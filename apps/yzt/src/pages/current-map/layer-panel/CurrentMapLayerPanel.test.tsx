@@ -13,6 +13,7 @@ import { sceneManifestSchema } from '@/features/scene-models/api';
 import { buildModelCatalog } from '@/features/scene-models/catalog';
 import { type SceneModels, useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
+import { required } from '@/shared/testing/required';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -134,6 +135,8 @@ function selectedRow(wrapper: VueWrapper): string | null {
   return found.exists() ? (found.attributes('data-current-row')?.replace('resource:', '') ?? null) : null;
 }
 const popover = () => document.querySelector<HTMLElement>('[data-layer-popover]');
+// 右键菜单里的定位
+const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
 
 afterEach(() => {
   // Element 的提示挂在 body 下，不归组件管
@@ -244,15 +247,30 @@ describe('CurrentMapLayerPanel', () => {
     expect(row(wrapper, 'bgdc_dltb').classes().some(name => name.includes('flash'))).toBe(true);
   });
 
-  it('定位：二维图层没到最小显示级别时放大到那一级，到了就不可用（后端给不出范围）', async () => {
+  it('定位在右键菜单和双击里（工具栏换成了移除）：二维图层没到最小显示级别时放大到那一级，到了就不可用（后端给不出范围）', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_lrdl']);
     await nextTick();
 
+    await row(wrapper, 'csxhjctb_lrdl').trigger('contextmenu');
+    expect(locateItem()?.disabled).toBe(false);
+    expect(locateItem()?.textContent).toContain('放大到第 9 级');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('contextmenu');
+    expect(locateItem()?.disabled).toBe(true);
+  });
+
+  it('工具栏的移除（用户 2026-11-15）：移除选中的一行，选中相邻的；没有选中时不可用', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_lrdl']);
+    await nextTick();
+    expect(tool(wrapper, 'remove-layer').attributes('aria-disabled')).toBe('true');
+
     await row(wrapper, 'csxhjctb_lrdl').trigger('click');
-    expect(tool(wrapper, 'locate').attributes('aria-disabled')).toBe('false');
-    await row(wrapper, 'bgdc_dltb').trigger('click');
-    expect(tool(wrapper, 'locate').attributes('aria-disabled')).toBe('true');
+    await tool(wrapper, 'remove-layer').trigger('click');
+    expect(currentOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
   });
 
   it('右键当前图层的一行：先选中它，菜单里能隐藏、移动和移除', async () => {
@@ -313,10 +331,11 @@ describe('CurrentMapLayerPanel', () => {
     expect(group.text()).toContain('仅三维');
     const station = () => wrapper.get('[data-current-row="model:station"]');
 
+    const locate = vi.spyOn(models, 'locate');
     await station().trigger('click');
     await station().trigger('dblclick');
     expect(station().attributes('aria-selected')).toBe('true');
-    expect(tool(wrapper, 'locate').attributes('aria-disabled')).toBe('true');
+    expect(locate).not.toHaveBeenCalled();
     expect(tool(wrapper, 'opacity').attributes('aria-disabled')).toBe('true');
     expect(tool(wrapper, 'legend').attributes('aria-disabled')).toBe('true');
     expect(wrapper.get('[data-roam="station"]').attributes('aria-disabled')).toBe('true');
@@ -340,8 +359,7 @@ describe('CurrentMapLayerPanel', () => {
     const locate = vi.spyOn(models, 'locate');
 
     await wrapper.get('[data-current-row="model:station"]').trigger('click');
-    expect(tool(wrapper, 'locate').attributes('aria-disabled')).toBe('false');
-    await tool(wrapper, 'locate').trigger('click');
+    await wrapper.get('[data-current-row="model:station"]').trigger('dblclick');
     expect(locate).toHaveBeenCalledExactlyOnceWith('station');
   });
 
@@ -428,5 +446,41 @@ describe('CurrentMapLayerPanel', () => {
     legendYield.value = 'bgdc_dltb';
     await nextTick();
     expect(popover()).toBeNull();
+  });
+
+  it('只有二维图层或只有三维模型时不显示组标题，行照常显示；两组都有时才有标题（用户 2026-11-15）', async () => {
+    const { wrapper, owner, models } = await mountPanel();
+    expect(wrapper.find('[data-current-group="layers"] button[aria-expanded]').exists()).toBe(false);
+    expect(wrapper.find('[data-current-row="resource:bgdc_dltb"]').exists()).toBe(true);
+
+    models.add(['white']);
+    await nextTick();
+    expect(wrapper.findAll('[data-current-group] > button[aria-expanded]')).toHaveLength(2);
+
+    owner.remove(['bgdc_dltb']);
+    await nextTick();
+    expect(wrapper.find('[data-current-group="models"] > button[aria-expanded]').exists()).toBe(false);
+    expect(wrapper.find('[data-current-row="model:white"]').exists()).toBe(true);
+  });
+
+  it('目录里右键分类：菜单作用于它下面的项，没有定位；分类不能选中（用户 2026-11-15）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    await tool(wrapper, 'expand-all').trigger('click');
+    // 土地资源这个分类的行
+    const land = () =>
+      required(
+        wrapper.findAll('[data-catalog-node]').find(item => item.text().startsWith('土地资源')),
+        '土地资源'
+      );
+    await land().trigger('contextmenu');
+    const items = [...document.querySelectorAll<HTMLButtonElement>('[data-menu-item]')];
+    expect(items.map(item => item.getAttribute('data-menu-item'))).toStrictEqual(['add', 'remove']);
+    expect(items[0]?.textContent).toContain('添加 2 项');
+
+    items[0]?.click();
+    await nextTick();
+    expect(currentOrder(wrapper)).toEqual(expect.arrayContaining(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']));
+    expect(land().attributes('aria-selected')).toBeUndefined();
+    expect(owner.state.value.displays.get('bgdc_cjdcq')?.added).toBe(true);
   });
 });

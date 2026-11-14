@@ -48,7 +48,7 @@ function mountTree() {
 const selectedKeys = (selection: CatalogSelection) => [...selection.keys];
 
 describe('CatalogTree', () => {
-  it('单击只选这一行，Ctrl 单击加选或取消，Shift 单击从起点连选；选中的行标出 aria-selected', async () => {
+  it('单击只选这一项，Ctrl 单击加选或取消，Shift 单击从起点连选（只连项）；选中的项标出 aria-selected', async () => {
     const { selection, row } = mountTree();
 
     await row('a').trigger('click');
@@ -59,21 +59,37 @@ describe('CatalogTree', () => {
     await row('c').trigger('click', { ctrlKey: true });
     expect(selectedKeys(selection.value)).toStrictEqual(['a']);
 
-    // 连选从最后一次单选或加选的那一行开始
+    // 连选从最后一次单选或加选的那一项开始，中间的分类不算
     await row('a').trigger('click');
-    await row('water').trigger('click', { shiftKey: true });
-    expect(selectedKeys(selection.value)).toStrictEqual(['a', 'b', 'water']);
+    await row('c').trigger('click', { shiftKey: true });
+    expect(selectedKeys(selection.value)).toStrictEqual(['a', 'b', 'c']);
   });
 
-  it('双击已添加的项是定位，没添加的什么也不做；双击分类是展开、收起（用户 2026-11-14）', async () => {
-    const { events, expanded, row } = mountTree();
+  it('分类不能选中（用户 2026-11-15）：单击是展开、收起，选中不变；双击已添加的项是定位，没添加的什么也不做', async () => {
+    const { selection, events, expanded, row } = mountTree();
+    await row('a').trigger('click');
+
+    await row('water').trigger('click');
+    expect(expanded.value.has('water')).toBe(false);
+    expect(selectedKeys(selection.value)).toStrictEqual(['a']);
+    expect(row('water').attributes('aria-selected')).toBeUndefined();
+    await row('water').trigger('click');
+    expect(expanded.value.has('water')).toBe(true);
 
     await row('a').trigger('dblclick');
     await row('b').trigger('dblclick');
     expect(events).toStrictEqual([['locate', 'a']]);
+  });
 
-    await row('water').trigger('dblclick');
-    expect(expanded.value.has('water')).toBe(false);
+  it('行尾一列（用户 2026-11-15）：分类是项数，已添加的项是勾，两者在同一列', () => {
+    const { row } = mountTree();
+    const mark = row('a').get('[data-added-mark]').element.parentElement;
+    const count = row('land')
+      .findAll('span')
+      .find(item => item.text() === '2' && item.element.children.length === 0)?.element.parentElement;
+    expect(mark?.className).toBeTruthy();
+    expect(count?.className).toBe(mark?.className);
+    expect(row('b').find('[data-added-mark]').exists()).toBe(false);
   });
 
   it('已添加的行尾是勾；行尾的按钮只作用于这一行：项是添加或移除，分类是添加下面还没加的', async () => {
@@ -88,18 +104,23 @@ describe('CatalogTree', () => {
     expect(events).toStrictEqual([['remove', 'a'], ['add', 'b'], ['add', 'b']]);
   });
 
-  it('键盘：上下移动并选中，Insert 添加、Delete 移除选中里能做的，已加入的不重复', async () => {
-    const { selection, events, row } = mountTree();
-    await row('land').trigger('click');
+  it('键盘：上下移动，到项上选中、到分类上只移焦点；Insert 添加、Delete 移除选中里能做的，焦点在分类上时作用于它下面的项', async () => {
+    const { selection, expanded, events, row } = mountTree();
 
     await row('land').trigger('keydown', { key: 'ArrowDown' });
     expect(selectedKeys(selection.value)).toStrictEqual(['a']);
     await row('a').trigger('keydown', { key: 'ArrowDown', shiftKey: true });
     expect(selectedKeys(selection.value)).toStrictEqual(['a', 'b']);
+    await row('b').trigger('keydown', { key: 'ArrowDown' });
+    expect(selectedKeys(selection.value)).toStrictEqual(['a', 'b']);
+    expect(selection.value.focus).toBe('water');
+    await row('water').trigger('keydown', { key: ' ' });
+    expect(expanded.value.has('water')).toBe(false);
 
     await row('b').trigger('keydown', { key: 'Insert' });
     await row('b').trigger('keydown', { key: 'Delete' });
-    expect(events).toStrictEqual([['add', 'b'], ['remove', 'a']]);
+    await row('land').trigger('keydown', { key: 'Delete' });
+    expect(events).toStrictEqual([['add', 'b'], ['remove', 'a'], ['remove', 'a']]);
   });
 
   it('右键不在选中里的行：先只选它再报菜单；在选中里时保留多选', async () => {
@@ -111,6 +132,9 @@ describe('CatalogTree', () => {
     expect(selectedKeys(selection.value)).toStrictEqual(['a', 'b']);
     await row('c').trigger('contextmenu');
     expect(selectedKeys(selection.value)).toStrictEqual(['c']);
-    expect(events).toStrictEqual([['menu', 'a'], ['menu', 'c']]);
+    // 右键分类不改选中
+    await row('land').trigger('contextmenu');
+    expect(selectedKeys(selection.value)).toStrictEqual(['c']);
+    expect(events).toStrictEqual([['menu', 'a'], ['menu', 'c'], ['menu', 'land']]);
   });
 });

@@ -177,17 +177,18 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await pin.locator('svg').last().click();
     await expect(page.locator('[data-location-info]')).toBeVisible();
 
-    // 在资源目录里加入生成的屋子（ADR 0157）：展开全部、选中、点"添加"；新加的一行被选中，加载好以后用工具栏定位
+    // 在资源目录里加入生成的屋子（ADR 0157）：展开全部、选中、点"添加"；新加的一行被选中，加载好以后双击这一行定位
     const addModel = async (id: string) => {
       await page.locator('[data-tool="expand-all"]').click();
       await page.locator(`[data-catalog-node="model:${id}"]`).click();
       await page.locator('[data-tool="add"]').click();
     };
-    const locate = page.locator('[data-tool="locate"]');
+    // 定位：双击当前图层里的这一行（工具栏换成了移除，用户 2026-11-15）
+    const locate = (id: string) => page.locator(`[data-current-row="model:${id}"] [data-row-text]`).dblclick();
     await addModel('smoke-room');
     const room = page.locator('[data-roam="smoke-room"]');
     await expect(room).toHaveAttribute('aria-disabled', 'false', { timeout: 60_000 });
-    await locate.click();
+    await locate('smoke-room');
     await expect(page.locator('[data-map-status]')).toHaveCount(0);
 
     // 当前图层里的"漫游"：有出生点的从步行开始，地下的屋子抬高，黑幕下进站（ADR 0147 第 4 节）；退出时同样回到地面
@@ -221,7 +222,7 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await expect(bar).toHaveCount(0);
     // 退出漫游后面板原样回来，泼溅这一行还选中着
     await expect(splat).toHaveAttribute('aria-selected', 'true');
-    await locate.click();
+    await locate('smoke-splat');
     // 底图里没有这种绿色：占比超过 0.5% 就是画出来了（斜着看，2026-11-10 实测约 1.7%）
     await expect
       .poll(() => greenShare(page, flat), { message: '画出绿色的泼溅', timeout: 60_000 })

@@ -31,6 +31,8 @@ export const CurrentLayerGroup = defineComponent({
     tag: { type: String, default: undefined },
     /** 整组变淡：二维里的模型 */
     dimmed: { type: Boolean, default: false },
+    /** 不显示标题（当前图层里只有这一组时，用户 2026-11-15）：没有收起、展开，行一直显示 */
+    headless: { type: Boolean, default: false },
     open: { type: Boolean, default: true },
     keys: { type: Array as PropType<readonly string[]>, required: true },
     selected: { type: String as PropType<string | null>, default: null },
@@ -186,20 +188,22 @@ export const CurrentLayerGroup = defineComponent({
 
     return () => (
       <div class={[styles.group, props.dimmed && styles.dimmed]} data-current-group={props.group}>
-        <button
-          type="button"
-          class={styles.head}
-          aria-expanded={props.open}
-          onClick={() => emit('update:open', !props.open)}
-        >
-          <ElIcon class={[styles.arrow, props.open && styles.open]}>
-            <ArrowRight />
-          </ElIcon>
-          <span>{props.title}</span>
-          <span class={styles.badge}>{props.keys.length}</span>
-          {props.tag && <span class={styles.tag}>{props.tag}</span>}
-        </button>
-        {props.open && (
+        {!props.headless && (
+          <button
+            type="button"
+            class={styles.head}
+            aria-expanded={props.open}
+            onClick={() => emit('update:open', !props.open)}
+          >
+            <ElIcon class={[styles.arrow, props.open && styles.open]}>
+              <ArrowRight />
+            </ElIcon>
+            <span>{props.title}</span>
+            <span class={styles.badge}>{props.keys.length}</span>
+            {props.tag && <span class={styles.tag}>{props.tag}</span>}
+          </button>
+        )}
+        {(props.open || props.headless) && (
           <ul ref={list} class={styles.rows} role="listbox" aria-label={props.title}>
             {props.keys.map(renderRow)}
           </ul>

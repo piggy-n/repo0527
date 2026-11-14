@@ -4,7 +4,7 @@ import type { ResourceLayers } from '../composables/useResourceLayers';
 import styles from './BatchYearSelect.module.scss';
 
 /**
- * 批量设置年份（ADR 0052 第 2 节）：选完就执行，选择框回显最后一次批量设置的年份（ADR 0116）；
+ * 批量设置年份（ADR 0052 第 2 节，界面上叫"筛选年份"，用户 2026-11-15）：选完就执行，选择框回显最后一次批量设置的年份（ADR 0116）；
  * 还没有数据的 2020、2021 选了图层不变，不提示。目录还没到、没有可选的年份时不显示
  */
 export const BatchYearSelect = defineComponent({
@@ -18,8 +18,8 @@ export const BatchYearSelect = defineComponent({
         <ElSelect
           class={styles.batch}
           modelValue={props.layers.batchYear.value ?? undefined}
-          placeholder="批量设置年份"
-          aria-label="批量设置年份"
+          placeholder="筛选年份"
+          aria-label="筛选年份"
           onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}
         >
           {props.layers.batchYears.value.map(year => (

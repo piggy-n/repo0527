@@ -344,12 +344,12 @@ const readout = useMapReadout(map);
 | 文件 | 内容 |
 |---|---|
 | `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；登记为贴左边的悬浮元素 |
-| `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：Ctrl、Shift 多选，键盘，行尾的添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
+| `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：只有项能选中，Ctrl、Shift 多选，分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时是添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
-| `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签（二维里的模型组） |
+| `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签（二维里的模型组），`headless` 时不显示标题（只有这一组时） |
 | `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示）、右键菜单、开在面板右边的浮层（箭头对着选中的行，手机宽度时盖在下段上） |
 | `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度、在滚动区里露出一行（纯函数和小工具） |
-| `layer-row.module.scss` | 行的公共部分：符号、名称、紧跟名称的状态、行尾的框（宽 72）、移除、加载中的转圈 |
+| `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 
 - 选中、浮层、菜单这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
 - 页面给 `reveal` 一个新对象时，面板在当前图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行）；`requests` 给出加载超过 0.4 秒的行，资源行在名称后面转圈

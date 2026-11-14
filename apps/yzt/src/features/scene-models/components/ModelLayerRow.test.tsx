@@ -32,7 +32,7 @@ const CATALOG = buildModelCatalog(
         underground: false,
         effects: [
           { id: 'plain', label: '无纹理', tileset: 'W/plain.json' },
-          { id: 'window', label: '内置效果1', tileset: 'W/window.json' }
+          { id: 'window', label: '效果1', tileset: 'W/window.json' }
         ]
       },
       { id: 'city', name: '新街口倾斜摄影', cityCode: '320100', kind: 'oblique', underground: false, tileset: 'C.json' }
@@ -116,7 +116,7 @@ describe('ModelLayerRow', () => {
     expect(select.props('modelValue')).toBe('plain');
     expect(select.findAllComponents(ElOption).map(option => option.props('label'))).toStrictEqual([
       '无纹理',
-      '内置效果1'
+      '效果1'
     ]);
     select.vm.$emit('update:modelValue', 'window');
     await nextTick();

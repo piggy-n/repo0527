@@ -152,9 +152,11 @@ export const CurrentMapLayerPanel = defineComponent({
     const modelsOpen = ref(true);
     // 两组按显示的先后接在一起；方向键跨组时只走展开着的组
     const currentKeys = computed(() => [...layerKeys.value, ...modelKeys.value]);
+    // 只有二维图层或只有三维模型时不显示组标题，这一组一直展开（用户 2026-11-15）
+    const single = computed(() => layerKeys.value.length === 0 || modelKeys.value.length === 0);
     const shownKeys = computed(() => [
-      ...(layersOpen.value ? layerKeys.value : []),
-      ...(modelsOpen.value ? modelKeys.value : [])
+      ...(layersOpen.value || single.value ? layerKeys.value : []),
+      ...(modelsOpen.value || single.value ? modelKeys.value : [])
     ]);
     const groupKeysOf = (key: string) => (modelIdOfKey(key) === null ? layerKeys.value : modelKeys.value);
     const selected = ref<string | null>(null);
@@ -422,7 +424,6 @@ export const CurrentMapLayerPanel = defineComponent({
       const canMove = (action: MoveAction) => key !== null && moveIndex(groupKeysOf(key), key, action) !== null;
       // 模型的先后只影响列表，遮挡按模型在空间里的位置
       const note = model ? '（只改列表顺序）' : '';
-      const info = locateInfo(key);
       return [
         { key: 'move-up', icon: 'move-up', label: '图层上移', tip: `上移${note}`, disabled: !canMove('move-up') },
         { key: 'move-down', icon: 'move-down', label: '图层下移', tip: `下移${note}`, disabled: !canMove('move-down') },
@@ -452,7 +453,7 @@ export const CurrentMapLayerPanel = defineComponent({
           pressed: popover.value?.kind === 'legend'
         },
         'divider',
-        { key: 'locate', icon: 'focus', label: '定位图层', tip: info.tip, disabled: !info.enabled }
+        { key: 'remove-layer', icon: 'layer-remove', label: '移除图层', tip: '移除', disabled: key === null }
       ];
     });
 
@@ -463,22 +464,27 @@ export const CurrentMapLayerPanel = defineComponent({
       }
       if ((action === 'opacity' || action === 'legend') && resourceCodeOfKey(key) !== null) {
         togglePopover(action);
-      } else if (action === 'locate') {
-        locate(key);
+      } else if (action === 'remove-layer') {
+        removeKeys([key]);
       } else if (action === 'move-up' || action === 'move-down' || action === 'move-top' || action === 'move-bottom') {
         move(key, action);
       }
     };
 
     // ---------- 右键菜单
+    // 目录的菜单作用的项：右键分类时是它下面的，右键项时是选中的
+    const catalogMenuCover = (key: string) =>
+      findCatalogNode(nodes.value, key)?.kind === 'branch' ? catalogCover(nodes.value, new Set([key])) : cover.value;
+
     const menuItems = computed((): PanelMenuEntry[] => {
       const current = menu.value;
       if (!current) {
         return [];
       }
       if (current.source === 'catalog') {
-        const adds = cover.value.add.length;
-        const removes = cover.value.remove.length;
+        const menuCover = catalogMenuCover(current.key);
+        const adds = menuCover.add.length;
+        const removes = menuCover.remove.length;
         const node = findCatalogNode(nodes.value, current.key);
         const added = node?.kind === 'leaf' && node.added;
         return [
@@ -496,14 +502,9 @@ export const CurrentMapLayerPanel = defineComponent({
             disabled: removes === 0,
             shortcut: 'Delete'
           },
-          'divider',
-          {
-            key: 'locate',
-            label: '定位',
-            icon: 'focus',
-            disabled: !added,
-            shortcut: node?.kind === 'leaf' ? '双击' : undefined
-          }
+          ...(node?.kind === 'leaf'
+            ? (['divider', { key: 'locate', label: '定位', icon: 'focus', disabled: !added, shortcut: '双击' }] satisfies PanelMenuEntry[])
+            : [])
         ];
       }
       const visible = visibleOf(current.key);
@@ -545,10 +546,11 @@ export const CurrentMapLayerPanel = defineComponent({
         return;
       }
       if (current.source === 'catalog') {
+        const menuCover = catalogMenuCover(current.key);
         if (action === 'add') {
-          addKeys(cover.value.add);
+          addKeys(menuCover.add);
         } else if (action === 'remove') {
-          removeKeys(cover.value.remove);
+          removeKeys(menuCover.remove);
         } else if (action === 'locate') {
           locateInList(current.key);
         }
@@ -647,7 +649,8 @@ export const CurrentMapLayerPanel = defineComponent({
             key="layers"
             group="layers"
             title="二维图层"
-            open={layersOpen.value}
+            open={layersOpen.value || single.value}
+            headless={single.value}
             keys={layerKeys.value}
             dragTip="拖动调整叠放顺序（上层优先显示）"
             onUpdate:open={(open: boolean) => (layersOpen.value = open)}
@@ -666,7 +669,8 @@ export const CurrentMapLayerPanel = defineComponent({
             title="三维模型"
             tag={scene.value ? undefined : '仅三维'}
             dimmed={!scene.value}
-            open={modelsOpen.value}
+            open={modelsOpen.value || single.value}
+            headless={single.value}
             keys={modelKeys.value}
             dragTip="拖动调整列表顺序"
             onUpdate:open={(open: boolean) => (modelsOpen.value = open)}

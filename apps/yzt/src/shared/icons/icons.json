@@ -302,7 +302,7 @@
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     },
-    "body": "<path d=\"M9.5 14.5 6.6 13l-5.1 2.6v-11L6.6 2l5.1 2.6L16.8 2v7M6.6 2v11m5.1-8.4v9.9\"/><path stroke-width=\"2.5\" d=\"M11.5 17h11M17 11.5v11\"/>"
+    "body": "<path d=\"m5 12 5 5L20 7\"/>"
   },
   "layer-opacity": {
     "viewBox": "0 0 24 24",
@@ -324,7 +324,7 @@
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     },
-    "body": "<path d=\"M9.5 14.5 6.6 13l-5.1 2.6v-11L6.6 2l5.1 2.6L16.8 2v11l-2.9 1.5M6.6 2v11m5.1-8.4v9.9\"/><path stroke-width=\"2.5\" d=\"M11.5 17h11\"/>"
+    "body": "<path d=\"M18 6 6 18M6 6l12 12\"/>"
   },
   "location-pin": {
     "viewBox": "0 0 24 24",

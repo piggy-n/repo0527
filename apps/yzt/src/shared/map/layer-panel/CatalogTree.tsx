@@ -15,8 +15,9 @@ export interface MenuPoint {
 }
 
 /**
- * 资源目录的树（ADR 0157）：单击选中，Ctrl（Mac 上 ⌘）单击加选，Shift 单击连选；行尾平时用绿色的勾标出已添加，
- * 悬停、键盘焦点时换成这一行的添加或移除；双击已添加的项是定位。节点由各 feature 推导、页面拼好交进来，
+ * 资源目录的树（ADR 0157）：只有项能选中，单击选中，Ctrl（Mac 上 ⌘）单击加选，Shift 单击连选；分类不能选中
+ * （用户 2026-11-15），单击是展开、收起。行尾一列：分类是项数，已添加的项是绿色的勾，悬停、键盘焦点时换成这一行的
+ * 添加或移除（分类作用于下面全部的项）；双击已添加的项是定位。节点由各 feature 推导、页面拼好交进来，
  * 选中和展开由页面持有，添加、移除、定位都只报告给页面
  */
 export const CatalogTree = defineComponent({
@@ -43,6 +44,9 @@ export const CatalogTree = defineComponent({
     const root = ref<HTMLElement>();
     const visible = computed(() => visibleKeys(props.nodes, props.expanded, props.searching));
     const roving = computed(() => rovingKey(props.selection, visible.value));
+    // 能选中的只有项：连选只连显示着的项
+    const leafKeys = computed(() => new Set(props.nodes.flatMap(leavesOf).map(leaf => leaf.key)));
+    const visibleLeaves = computed(() => visible.value.filter(key => leafKeys.value.has(key)));
 
     const rowOf = (key: string) => root.value?.querySelector<HTMLElement>(`[data-catalog-node="${CSS.escape(key)}"]`);
     const focusRow = async (key: string) => {
@@ -55,7 +59,9 @@ export const CatalogTree = defineComponent({
     };
 
     const select = (key: string, mode: SelectMode = {}) =>
-      emit('update:selection', selectKey(props.selection, key, visible.value, mode));
+      emit('update:selection', selectKey(props.selection, key, visibleLeaves.value, mode));
+    // 分类只接键盘焦点，选中不变
+    const focusOnly = (key: string) => emit('update:selection', focusKey(props.selection, key));
 
     const toggleExpanded = (key: string, open?: boolean) => {
       const next = new Set(props.expanded);
@@ -80,31 +86,38 @@ export const CatalogTree = defineComponent({
       return false;
     };
 
-    // 行上的单击：Ctrl / ⌘ 加选，Shift 连选
-    const onRowClick = (event: MouseEvent, key: string) =>
-      select(key, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
-
-    // 双击：项是定位（没添加的什么也不做），分类是展开、收起
-    const onRowDblclick = (event: MouseEvent, node: CatalogNode) => {
-      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+    // 行上的单击：项是选中（Ctrl / ⌘ 加选，Shift 连选），分类是展开、收起
+    const onRowClick = (event: MouseEvent, node: CatalogNode) => {
+      if (node.kind === 'leaf') {
+        select(node.key, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
         return;
       }
-      if (node.kind === 'leaf') {
-        locate(node.key);
-      } else if (!props.searching) {
+      focusOnly(node.key);
+      if (!props.searching) {
         toggleExpanded(node.key);
       }
     };
 
-    // 右键：不在选中里的行先改成只选它，在选中里时保留多选
-    const openMenu = (key: string, point: MenuPoint) => {
-      if (!props.selection.keys.has(key)) {
-        select(key);
-      } else {
-        emit('update:selection', focusKey(props.selection, key));
+    // 双击：已添加的项是定位，没添加的什么也不做；分类的两下单击已经展开又收起，这里不再处理
+    const onRowDblclick = (event: MouseEvent, node: CatalogNode) => {
+      if (node.kind === 'leaf' && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        locate(node.key);
       }
-      emit('menu', key, point);
     };
+
+    // 右键：不在选中里的项先改成只选它，在选中里时保留多选；分类不改选中，菜单作用于它下面的项
+    const openMenu = (node: CatalogNode, point: MenuPoint) => {
+      if (node.kind === 'branch' || props.selection.keys.has(node.key)) {
+        focusOnly(node.key);
+      } else {
+        select(node.key);
+      }
+      emit('menu', node.key, point);
+    };
+
+    // Insert、Delete 作用的项：焦点在分类上时是它下面的，否则是选中的
+    const keyboardCover = (node: CatalogNode) =>
+      catalogCover(props.nodes, node.kind === 'branch' ? new Set([node.key]) : props.selection.keys);
 
     const onRowKeydown = (event: KeyboardEvent, node: CatalogNode) => {
       if (event.target !== event.currentTarget || event.isComposing) {
@@ -114,24 +127,30 @@ export const CatalogTree = defineComponent({
       const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
       if (step !== undefined) {
         const next = visible.value[Math.min(visible.value.length - 1, Math.max(0, index + step))];
-        if (next !== undefined) {
+        if (next !== undefined && leafKeys.value.has(next)) {
           select(next, { range: event.shiftKey });
+        } else if (next !== undefined) {
+          focusOnly(next);
+        }
+        if (next !== undefined) {
           void focusRow(next);
         }
       } else if (event.key === 'ArrowRight' && node.kind === 'branch' && !props.searching) {
         toggleExpanded(node.key, true);
       } else if (event.key === 'ArrowLeft' && node.kind === 'branch' && !props.searching) {
         toggleExpanded(node.key, false);
-      } else if (event.key === ' ') {
-        select(node.key, { toggle: true });
-      } else if (event.key === 'Enter') {
-        if (node.kind === 'branch' && !props.searching) {
-          toggleExpanded(node.key);
+      } else if (event.key === ' ' || event.key === 'Enter') {
+        if (node.kind === 'branch') {
+          if (!props.searching) {
+            toggleExpanded(node.key);
+          }
+        } else if (event.key === ' ') {
+          select(node.key, { toggle: true });
         } else {
           locate(node.key);
         }
       } else if (event.key === 'Insert' || event.key === 'Delete') {
-        const cover = catalogCover(props.nodes, props.selection.keys);
+        const cover = keyboardCover(node);
         const keys = event.key === 'Insert' ? cover.add : cover.remove;
         if (keys.length > 0 && event.key === 'Insert') {
           emit('add', keys);
@@ -140,14 +159,15 @@ export const CatalogTree = defineComponent({
         }
       } else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-        openMenu(node.key, { x: rect.left + 40, y: rect.bottom });
+        openMenu(node, { x: rect.left + 40, y: rect.bottom });
       } else {
         return;
       }
       event.preventDefault();
     };
 
-    // 行尾：平时已全部添加的是绿色的勾；悬停、键盘焦点时换成这一行能做的操作，还有没添加的是添加，否则是移除
+    // 行尾一列（用户 2026-11-15：勾和项数在同一条竖线上）：分类平时是项数，全部添加的项是绿色的勾；
+    // 悬停、键盘焦点时换成这一行能做的操作，还有没添加的是添加，否则是移除
     const renderEnd = (node: CatalogNode) => {
       const leaves = leavesOf(node);
       const added = leaves.filter(leaf => leaf.added).length;
@@ -158,7 +178,8 @@ export const CatalogTree = defineComponent({
       const keys = leaves.filter(leaf => leaf.added !== canAdd).map(leaf => leaf.key);
       return (
         <span class={styles.end}>
-          {leaves.length > 0 && added === leaves.length && (
+          {node.kind === 'branch' && <span class={styles.badge}>{leaves.length}</span>}
+          {node.kind === 'leaf' && node.added && (
             <span class={styles.mark} role="img" aria-label="已添加" data-added-mark>
               <SvgIcon name="check" size={14} />
             </span>
@@ -197,16 +218,16 @@ export const CatalogTree = defineComponent({
           class={[styles.row, node.kind === 'branch' && styles.branch, selected && styles.selected]}
           role="treeitem"
           aria-level={depth + 1}
-          aria-selected={selected}
+          aria-selected={node.kind === 'leaf' ? selected : undefined}
           aria-expanded={node.kind === 'branch' ? open : undefined}
           tabindex={node.key === roving.value ? 0 : -1}
           data-catalog-node={node.key}
           style={{ paddingLeft: `${depth * 18}px` }}
-          onClick={(event: MouseEvent) => onRowClick(event, node.key)}
+          onClick={(event: MouseEvent) => onRowClick(event, node)}
           onDblclick={(event: MouseEvent) => onRowDblclick(event, node)}
           onContextmenu={(event: MouseEvent) => {
             event.preventDefault();
-            openMenu(node.key, { x: event.clientX, y: event.clientY });
+            openMenu(node, { x: event.clientX, y: event.clientY });
           }}
           onKeydown={(event: KeyboardEvent) => onRowKeydown(event, node)}
         >
@@ -236,7 +257,6 @@ export const CatalogTree = defineComponent({
             {node.label}
           </span>
           {node.kind === 'leaf' && node.note && <span class={styles.note}>{node.note}</span>}
-          {node.kind === 'branch' && <span class={styles.badge}>{leavesOf(node).length}</span>}
           {renderEnd(node)}
         </div>
       );
@@ -244,7 +264,7 @@ export const CatalogTree = defineComponent({
         <li key={node.key} role="none">
           {row}
           {open && node.kind === 'branch' && (
-            <ul class={styles.children} role="group">
+            <ul class={styles.children} role="group" style={{ '--guide-depth': depth }}>
               {node.children.map(child => renderNode(child, depth + 1))}
             </ul>
           )}

@@ -1850,7 +1850,6 @@ describe('CurrentMapPage', () => {
       await addModel(wrapper, 'sz-station');
       const group = wrapper.get('[data-current-group="models"]');
       expect(group.text()).toContain('仅三维');
-      expect(wrapper.get('[data-tool="locate"]').attributes('aria-disabled')).toBe('true');
 
       await switchTo(wrapper, '三维');
       expect(wrapper.get('[data-current-group="models"]').text()).not.toContain('仅三维');
@@ -1869,7 +1868,8 @@ describe('CurrentMapPage', () => {
       ]);
 
       await scene.ready('sz-station');
-      await wrapper.get('[data-tool="locate"]').trigger('click');
+      // 定位：当前图层里双击这一行（工具栏换成了移除，用户 2026-11-15）
+      await wrapper.get('[data-current-row="model:sz-station"]').trigger('dblclick');
       await settle();
       expect(page.map.flyToCalls.at(-1)).toMatchObject({
         center: MODEL_CAMERA.center,

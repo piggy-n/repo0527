@@ -6,8 +6,8 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 24px;
+  width: 24px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -51,11 +51,11 @@ button.symbol {
   font-size: var(--font-size-xs);
 }
 
-// 行尾的年份、效果、漫游：同一个框，宽 72、高 22，边框常显（用户 2026-11-14：三个的样式和宽度统一）
+// 行尾的年份、效果、漫游：同一个框，宽 56、高 24，边框常显（用户 2026-11-14：三个的样式和宽度统一；11-15：再窄一些）
 .trail {
   flex: none;
   box-sizing: border-box;
-  width: 72px;
+  width: 56px;
 }
 
 // 只有一年的资源、不能操作时：同样的框，只有文字

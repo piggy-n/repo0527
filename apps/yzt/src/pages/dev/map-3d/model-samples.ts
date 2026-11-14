@@ -43,8 +43,8 @@ export const MODEL_KIND_LABELS: Readonly<Record<ModelKind, string>> = {
 
 const WHITE_EFFECTS: readonly ModelEffect[] = [
   { id: 'plain', label: '无纹理' },
-  { id: 'window', label: '内置效果1' },
-  { id: 'tech', label: '内置效果2' }
+  { id: 'window', label: '效果1' },
+  { id: 'tech', label: '效果2' }
 ];
 
 // 以中心为原点按米偏移出途经点，示意用，不追求精确

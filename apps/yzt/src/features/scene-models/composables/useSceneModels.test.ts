@@ -43,7 +43,7 @@ const CATALOG = buildModelCatalog(
         underground: false,
         effects: [
           { id: 'plain', label: '无纹理', tileset: 'W/plain/tileset.json' },
-          { id: 'window', label: '内置效果1', tileset: 'W/window/tileset.json' }
+          { id: 'window', label: '效果1', tileset: 'W/window/tileset.json' }
         ]
       },
       { id: 'city', name: '倾斜', cityCode: '320100', kind: 'oblique', underground: false, tileset: 'C/tileset.json' },

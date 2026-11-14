@@ -38,7 +38,7 @@
 | 字段 | 说明 |
 |---|---|
 | `tileset` | `oblique`、`indoor`：`tileset.json` 的地址，相对清单，按段编码（见"目录层级"） |
-| `effects` | `white`：`[{ id, label, tileset }]`，第一种是默认效果 |
+| `effects` | `white`：`[{ id, label, tileset }]`，第一种是默认效果；`label` 显示在当前图层行尾 56 宽的框里，写短名（如"无纹理""效果1"），超过四个字会省略 |
 | `maximumScreenSpaceError` | 可选，屏幕误差上限（正数）；不写用默认值 8，只给放不下的模型写（[map-three.md](../modules/map-three.md)"渲染"的瓦片） |
 | `spawn` | 可选，步行的出生点 `{ lng, lat, height, heading }`：脚下地板的椭球高，朝向是正北为 0、顺时针的度数 |
 | `routes` | 可选，预置的漫游路线 `[{ id, name, path }]`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`，至少两个点；头顶低的地方可以多一个值，是视点在地板以上的米数（0～1.6，不写是 1.6，ADR 0156 第 3 节） |

@@ -10,13 +10,13 @@
 .children {
   position: relative;
 
-  // 引导线对着上一层箭头的中线
+  // 引导线对着上一层箭头的中线：缩进加在行上、列表本身不缩进，所以按上一层的层级（--guide-depth）算位置，否则各层的线叠在一起
   &::before {
     content: '';
     position: absolute;
     top: 0;
     bottom: 4px;
-    left: 7px;
+    left: calc(var(--guide-depth, 0) * 18px + 7px);
     width: 1px;
     background-color: var(--color-border);
   }
@@ -51,7 +51,8 @@
       display: inline-flex;
     }
 
-    .mark {
+    .mark,
+    .badge {
       display: none;
     }
   }
@@ -144,21 +145,24 @@
 
 .badge {
   flex: none;
+  min-width: 22px;
   padding: 0 6px;
+  box-sizing: border-box;
   border-radius: 999px;
   background-color: var(--color-neutral-bg);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
+  line-height: 18px;
+  text-align: center;
 }
 
-// 行尾固定 22 宽：悬停时图标替换，名称不跳动
+// 行尾一列，固定 30 宽、内容居中：分类的项数、项的勾、悬停时的添加、移除在同一条竖线上，悬停时替换，名称不跳动
 .end {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 30px;
   height: 22px;
 }
 

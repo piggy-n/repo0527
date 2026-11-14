@@ -59,7 +59,7 @@ export const ResourceLayerRow = defineComponent({
             data-row-symbol
             onClick={() => emit('legend')}
           >
-            <LegendPreview entry={legendEntry(item, shown.year, props.symbols.overrideOf(props.code))} />
+            <LegendPreview entry={legendEntry(item, shown.year, props.symbols.overrideOf(props.code))} small />
           </button>
         </ElTooltip>,
         <span class={rowStyles.name} title={name} data-row-text>
