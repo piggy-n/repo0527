@@ -50,7 +50,7 @@ describe('manifestSpawn、manifestRoute、outline', () => {
   });
 
   it('路线的点是 [经度, 纬度, 椭球高]，矮的地方多一个眼高', () => {
-    const route = manifestRoute(track, { id: 'east', name: '往东', from: 1, to: 19 }, FRAME);
+    const route = manifestRoute(track, { id: 'east', name: '往东', from: 1, to: 19 }, FRAME, grid);
     expect(route).toMatchObject({ id: 'east', name: '往东' });
     expect(route.path[0]).toHaveLength(3);
     expect(route.path.at(-1)).toHaveLength(4);

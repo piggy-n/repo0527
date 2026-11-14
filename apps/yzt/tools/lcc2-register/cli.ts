@@ -53,7 +53,7 @@ function printRoam(
   const spawn = manifestSpawn(track, options.spawnAt, frame);
   console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
   if (options.routes.length > 0) {
-    const routes = options.routes.map((span) => manifestRoute(track, span, frame));
+    const routes = options.routes.map((span) => manifestRoute(track, span, frame, result.grid));
     const lines = routes.map(
       ({ id, name, path }) =>
         `    { "id": ${JSON.stringify(id)}, "name": ${JSON.stringify(name)}, "path": [\n` +

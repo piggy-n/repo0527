@@ -26,9 +26,48 @@ describe('trackOf', () => {
   });
 });
 
+// 1.2 米宽、20 米长的通道（两边没有网格就是墙），头顶 2.5 米；扫描的人在里面左右摆着走（y 0.35～0.85，每 4 米一个来回）
+const corridor = (...extra: ReturnType<typeof rectangle>[]) =>
+  buildFloorGrid([rectangle(0, 0, 20, 1.2, 0), rectangle(0, 0, 20, 1.2, 2.5), ...extra]);
+const zigzag = walk(
+  Array.from({ length: 10 }, (_, i) => ({
+    from: [i * 2, i % 2 === 0 ? 0.35 : 0.85] as const,
+    to: [(i + 1) * 2, i % 2 === 0 ? 0.85 : 0.35] as const
+  })),
+  () => 0
+);
+// 路线上的点离首尾连线的最大水平距离
+const bend = (route: readonly RoamPoint[]) => {
+  const first = route[0];
+  const last = route.at(-1);
+  if (!first || !last) {
+    throw new Error('路线没有点');
+  }
+  const length = Math.hypot(last.x - first.x, last.y - first.y);
+  return Math.max(
+    ...route.map(
+      ({ x, y }) => Math.abs((last.x - first.x) * (first.y - y) - (first.x - x) * (last.y - first.y)) / length
+    )
+  );
+};
+
+// 沿路线每 5 厘米一个点
+function along(route: readonly RoamPoint[]): { x: number; y: number }[] {
+  const points: { x: number; y: number }[] = [];
+  for (let i = 1; i < route.length; i++) {
+    const a = route[i - 1];
+    const b = route[i];
+    const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.05);
+    for (let s = 0; s <= steps; s++) {
+      points.push({ x: a.x + ((b.x - a.x) * s) / steps, y: a.y + ((b.y - a.y) * s) / steps });
+    }
+  }
+  return points;
+}
+
 describe('routeOf', () => {
   it('贴地板、门槛按中位数滤掉；矮墓道里眼高 = 净空 - 0.2；直线抽稀成几个点', () => {
-    const route = routeOf(trackOf(TRAJECTORY, GRID), 2, 18);
+    const route = routeOf(trackOf(TRAJECTORY, GRID), 2, 18, GRID);
     expect(route.length).toBeLessThanOrEqual(5);
     expect(route.every(({ floor }) => floor === 0)).toBe(true);
     expect(route[0]).toMatchObject({ eye: EYE_HEIGHT });
@@ -40,7 +79,7 @@ describe('routeOf', () => {
   it('门楣、梁只占一两个取样点，眼高照样降下来，不按中位数滤掉', () => {
     // x 6.0～6.3 头顶 1.4 米有一道梁，扫描仪在它下面
     const grid = buildFloorGrid([rectangle(0, 0, 12, 4, 0), rectangle(6, 0, 6.3, 4, 1.4)]);
-    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid), 1, 11);
+    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid), 1, 11, grid);
     // 路线上 x 处的眼高（按前后两点插值，同 RoutePath）
     const eyeAt = (x: number) => {
       const next = route.findIndex(point => point.x >= x);
@@ -65,9 +104,89 @@ describe('routeOf', () => {
       rectangle(0, 0, 12, 4, 2),
       rectangle(6, 0, 6.3, 4, 0.9)
     ]);
-    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid), 1, 11);
+    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid), 1, 11, grid);
     expect(route.every(({ floor }) => floor === 0)).toBe(true);
     expect(route.map(({ eye }) => eye)).toStrictEqual(route.map(() => EYE_HEIGHT));
+  });
+
+  it('通道里左右摆的轨迹拉成一条直线', () => {
+    const route = routeOf(trackOf(zigzag, corridor()), 1, 19, corridor());
+    expect(bend(route)).toBeLessThan(0.03);
+    expect(route.every(({ floor, eye }) => floor === 0 && eye === EYE_HEIGHT)).toBe(true);
+  });
+
+  it('地面上一格宽的洞（扫描漏掉的）不打断直线', () => {
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 9.9, 1.2, 0),
+      rectangle(10.1, 0, 20, 1.2, 0),
+      rectangle(0, 0, 20, 1.2, 2.5)
+    ]);
+    const route = routeOf(trackOf(zigzag, grid), 1, 19, grid);
+    expect(bend(route)).toBeLessThan(0.03);
+  });
+
+  it('拉直后离墙仍有 0.2 米：通道变窄处直线会贴到墙，拐点留着', () => {
+    // x 10 以前 y 0～1.6，以后收窄成 y 0～0.6；扫描的人走在两段的中间。首尾连线在 x 10.4 处 y 约 0.54，离墙只有 0.06 米
+    const grid = buildFloorGrid([rectangle(0, 0, 10, 1.6, 0), rectangle(10, 0, 20, 0.6, 0)]);
+    const track = trackOf(
+      walk(
+        [
+          { from: [0, 0.8], to: [10, 0.8] },
+          { from: [10, 0.8], to: [10.3, 0.3] },
+          { from: [10.3, 0.3], to: [20, 0.3] }
+        ],
+        () => 0
+      ),
+      grid
+    );
+    const route = routeOf(track, 1, 19, grid);
+    // 窄的一段里每 5 厘米离墙（y 0.6）至少约 0.2 米（方格 0.2 米，差几厘米）
+    const narrow = along(route).filter(({ x }) => x > 10.4);
+    expect(narrow.length).toBeGreaterThan(0);
+    expect(Math.max(...narrow.map(({ y }) => y))).toBeLessThan(0.42);
+  });
+
+  it('拉直不穿墙：通道错开 0.8 米，偏差在容差以内但直线会穿过墙角，拐点留着', () => {
+    // 西段 y 0～1，东段 y 0.8～1.8，x 5～5.5 两段重叠处能过去；错开的地方不在中间，首尾连线在 x 6 处 y 约 0.72，在墙里
+    const grid = buildFloorGrid([rectangle(0, 0, 5.5, 1, 0), rectangle(5, 0.8, 20, 1.8, 0)]);
+    const track = trackOf(
+      walk(
+        [
+          { from: [0, 0.5], to: [5.25, 0.5] },
+          { from: [5.25, 0.5], to: [5.25, 1.3] },
+          { from: [5.25, 1.3], to: [20, 1.3] }
+        ],
+        () => 0
+      ),
+      grid
+    );
+    const route = routeOf(track, 1, 19, grid);
+    // 路线上每 5 厘米都在地面上（不在墙里）
+    const inWall = along(route).filter(
+      ({ x, y }) => !((x <= 5.5 && y >= 0 && y <= 1) || (x >= 5 && y >= 0.8 && y <= 1.8))
+    );
+    expect(inWall).toStrictEqual([]);
+  });
+
+  it('拉直以后，梁下面的低眼高还在原来的地方', () => {
+    // x 10.0～10.3 头顶 1.4 米有一道梁
+    const grid = corridor(rectangle(10, 0, 10.3, 1.2, 1.4));
+    const route = routeOf(trackOf(zigzag, grid), 1, 19, grid);
+    expect(bend(route)).toBeLessThan(0.03);
+    const eyeAt = (x: number) => {
+      const next = route.findIndex(point => point.x >= x);
+      const a = route[next - 1];
+      const b = route[next];
+      if (!a || !b) {
+        throw new Error(`路线在 x ${x} 两边没有点`);
+      }
+      return a.eye + ((b.eye - a.eye) * (x - a.x)) / (b.x - a.x);
+    };
+    for (const x of [10, 10.15, 10.3]) {
+      expect(eyeAt(x)).toBeLessThanOrEqual(1.2 + 0.08);
+    }
+    expect(eyeAt(6)).toBe(EYE_HEIGHT);
+    expect(eyeAt(15)).toBe(EYE_HEIGHT);
   });
 
   it('中间脚下没有网格的按前后插值；段不在轨迹里、整段没有网格时报错', () => {
@@ -81,16 +200,16 @@ describe('routeOf', () => {
       walk([{ from: [0, 2], to: [20, 2] }], x => (x > 12 ? 0.4 : 0)),
       grid
     );
-    const route = routeOf(track, 1, 19);
+    const route = routeOf(track, 1, 19, grid);
     expect(route[0]?.x).toBeCloseTo(1, 0);
     // 米数按扫描仪走过的三维长度算，x 12 处上了 0.4 米，19 米在 x 18 多一点
     expect(route.at(-1)?.x).toBeGreaterThan(18);
     expect(route.filter(({ x }) => x < 11.5).every(({ floor }) => floor === 0)).toBe(true);
     // 地面方格的高度是 Float32
     expect(route.filter(({ x }) => x > 12.5).every(({ floor }) => Math.abs(floor - 0.4) < 1e-6)).toBe(true);
-    expect(() => routeOf(track, 10, 30)).toThrow('不在轨迹里');
+    expect(() => routeOf(track, 10, 30, grid)).toThrow('不在轨迹里');
     const offMesh: Vec3[] = walk([{ from: [30, 2], to: [40, 2] }], () => 0);
-    expect(() => routeOf(trackOf(offMesh, grid), 1, 5)).toThrow('脚下没有网格');
+    expect(() => routeOf(trackOf(offMesh, grid), 1, 5, grid)).toThrow('脚下没有网格');
   });
 });
 

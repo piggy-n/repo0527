@@ -17,6 +17,16 @@ const WINDOW_HALF = 2;
 // 抽稀的容差：水平偏离折线、地板和眼高偏离插值不超过这么多米
 const SIMPLIFY_HORIZONTAL = 0.2;
 const SIMPLIFY_VERTICAL = 0.08;
+// 拉直：水平偏离扫描轨迹不超过这么多米的一段换成直线（扫描的人在通道里从一面墙斜着走到另一面，摆幅约 0.5 米）；
+// 直线上的点都落在直线上以后，再按这个容差去掉多余的点
+const STRAIGHT_HORIZONTAL = 1;
+const STRAIGHT_RESIDUAL = 0.02;
+// 直线上相机经过的地方要空：每隔 CLEAR_STEP 米，中线和左右各偏 CLEAR_LATERAL 米处，离路线的地板 FLOOR_REACH 米内有表面，
+// 地板以上 STEP_OVER 米（台阶、路沿，相机从上面过）到视点以上 HEAD_CLEARANCE 米（同眼高的规则）之间没有别的表面
+const CLEAR_STEP = 0.1;
+const CLEAR_LATERAL = 0.2;
+const FLOOR_REACH = 0.3;
+const STEP_OVER = 0.5;
 // 出生点：朝向取之后这么远（沿轨迹）那一点的方向，开头的小弯不算，净空至少这么高（矮通道里不出生）
 const SPAWN_LOOK = 8;
 const SPAWN_HEADROOM = 1.8;
@@ -74,20 +84,31 @@ function medianAround(values: readonly number[], i: number): number {
   return sorted[Math.floor(sorted.length / 2)] ?? Number.NaN;
 }
 
-// 点到 a→b 的偏差：水平到线段的距离，地板、眼高和线性插值的差，按各自的容差折算，超过 1 就要留下这个点
-function deviation(point: RoamPoint, a: RoamPoint, b: RoamPoint): number {
+// 点在线段 a→b 上的投影位置（0～1）和水平距离
+function project(point: RoamPoint, a: RoamPoint, b: RoamPoint): { t: number; distance: number } {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const length2 = dx * dx + dy * dy;
   const t = length2 > 0 ? Math.min(1, Math.max(0, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length2)) : 0;
-  const horizontal = Math.hypot(point.x - (a.x + dx * t), point.y - (a.y + dy * t));
-  const floor = Math.abs(point.floor - (a.floor + (b.floor - a.floor) * t));
-  const eye = Math.abs(point.eye - (a.eye + (b.eye - a.eye) * t));
-  return Math.max(horizontal / SIMPLIFY_HORIZONTAL, floor / SIMPLIFY_VERTICAL, eye / SIMPLIFY_VERTICAL);
+  return { t, distance: Math.hypot(point.x - (a.x + dx * t), point.y - (a.y + dy * t)) };
 }
 
-/** 抽稀（Douglas-Peucker），水平、地板、眼高一起看；首尾保留 */
-export function simplify(points: readonly RoamPoint[]): RoamPoint[] {
+// 点到 a→b 的偏差：水平到线段的距离，地板、眼高和线性插值的差，按各自的容差折算，超过 1 就要留下这个点
+function deviation(
+  point: RoamPoint,
+  a: RoamPoint,
+  b: RoamPoint,
+  horizontalTolerance: number,
+  verticalTolerance: number
+): number {
+  const { t, distance: horizontal } = project(point, a, b);
+  const floor = Math.abs(point.floor - (a.floor + (b.floor - a.floor) * t));
+  const eye = Math.abs(point.eye - (a.eye + (b.eye - a.eye) * t));
+  return Math.max(horizontal / horizontalTolerance, floor / verticalTolerance, eye / verticalTolerance);
+}
+
+// Douglas-Peucker：split(first, last) 返回要在中间留下的点（没有时 -1），首尾保留
+function douglasPeucker<T>(points: readonly T[], split: (first: number, last: number) => number): T[] {
   if (points.length <= 2) {
     return [...points];
   }
@@ -97,16 +118,8 @@ export function simplify(points: readonly RoamPoint[]): RoamPoint[] {
   const stack: [number, number][] = [[0, points.length - 1]];
   while (stack.length > 0) {
     const [first, last] = stack.pop() ?? [0, 0];
-    let worst = 0;
-    let index = -1;
-    for (let i = first + 1; i < last; i++) {
-      const value = deviation(points[i], points[first], points[last]);
-      if (value > worst) {
-        worst = value;
-        index = i;
-      }
-    }
-    if (worst > 1) {
+    const index = last - first < 2 ? -1 : split(first, last);
+    if (index !== -1) {
       keep[index] = 1;
       stack.push([first, index], [index, last]);
     }
@@ -114,11 +127,172 @@ export function simplify(points: readonly RoamPoint[]): RoamPoint[] {
   return points.filter((_, i) => keep[i] === 1);
 }
 
+// first～last 之间偏差最大的点，没有超过容差的返回 -1
+function worstOf(
+  points: readonly RoamPoint[],
+  first: number,
+  last: number,
+  horizontalTolerance: number,
+  verticalTolerance: number
+): number {
+  let worst = 0;
+  let index = -1;
+  for (let i = first + 1; i < last; i++) {
+    const value = deviation(points[i], points[first], points[last], horizontalTolerance, verticalTolerance);
+    if (value > worst) {
+      worst = value;
+      index = i;
+    }
+  }
+  return worst > 1 ? index : -1;
+}
+
+/** 抽稀（Douglas-Peucker），水平、地板、眼高一起看；首尾保留 */
+export function simplify(points: readonly RoamPoint[], horizontalTolerance = SIMPLIFY_HORIZONTAL): RoamPoint[] {
+  return douglasPeucker(points, (first, last) => worstOf(points, first, last, horizontalTolerance, SIMPLIFY_VERTICAL));
+}
+
+// 站在 floor 上、视点在 top 的相机在 (x, y) 这一列是不是空的。扫描的地面常有一两格的洞，脚下的表面可以在 holes 给的相邻方格里
+function clearAt(
+  grid: FloorGrid,
+  x: number,
+  y: number,
+  floor: number,
+  top: number,
+  holes: readonly (readonly [number, number])[] = []
+): boolean {
+  let ground = false;
+  for (const height of floorsAt(grid, x, y)) {
+    if (Math.abs(height - floor) <= FLOOR_REACH) {
+      ground = true;
+    } else if (height > floor + STEP_OVER && height < top + HEAD_CLEARANCE) {
+      return false;
+    }
+  }
+  return (
+    ground ||
+    holes.some(([dx, dy]) => floorsAt(grid, x + dx, y + dy).some(height => Math.abs(height - floor) <= FLOOR_REACH))
+  );
+}
+
+// 中线：周围 8 格；两侧：只沿前进方向的前后两格。墙（陡的面不进方格）靠"没有地面"认出来，墙和前进方向平行，
+// 沿前进方向找不到地面；横在路上的洞沿前进方向能跨过去
+const around = (cell: number) =>
+  [-1, 0, 1]
+    .flatMap(i => [-1, 0, 1].map(j => [i * cell, j * cell] as const))
+    .filter(([dx, dy]) => dx !== 0 || dy !== 0);
+const along = (cell: number, ux: number, uy: number) => [[ux * cell, uy * cell] as const, [-ux * cell, -uy * cell] as const];
+
+// 沿 (nx, ny) 方向两侧 CLEAR_LATERAL 米处都是空的（前进方向是 (ny, -nx)）
+function clearAside(grid: FloorGrid, point: RoamPoint, nx: number, ny: number): boolean {
+  const top = point.floor + point.eye;
+  const holes = along(grid.cellSize, ny, -nx);
+  return [-CLEAR_LATERAL, CLEAR_LATERAL].every(offset =>
+    clearAt(grid, point.x + nx * offset, point.y + ny * offset, point.floor, top, holes)
+  );
+}
+
+// 每个点的水平弧长
+function arcLengths(points: readonly RoamPoint[]): number[] {
+  const arcs = [0];
+  for (let i = 1; i < points.length; i++) {
+    arcs.push(arcs[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  }
+  return arcs;
+}
+
 /**
- * 轨迹上 from～to 米这一段做成路线：去掉两头脚下没有表面的点，中间的按前后插值；地板取中位数去抖，眼高按这个地板算、取前后的最小值，再抽稀。
- * 段不在轨迹范围里、有效的点不到两个时报错
+ * 拉直（ADR 0156 第 4 节）：先只按水平抽稀（容差 STRAIGHT_HORIZONTAL），一段直线要代替原来那段，相机沿它走时周围得是空的；
+ * 原来的点按弧长比例落到直线上，地板、眼高跟着原来的点（检查时头顶按眼高的规则留了余量，不用在新位置重算），最后在直线上按地板、眼高抽稀。
+ * 原来的点两侧本来就不空的地方（贴着东西走过），直线在这一处只要求中线空
  */
-export function routeOf(track: readonly TrackSample[], from: number, to: number): RoamPoint[] {
+function straighten(points: readonly RoamPoint[], grid: FloorGrid): RoamPoint[] {
+  if (points.length <= 2) {
+    return [...points];
+  }
+  const arcs = arcLengths(points);
+  // 原来的点两侧空不空，方向取前后两点
+  const roomy = points.map((point, i) => {
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(points.length - 1, i + 1)];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    return length > 0 && clearAside(grid, point, -(b.y - a.y) / length, (b.x - a.x) / length);
+  });
+  // first～last 换成直线时，相机经过的地方是不是空的；地板、眼高、两侧要不要空按弧长比例取原来的点
+  const nearby = around(grid.cellSize);
+  const clearChord = (first: number, last: number) => {
+    const a = points[first];
+    const b = points[last];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const nx = length > 0 ? -(b.y - a.y) / length : 0;
+    const ny = length > 0 ? (b.x - a.x) / length : 0;
+    const steps = Math.max(1, Math.ceil(length / CLEAR_STEP));
+    let k = first;
+    for (let s = 0; s <= steps; s++) {
+      const arc = arcs[first] + ((arcs[last] - arcs[first]) * s) / steps;
+      while (k < last && arcs[k + 1] < arc) {
+        k++;
+      }
+      const p = points[k];
+      const q = points[Math.min(k + 1, last)];
+      const t = arcs[k + 1] > arcs[k] ? Math.min(1, (arc - arcs[k]) / (arcs[k + 1] - arcs[k])) : 0;
+      const point: RoamPoint = {
+        x: a.x + ((b.x - a.x) * s) / steps,
+        y: a.y + ((b.y - a.y) * s) / steps,
+        floor: p.floor + (q.floor - p.floor) * t,
+        eye: p.eye + (q.eye - p.eye) * t
+      };
+      const wanted = t < 0.5 ? roomy[k] : roomy[Math.min(k + 1, last)];
+      if (!clearAt(grid, point.x, point.y, point.floor, point.floor + point.eye, nearby)) {
+        return false;
+      }
+      if (wanted && !clearAside(grid, point, nx, ny)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  // 先按原来的容差抽稀：直线通不过的地方退回到这些点（原来的路线），不退回到每 0.25 米一个的取样点
+  const base = douglasPeucker(
+    points.map((_, i) => i),
+    (first, last) => worstOf(points, first, last, SIMPLIFY_HORIZONTAL, SIMPLIFY_VERTICAL)
+  );
+  // 再只按水平抽稀：地板、眼高要留的点放到直线上以后再补，补在这里的话每个点都在原来摆动的位置上拐一次
+  const anchors = douglasPeucker(base, (first, last) => {
+    let farthest = -1;
+    let distance = -1;
+    for (let j = first + 1; j < last; j++) {
+      const offset = project(points[base[j]], points[base[first]], points[base[last]]).distance;
+      if (offset > distance) {
+        distance = offset;
+        farthest = j;
+      }
+    }
+    // 偏得太远，或者偏差在容差以内但直线不空：都在偏得最远的点拆开
+    return distance > STRAIGHT_HORIZONTAL || !clearChord(base[first], base[last]) ? farthest : -1;
+  });
+  // 原来的点按弧长比例落到所在的直线上，placed[k] 对应 points[k]
+  const placed: RoamPoint[] = [];
+  for (let n = 1; n < anchors.length; n++) {
+    const i0 = anchors[n - 1];
+    const i1 = anchors[n];
+    for (let k = n === 1 ? i0 : i0 + 1; k <= i1; k++) {
+      const t = arcs[i1] > arcs[i0] ? (arcs[k] - arcs[i0]) / (arcs[i1] - arcs[i0]) : 0;
+      placed.push({
+        ...points[k],
+        x: points[i0].x + (points[i1].x - points[i0].x) * t,
+        y: points[i0].y + (points[i1].y - points[i0].y) * t
+      });
+    }
+  }
+  return simplify(placed, STRAIGHT_RESIDUAL);
+}
+
+/**
+ * 轨迹上 from～to 米这一段做成路线：去掉两头脚下没有表面的点，中间的按前后插值；地板取中位数去抖，眼高按这个地板算、取前后的最小值，
+ * 再拉直、抽稀（grid 是 trackOf 用的那份）。段不在轨迹范围里、有效的点不到两个时报错
+ */
+export function routeOf(track: readonly TrackSample[], from: number, to: number, grid: FloorGrid): RoamPoint[] {
   const total = track.at(-1)?.distance ?? 0;
   if (!(from >= 0 && to > from && to <= total + ROUTE_SPACING)) {
     throw new ToolError(`路线段 ${from}～${to} 米不在轨迹里（轨迹共 ${total.toFixed(1)} 米）`);
@@ -144,13 +318,14 @@ export function routeOf(track: readonly TrackSample[], from: number, to: number)
   const routeFloors = floors.map((_, i) => medianAround(floors, i));
   // 眼高按路线的地板（视点站的地方）算，不按这个点脚下的表面：单个点脚下可能是栏杆、展柜、台阶的顶，按它算视点被压到贴地
   const eyes = usable.map((sample, i) => eyeAbove(routeFloors[i], sample.ceiling));
-  return simplify(
+  return straighten(
     usable.map(({ point: [x, y] }, i) => ({
       x,
       y,
       floor: routeFloors[i],
       eye: Math.min(...windowAround(eyes, i))
-    }))
+    })),
+    grid
   );
 }
 

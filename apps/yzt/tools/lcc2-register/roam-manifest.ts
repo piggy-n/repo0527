@@ -1,5 +1,6 @@
 // 出生点、路线换成清单的写法（ADR 0156 第 4 节，docs/config/3dt-manifest.md）
 import type { RouteSpan } from './args.ts';
+import type { FloorGrid } from './floor-grid.ts';
 import type { Vec3 } from './lcc2-data.ts';
 import { type Correction, meshToLngLatHeight, type Placement, yawToManifestHeading } from './placement.ts';
 import type { GridProjection } from './projection.ts';
@@ -47,9 +48,14 @@ export function manifestSpawn(track: readonly TrackSample[], from: number, frame
   };
 }
 
-/** 一条路线：眼高到厘米，等于 EYE_HEIGHT 的不写 */
-export function manifestRoute(track: readonly TrackSample[], span: RouteSpan, frame: RoamFrame): ManifestRoute {
-  const path = routeOf(track, span.from, span.to).map(point => {
+/** 一条路线：眼高到厘米，等于 EYE_HEIGHT 的不写；grid 是 trackOf 用的那份 */
+export function manifestRoute(
+  track: readonly TrackSample[],
+  span: RouteSpan,
+  frame: RoamFrame,
+  grid: FloorGrid
+): ManifestRoute {
+  const path = routeOf(track, span.from, span.to, grid).map(point => {
     const [lng, lat, height] = lngLatHeight(frame, point);
     const eye = round(point.eye, 2);
     return eye < EYE_HEIGHT
