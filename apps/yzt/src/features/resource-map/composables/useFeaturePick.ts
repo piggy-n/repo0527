@@ -55,7 +55,7 @@ import {
 } from '../feature-query';
 import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
-import type { ResourceLayersState } from '../resource-layers';
+import { isDrawn, type ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
 import { sourceLayerOf } from '../style-registry';
 import type { ResourceLayers } from './useResourceLayers';
@@ -198,17 +198,17 @@ function identityOf({ target, guid }: PickCandidate): SelectedFeature {
   return { sourceId: target.sourceId, featureId: guid };
 }
 
-// 资源仍然勾选、年份没变、还在目录里
+// 资源仍然画在地图上、年份没变、还在目录里
 function isShown(state: ResourceLayersState, target: PickResource): boolean {
   const { code } = target.resource;
   const display = state.displays.get(code);
-  return display?.checked === true && display.year === target.year && state.catalog?.resources.has(code) === true;
+  return isDrawn(display) && display?.year === target.year && state.catalog?.resources.has(code) === true;
 }
 
 // 参与识别的资源和年份，连同顺序；变了时进行中的识别作废
 function identifySignature(state: ResourceLayersState): string {
   return state.order
-    .filter(code => state.displays.get(code)?.checked && state.catalog?.resources.has(code))
+    .filter(code => isDrawn(state.displays.get(code)) && state.catalog?.resources.has(code))
     .map(code => `${code}@${state.displays.get(code)?.year}`)
     .join();
 }

@@ -96,7 +96,7 @@ describe('资源图层偏好的校验', () => {
 });
 
 describe('资源图层的偏好', () => {
-  it('目录先到也要等存储读完才合并；用上次的勾选、透明度、顺序和年份', async () => {
+  it('目录先到也要等存储读完才合并；用上次的勾选、透明度、顺序和年份；改版前存的没有 added，勾选过的算已加入（ADR 0157）', async () => {
     const store = createMemoryStore(
       stored(
         {
@@ -115,11 +115,33 @@ describe('资源图层的偏好', () => {
 
     expect(ctx.owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
     expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')).toStrictEqual({
+      added: true,
       checked: true,
       opacity: 0.5,
       year: 2023
     });
+    expect(ctx.owner.state.value.displays.get('bgdc_dltb')).toMatchObject({ added: false, checked: false });
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl']);
+  });
+
+  it('存下的 added 和 checked 分开还原：加入了但隐藏的不画，仍在当前地图里；没加入的不画', async () => {
+    const store = createMemoryStore(
+      stored(
+        {
+          csxhjctb_hydl: { added: true, checked: false, opacity: 1, year: 2025 },
+          bgdc_dltb: { added: false, checked: true, opacity: 1, year: 2022 },
+          bgdc_cjdcq: { added: true, checked: true, opacity: 1, year: 2024 }
+        },
+        ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']
+      )
+    );
+    using ctx = setup(store);
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')).toMatchObject({ added: true, checked: false });
+    expect(ctx.owner.state.value.displays.get('bgdc_dltb')).toMatchObject({ added: false, checked: true });
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_cjdcq']);
   });
 
   it('存下的资源目录里没有了、年份失效、目录里新出现的资源：按 ADR 0041 合并', async () => {
@@ -133,8 +155,9 @@ describe('资源图层的偏好', () => {
     const { displays, order } = ctx.owner.state.value;
     expect(displays.has('gone')).toBe(false);
     expect(displays.get('csxhjctb_hydl')?.year).toBe(2025);
-    expect(displays.get('bgdc_dltb')?.checked).toBe(true);
-    expect(order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+    expect(displays.get('bgdc_dltb')).toMatchObject({ added: true, checked: true });
+    // 新出现的资源按目录的顺序排在最后，已有的不按目录树整理（ADR 0157）
+    expect(order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
   });
 
   it('存下的顺序有重复：整条作废，按默认值显示，不会推导出重复的图层', async () => {
@@ -206,25 +229,26 @@ describe('资源图层的偏好', () => {
     expect(ctx.owner.batchYear.value).toBeNull();
   });
 
-  it('修改后防抖写入：每个资源的设置和叠放顺序（也是目录树的顺序）', async () => {
+  it('修改后防抖写入：每个资源的加入、显示、透明度、年份和叠放顺序', async () => {
     const store = createMemoryStore();
     using ctx = setup(store);
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
 
-    ctx.owner.setChecked('csxhjctb_hydl', true);
+    ctx.owner.add(['csxhjctb_hydl']);
     ctx.owner.setOpacity('csxhjctb_hydl', 0.4);
-    ctx.owner.move({ parentId: '测试', keys: ctx.owner.state.value.order, from: 2, to: 0 });
+    ctx.owner.moveLayer('csxhjctb_hydl', 1);
+    ctx.owner.setVisible('bgdc_dltb', false);
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
 
     expect(store.entries.get(KEY)).toStrictEqual({
       version: 1,
       value: {
         displays: {
-          bgdc_dltb: { checked: true, opacity: 1, year: 2022 },
-          bgdc_cjdcq: { checked: false, opacity: 1, year: 2024 },
-          csxhjctb_hydl: { checked: true, opacity: 0.4, year: 2025 }
+          bgdc_dltb: { added: true, checked: false, opacity: 1, year: 2022 },
+          bgdc_cjdcq: { added: false, checked: false, opacity: 1, year: 2024 },
+          csxhjctb_hydl: { added: true, checked: true, opacity: 0.4, year: 2025 }
         },
-        order: ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq'],
+        order: ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_cjdcq'],
         batchYear: null
       }
     });

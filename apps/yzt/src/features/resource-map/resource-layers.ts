@@ -6,7 +6,6 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup, StyleImage, StyleImages } from '@mx/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
-import { treeOrder } from './catalog-order';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
   DEFAULT_OPACITY,
@@ -52,6 +51,9 @@ export function resourceTileBase(apiBaseUrl: string, origin: string): string {
 
 /** 一个资源的显示状态 */
 export interface ResourceDisplay {
+  /** 已加入当前地图（ADR 0157）；移出时其他设置保留，再加入时沿用 */
+  readonly added: boolean;
+  /** 显示：当前图层里行首的复选框，只对已加入的资源起作用 */
   readonly checked: boolean;
   /** 0～1 */
   readonly opacity: number;
@@ -64,7 +66,7 @@ export interface ResourceLayersState {
   /** 目录还没加载时为 null */
   readonly catalog: ResourceCatalog | null;
   readonly displays: ReadonlyMap<string, ResourceDisplay>;
-  /** 叠放顺序，包括没勾选的，排在前面的画在上面；按目录树整理过，同一个分类的资源连在一起，也是树上的顺序（ADR 0118） */
+  /** 叠放顺序，包括没加入的：已加入的按它从上到下画在地图上，新加入的移到最前；和目录树的顺序无关（ADR 0157，取代 ADR 0118） */
   readonly order: readonly string[];
 }
 
@@ -79,36 +81,108 @@ export function latestYear(resource: Resource): number {
   return resource.years[resource.years.length - 1];
 }
 
+// 登记表里默认勾选的资源（地类图斑）默认加入并显示
 function defaultDisplay(resource: Resource): ResourceDisplay {
-  return {
-    checked: resourceStyle(resource.code).checked ?? false,
-    opacity: DEFAULT_OPACITY,
-    year: latestYear(resource)
-  };
+  const shown = resourceStyle(resource.code).checked ?? false;
+  return { added: shown, checked: shown, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
 }
 
-// 年份仍在资源的年份里就保留，否则改用最新的一年；勾选和透明度保留
+/** 画在地图上：已加入当前地图并且显示 */
+export function isDrawn(display: ResourceDisplay | undefined): boolean {
+  return display !== undefined && display.added && display.checked;
+}
+
+/** 当前地图里的资源（包括隐藏的），按叠放顺序从上到下 */
+export function addedCodes(state: ResourceLayersState): string[] {
+  return state.order.filter(code => state.displays.get(code)?.added === true);
+}
+
+// 有目录里没有的资源时抛错
+function assertKnown(state: ResourceLayersState, codes: readonly string[]): void {
+  const missing = codes.find(code => !state.displays.has(code));
+  if (missing !== undefined) {
+    throw new Error(`目录里没有资源 ${missing}`);
+  }
+}
+
+/**
+ * 加入当前地图（ADR 0157）：没加入的按给出的先后移到最前面并显示，一次加多个时整批在最前、批内保持给出的先后；
+ * 已加入的不动，不重复。没有要加入的时返回原来的状态对象；有目录里没有的资源时抛错
+ */
+export function withAdded(state: ResourceLayersState, codes: readonly string[]): ResourceLayersState {
+  assertKnown(state, codes);
+  const fresh = [...new Set(codes)].filter(code => state.displays.get(code)?.added === false);
+  if (fresh.length === 0) {
+    return state;
+  }
+  const displays = new Map(state.displays);
+  for (const code of fresh) {
+    const display = displays.get(code);
+    if (display) {
+      displays.set(code, { ...display, added: true, checked: true });
+    }
+  }
+  const moved = new Set(fresh);
+  return { ...state, displays, order: [...fresh, ...state.order.filter(code => !moved.has(code))] };
+}
+
+/**
+ * 移出当前地图：透明度、年份等设置保留，再加入时沿用；没加入的忽略。
+ * 没有要移出的时返回原来的状态对象；有目录里没有的资源时抛错
+ */
+export function withRemoved(state: ResourceLayersState, codes: readonly string[]): ResourceLayersState {
+  assertKnown(state, codes);
+  const removing = codes.filter(code => state.displays.get(code)?.added === true);
+  if (removing.length === 0) {
+    return state;
+  }
+  const displays = new Map(state.displays);
+  for (const code of removing) {
+    const display = displays.get(code);
+    if (display) {
+      displays.set(code, { ...display, added: false });
+    }
+  }
+  return { ...state, displays };
+}
+
+/**
+ * 在当前地图里把资源挪到第 to 位（在已加入的资源里从上往下数，从 0 开始）：已加入的按新的先后排在最前，没加入的跟在后面。
+ * 位置不变时返回原来的状态对象；资源没加入、位置越界时抛错
+ */
+export function withMoved(state: ResourceLayersState, code: string, to: number): ResourceLayersState {
+  const added = addedCodes(state);
+  const from = added.indexOf(code);
+  if (from === -1) {
+    throw new Error(`资源 ${code} 不在当前地图里`);
+  }
+  if (!(Number.isInteger(to) && to >= 0 && to < added.length)) {
+    throw new RangeError(`位置应在 0～${added.length - 1} 之间，收到 ${to}`);
+  }
+  if (from === to) {
+    return state;
+  }
+  const reordered = added.toSpliced(from, 1).toSpliced(to, 0, code);
+  const rest = state.order.filter(other => state.displays.get(other)?.added !== true);
+  return { ...state, order: [...reordered, ...rest] };
+}
+
+// 年份仍在资源的年份里就保留，否则改用最新的一年；加入、勾选和透明度保留
 function keptDisplay(display: ResourceDisplay, resource: Resource): ResourceDisplay {
   return resource.years.includes(display.year) ? display : { ...display, year: latestYear(resource) };
 }
 
-// 已有的资源保持原来的顺序；新出现的插到目录里排在它后面的第一个已有资源之前，没有就排在最后
+// 已有的资源保持原来的顺序，新出现的按目录的顺序排在最后
 function mergedOrder(previous: readonly string[], catalog: ResourceCatalog): string[] {
-  const codes = [...catalog.resources.keys()];
   const order = previous.filter(code => catalog.resources.has(code));
   const existing = new Set(order);
-  for (const [index, code] of codes.entries()) {
-    if (!existing.has(code)) {
-      const anchor = codes.slice(index + 1).find(next => existing.has(next));
-      order.splice(anchor === undefined ? order.length : order.indexOf(anchor), 0, code);
-    }
-  }
-  return order;
+  return [...order, ...[...catalog.resources.keys()].filter(code => !existing.has(code))];
 }
 
 /**
- * 目录（重新）加载后按资源合并显示状态（ADR 0041 第 3 节）：仍有的资源保留勾选、透明度和顺序，年份不再有效时改用最新的一年；
- * 新出现的用登记表的默认值；目录里没有了的删掉。顺序再按目录树整理（ADR 0118）。持久化恢复的状态同样经过这里，不直接使用存下的值
+ * 目录（重新）加载后按资源合并显示状态（ADR 0041 第 3 节）：仍有的资源保留加入、勾选、透明度和顺序，年份不再有效时改用最新的一年；
+ * 新出现的用登记表的默认值，排在最后；目录里没有了的删掉。顺序不再按目录树整理（ADR 0157）。
+ * 持久化恢复的状态同样经过这里，不直接使用存下的值
  */
 export function mergeDisplayState(previous: ResourceLayersState, catalog: ResourceCatalog): ResourceLayersState {
   if (previous.catalog === catalog) {
@@ -119,7 +193,7 @@ export function mergeDisplayState(previous: ResourceLayersState, catalog: Resour
     const display = previous.displays.get(resource.code);
     displays.set(resource.code, display ? keptDisplay(display, resource) : defaultDisplay(resource));
   }
-  return { catalog, displays, order: treeOrder(catalog.categories, mergedOrder(previous.order, catalog)) };
+  return { catalog, displays, order: mergedOrder(previous.order, catalog) };
 }
 
 // 批量设置年份固定列出的年份（ADR 0094）：数据里还没有时也列出
@@ -143,7 +217,7 @@ export function batchYearOptions(catalog: ResourceCatalog | null): number[] {
 }
 
 /**
- * 批量设置年份后的显示状态（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变；
+ * 批量设置年份后的显示状态（ADR 0052 第 2 节）：有这一年的资源不论是否加入、显示都切过去，其他不变；
  * 没有资源要改时（包括没有任何资源有这一年，ADR 0094）返回原来的状态对象；年份不是整数时抛错
  */
 export function withYearForAll(state: ResourceLayersState, year: number): ResourceLayersState {
@@ -238,7 +312,7 @@ export function validateCatalog(
 ): ReadonlyMap<string, readonly string[]> {
   const invalid = new Map<string, readonly string[]>();
   for (const resource of catalog?.resources.values() ?? []) {
-    const display = { checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
+    const display = { added: true, checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
     try {
       const { id, source, layers } = resourceEntry(resource, display, tileBase, styleOf(resource.code), undefined);
       const errors = validateStyleMin({ version: 8, sources: { [id]: source }, layers: [...layers] });
@@ -262,7 +336,7 @@ export interface ResourcesGroupInput {
   readonly overrideOf?: SymbolOverrideOf;
 }
 
-/** resources 分组：只有勾选且校验通过的资源，每个资源一个数据源、一个图层；面板上排在前面的画在上面 */
+/** resources 分组：只有画在地图上（已加入并显示）且校验通过的资源，每个资源一个数据源、一个图层；面板上排在前面的画在上面 */
 export function resourcesGroup({
   state,
   invalid,
@@ -276,7 +350,7 @@ export function resourcesGroup({
   for (const code of state.order.toReversed()) {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (resource && display?.checked && !invalid.has(code)) {
+    if (resource && display && isDrawn(display) && !invalid.has(code)) {
       const entry = resourceEntry(resource, display, tileBase, resourceStyle(code), overrideOf(code));
       sources[entry.id] = entry.source;
       layers.push(...entry.layers);

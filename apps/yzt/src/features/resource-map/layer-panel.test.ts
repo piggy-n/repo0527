@@ -54,7 +54,7 @@ function withChecked(state: ResourceLayersState, codes: readonly string[], check
   for (const code of codes) {
     const display = displays.get(code);
     if (display) {
-      displays.set(code, { ...display, checked });
+      displays.set(code, { ...display, added: checked, checked });
     }
   }
   return { ...state, displays };
@@ -218,18 +218,6 @@ describe('目录树和叠放顺序（ADR 0118）', () => {
           ['水资源(none)', ['szy_kt']]
         ]
       ]
-    ]);
-  });
-
-  it('存下的顺序没有按目录树时，合并目录时整理：同一个分类的资源连在一起，新出现的资源排在同级里', () => {
-    const stored = { ...INITIAL, catalog: null, order: ['poi', 'bgdc_dltb', 'szy_kt', 'bgdc_cjdcqjx'] };
-
-    expect(mergeDisplayState(stored, buildCatalog(TREE)).order).toStrictEqual([
-      'poi',
-      'bgdc_dltb',
-      'bgdc_cjdcq',
-      'bgdc_cjdcqjx',
-      'szy_kt'
     ]);
   });
 

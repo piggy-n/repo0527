@@ -90,7 +90,9 @@ function checkedState(): ResourceLayersState {
     }
   ]);
   const state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalog);
-  const displays = new Map([...state.displays].map(([code, display]) => [code, { ...display, checked: true }]));
+  const displays = new Map(
+    [...state.displays].map(([code, display]) => [code, { ...display, added: true, checked: true }])
+  );
   return { ...state, displays };
 }
 

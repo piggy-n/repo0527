@@ -110,12 +110,17 @@ afterEach(() => {
 });
 
 describe('ResourceLegend', () => {
-  it('按叠放顺序列出勾选的资源', async () => {
+  it('按叠放顺序列出画在地图上的资源：新加入的在最上面，隐藏的不列出', async () => {
     const { wrapper, owner } = mountLegend();
-    owner.setChecked('csxhjctb_hydl', true);
+    owner.add(['csxhjctb_hydl']);
     await nextTick();
 
-    expect(entries(wrapper)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
+    expect(entries(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb']);
+
+    owner.setVisible('bgdc_dltb', false);
+    await nextTick();
+
+    expect(entries(wrapper)).toStrictEqual(['csxhjctb_hydl']);
   });
 
   it('湿地只列它实际有的地类，搜索也只在这些里找；地类图斑仍是全表（ADR 0124）', async () => {

@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
+  addedCodes,
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
+  isDrawn,
   mergeDisplayState,
   isResourceBodyLayer,
   resourceCodeOfSource,
@@ -16,6 +18,9 @@ import {
   resourceSourceId,
   resourceTileBase,
   validateCatalog,
+  withAdded,
+  withMoved,
+  withRemoved,
   withYearForAll
 } from './resource-layers';
 import { BLANK_PATTERN_IMAGE_ID, patternImageId, patternImages } from './fill-patterns';
@@ -54,8 +59,9 @@ function withDisplay(state: ResourceLayersState, code: string, change: Partial<R
   return { ...state, displays: new Map([...state.displays, [code, { ...display, ...change }]]) };
 }
 
+// 全部加入当前地图并显示，顺序不变
 function checkAll(state: ResourceLayersState): ResourceLayersState {
-  return state.order.reduce((next, code) => withDisplay(next, code, { checked: true }), state);
+  return state.order.reduce((next, code) => withDisplay(next, code, { added: true, checked: true }), state);
 }
 
 function derive(state: ResourceLayersState, invalid: ReadonlyMap<string, unknown> = new Map()) {
@@ -109,13 +115,13 @@ describe('ID 与地址', () => {
 });
 
 describe('mergeDisplayState', () => {
-  it('第一次合并：顺序同目录，默认值来自登记表（只有地类图斑默认勾选），年份取最新的一年，透明度 1', () => {
+  it('第一次合并：顺序同目录，默认值来自登记表（只有地类图斑默认加入并显示），年份取最新的一年，透明度 1', () => {
     const state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
 
     expect(state.catalog).toBe(CATALOG);
     expect(state.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'csxhjctb_gyssp']);
-    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ checked: true, opacity: 1, year: 2022 });
-    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: false, opacity: 1, year: 2025 });
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ added: true, checked: true, opacity: 1, year: 2022 });
+    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({ added: false, checked: false, opacity: 1, year: 2025 });
   });
 
   it('同一个目录：返回原来的状态对象', () => {
@@ -124,29 +130,28 @@ describe('mergeDisplayState', () => {
     expect(mergeDisplayState(state, CATALOG)).toBe(state);
   });
 
-  it('目录刷新：仍有的资源保留勾选、透明度和顺序；目录里没有了的删掉', () => {
+  it('目录刷新：仍有的资源保留加入、勾选、透明度和顺序；目录里没有了的删掉', () => {
     let state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
-    state = withDisplay(state, 'csxhjctb_hydl', { checked: true, opacity: 0.4 });
+    state = withDisplay(state, 'csxhjctb_hydl', { added: true, checked: true, opacity: 0.4 });
     state = withDisplay(state, 'bgdc_dltb', { checked: false });
     state = { ...state, order: ['csxhjctb_hydl', 'bgdc_cjdcqjx', 'bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_gyssp'] };
 
     const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, HYDL, GYSSP));
 
     expect(next.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_gyssp']);
-    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: true, opacity: 0.4, year: 2025 });
+    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ added: true, checked: true, opacity: 0.4, year: 2025 });
     expect(next.displays.get('bgdc_dltb')?.checked).toBe(false);
     expect(next.displays.has('bgdc_cjdcqjx')).toBe(false);
   });
 
-  it('新出现的资源用默认值，插到目录里排在它后面的第一个已有资源之前，没有就排在最后', () => {
+  it('新出现的资源用默认值，按目录的顺序排在最后；已有的顺序不按目录树整理（ADR 0157）', () => {
     let state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(DLTB, HYDL));
     state = { ...state, order: ['csxhjctb_hydl', 'bgdc_dltb'] };
 
-    // 目录顺序：dltb、新 a、新 b、hydl、新 z
     const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, CJDCQJX, HYDL, GYSSP));
 
-    expect(next.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'bgdc_dltb', 'csxhjctb_gyssp']);
-    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 1, year: 2024 });
+    expect(next.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_gyssp']);
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ added: false, checked: false, opacity: 1, year: 2024 });
   });
 
   it('年份：仍在资源的年份里就保留，否则改用最新的一年', () => {
@@ -161,6 +166,69 @@ describe('mergeDisplayState', () => {
   });
 });
 
+describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
+  // 初始只有地类图斑在当前地图里
+  const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+
+  it('画在地图上要已加入并且显示', () => {
+    expect(isDrawn(undefined)).toBe(false);
+    expect(isDrawn({ added: true, checked: true, opacity: 1, year: 2022 })).toBe(true);
+    expect(isDrawn({ added: true, checked: false, opacity: 1, year: 2022 })).toBe(false);
+    expect(isDrawn({ added: false, checked: true, opacity: 1, year: 2022 })).toBe(false);
+  });
+
+  it('加入：放到最前面并显示；一次加多个时整批在最前，批内保持给出的先后；已加入的不动、不重复', () => {
+    const hidden = withDisplay(initial, 'csxhjctb_gyssp', { checked: false });
+
+    const next = withAdded(hidden, ['csxhjctb_hydl', 'bgdc_dltb', 'csxhjctb_gyssp', 'csxhjctb_hydl']);
+
+    expect(addedCodes(next)).toStrictEqual(['csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_dltb']);
+    expect(next.order).toStrictEqual(['csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx']);
+    expect(next.displays.get('csxhjctb_gyssp')).toMatchObject({ added: true, checked: true });
+  });
+
+  it('移出：设置保留；移出后再加入，重新放到最前面并显示，透明度和年份沿用', () => {
+    let state = withAdded(initial, ['csxhjctb_hydl']);
+    state = withDisplay(state, 'bgdc_dltb', { opacity: 0.5, checked: false });
+
+    state = withRemoved(state, ['bgdc_dltb']);
+    expect(addedCodes(state)).toStrictEqual(['csxhjctb_hydl']);
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ added: false, checked: false, opacity: 0.5, year: 2022 });
+
+    state = withAdded(state, ['bgdc_dltb']);
+    expect(addedCodes(state)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ added: true, checked: true, opacity: 0.5, year: 2022 });
+  });
+
+  it('没有要加入、移出的时返回原来的状态对象；有目录里没有的资源时抛错', () => {
+    expect(withAdded(initial, ['bgdc_dltb'])).toBe(initial);
+    expect(withAdded(initial, [])).toBe(initial);
+    expect(withRemoved(initial, ['csxhjctb_hydl'])).toBe(initial);
+    expect(() => withAdded(initial, ['bgdc_dltb', 'nope'])).toThrow('目录里没有资源 nope');
+    expect(() => withRemoved(initial, ['nope'])).toThrow('目录里没有资源 nope');
+  });
+
+  it('挪动：按已加入的资源里的位置，已加入的排在最前，没加入的跟在后面', () => {
+    const state = withAdded(initial, ['csxhjctb_hydl', 'csxhjctb_gyssp']);
+
+    const next = withMoved(state, 'bgdc_dltb', 0);
+
+    expect(addedCodes(next)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl', 'csxhjctb_gyssp']);
+    expect(next.order).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_cjdcq', 'bgdc_cjdcqjx']);
+    expect(addedCodes(withMoved(next, 'bgdc_dltb', 2))).toStrictEqual(['csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_dltb']);
+  });
+
+  it('挪动：位置不变时返回原来的状态对象；没加入、位置越界时抛错', () => {
+    const state = withAdded(initial, ['csxhjctb_hydl']);
+
+    expect(withMoved(state, 'bgdc_dltb', 1)).toBe(state);
+    expect(() => withMoved(state, 'bgdc_cjdcq', 0)).toThrow('资源 bgdc_cjdcq 不在当前地图里');
+    expect(() => withMoved(state, 'bgdc_dltb', 2)).toThrow(RangeError);
+    expect(() => withMoved(state, 'bgdc_dltb', -1)).toThrow(RangeError);
+    expect(() => withMoved(state, 'bgdc_dltb', 0.5)).toThrow(RangeError);
+  });
+});
+
 describe('resourcesGroup', () => {
   const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
 
@@ -168,9 +236,12 @@ describe('resourcesGroup', () => {
     expect(derive(EMPTY_RESOURCE_LAYERS)).toStrictEqual({ sources: {}, layers: [] });
   });
 
-  it('只放勾选且校验通过的资源；面板上排在前面的画在上面（样式里的图层从下到上）', () => {
-    let state = withDisplay(initial, 'csxhjctb_hydl', { checked: true });
-    state = withDisplay(state, 'csxhjctb_gyssp', { checked: true });
+  it('只放已加入、显示且校验通过的资源；面板上排在前面的画在上面（样式里的图层从下到上）', () => {
+    let state = withDisplay(initial, 'csxhjctb_hydl', { added: true, checked: true });
+    state = withDisplay(state, 'csxhjctb_gyssp', { added: true, checked: true });
+    // 加入了但隐藏、勾选着但没加入的都不画
+    state = withDisplay(state, 'bgdc_cjdcq', { added: true, checked: false });
+    state = withDisplay(state, 'bgdc_cjdcqjx', { added: false, checked: true });
     state = { ...state, order: ['csxhjctb_gyssp', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl'] };
 
     const group = derive(state, new Map([['bgdc_dltb', ['配置错误']]]));
@@ -381,13 +452,13 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
     expect(batchYearOptions(null)).toStrictEqual([]);
   });
 
-  it('有这一年的资源不论是否勾选都切过去，没有的不变；勾选、透明度、顺序不变', () => {
-    const state = withDisplay(initial, 'csxhjctb_hydl', { checked: true, opacity: 0.4 });
+  it('有这一年的资源不论是否加入都切过去，没有的不变；加入、勾选、透明度、顺序不变', () => {
+    const state = withDisplay(initial, 'csxhjctb_hydl', { added: true, checked: true, opacity: 0.4 });
 
     const next = withYearForAll(state, 2023);
 
-    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: true, opacity: 0.4, year: 2023 });
-    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 1, year: 2023 });
+    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ added: true, checked: true, opacity: 0.4, year: 2023 });
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ added: false, checked: false, opacity: 1, year: 2023 });
     expect(next.displays.get('bgdc_dltb')).toBe(state.displays.get('bgdc_dltb'));
     expect(next.displays.get('csxhjctb_gyssp')).toBe(state.displays.get('csxhjctb_gyssp'));
     expect(next.order).toBe(state.order);

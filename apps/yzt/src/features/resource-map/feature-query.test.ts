@@ -62,7 +62,7 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number, checked = true): ResourceDisplay => ({ checked, opacity: 1, year });
+const display = (year: number, checked = true): ResourceDisplay => ({ added: true, checked, opacity: 1, year });
 
 // 从上到下：水域线、村级调查区、地类图斑、坑塘（没勾选）、公用设施点
 const STATE: ResourceLayersState = {

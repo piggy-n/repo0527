@@ -1,6 +1,6 @@
 import type { CatalogCategory, ResourceGeometry } from './catalog';
 import { CATALOG_ROOT, type TreeMove } from './catalog-order';
-import type { ResourceLayersState } from './resource-layers';
+import { isDrawn, type ResourceLayersState } from './resource-layers';
 
 // 图层面板显示的数据，都由显示状态推导；面板只显示和调用拥有者的操作（5C.2）
 
@@ -34,7 +34,7 @@ export function nodeKey(node: PanelNode): string {
 }
 
 function checkStateOf(codes: readonly string[], state: ResourceLayersState): CheckState {
-  const checked = codes.filter(code => state.displays.get(code)?.checked).length;
+  const checked = codes.filter(code => isDrawn(state.displays.get(code))).length;
   if (checked === 0) {
     return 'none';
   }
@@ -72,7 +72,7 @@ export function panelTree(state: ResourceLayersState, keyword = ''): PanelCatego
       if (!resource || !(keep || matches(resource.name))) {
         return [];
       }
-      const checked = state.displays.get(child.code)?.checked ?? false;
+      const checked = isDrawn(state.displays.get(child.code));
       return [{ kind: 'resource', code: child.code, name: resource.name, geometry: resource.geometry, checked }];
     });
     const sorted = sortedNodes(children);
@@ -125,7 +125,7 @@ export function checkedLayers(state: ResourceLayersState): CheckedLayer[] {
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display?.checked) {
+    if (!resource || !display || !isDrawn(display)) {
       return [];
     }
     const { opacity, year } = display;

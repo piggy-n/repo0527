@@ -15,7 +15,7 @@ import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
-import { isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
+import { isDrawn, isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
 // 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
@@ -65,7 +65,7 @@ export interface PickResource {
   readonly layerCode: string;
 }
 
-/** 参与识别的资源，从上到下：勾选、当前级别显示、没被校验拦下的 */
+/** 参与识别的资源，从上到下：画在地图上（已加入并显示）、当前级别显示、没被校验拦下的 */
 export function pickResources(
   state: ResourceLayersState,
   invalid: ReadonlyMap<string, unknown>,
@@ -74,7 +74,7 @@ export function pickResources(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display?.checked || invalid.has(code) || zoom < (resource.minzoom ?? 0)) {
+    if (!resource || !display || !isDrawn(display) || invalid.has(code) || zoom < (resource.minzoom ?? 0)) {
       return [];
     }
     const layerCode = tilesetOf(code, display.year);

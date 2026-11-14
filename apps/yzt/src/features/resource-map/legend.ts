@@ -1,7 +1,7 @@
 import type { Resource } from './catalog';
 import { classItems, legacyItem, OTHER_ITEM } from './classification';
 import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
-import type { ResourceLayersState } from './resource-layers';
+import { isDrawn, type ResourceLayersState } from './resource-layers';
 import {
   noSymbolOverride,
   type ResourceSymbolOverride,
@@ -165,7 +165,7 @@ export function legendEntries(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display?.checked || invalid.has(code)) {
+    if (!resource || !display || !isDrawn(display) || invalid.has(code)) {
       return [];
     }
     return [legendEntry(resource, display.year, overrideOf(code))];

@@ -60,12 +60,6 @@ function layerIds(owner: ReturnType<typeof useResourceLayers>): string[] {
   return owner.deriveGroup().layers.map(({ id }) => id);
 }
 
-// 测试目录只有"测试"一个分类：在它下面把 code 移到第 index 位
-function moveTo(owner: ReturnType<typeof useResourceLayers>, code: string, index: number) {
-  const keys = owner.state.value.order;
-  owner.move({ parentId: '测试', keys, from: keys.indexOf(code), to: index });
-}
-
 // 村级调查区的统一符号改成红色
 const redVillageSurvey = (code: string) => (code === 'bgdc_cjdcq' ? { uniform: { fillColor: 'red' } } : undefined);
 
@@ -89,15 +83,15 @@ describe('useResourceLayers', () => {
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
   });
 
-  it('目录重新加载：按资源合并，保留用户的勾选，删掉没有了的资源', async () => {
+  it('目录重新加载：按资源合并，保留用户加入的图层和顺序，删掉没有了的资源', async () => {
     using ctx = await loaded();
-    ctx.owner.setChecked('csxhjctb_hydl', true);
+    ctx.owner.add(['csxhjctb_hydl']);
 
     ctx.catalog.value = catalogOf(DLTB, HYDL);
     await nextTick();
 
-    expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
-    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
+    expect(ctx.owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb']);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl']);
   });
 
   it('三维引擎不画样式图层时（app 注入的能力）三维里推导出空分组，切回二维恢复（ADR 0147、0153）', async () => {
@@ -131,16 +125,19 @@ describe('useResourceLayers', () => {
     using ctx = await loaded();
     const initial = ctx.owner.state.value;
 
-    ctx.owner.setChecked('bgdc_dltb', true);
+    ctx.owner.add(['bgdc_dltb']);
+    ctx.owner.remove(['bgdc_cjdcq']);
+    ctx.owner.setVisible('bgdc_dltb', true);
     ctx.owner.setOpacity('bgdc_dltb', 1);
     ctx.owner.setYear('csxhjctb_hydl', 2025);
-    moveTo(ctx.owner, 'bgdc_dltb', 0);
+    ctx.owner.moveLayer('bgdc_dltb', 0);
     expect(ctx.owner.state.value).toBe(initial);
 
-    ctx.owner.setChecked('csxhjctb_hydl', true);
+    ctx.owner.add(['csxhjctb_hydl']);
     ctx.owner.setOpacity('csxhjctb_hydl', 0.3);
     ctx.owner.setYear('csxhjctb_hydl', 2023);
     expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')).toStrictEqual({
+      added: true,
       checked: true,
       opacity: 0.3,
       year: 2023
@@ -151,66 +148,76 @@ describe('useResourceLayers', () => {
     expect(initial.displays.get('csxhjctb_hydl')?.checked).toBe(false);
   });
 
-  it('批量勾选：一次替换状态；都已是目标值时不替换；有目录里没有的资源时抛错、什么也不改', async () => {
+  it('加入多个、移出多个：各只替换一次状态；新加的整批放在最前；有目录里没有的资源时抛错、什么也不改（ADR 0157）', async () => {
     using ctx = await loaded();
     const initial = ctx.owner.state.value;
+    let replaced = 0;
+    const stop = watch(ctx.owner.state, () => replaced++, { flush: 'sync' });
 
-    ctx.owner.setCheckedMany(['bgdc_dltb'], true);
-    expect(ctx.owner.state.value).toBe(initial);
-    expect(() => ctx.owner.setCheckedMany(['bgdc_cjdcq', 'szy_kt'], true)).toThrow('目录里没有资源 szy_kt');
+    expect(() => ctx.owner.add(['bgdc_cjdcq', 'szy_kt'])).toThrow('目录里没有资源 szy_kt');
     expect(ctx.owner.state.value).toBe(initial);
 
-    ctx.owner.setCheckedMany(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb'], true);
-    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_cjdcq', 'resources-bgdc_dltb']);
-    ctx.owner.setCheckedMany(['bgdc_cjdcq', 'csxhjctb_hydl'], false);
+    ctx.owner.add(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
+    expect(replaced).toBe(1);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl', 'resources-bgdc_cjdcq']);
+    ctx.owner.remove(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    expect(replaced).toBe(2);
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+    stop();
   });
 
-  it('目录树里同级调整就是调整叠放顺序：排在最上面的画在最上层', async () => {
+  it('隐藏的图层不画，仍在当前地图里、位置不变；再显示时照旧', async () => {
     using ctx = await loaded();
-    ctx.owner.setChecked('csxhjctb_hydl', true);
+    ctx.owner.add(['csxhjctb_hydl']);
 
-    moveTo(ctx.owner, 'csxhjctb_hydl', 0);
+    ctx.owner.setVisible('csxhjctb_hydl', false);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
     expect(ctx.owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
+
+    ctx.owner.setVisible('csxhjctb_hydl', true);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl']);
+  });
+
+  it('当前地图里挪动就是调整叠放顺序：排在最上面的画在最上层', async () => {
+    using ctx = await loaded();
+    ctx.owner.add(['csxhjctb_hydl']);
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl']);
 
-    moveTo(ctx.owner, 'csxhjctb_hydl', 2);
-    expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+    ctx.owner.moveLayer('csxhjctb_hydl', 1);
+    expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_cjdcq']);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
-  it('参数不合法时抛错，状态不变：目录里没有的资源、透明度越界、不是资源的年份、位置越界、键重复', async () => {
+  it('参数不合法时抛错，状态不变：目录里没有的资源、透明度越界、不是资源的年份、没加入、位置越界', async () => {
     using ctx = await loaded();
     const before = ctx.owner.state.value;
-    const keys = before.order;
 
-    expect(() => ctx.owner.setChecked('szy_kt', true)).toThrow('目录里没有资源 szy_kt');
+    expect(() => ctx.owner.add(['szy_kt'])).toThrow('目录里没有资源 szy_kt');
+    expect(() => ctx.owner.remove(['szy_kt'])).toThrow('目录里没有资源 szy_kt');
+    expect(() => ctx.owner.setVisible('szy_kt', true)).toThrow('目录里没有资源 szy_kt');
     expect(() => ctx.owner.setOpacity('bgdc_dltb', 1.5)).toThrow(RangeError);
     expect(() => ctx.owner.setOpacity('bgdc_dltb', Number.NaN)).toThrow(RangeError);
     expect(() => ctx.owner.setYear('csxhjctb_hydl', 2030)).toThrow('没有 2030 年的数据');
-    expect(() => ctx.owner.move({ parentId: '测试', keys, from: 0, to: 3 })).toThrow(RangeError);
-    expect(() => ctx.owner.move({ parentId: '测试', keys, from: -1, to: 0 })).toThrow(RangeError);
-    expect(() => ctx.owner.move({ parentId: '测试', keys, from: 0, to: 0.5 })).toThrow(RangeError);
-    expect(() => ctx.owner.move({ parentId: '测试', keys: ['bgdc_dltb', 'bgdc_dltb'], from: 0, to: 1 })).toThrow(
-      '重复的键'
-    );
+    expect(() => ctx.owner.moveLayer('csxhjctb_hydl', 0)).toThrow('不在当前地图里');
+    expect(() => ctx.owner.moveLayer('bgdc_dltb', 1)).toThrow(RangeError);
     expect(ctx.owner.state.value).toBe(before);
   });
 
   it('目录还没加载时操作抛错', () => {
     using ctx = setup();
 
-    expect(() => ctx.owner.setChecked('bgdc_dltb', true)).toThrow('目录里没有资源 bgdc_dltb');
+    expect(() => ctx.owner.add(['bgdc_dltb'])).toThrow('目录里没有资源 bgdc_dltb');
   });
 
-  it('只在目录变化时校验：勾选、改透明度、调整顺序都不重新校验', async () => {
+  it('只在目录变化时校验：加入、改透明度、调整顺序都不重新校验', async () => {
     const validate = vi.fn<typeof validateCatalog>(validateCatalog);
     using ctx = await loaded({ validate });
     ctx.owner.deriveGroup();
     const calls = validate.mock.calls.length;
 
-    ctx.owner.setChecked('csxhjctb_hydl', true);
+    ctx.owner.add(['csxhjctb_hydl']);
     ctx.owner.setOpacity('csxhjctb_hydl', 0.5);
-    moveTo(ctx.owner, 'csxhjctb_hydl', 0);
+    ctx.owner.moveLayer('csxhjctb_hydl', 1);
     ctx.owner.deriveGroup();
     await nextTick();
 
@@ -253,20 +260,20 @@ describe('useResourceLayers', () => {
         }
       }
     });
-    ctx.owner.setChecked('bgdc_cjdcq', true);
+    ctx.owner.add(['bgdc_cjdcq']);
     const fillColors = computed(() =>
       ctx.owner.deriveGroup().layers.map(item => (item.type === 'fill' ? item.paint?.['fill-color'] : undefined))
     );
-    const [, landuse] = fillColors.value;
+    const [landuse] = fillColors.value;
 
     overrides.value = new Map([['bgdc_dltb', { fillColor: 'rgba(0, 0, 0, 1)' }], ['bgdc_cjdcq', { fillColor: 'red' }]]);
-    // 地类图斑按属性配色，不用统一样式的覆盖
-    expect(fillColors.value).toStrictEqual(['red', landuse]);
+    // 地类图斑按属性配色，不用统一样式的覆盖；村级调查区新加入，在最上面（样式里最后）
+    expect(fillColors.value).toStrictEqual([landuse, 'red']);
   });
 
   it('批量设置年份：只替换一次状态，推导用新的年份；没有资源要改、没有任何资源有这一年时不替换（ADR 0094）', async () => {
     using ctx = await loaded();
-    ctx.owner.setChecked('csxhjctb_hydl', true);
+    ctx.owner.add(['csxhjctb_hydl']);
     let replaced = 0;
     const stop = watch(ctx.owner.state, () => replaced++, { flush: 'sync' });
 
@@ -316,17 +323,21 @@ describe('useResourceLayers', () => {
     expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
   });
 
-  it('换年份不改变勾选、透明度、顺序和符号', async () => {
+  it('换年份不改变加入、显示、透明度、顺序和符号', async () => {
     using ctx = await loaded({ symbols: { overrideOf: redVillageSurvey } });
-    ctx.owner.setChecked('bgdc_cjdcq', true);
+    ctx.owner.add(['bgdc_cjdcq']);
     ctx.owner.setOpacity('bgdc_cjdcq', 0.5);
-    moveTo(ctx.owner, 'bgdc_cjdcq', 0);
     const fillOf = () => ctx.owner.deriveGroup().layers.find(({ id }) => id === 'resources-bgdc_cjdcq');
 
     ctx.owner.setYearForAll(2023);
     ctx.owner.setYear('bgdc_cjdcq', 2024);
 
-    expect(ctx.owner.state.value.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: true, opacity: 0.5, year: 2024 });
+    expect(ctx.owner.state.value.displays.get('bgdc_cjdcq')).toStrictEqual({
+      added: true,
+      checked: true,
+      opacity: 0.5,
+      year: 2024
+    });
     expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
     const fill = fillOf();
     expect(fill?.type === 'fill' && fill.paint?.['fill-color']).toBe('red');

@@ -1460,7 +1460,7 @@ describe('CurrentMapPage', () => {
     expect(pin(wrapper).attributes('style')).toContain('left: 200px; top: 100px;');
   });
 
-  it('资源目录加载后：默认勾选的地类图斑插在注记下面；在列表里勾上别的资源就加到地图上', async () => {
+  it('资源目录加载后：默认勾选的地类图斑插在注记下面；在列表里勾上别的资源就加到地图上，新加的在最上面（ADR 0157）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
 
@@ -1471,7 +1471,7 @@ describe('CurrentMapPage', () => {
     expect(wrapper.text()).not.toContain('公共库');
     await resourceRow(wrapper, 'csxhjctb_hydl').get('input').setValue(true);
     await settle();
-    expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
+    expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
   });
 
   it('平移和同一级内缩放不更新"已选择图层"列表，跨过最小级别才更新提示', async () => {

@@ -51,7 +51,9 @@ const CATALOG = buildCatalog([
 ]);
 
 function checkAll(state: ResourceLayersState): ResourceLayersState {
-  const displays = new Map([...state.displays].map(([code, display]) => [code, { ...display, checked: true }]));
+  const displays = new Map(
+    [...state.displays].map(([code, display]) => [code, { ...display, added: true, checked: true }])
+  );
   return { ...state, displays };
 }
 

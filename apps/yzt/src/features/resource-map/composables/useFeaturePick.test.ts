@@ -57,7 +57,7 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number): ResourceDisplay => ({ checked: true, opacity: 1, year });
+const display = (year: number): ResourceDisplay => ({ added: true, checked: true, opacity: 1, year });
 
 function withDisplay(state: ResourceLayersState, code: string, change: Partial<ResourceDisplay>): ResourceLayersState {
   const current = state.displays.get(code);

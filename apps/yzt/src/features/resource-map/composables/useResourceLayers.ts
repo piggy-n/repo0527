@@ -20,6 +20,9 @@ import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
+  withAdded,
+  withMoved,
+  withRemoved,
   resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
@@ -46,8 +49,20 @@ export interface ResourceLayers {
   /** 最小显示级别，面板结合当前的缩放级别提示"放大至第 N 级显示"；没有限制时为 undefined */
   readonly minzoomOf: (code: string) => number | undefined;
   /** 以下操作遇到目录里没有的资源都抛错 */
+  /**
+   * 加入当前地图（ADR 0157）：没加入的按给出的先后放到最前面并显示，已加入的不动；只替换一次状态。
+   * 调用方按目录的先后给出，一次加多个时整批在最前
+   */
+  readonly add: (codes: readonly string[]) => void;
+  /** 移出当前地图，透明度、年份等设置保留，再加入时沿用；没加入的忽略 */
+  readonly remove: (codes: readonly string[]) => void;
+  /** 当前图层里的显示、隐藏：只对已加入的资源起作用 */
+  readonly setVisible: (code: string, visible: boolean) => void;
+  /** 在当前地图里挪到第 to 位（已加入的资源里从上往下数）；没加入、位置越界时抛错 */
+  readonly moveLayer: (code: string, to: number) => void;
+  /** 过渡：旧面板的勾选就是加入、取消就是移出，第 2 步换成新面板后删除 */
   readonly setChecked: (code: string, checked: boolean) => void;
-  /** 一次勾选或取消多个资源（分类的级联勾选），只替换一次状态；有目录里没有的资源时什么也不改 */
+  /** 过渡：同 setChecked，用于分类的级联勾选 */
   readonly setCheckedMany: (codes: readonly string[], checked: boolean) => void;
   /** 不在 0～1 之间时抛错 */
   readonly setOpacity: (code: string, opacity: number) => void;
@@ -65,10 +80,7 @@ export interface ResourceLayers {
    * 没有任何资源有这一年时图层不变（ADR 0094），年份不是整数时抛错
    */
   readonly setYearForAll: (year: number) => void;
-  /**
-   * 目录树里同级调整顺序，地图的叠放顺序、"已选择图层"和图例跟着变（ADR 0118）；"已选择图层"里的移动先由
-   * moveTarget、checkedDropTarget 换成目录树里的调整。位置越界、键重复时抛错
-   */
+  /** 过渡：旧面板在目录树里同级调整顺序（ADR 0118），第 2 步换成新面板后删除。位置越界、键重复时抛错 */
   readonly move: (target: TreeMove) => void;
   /**
    * 三维且三维引擎不画样式图层（能力 `styleLayers` 为 false，app 注入的收窄能力，ADR 0153）：分组为空，图例只有说明；
@@ -178,25 +190,22 @@ export function useResourceLayers(
     }
   };
 
-  const setCheckedMany = (codes: readonly string[], checked: boolean) => {
-    const current = state.value;
-    const missing = codes.find(code => !current.displays.has(code));
-    if (missing !== undefined) {
-      throw new Error(`目录里没有资源 ${missing}`);
-    }
-    const displays = new Map(current.displays);
-    let changed = false;
-    for (const code of codes) {
-      const display = displays.get(code);
-      if (display && display.checked !== checked) {
-        displays.set(code, { ...display, checked });
-        changed = true;
-      }
-    }
-    if (changed) {
-      state.value = { ...current, displays };
-    }
+  const add = (codes: readonly string[]) => {
+    state.value = withAdded(state.value, codes);
   };
+
+  const remove = (codes: readonly string[]) => {
+    state.value = withRemoved(state.value, codes);
+  };
+
+  const setVisible = (code: string, visible: boolean) =>
+    update(code, display => (display.checked === visible ? display : { ...display, checked: visible }));
+
+  const moveLayer = (code: string, to: number) => {
+    state.value = withMoved(state.value, code, to);
+  };
+
+  const setCheckedMany = (codes: readonly string[], checked: boolean) => (checked ? add(codes) : remove(codes));
 
   const setOpacity = (code: string, opacity: number) => {
     if (!(Number.isFinite(opacity) && opacity >= 0 && opacity <= 1)) {
@@ -235,6 +244,10 @@ export function useResourceLayers(
     configErrors,
     tileErrors,
     minzoomOf: code => catalog.value?.resources.get(code)?.minzoom,
+    add,
+    remove,
+    setVisible,
+    moveLayer,
     setChecked: (code, checked) => setCheckedMany([code], checked),
     setCheckedMany,
     setOpacity,
