@@ -132,8 +132,12 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   return { geometry: 'circle', fill: symbol.fillColor, stroke: symbol.strokeColor, radius, strokeWidth };
 }
 
-// 年份只用来显示（ADR 0052 第 3 节）：条目的身份、名称和符号仍按 code
-function legendEntry(resource: Resource, year: number, override: ResourceSymbolOverride | undefined): LegendEntry {
+/** 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code */
+export function legendEntry(
+  resource: Resource,
+  year: number,
+  override: ResourceSymbolOverride | undefined
+): LegendEntry {
   const { code, name } = resource;
   const style = resourceStyle(code);
   const rule = style.color;

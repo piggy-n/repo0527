@@ -309,6 +309,16 @@ $tree-node: '.el-tree > .el-tree-node';
   display: none;
 }
 
+// 窄的行内选择框：左右只留 4、文字居中，72 宽放得下五个字（地图页当前图层行尾的年份、效果，ADR 0157）；和 select-no-arrow 一起用
+.el-select.select-compact .el-select__wrapper {
+  padding: 0 4px;
+}
+
+.el-select.select-compact .el-select__selection {
+  justify-content: center;
+  text-align: center;
+}
+
 // 与旁边的状态文字同字体，避免浏览器默认按钮字体造成字形错位
 .el-button.button-inline {
   font-family: var(--font-family-base);

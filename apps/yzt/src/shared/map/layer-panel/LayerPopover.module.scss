@@ -1,0 +1,44 @@
+// 当前图层的浮层（ADR 0157）：白底、大阴影，左边的箭头对着选中的行
+
+.popover {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-container);
+  box-shadow: var(--shadow-lg);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: calc(var(--arrow-top, 22px) - 6px);
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    background-color: var(--color-bg-container);
+    box-shadow: -2px 2px 4px rgba(20, 52, 105, 0.06);
+    transform: rotate(45deg);
+  }
+}
+
+.sheet::before {
+  display: none;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  padding: 0 var(--space-sm) 0 var(--space-lg);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--space-lg) var(--space-lg);
+  overflow-y: auto;
+}

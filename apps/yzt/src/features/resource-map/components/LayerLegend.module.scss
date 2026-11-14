@@ -1,0 +1,6 @@
+// 浮层里一个资源的图例：上下排列，和右侧"图例"页展开后的内容同样的间距
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}

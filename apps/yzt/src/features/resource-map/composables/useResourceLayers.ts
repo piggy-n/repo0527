@@ -15,7 +15,6 @@ import { appConfig } from '@/shared/config/app-config';
 import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
-import { type TreeMove, treeOrder } from '../catalog-order';
 import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
@@ -60,10 +59,6 @@ export interface ResourceLayers {
   readonly setVisible: (code: string, visible: boolean) => void;
   /** 在当前地图里挪到第 to 位（已加入的资源里从上往下数）；没加入、位置越界时抛错 */
   readonly moveLayer: (code: string, to: number) => void;
-  /** 过渡：旧面板的勾选就是加入、取消就是移出，第 2 步换成新面板后删除 */
-  readonly setChecked: (code: string, checked: boolean) => void;
-  /** 过渡：同 setChecked，用于分类的级联勾选 */
-  readonly setCheckedMany: (codes: readonly string[], checked: boolean) => void;
   /** 不在 0～1 之间时抛错 */
   readonly setOpacity: (code: string, opacity: number) => void;
   /** 不是这个资源的年份时抛错 */
@@ -80,8 +75,6 @@ export interface ResourceLayers {
    * 没有任何资源有这一年时图层不变（ADR 0094），年份不是整数时抛错
    */
   readonly setYearForAll: (year: number) => void;
-  /** 过渡：旧面板在目录树里同级调整顺序（ADR 0118），第 2 步换成新面板后删除。位置越界、键重复时抛错 */
-  readonly move: (target: TreeMove) => void;
   /**
    * 三维且三维引擎不画样式图层（能力 `styleLayers` 为 false，app 注入的收窄能力，ADR 0153）：分组为空，图例只有说明；
    * 引用资源数据源的推导（框选的批量高亮）这时也不能有图层
@@ -205,8 +198,6 @@ export function useResourceLayers(
     state.value = withMoved(state.value, code, to);
   };
 
-  const setCheckedMany = (codes: readonly string[], checked: boolean) => (checked ? add(codes) : remove(codes));
-
   const setOpacity = (code: string, opacity: number) => {
     if (!(Number.isFinite(opacity) && opacity >= 0 && opacity <= 1)) {
       throw new RangeError(`资源的透明度应在 0～1 之间，收到 ${opacity}`);
@@ -231,14 +222,6 @@ export function useResourceLayers(
 
   const hiddenInScene = computed(() => map.dimension.value === '3d' && !map.sceneCapabilities.styleLayers);
 
-  const move = (target: TreeMove) => {
-    const current = state.value;
-    const order = treeOrder(current.catalog?.categories ?? [], current.order, target);
-    if (order.some((code, index) => code !== current.order[index])) {
-      state.value = { ...current, order };
-    }
-  };
-
   return {
     state: shallowReadonly(state),
     configErrors,
@@ -248,8 +231,6 @@ export function useResourceLayers(
     remove,
     setVisible,
     moveLayer,
-    setChecked: (code, checked) => setCheckedMany([code], checked),
-    setCheckedMany,
     setOpacity,
     setYear,
     batchYears,
@@ -257,7 +238,6 @@ export function useResourceLayers(
       lastBatchYear.value !== null && batchYears.value.includes(lastBatchYear.value) ? lastBatchYear.value : null
     ),
     setYearForAll,
-    move,
     hiddenInScene,
     deriveGroup: () =>
       hiddenInScene.value

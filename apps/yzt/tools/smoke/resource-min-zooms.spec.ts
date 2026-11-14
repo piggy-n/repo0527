@@ -24,7 +24,7 @@ const TREE = [
   }
 ];
 
-/** 登录到现状底图并勾选两个资源，返回不断累积的瓦片请求路径；瓦片和目录在浏览器中拦截 */
+/** 登录到现状底图并把两个资源加入当前地图，返回不断累积的瓦片请求路径；瓦片和目录在浏览器中拦截 */
 async function openResources(context: BrowserContext, page: Page): Promise<readonly string[]> {
   const tiles: string[] = [];
   await context.route('**/backend/resource-map/base/tree', route => route.fulfill({ json: { code: 200, data: TREE } }));
@@ -40,15 +40,16 @@ async function openResources(context: BrowserContext, page: Page): Promise<reado
   await expect(page).toHaveURL(/\/current-map$/);
   await expect(page.locator('[data-map-view-state]')).toHaveAttribute('data-map-view-state', 'ready');
 
-  await page.locator(`[data-resource="${LIMITED}"] label`).click();
-  await page.locator(`[data-resource="${FREE}"] label`).click();
-  await page.getByRole('button', { name: '展开已选择图层' }).click();
-  await expect(page.locator(`[data-layer="${LIMITED}"]`)).toBeVisible();
+  // 资源目录里选中两个资源，用标题上的"添加"加入当前地图（ADR 0157）
+  await page.locator(`[data-catalog-node="resource:${LIMITED}"]`).click();
+  await page.locator(`[data-catalog-node="resource:${FREE}"]`).click({ modifiers: ['Control'] });
+  await page.locator('[data-tool="add"]').click();
+  await expect(page.locator(`[data-current-row="resource:${LIMITED}"]`)).toBeVisible();
   return tiles;
 }
 
 function hintOf(page: Page) {
-  return page.locator(`[data-layer="${LIMITED}"] [data-status="minzoom"]`);
+  return page.locator(`[data-current-row="resource:${LIMITED}"] [data-status="minzoom"]`);
 }
 
 async function tilesRequested(tiles: readonly string[], code: string): Promise<void> {

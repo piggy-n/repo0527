@@ -1,0 +1,67 @@
+// 资源图层面板的右键菜单（ADR 0157）
+
+.menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 176px;
+  padding: 4px 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-container);
+  box-shadow: var(--shadow-md);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-regular);
+  font: inherit;
+  font-size: var(--font-size-base);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    outline: none;
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &:disabled {
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}
+
+.danger:hover:not(:disabled),
+.danger:focus-visible {
+  background-color: var(--color-danger-bg-solid);
+  color: var(--color-danger);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+}
+
+.label {
+  flex: 1;
+}
+
+.shortcut {
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+}
+
+.divider {
+  height: 1px;
+  margin: 4px 0;
+  background-color: var(--color-border-light);
+}

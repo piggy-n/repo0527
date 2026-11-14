@@ -4,7 +4,6 @@ import { MapCanvas, provideMap, usePageActive, useShownElementSize } from '@mx/m
 import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
-import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
 import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePick';
@@ -50,6 +49,7 @@ import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
+import { CurrentMapLayerPanel } from './layer-panel/CurrentMapLayerPanel';
 import { mapPageLayout } from './map-page-layout';
 
 // 功能标签、独立详情和底图分开管理，功能与详情同列上下排列（ADR 0070）
@@ -104,6 +104,8 @@ export const CurrentMapPage = defineComponent({
     const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });
     // 编辑时隐藏图例的全局恢复入口，保留当前图例和图层级操作
     const legendEditing = ref(false);
+    // 当前图层的图例浮层正在显示的资源：右侧图例在编辑同一个资源时回到浏览（ADR 0157）
+    const legendCode = ref<string | null>(null);
     const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences, symbols });
     const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
@@ -319,14 +321,18 @@ export const CurrentMapPage = defineComponent({
           />
         );
       }
+      const status = resources.state.value.catalog ? 'ready' : catalogQuery.isError.value ? 'failed' : 'loading';
       return (
-        <ResourceLayerPanel
-          layers={resources}
+        <CurrentMapLayerPanel
+          resources={resources}
+          symbols={symbols}
           layout={panelLayout}
-          failed={catalogQuery.isError.value}
+          status={status}
           collapsed={!sides.left.value}
+          sheet={layout.value.phone}
           onRetry={() => void catalogQuery.refetch()}
           onUpdate:collapsed={changeLeftCollapsed}
+          onLegendCode={(code: string | null) => (legendCode.value = code)}
         />
       );
     };
@@ -401,6 +407,7 @@ export const CurrentMapPage = defineComponent({
                         symbols={symbols}
                         active={active}
                         scene={resourcesHidden}
+                        yieldCode={legendCode.value}
                         onEditingChange={value => (legendEditing.value = value)}
                       />
                     ],

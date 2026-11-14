@@ -1,0 +1,195 @@
+// 资源目录的树（ADR 0157）：行高 32，每层缩进 18，下一层左边有引导线
+
+.tree,
+.children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.children {
+  position: relative;
+
+  // 引导线对着上一层箭头的中线
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 4px;
+    left: 7px;
+    width: 1px;
+    background-color: var(--color-border);
+  }
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-base);
+  cursor: default;
+  outline: none;
+  user-select: none;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--color-primary-border-hover);
+  }
+
+  // 悬停、键盘焦点时行尾换成操作
+  &:hover,
+  &:focus-visible {
+    .action {
+      display: inline-flex;
+    }
+
+    .mark {
+      display: none;
+    }
+  }
+}
+
+.branch .name {
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+// 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；多选时每一行都这样
+.selected {
+  background-color: var(--color-primary-bg);
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: 3px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+
+  .name {
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .icon {
+    color: var(--color-primary);
+  }
+}
+
+.arrow {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+
+  :global(.el-icon) {
+    transition: transform 0.15s;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.open :global(.el-icon) {
+  transform: rotate(90deg);
+}
+
+.pad {
+  flex: none;
+  width: 16px;
+}
+
+.icon {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.badge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+// 行尾固定 22 宽：悬停时图标替换，名称不跳动
+.end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.mark {
+  display: inline-flex;
+  color: var(--color-success);
+}
+
+.action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-alpha-12);
+  }
+}
+
+.remove {
+  color: var(--color-text-secondary);
+
+  &:hover {
+    background-color: var(--color-danger-bg-solid);
+    color: var(--color-danger);
+  }
+}

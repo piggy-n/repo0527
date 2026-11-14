@@ -1,11 +1,17 @@
-// 资源图层面板（ADR 0053 第 6 节，设计稿 5D.2）：宽 320，最高到所在列的高度，目录和"已选择图层"在内部滚动
+// 资源图层面板的外壳（ADR 0157）：宽 320，最高到所在列的高度；资源目录、当前图层两段在各自的滚动区里滚动
 
-// 不让列压缩：面板的高度只由内容决定，两区的高度由组件按列的高度算好，面板最高正好到列的高度。
-// 被压缩时面板和两区的高度差不再是头部、搜索行的高度，分法会停在错的结果上
+// 不让列压缩：面板的高度只由内容决定，两段的高度由组件按列的高度算好，面板最高正好到列的高度
 .root {
   display: flex;
   flex: none;
   flex-direction: column;
+}
+
+.panelBox {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .panel {
@@ -15,7 +21,7 @@
   max-width: 100%;
 
   > header {
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs);
   }
 }
 
@@ -31,8 +37,7 @@
   }
 }
 
-// 放不下时（手机宽度）页签在自己的区域里横向滚动，收起按钮始终可见（设计稿 5D.8）；
-// 横向滚动会连带裁掉纵向，下面留出当前页签横线的位置
+// 放不下时（手机宽度）页签在自己的区域里横向滚动，收起按钮始终可见（设计稿 5D.8）
 .tabs {
   display: flex;
   gap: 12px;
@@ -89,6 +94,50 @@
   }
 }
 
+.sections {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.section {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+// 两段的标题：左边竖条加名称，右边是工具栏
+.sectionHead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 12px 0 var(--space-lg);
+}
+
+.sectionTitle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+
+  &::before {
+    content: '';
+    width: 4px;
+    height: 14px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+}
+
 // 搜索和批量设置年份在一行
 .filter {
   display: flex;
@@ -97,40 +146,23 @@
   padding: 0 var(--space-lg) var(--space-sm);
 }
 
-.search {
+.scroll {
   flex: 1;
-  min-width: 0;
-}
-
-// Element 的选择框左右各留 12、箭头 14：放得下"批量设置年份"六个字
-.batch {
-  flex: none;
-  width: 132px;
-}
-
-// 批量年份下拉的一项：铺满整行（抵消 Element 选项左 20、右 32 的内边距），点哪里都能再执行一次回显着的那一年
-.batchOption {
-  display: block;
-  margin: 0 -32px 0 -20px;
-  padding: 0 32px 0 20px;
-}
-
-// 目录、分割线、"已选择图层"：两区的高度由组件按内容和分割线算好（panel-split.ts），面板跟着内容变矮
-.lists {
-  display: flex;
-  flex: none;
-  flex-direction: column;
   min-height: 0;
-}
-
-.tree {
-  flex: none;
-  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 var(--space-sm) 0 var(--space-md);
 }
 
-// 高 24，线在正中：上面离目录、下面离"已选择图层"的标题都是 11
+.catalog {
+  padding: 0 var(--space-sm) var(--space-sm) var(--space-md);
+}
+
+// 下边距放在量本来高度的这一层里，算进当前图层的高度
+.current {
+  padding: 0 var(--space-sm) var(--space-md);
+}
+
+// 高 24，线在正中
 .splitter {
   position: relative;
   flex: none;
@@ -167,12 +199,11 @@
   }
 }
 
-// 拖动改变不了两区时（都放得下、目录已经全部显示）：不显示成能拖的样子，键盘焦点照常显示
+// 拖动改变不了两段时（都放得下）：不显示成能拖的样子，键盘焦点照常显示
 .fixed {
   cursor: default;
 }
 
-// 中间的圆形手柄
 .splitterHandle {
   position: absolute;
   top: 0;
@@ -189,90 +220,11 @@
   color: var(--color-text-regular);
 }
 
-.checked {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  min-height: 0;
-}
-
-// 有勾选资源时保留整行开关，收起时作为面板底部的展开入口
-.checkedHead {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-sm);
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 40px;
-  padding: var(--space-sm) var(--space-lg);
-  border: 0;
-  background-color: var(--color-neutral-bg-light);
-  color: var(--color-text-secondary);
-  font: inherit;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-primary);
-    background-color: var(--color-primary-bg);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-primary-border-hover);
-    outline-offset: -2px;
-  }
-}
-
-.checkedTitle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--color-text-title);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-
-  &::before {
-    content: '';
-    width: 4px;
-    height: 14px;
-    border-radius: 999px;
-    background-color: var(--color-primary);
-  }
-}
-
-.checkedToggle {
-  margin-left: auto;
-  font-size: var(--font-size-xs);
-}
-
-.badge {
-  padding: 0 6px;
-  border-radius: 999px;
-  background-color: var(--color-neutral-bg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-}
-
-// 只纵向滚动：透明度滑块等行内的内容不撑开列表
-.checkedList {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 0 var(--space-sm);
-}
-
-// 下边距放在量本来高度的这一层里，算进"已选择图层"的内容高度
-.checkedContent {
-  padding-bottom: var(--space-md);
-}
-
 .status {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: 0 var(--space-lg) var(--space-lg);
+  padding: 0 var(--space-sm) var(--space-lg);
   font-size: var(--font-size-xs);
   color: var(--color-text-regular);
 }

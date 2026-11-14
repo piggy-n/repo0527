@@ -1,0 +1,52 @@
+// 面板两段标题右边的工具栏：当前图层有 7 个按钮，320 宽里每个 26 × 26
+
+.toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  cursor: pointer;
+
+  &:hover:not([aria-disabled='true']) {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &[aria-pressed='true'] {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+
+  &[aria-disabled='true'] {
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.divider {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 3px;
+  background-color: var(--color-divider);
+}
