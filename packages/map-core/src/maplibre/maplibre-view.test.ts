@@ -2642,6 +2642,8 @@ describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => 
       height: 15
     });
     expect(ctx.view.project([118.8, 32.05], 15)).toStrictEqual({ x: 7, y: 9 });
+    // 只打地面时跳过模型（ADR 0157：框选、容差框的四角）
+    expect(ctx.view.pick({ x: 1, y: 1 }, { ground: true })).toMatchObject({ kind: 'hit', surface: 'map' });
 
     ctx.view.setKind('2d');
     expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'map' });

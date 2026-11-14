@@ -53,7 +53,7 @@ import {
   queryCapabilityOf,
   serverCandidates
 } from '../feature-query';
-import { pickHintLines, scenePickHintLines } from '../pick-hint';
+import { pickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
 import { isDrawn, type ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
@@ -217,7 +217,7 @@ function identifySignature(state: ResourceLayersState): string {
 export function useFeaturePick(
   map: Pick<
     MapContext,
-    'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer' | 'sceneCapabilities'
+    'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer'
   >,
   resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene'>,
   options: FeaturePickOptions = {}
@@ -252,7 +252,6 @@ export function useFeaturePick(
   // 按住 Ctrl（Mac 上 ⌘）临时拖动地图，提示里写同一个键（ADR 0056）
   const panKey = currentPanKey();
   const hintLines = pickHintLines(panKey);
-  const sceneHintLines = scenePickHintLines(panKey);
   // 鼠标旁的提示是否打开：进入点/框选时打开，单击或框选识别过一次后关闭，直到下次进入
   const hintOpen = shallowRef(false);
   // 详情到了以后要执行的定位
@@ -622,12 +621,8 @@ export function useFeaturePick(
     }
   );
 
+  // 三维里照常识别（ADR 0157）：登记的数据集查后端（identifyStep），点到模型上时查模型脚下（planIdentify）
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
-    // 三维引擎不能识别时三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果。
-    // 能识别时（三维引擎的能力 identify 为 true；app 现在注入 false，ADR 0153）照常识别，三维的识别规则见 identifyStep
-    if (view.kind === '3d' && !map.sceneCapabilities.identify && event.type !== 'key' && event.type !== 'leave') {
-      return false;
-    }
     switch (event.type) {
       case 'down':
         if (event.button === 0) {
@@ -731,8 +726,7 @@ export function useFeaturePick(
       if (!hintOpen.value || point === null || view === null || gesture.value.kind === 'drawing') {
         return null;
       }
-      const unsupported = view.kind === '3d' && !map.sceneCapabilities.identify;
-      return { point, lines: unsupported ? sceneHintLines : hintLines };
+      return { point, lines: hintLines };
     }),
     detail,
     tools: { [FEATURE_PICK_TOOL]: pickTool },

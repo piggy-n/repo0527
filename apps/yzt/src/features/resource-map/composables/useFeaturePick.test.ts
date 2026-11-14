@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { bbox } from '@turf/bbox';
-import { flushPromises, mount } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
 import type { Point, Polygon, Position } from 'geojson';
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
@@ -13,7 +13,7 @@ import type {
   ToolView,
   ViewKind
 } from '@mx/map-core';
-import type { CameraControl, CameraOperation, MapContext, MapViewport, SceneCapabilities } from '@mx/map-vue';
+import type { CameraControl, CameraOperation, MapContext, MapViewport } from '@mx/map-vue';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { RegionScope } from '@/shared/map/region/region-scope';
@@ -184,9 +184,7 @@ function setup(
   state = STATE,
   invalid: ReadonlyMap<string, readonly string[]> = new Map(),
   initialScope: RegionScope | null = null,
-  onIdentifyStart = vi.fn<() => void>(),
-  // 三维引擎的能力：默认同 app 注入的，三维期间不识别
-  sceneCapabilities: SceneCapabilities = { styleLayers: false, identify: false, splats: true }
+  onIdentifyStart = vi.fn<() => void>()
 ) {
   const fake = fakeCamera(zoom);
   // 区划裁剪的范围，可以由用例中途改变
@@ -195,7 +193,7 @@ function setup(
   // 视图和指针：跟随提示要视图就绪、指针在画布上
   const view = shallowRef<MapViewport | null>(contextView('2d'));
   const mapPointer = shallowRef<ScreenPoint | null>(null);
-  const map = { useCamera: () => fake.camera, select, view, pointer: mapPointer, sceneCapabilities, ...fake };
+  const map = { useCamera: () => fake.camera, select, view, pointer: mapPointer, ...fake };
   // 校验结果、三维里资源分组是否为空可以由用例中途改变
   const errors = shallowRef(invalid);
   const hidden = shallowRef(false);
@@ -367,32 +365,9 @@ describe('useFeaturePick：识别', () => {
     expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
   });
 
-  it('三维期间不识别：单击、框选都不发请求、不通知页面，二维的结果不变（ADR 0080 第 5 节）', async () => {
+  it('三维里照常识别（ADR 0157）：按三维的规则，能后端识别的资源查后端', async () => {
     const requests = mockIdentify(() => page(2, [{ guid: guid(1) }, { guid: guid(2) }]));
     const { owner, send, onIdentifyStart } = setup(16);
-    send(click(), [rendered(DLTB, 1), rendered(DLTB, 2)]);
-    const listed = owner.state.value;
-    onIdentifyStart.mockClear();
-
-    expect(send(click(), [], '3d')).toBe(false);
-    send(pointer('down', FROM), [], '3d');
-    send(pointer('move', TO), [], '3d');
-    send(pointer('up', TO), [], '3d');
-    await flushPromises();
-
-    expect(owner.state.value).toBe(listed);
-    expect(owner.boxDraft.value).toBeNull();
-    expect(onIdentifyStart).not.toHaveBeenCalled();
-    expect(requests).toStrictEqual([]);
-  });
-
-  it('三维引擎能识别时（MapLibre 引擎，ADR 0147）三维照常识别：按三维的规则，能后端识别的资源查后端', async () => {
-    const requests = mockIdentify(() => page(2, [{ guid: guid(1) }, { guid: guid(2) }]));
-    const { owner, send, onIdentifyStart } = setup(16, STATE, new Map(), null, vi.fn(), {
-      styleLayers: true,
-      identify: true,
-      splats: true
-    });
 
     expect(send(click(), [rendered(DLTB, 1)], '3d')).toBe(true);
 
@@ -402,8 +377,8 @@ describe('useFeaturePick：识别', () => {
     expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022']);
   });
 
-  it('三维引擎能识别时三维里可以框选', () => {
-    const { owner, send } = setup(16, STATE, new Map(), null, vi.fn(), { styleLayers: true, identify: true, splats: true });
+  it('三维里可以框选', () => {
+    const { owner, send } = setup(16);
 
     expect(send(pointer('down', FROM), [], '3d')).toBe(true);
     send(pointer('move', TO), [], '3d');
@@ -803,35 +778,17 @@ describe('useFeaturePick：框选', () => {
     expect(owner.hint.value).not.toBeNull();
   });
 
-  it('三维里提示点/框选不可用和怎样拖动地图，单击后照样显示（ADR 0080 第 5 节）', () => {
-    const { owner, pick, send, view, mapPointer } = setup(15);
-    view.value = contextView('3d');
-    mapPointer.value = { x: 50, y: 60 };
-    pick.activate?.();
-
-    send(click(), [], '3d');
-
-    expect(owner.hint.value).toStrictEqual({
-      point: { x: 50, y: 60 },
-      lines: ['三维模式暂不支持点/框选', '切换到二维后使用，按住 Ctrl 拖动地图']
-    });
-  });
-
-  it('三维引擎能识别时三维里的提示和二维一样', () => {
+  it('三维里的提示和二维一样（ADR 0157）', () => {
     const flat = setup(15);
     flat.mapPointer.value = { x: 50, y: 60 };
     flat.pick.activate?.();
-    const { owner, pick, view, mapPointer } = setup(15, STATE, new Map(), null, vi.fn(), {
-      styleLayers: true,
-      identify: true,
-      splats: true
-    });
+    const { owner, pick, view, mapPointer } = setup(15);
     view.value = contextView('3d');
     mapPointer.value = { x: 50, y: 60 };
     pick.activate?.();
 
     expect(owner.hint.value).toStrictEqual(flat.owner.hint.value);
-    expect(owner.hint.value?.lines).not.toContain('三维模式暂不支持点/框选');
+    expect(owner.hint.value?.lines).toStrictEqual(['单击查看要素，拖动框选', '按住 Ctrl 拖动地图，Esc 取消或清除结果']);
   });
 
   it('第一次单击识别后关闭提示，直到下次进入；临时拖动、Esc 不算用过', () => {

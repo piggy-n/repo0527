@@ -579,7 +579,7 @@ export class MapLibreView<const G extends string> implements MapView {
   pick(point: ScreenPoint, options?: PickOptions): PickResult {
     const map = this.#readyMap();
     if (this.#kind === '3d') {
-      const model = this.#scene?.pick(point, options);
+      const model = options?.ground ? null : this.#scene?.pick(point, options);
       if (model) {
         return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
       }

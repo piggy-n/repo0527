@@ -14,7 +14,7 @@ paths:
 
 - 三维只用 MapLibre + Three.js（`@mx/map-three`，ADR 0147）。Cesium 引擎由 ADR 0153 移除，代码在标签 `cesium-engine-2026-11`，不要再引入 Cesium 或第二种三维引擎；要改这一点先写 ADR
 - `MapCanvas` 的一个视图同时担任二三维：第一次切到三维时由 map-vue 动态导入 map-three（只有 map-vue 能导入它，只有 map-three 和驾驶舱能导入 `three`、`3d-tiles-renderer`）；三维模块加载失败只让三维失败，二维照常可用，`retry` 只重新加载这个模块。二维第一次画面稳定后由画布交给 `MAP_RUNTIME_PRELOAD` 预加载 map-three（ADR 0091）
-- 页面和拥有者不判断引擎，按上下文的 `sceneCapabilities`（三维里显示样式图层、三维里识别、高斯泼溅）和 `dimension` 决定资源图层、图例、点/框选怎样显示；三维里照常显示资源图层（ADR 0157）：app 注入的能力（`app/map-runtime-provider.ts`）里 `styleLayers`、`splats` 是 true，`identify` 暂时是 false，没有开关
+- 页面和拥有者不判断引擎，按上下文的 `sceneCapabilities`（三维里显示样式图层、三维里识别、高斯泼溅）和 `dimension` 决定资源图层、图例、点/框选怎样显示；三维里照常显示资源图层、点/框选（ADR 0157）：app 注入的能力（`app/map-runtime-provider.ts`）原样，三项都是 true，没有开关。模型永远不是点/框选的结果：点到模型上时查模型脚下（命中点正下方的地面投影回屏幕，渲染要素和容差框围着它），框和容差框的四角用只打地面的拾取（`PickOptions.ground`）
 - 契约：三维实现会话的三维内容（`SceneContent`、`sceneStatus`、`roamStatus`）、`MapView` 和 `ToolView`；契约测试是 map-vue 的 `scene-contract.browser.test.tsx`（真实的 MapLibre + Three），改契约时同步改它
 - 模型层叠在页面用 `provideMap` 的 `sceneBelow` 声明的分组下面，以上的分组画在模型上面
 - 地下的模型要抬高（MapLibre 把相机限制在 0 米以上，ADR 0147 第 4 节）：抬高只存在于渲染适配器内部，拾取、相机、漫游状态对外都是真实椭球高。漫游在 map-core 的 `maplibre/roam/`：路线、步行只用真实坐标，经 `RoamHost` 设相机、拾取，抬高只在 `MapLibreRoam` 的相机换算和渲染器里（[map-three.md](../../docs/modules/map-three.md)"漫游"）

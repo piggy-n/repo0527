@@ -44,7 +44,6 @@
 ## 未完成的功能
 
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
-- 三维点/框选不识别：app 注入的能力里 `identify` 是 false（`app/map-runtime-provider.ts`），三维里的资源图层已经照常显示（ADR 0157）
 - LCC2（高斯泼溅，[ADR 0149](adr/0149-lcc2-gaussian-splats.md)）还没有结论的：楚王山1号亮处偏白来自数据、库还是软件渲染；每帧的 GL 保护是否必要，见 [map-three.md](modules/map-three.md)"泼溅的预算"
 - LCC2 配准的 0.5 米验收（ADR 0149 第 9 节 L.2）：楚王山1号和影像只确认到 1 米以内（ArcGIS 这里约 0.5 米/像素，路大多在树冠下，旁边没有倾斜模型），等有和倾斜模型重叠的 LCC2、控制点或更清晰的影像时再验；`docs/deployment.md` 的 nginx 转发没有实测，首次部署时按其中的 curl 验收
 - 清单新加的 LCC2（`xz-cws2`、`xz-cws3`、`xz-tls1`、`xz-tsm`、`xz-gshm`、`xz-tls2`、`xz-ddsh`、`xz-szs`）只把轨迹和网格叠在影像上目视过（楚王山2号偏约 2～4 米，驮篮山1号、土山墓、龟山汉墓和楚王山3号 1～3 米，后三个只看了落在哪里，[3dt-manifest.md](config/3dt-manifest.md)）：还没在 `maplibre` 引擎下俯视泼溅和影像比，高度没有逐处核对，影像也只能核对入口和露天的部分
