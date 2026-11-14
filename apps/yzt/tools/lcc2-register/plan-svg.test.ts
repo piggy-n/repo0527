@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildFloorGrid } from './floor-grid.ts';
 import { yawToManifestHeading } from './placement.ts';
 import { type PlanInput, planProjection, type PlanRoute, planSvg, ROUTE_COLORS, routeLength } from './plan-svg.ts';
-import { outline } from './roam-manifest.ts';
+import { manifestEye, outline } from './roam-manifest.ts';
 import { EYE_HEIGHT, routeOf, spawnOf, trackOf } from './roam.ts';
 import { rectangle, walk } from './test-meshes.ts';
 
@@ -20,6 +20,7 @@ const ROUTES: readonly PlanRoute[] = [
   { id: 'low', name: '穿过矮通道', from: 5, to: 35, points: routeOf(TRACK, 5, 35, GRID) },
   { id: 'upper', name: '上一层', from: 45, to: 55, points: routeOf(TRACK, 45, 55, GRID) }
 ];
+const routePoint = (x: number, y: number, floor: number) => ({ x, y, floor, eye: EYE_HEIGHT });
 const INPUT: PlanInput = { title: '样例.lcc2', heading: 0, grid: GRID, track: TRACK, spawn: SPAWN, routes: ROUTES };
 
 const numbers = (text: string) => text.split(/[ ,]/).map(Number);
@@ -123,7 +124,7 @@ describe('planSvg', () => {
     expect(attributes(svg, 'data-route')).toStrictEqual(['low', 'upper']);
     expect(attributes(svg, 'data-route-line')).toStrictEqual(ROUTE_COLORS.slice(0, 2));
     const [first, second] = svg.split('<g data-route=').slice(1);
-    const lowPoints = ROUTES[0].points.filter(({ eye }) => eye < EYE_HEIGHT);
+    const lowPoints = ROUTES[0].points.filter(({ eye }) => manifestEye(eye) !== undefined);
     expect(lowPoints.length).toBeGreaterThan(0);
     expect(first.split('data-low="route"').length - 1).toBe(lowPoints.length);
     expect(second.split('</g>')[0].split('data-low="route"').length - 1).toBe(0);
@@ -134,6 +135,20 @@ describe('planSvg', () => {
     expect(line.slice(0, 2)).toStrictEqual([Number(x.toFixed(1)), Number(y.toFixed(1))]);
     expect(line).toHaveLength(ROUTES[0].points.length * 2);
     expect(svg).toContain(`low 穿过矮通道：5～35 米，长 ${routeLength(ROUTES[0].points).toFixed(0)} 米`);
+  });
+
+  it('红圈和清单同一个口径：眼高取整到厘米以后低于 1.6 才画，提示里是清单写的值', () => {
+    // 1.597 取整是 1.6，清单里不写眼高，图上也不画；1.594 取整是 1.59
+    const points = [
+      routePoint(0, 2, 0),
+      { ...routePoint(5, 2, 0), eye: 1.597 },
+      { ...routePoint(10, 2, 0), eye: 1.594 }
+    ];
+    const drawn = planSvg({ ...INPUT, routes: [{ id: 'edge', name: '边界', from: 0, to: 10, points }] });
+    expect(points.map(({ eye }) => manifestEye(eye))).toStrictEqual([undefined, undefined, 1.59]);
+    expect(drawn.split('data-low="route"').length - 1).toBe(1);
+    expect(drawn).toContain('edge：眼高 1.59 米');
+    expect(drawn).not.toContain('眼高 1.60 米');
   });
 
   it('路线比颜色多时不循环：多出来的用同一种中性色', () => {
@@ -175,11 +190,9 @@ describe('planSvg', () => {
   });
 });
 
-const point = (x: number, y: number, floor: number) => ({ x, y, floor, eye: EYE_HEIGHT });
-
 describe('routeLength', () => {
   it('水平的距离加地板的高差', () => {
-    expect(routeLength([point(0, 0, 0), point(3, 4, 0), point(3, 4, 2)])).toBe(7);
-    expect(routeLength([point(1, 1, 1)])).toBe(0);
+    expect(routeLength([routePoint(0, 0, 0), routePoint(3, 4, 0), routePoint(3, 4, 2)])).toBe(7);
+    expect(routeLength([routePoint(1, 1, 1)])).toBe(0);
   });
 });

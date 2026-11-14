@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute } from 'node:path';
+import { basename } from 'node:path';
 import { localPath } from '../local-files/paths.ts';
 import { HELP, parseOptions } from './args.ts';
 import { CHECK_PASS_RATIO, type TrajectoryCheck } from './check.ts';
@@ -8,7 +7,8 @@ import { FIT_WINDOW, SCANNER_WINDOW } from './fit.ts';
 import type { Vec3 } from './lcc2-data.ts';
 import { type Placement, roundPlacement, trajectoryToMesh } from './placement.ts';
 import { gridProjection } from './projection.ts';
-import { planSvg } from './plan-svg.ts';
+import { writePlan } from './plan-file.ts';
+import { type PlanInput, planSvg } from './plan-svg.ts';
 import { manifestPath, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
 import { routeOf, spawnOf, trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
@@ -34,12 +34,12 @@ const json = (placement: Placement) => {
 };
 
 // 出生点、轨迹的概要和路线（ADR 0156 第 4 节）：轨迹按这次的修正换到网格的局部系，贴着同一份地面方格；
-// 给了 --plan 时把这些画成平面图
-async function printRoam(
+// 给了 --plan 时返回平面图要画的内容，由 main 在打印摆放以后画和写
+function printRoam(
   result: Awaited<ReturnType<typeof register>>,
   model: Awaited<ReturnType<typeof readModel>>,
   options: ReturnType<typeof parseOptions>
-): Promise<void> {
+): PlanInput | null {
   const { index, trajectory } = model;
   const frame: RoamFrame = {
     projection: gridProjection(index.epsg),
@@ -72,21 +72,17 @@ async function printRoam(
     const counts = routes.map(({ path }) => `${path.length} 个点`).join('、');
     console.log(`路线（${counts}）："routes": [\n${lines.join(',\n')}\n  ]`);
   }
-  if (options.plan !== null) {
-    // 相对路径放在 local/ 下：不入库
-    const file = isAbsolute(options.plan) ? options.plan : localPath(options.plan);
-    const svg = planSvg({
-      title: basename(options.index),
-      heading: result.placement.heading,
-      grid: result.grid,
-      track,
-      spawn: spawnOf(track, options.spawnAt),
-      routes: localRoutes
-    });
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, svg);
-    console.log(`平面图：${file}`);
+  if (options.plan === null) {
+    return null;
   }
+  return {
+    title: basename(options.index),
+    heading: result.placement.heading,
+    grid: result.grid,
+    track,
+    spawn: spawnOf(track, options.spawnAt),
+    routes: localRoutes
+  };
 }
 
 /** 跑一遍配准并打印，返回退出码 */
@@ -138,15 +134,17 @@ async function main(): Promise<number> {
   );
 
   console.log(`按 offset 原样换算（对照）："placement": ${json(result.asIsPlacement)}`);
-  if (options.roam) {
-    await printRoam(result, model, options);
-  }
+  const plan = options.roam ? printRoam(result, model, options) : null;
   if (result.failed) {
     console.error(`核对不通过，不要写进清单："placement": ${json(result.placement)}`);
-    return 1;
+  } else {
+    console.log(`配准后的摆放：              "placement": ${json(result.placement)}`);
   }
-  console.log(`配准后的摆放：              "placement": ${json(result.placement)}`);
-  return 0;
+  // 平面图最后画、最后写：写不了时摆放、出生点、路线已经打印出来；相对路径放在 local/ 下，不入库
+  if (plan !== null && options.plan !== null) {
+    console.log(`平面图：${await writePlan(options.plan, planSvg(plan), localPath())}`);
+  }
+  return result.failed ? 1 : 0;
 }
 
 try {

@@ -4,8 +4,8 @@ import { buildFloorGrid } from './floor-grid.ts';
 import type { Vec3 } from './lcc2-data.ts';
 import { meshToLngLatHeight, placementFor, yawToManifestHeading } from './placement.ts';
 import { gridProjection } from './projection.ts';
-import { manifestRoute, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
-import { trackOf } from './roam.ts';
+import { manifestEye, manifestPath, manifestRoute, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
+import { EYE_HEIGHT, trackOf } from './roam.ts';
 import { rectangle, walk } from './test-meshes.ts';
 
 const PROJECTION = gridProjection(4548);
@@ -34,6 +34,9 @@ describe('meshToLngLatHeight、yawToManifestHeading', () => {
   });
 });
 
+// 局部系里的一个路线点，只有眼高不同
+const withEye = (eye: number) => ({ x: 1, y: 2, floor: 0, eye });
+
 describe('manifestSpawn、manifestRoute、outline', () => {
   // 20 × 4 米的地面，x 10 以后头顶 1.5 米有顶；沿 y = 2 往东走
   const grid = buildFloorGrid([rectangle(0, 0, 20, 4, 0), rectangle(10, 0, 20, 4, 1.5)]);
@@ -55,6 +58,13 @@ describe('manifestSpawn、manifestRoute、outline', () => {
     expect(route.path[0]).toHaveLength(3);
     expect(route.path.at(-1)).toHaveLength(4);
     expect(route.path.at(-1)?.[3]).toBe(1.3);
+  });
+
+  it('眼高取整到厘米以后再和 1.6 比：1.597 取整是 1.6、不写，1.594 写 1.59；平面图的红圈用同一个判断', () => {
+    expect([EYE_HEIGHT, 1.597, 1.594, 0.9].map(manifestEye)).toStrictEqual([undefined, undefined, 1.59, 0.9]);
+    const path = manifestPath([withEye(EYE_HEIGHT), withEye(1.597), withEye(1.594)], FRAME);
+    expect(path.map(spot => spot.length)).toStrictEqual([3, 3, 4]);
+    expect(path[2][3]).toBe(1.59);
   });
 
   it('概要每 20 米一行，写出地板、扫描仪离地和净空', () => {

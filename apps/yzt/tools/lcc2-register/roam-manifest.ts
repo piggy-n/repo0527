@@ -48,14 +48,19 @@ export function manifestSpawn(track: readonly TrackSample[], from: number, frame
   };
 }
 
-/** 路线的点（局部系）换成清单的写法：眼高到厘米，等于 EYE_HEIGHT 的不写 */
+/** 写进清单的眼高：到厘米，取整以后等于 EYE_HEIGHT 的不写（undefined）；平面图上"眼高低于 1.6 的点"按同一个判断 */
+export function manifestEye(eye: number): number | undefined {
+  const rounded = round(eye, 2);
+  return rounded < EYE_HEIGHT ? rounded : undefined;
+}
+
+/** 路线的点（局部系）换成清单的写法：矮的地方多一个眼高（manifestEye） */
 export function manifestPath(points: readonly RoamPoint[], frame: RoamFrame): ManifestRoute['path'] {
   return points.map(point => {
     const [lng, lat, height] = lngLatHeight(frame, point);
-    const eye = round(point.eye, 2);
-    return eye < EYE_HEIGHT
-      ? [round(lng, 7), round(lat, 7), round(height, 2), eye]
-      : [round(lng, 7), round(lat, 7), round(height, 2)];
+    const spot = [round(lng, 7), round(lat, 7), round(height, 2)];
+    const eye = manifestEye(point.eye);
+    return eye === undefined ? spot : [...spot, eye];
   });
 }
 

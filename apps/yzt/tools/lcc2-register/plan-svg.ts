@@ -1,7 +1,7 @@
 // 轨迹的平面图（lcc2:register --plan，ADR 0156 第 4 节）：挑路线段、核对出生点和路线用。画碰撞网格的地板、修正后的扫描轨迹、
 // 每 20 米的米数（同概要）、出生点、路线；正北朝上，和 /dev/nav-grid 的平面图同一个方向。这里只算和拼字符串，写文件在 cli.ts
 import type { FloorGrid } from './floor-grid.ts';
-import { outlineLine, outlineSamples } from './roam-manifest.ts';
+import { manifestEye, outlineLine, outlineSamples } from './roam-manifest.ts';
 import { EYE_HEIGHT, eyeAbove, HEAD_CLEARANCE, type RoamPoint, type TrackSample } from './roam.ts';
 
 /** 画在图上的一条路线：轨迹上的起止米数，和生成的路线（局部系，就是写进清单的那些点） */
@@ -273,15 +273,19 @@ function routeLayers(routes: readonly PlanRoute[], { toCanvas }: PlanProjection)
     const [beforeX, beforeY] = canvas.at(-2) ?? canvas[0];
     // 终点的箭头，朝最后一段的方向
     const angle = (Math.atan2(endY - beforeY, endX - beforeX) / DEGREE).toFixed(1);
-    const lows = route.points
-      .map((point, k) => ({ point, spot: canvas[k] }))
-      .filter(({ point }) => point.eye < EYE_HEIGHT)
-      .map(
-        ({ point, spot: [x, y] }) =>
-          `<circle data-low="route" cx="${px(x)}" cy="${px(y)}" r="4" fill="${SURFACE}" stroke="${LOW}" ` +
+    // 和清单同一个判断、同一个取整：图上的圈和清单里带眼高的点一一对应，提示里就是清单写的值
+    const lows = route.points.flatMap((point, k) => {
+      const eye = manifestEye(point.eye);
+      if (eye === undefined) {
+        return [];
+      }
+      const [x, y] = canvas[k];
+      return [
+        `<circle data-low="route" cx="${px(x)}" cy="${px(y)}" r="4" fill="${SURFACE}" stroke="${LOW}" ` +
           `stroke-width="2">` +
-          `<title>${escape(route.id)}：眼高 ${meters(point.eye)} 米</title></circle>`
-      );
+          `<title>${escape(route.id)}：眼高 ${meters(eye)} 米</title></circle>`
+      ];
+    });
     return (
       `<g data-route="${escape(route.id)}"><title>${escape(routeSummary(route))}</title>` +
       `<polyline fill="none" stroke="${SURFACE}" stroke-width="7" stroke-linejoin="round" points="${points}"/>` +
