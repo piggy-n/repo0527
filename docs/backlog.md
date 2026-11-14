@@ -118,7 +118,7 @@
 - 业务端到端测试、覆盖率门槛
 - Worker 池的调度、缓存淘汰、内存预算，见 [utils](modules/utils.md)"还没做的"；瓦片数据服务等接入 MVT 时（[map-core](modules/map-core.md)"还没做的"）
 - 运行中 WebGL 上下文丢失（ADR 0030）：真实环境遇到再做
-- 暂不修复的两个安全告警等上游换大版本，见 [package-json](config/package-json.md)"暂不修复的安全告警"
+- 暂不修复的两个安全告警：2026-11-16 后在范围内升级 `eslint` 10.15.0、`glob` 13.0.7，其余等 `js-beautify` 换大版本，见 [package-json](config/package-json.md)"暂不修复的安全告警"
 - 换到更准的县界数据：现在县界和市界不重合（偏差中位约 150 米），换后用测试保证县界的边落在市界上（ADR 0057）
 
 ## 已知问题（现在不修）
