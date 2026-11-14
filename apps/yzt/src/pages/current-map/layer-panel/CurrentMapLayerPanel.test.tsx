@@ -1,6 +1,7 @@
 import type { CameraState, SceneStatus } from '@mx/map-core';
 import { type MapContext, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
+import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
@@ -367,5 +368,20 @@ describe('CurrentMapLayerPanel', () => {
     reveal.value = { key: 'model:white' };
     await nextTick();
     expect(selectedRow(wrapper)).toBe('model:white');
+  });
+
+  it('行尾的年份（ADR 0052）：多年份的是不带箭头的小下拉，新的在前，只改这一个资源', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    const select = row(wrapper, 'csxhjctb_hydl').getComponent(ElSelect);
+
+    expect(select.classes()).toEqual(expect.arrayContaining(['select-no-arrow', 'select-compact']));
+    expect(select.props('modelValue')).toBe(2024);
+    expect(select.findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([2024, 2023]);
+    select.vm.$emit('update:modelValue', 2023);
+    await nextTick();
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+    expect(owner.state.value.displays.get('bgdc_dltb')?.year).toBe(2024);
   });
 });
