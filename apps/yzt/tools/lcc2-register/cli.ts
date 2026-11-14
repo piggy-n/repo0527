@@ -11,7 +11,7 @@ import { trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
 
-// LCC2 的配准（ADR 0149 第 4 节）：在 apps/yzt 下运行 pnpm lcc2:register <索引>，用法见 docs/commands.md
+// LCC2 的配准（ADR 0149 第 4 节）：在 apps/yzt 下运行 pnpm lcc2:register <索引> --datum <米>，用法见 docs/commands.md
 
 const signed = (value: number, digits = 2) => `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`;
 const vector = (value: Vec3) => `(${value.map((part) => signed(part)).join(', ')})`;

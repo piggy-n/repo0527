@@ -124,8 +124,8 @@
 - 运行中 WebGL 上下文丢失（ADR 0030）：真实环境遇到再做
 - 暂不修复的两个安全告警：2026-11-16 后在范围内升级 `eslint` 10.15.0、`glob` 13.0.7，其余等 `js-beautify` 换大版本，见 [package-json](config/package-json.md)"暂不修复的安全告警"
 - 换到更准的县界数据：现在县界和市界不重合（偏差中位约 150 米），换后用测试保证县界的边落在市界上（ADR 0057）
-- 瓦片集的取点导出：在 `/dev/nav-grid` 上点出生点和途经点，导出清单的格式（椭球高），并把出生点画出来；现在瓦片集的出生点和路线没有工具，页面显示的地板是局部系的 z、只画路线（[3dt-manifest](config/3dt-manifest.md)"瓦片集的步骤"）
-- 瓦片集接入预检：根节点的 `transform` 是不是刚体、z 朝上，叶节点是不是 b3dm、有没有 `extensionsRequired`，叶节点的个数和总大小；现在要到建导航网格时才报错（[3dt-manifest](config/3dt-manifest.md)"先判断能不能不改代码接入"）
+- 瓦片集的取点导出：在 `/dev/nav-grid` 上点出生点和途经点，导出清单的格式（椭球高），并在平面图上标出出生点；现在瓦片集的出生点和路线没有工具，页面显示的地板是局部系的 z，平面图只画路线、不标出生点，"步行地图预览"按清单的出生点放人、只能粗核（[3dt-manifest](config/3dt-manifest.md)"瓦片集的步骤"）
+- 瓦片集接入预检：根节点的 `transform` 是不是刚体、z 朝上，叶节点是不是 b3dm、有没有 `extensionsRequired`，叶节点的个数和总大小；现在缺 `transform`、不是 b3dm、有 `extensionsRequired` 要到建导航网格时才报错，有缩放或不是 z 朝上不检查、会悄悄算错（[3dt-manifest](config/3dt-manifest.md)"先判断能不能不改代码接入"）
 - 按模型的导航参数：瓦片集一律 `NAV_DEFAULTS`、泼溅一律 `SCAN_NAV_OPTIONS`，清单里不能按模型调格子、身高、要不要遮盖；遇到露天也要走的瓦片集、参数不合适的扫描时再定
 - 地上室内的楼层名口径：`frame.ground` 是原点处椭球高 0 米，地面不在 0 米附近的地方（徐州约 40 米）地下层也叫 1F，`chooseSpawn` 往下找的两条也按它；接入地上的室内瓦片集前定地面取哪里
 - 非车站室内的叫法：瓦片集漫游时界面一律"站内"（`catalog.ts` 的 `roamPlaceOf`），接入不是车站的室内模型前定叫法
