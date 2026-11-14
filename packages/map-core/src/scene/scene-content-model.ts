@@ -122,6 +122,11 @@ export interface SceneContent {
   /** 高斯泼溅（ADR 0149）；没有时不写。ID 和瓦片集共用一个空间，状态都在 SceneStatus 里 */
   readonly splats?: readonly SplatLayer[];
   readonly underground: UndergroundView | null;
+  /**
+   * 漫游这份泼溅时只画它（隔离，ADR 0156 R.5）：MapLibre 引擎接管期间隐藏全部二维图层、用底色清屏，这份拿全部泼溅预算；
+   * 别的模型由拥有者设成不显示。不能和 underground 同时有；没有时不写
+   */
+  readonly isolatedSplat?: string;
   /** 没有漫游时不写 */
   readonly roam?: SceneRoam;
 }
@@ -250,7 +255,7 @@ function validateSplat({ id, url, attempt, placement }: SplatLayer): void {
   }
 }
 
-function validate({ tilesets, splats = [], underground, roam }: SceneContent): void {
+function validate({ tilesets, splats = [], underground, isolatedSplat, roam }: SceneContent): void {
   const ids = new Set<string>();
   for (const { id, url, attempt, maximumScreenSpaceError: screenError } of tilesets) {
     if (ids.has(id)) {
@@ -282,6 +287,14 @@ function validate({ tilesets, splats = [], underground, roam }: SceneContent): v
     const { surfaceOpacity } = underground;
     if (!(surfaceOpacity >= 0 && surfaceOpacity <= 1)) {
       throw new Error(`地表不透明度不在 0～1 之间：${surfaceOpacity}`);
+    }
+  }
+  if (isolatedSplat !== undefined) {
+    if (!splats.some(({ id }) => id === isolatedSplat)) {
+      throw new Error(`隔离的泼溅不存在：${isolatedSplat}`);
+    }
+    if (underground) {
+      throw new Error('隔离泼溅时不能同时有地下空间');
     }
   }
   if (roam) {

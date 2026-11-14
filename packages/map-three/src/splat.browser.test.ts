@@ -363,6 +363,45 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     expect(pickedHeight(ctx, { x: MIDDLE.x + 90, y: MIDDLE.y })).toBeCloseTo(5, 0);
   });
 
+  it('隔离一份泼溅（ADR 0156 R.5）：只画它、底色清屏，它拿全部预算；撤掉隔离后照常画、预算平分', async () => {
+    const ctx = await setup();
+    const glb = await boxGlb(8);
+    onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, 8), '/box/box.glb': glb }));
+    const box: TilesetLayer = { id: 'box', url: `${FIXTURE_ORIGIN}/box/tileset.json`, show: true, lighting: 'sun', attempt: 0 };
+    // 立方体挡在正方形前面（同上一个用例）；另一份泼溅在 2 公里外，只用来分预算
+    const far = square({ id: 'far', placement: { lng: MODEL_AT[0] + 0.02, lat: MODEL_AT[1], height: GROUND, heading: 0 } });
+    ctx.session.scene.set({
+      tilesets: [box],
+      splats: [square({ placement: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 5, heading: 0 } }), far],
+      underground: null
+    });
+    await until(() => ctx.view.sceneStatus.get('box')?.state === 'ready', '立方体就绪');
+    await boxContentDrawn(ctx);
+    await splatDrawn(ctx);
+    await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '立方体挡住泼溅');
+    const total = ctx.renderer.inspect().splatBudget;
+    const budgets = () => {
+      const { splats } = ctx.renderer.inspect();
+      return [splats.square?.budget, splats.far?.budget];
+    };
+    expect(budgets()).toStrictEqual([total / 2, total / 2]);
+    const corner = { x: 4, y: 4 };
+    const before = pixel(ctx.canvas, corner);
+
+    ctx.renderer.setLift({ modelId: 'square', meters: 0, backdrop: '#1e2226' });
+    await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '只画泼溅');
+    // 角上没有模型的地方是底色（30, 34, 38），不是二维
+    const [r, g, b] = pixel(ctx.canvas, corner);
+    expect([Math.abs(r - 30), Math.abs(g - 34), Math.abs(b - 38)].every(difference => difference <= 2)).toBe(true);
+    expect(budgets()).toStrictEqual([total, 1]);
+
+    ctx.renderer.setLift(null);
+    await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '立方体又挡住泼溅');
+    expect(pixel(ctx.canvas, corner)).toStrictEqual(before);
+    expect(budgets()).toStrictEqual([total / 2, total / 2]);
+    expect(ctx.errors).toStrictEqual([]);
+  });
+
   describe('要求裁剪的瓦片集（倾斜摄影）在泼溅的范围里不画（ADR 0149）', () => {
     it('重叠时立方体在盒子里不画、拾取不到，画出后面的泼溅；隐藏、卸载泼溅后恢复', async () => {
       const ctx = await setup();

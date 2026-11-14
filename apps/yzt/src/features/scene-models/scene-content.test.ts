@@ -93,4 +93,31 @@ describe('deriveSceneContent', () => {
     expect(roaming.splats?.[0]?.show).toBe(false);
     expect(roaming.underground?.tilesetId).toBe('station');
   });
+
+  it('漫游泼溅时隔离它：别的瓦片集、泼溅都不显示，不抬高（ADR 0156 R.5）', () => {
+    const placement = { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 };
+    const tomb = oblique('tomb', {
+      kind: 'splat',
+      effects: [],
+      splat: { url: 'https://maps.test/3dt/tomb/tomb.lcc2', placement },
+      // 泼溅写了 underground 也不抬高
+      underground: true,
+      routes: [{ id: 'in', name: '进墓室', path: [[117.06, 34.27, 50], [117.0601, 34.27, 50]], length: 9 }]
+    });
+    const other = oblique('cws', { kind: 'splat', effects: [], splat: { url: 'https://maps.test/3dt/cws/cws.lcc2', placement } });
+    const models = [oblique('xz'), tomb, other];
+    const state = loaded(['xz', 'tomb', 'cws']);
+    const roam: RouteChoice = { kind: 'route', modelId: 'tomb', routeId: 'in', id: 'r1', playing: false, speed: 4, run: 0 };
+
+    const before = deriveSceneContent(models, state);
+    expect('isolatedSplat' in before).toBe(false);
+    const roaming = deriveSceneContent(models, { ...state, roam });
+    expect(roaming.isolatedSplat).toBe('tomb');
+    expect(roaming.underground).toBeNull();
+    expect(roaming.tilesets.map(({ show }) => show)).toStrictEqual([false]);
+    expect(roaming.splats?.map(({ id, show }) => [id, show])).toStrictEqual([
+      ['tomb', true],
+      ['cws', false]
+    ]);
+  });
 });

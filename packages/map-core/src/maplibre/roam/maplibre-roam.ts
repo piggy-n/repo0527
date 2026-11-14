@@ -64,7 +64,7 @@ export interface MapLibreRoamOptions {
   readonly currentCamera: () => CameraState;
   /** 结束漫游时飞回开始前的相机 */
   readonly flyTo: (camera: CameraState, duration: number) => void;
-  /** 接管地图、抬高变了：视图据此隐藏、恢复二维图层，接管结束后按当前工具恢复手势和光标 */
+  /** 接管地图、抬高变了（隔离泼溅也算抬高，抬高量是 0）：视图据此隐藏、恢复二维图层，接管结束后按当前工具恢复手势和光标 */
   readonly onTakeover: (state: { readonly engaged: boolean; readonly lifted: boolean }) => void;
   readonly onStatus: (status: RoamStatus | null) => void;
 }
@@ -96,8 +96,9 @@ type RoamEntry =
   | { readonly kind: 'route'; roam: RouteRoam; readonly path: RoutePath; detached: boolean }
   | { readonly kind: 'walk'; roam: WalkRoam; detached: boolean };
 
+// 抬高或隔离：只画 modelId 这一份；地下的瓦片集抬高 meters 米，泼溅是 0（ADR 0156 R.5）
 interface Lift {
-  readonly tilesetId: string;
+  readonly modelId: string;
   readonly meters: number;
 }
 
@@ -112,7 +113,7 @@ interface Takeover {
   lift: Lift | null;
 }
 
-const sameLift = (a: Lift | null, b: Lift | null) => a?.tilesetId === b?.tilesetId && a?.meters === b?.meters;
+const sameLift = (a: Lift | null, b: Lift | null) => a?.modelId === b?.modelId && a?.meters === b?.meters;
 const toDegrees = (radians: number) => (radians * 180) / Math.PI;
 const separation = (a: Point3, b: Point3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
@@ -133,6 +134,7 @@ export class MapLibreRoam implements RoamHost, Disposable {
   #status: RoamStatus | null = null;
   #takeover: Takeover | null = null;
   #underground: UndergroundView | null = null;
+  #isolatedSplat: string | null = null;
   // 最后设给相机的真实视点和视场角（弧度）
   #eye: RoamEye | null = null;
   #fovy = 0;
@@ -184,8 +186,9 @@ export class MapLibreRoam implements RoamHost, Disposable {
    * 按会话的三维内容开始、改变或结束漫游；back 决定结束时是否飞回。
    * 换了一次漫游（ID 或种类变了）时直接开始新的，已经在模型里时不重新进出
    */
-  apply({ roam: wanted, underground }: SceneContent, back: boolean): void {
+  apply({ roam: wanted, underground, isolatedSplat }: SceneContent, back: boolean): void {
     this.#underground = underground;
+    this.#isolatedSplat = isolatedSplat ?? null;
     const entry = this.#entry;
     if (!wanted) {
       if (entry) {
@@ -450,11 +453,15 @@ export class MapLibreRoam implements RoamHost, Disposable {
     });
   }
 
-  // 抬高量：漫游地下的模型（会话有 underground）时按它的包围盒算，同一次漫游期间不变；还在加载时等它
+  // 抬高量：漫游地下的模型（会话有 underground）时按它的包围盒算，同一次漫游期间不变；还在加载时等它。
+  // 漫游泼溅（会话有 isolatedSplat）时隔离它、不抬高
   #wantedLift(): Lift | null | 'wait' {
     const takeover = this.#takeover;
     if (takeover) {
       return takeover.lift;
+    }
+    if (this.#isolatedSplat !== null) {
+      return { modelId: this.#isolatedSplat, meters: 0 };
     }
     const tilesetId = this.#underground?.tilesetId;
     if (!tilesetId) {
@@ -465,7 +472,7 @@ export class MapLibreRoam implements RoamHost, Disposable {
       return this.#options.tilesetState(tilesetId) === 'loading' ? 'wait' : null;
     }
     const meters = liftFor(lowest);
-    return meters > 0 ? { tilesetId, meters } : null;
+    return meters > 0 ? { modelId: tilesetId, meters } : null;
   }
 
   // 接管地图：记下开始前的相机和设置，关掉手势，放宽缩放、俯仰上限，中心高度不夹到地面；抬高交给渲染器

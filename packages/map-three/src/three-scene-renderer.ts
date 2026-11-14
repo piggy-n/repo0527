@@ -322,7 +322,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
     }
     const drawn: TilesetEntry[] = [];
     for (const [id, entry] of this.#tilesets) {
-      if (lifted && id !== lifted.tilesetId) {
+      if (lifted && id !== lifted.modelId) {
         entry.skipFrame();
       } else if (entry.prepare(frame, surface, canvas.width, canvas.height)) {
         webgl.render(entry.scene, entry.camera);
@@ -340,8 +340,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
       }
     }
     // 泼溅是半透明的、不写深度：在不透明的瓦片、模型之后画，用它们的深度做遮挡
-    for (const entry of this.#splats.values()) {
-      if (lifted) {
+    for (const [id, entry] of this.#splats) {
+      if (lifted && id !== lifted.modelId) {
         entry.skipFrame();
       } else if (entry.prepare(frame, surface)) {
         webgl.render(entry.scene, entry.camera);
@@ -394,7 +394,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       const sphere = await entry.load(signal);
       signal.throwIfAborted();
       this.#assertAlive();
-      if (this.#lift?.tilesetId === id) {
+      if (this.#lift?.modelId === id) {
         entry.setLift(this.#lift.meters);
       }
       entry.setClipBoxes(this.#splatClipBoxes());
@@ -541,8 +541,9 @@ export class ThreeSceneRenderer implements SceneRenderer {
   setLift(lift: SceneLift | null): void {
     this.#lift = lift;
     for (const [id, entry] of this.#tilesets) {
-      entry.setLift(lift?.tilesetId === id ? lift.meters : 0);
+      entry.setLift(lift?.modelId === id ? lift.meters : 0);
     }
+    this.#shareSplatBudget();
     this.#marker.setLift(this.#activeLift()?.meters ?? 0);
     this.#scale.release();
     this.#surface?.requestRepaint();
@@ -686,10 +687,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
     }
   }
 
-  // 抬高的瓦片集还在时才算抬高：被移除以后照常画其他内容
+  // 抬高的瓦片集、隔离的泼溅还在时才算：被移除以后照常画其他内容
   #activeLift(): SceneLift | null {
     const lift = this.#lift;
-    return lift && lift.meters !== 0 && this.#tilesets.has(lift.tilesetId) ? lift : null;
+    return lift && (this.#tilesets.has(lift.modelId) || this.#splats.has(lift.modelId)) ? lift : null;
   }
 
   // 丢掉 WebGLRenderer：它跟踪的 GPU 资源随之作废，下次画时重新上传；内容（瓦片、泼溅、模型）保留。
@@ -738,11 +739,13 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#surface?.requestRepaint();
   }
 
-  // 总预算按份平分：多加一份不会让总的高斯个数翻倍
+  // 总预算按份平分：多加一份不会让总的高斯个数翻倍。隔离一份泼溅时它拿全部预算，别的不画、只留 1（ADR 0156 R.5）
   #shareSplatBudget(): void {
+    const isolated = this.#activeLift()?.modelId;
+    const alone = isolated !== undefined && this.#splats.has(isolated);
     const share = Math.max(1, Math.floor(this.#splatBudget / Math.max(1, this.#splats.size)));
-    for (const entry of this.#splats.values()) {
-      entry.setBudget(share);
+    for (const [id, entry] of this.#splats) {
+      entry.setBudget(alone ? (id === isolated ? this.#splatBudget : 1) : share);
     }
   }
 

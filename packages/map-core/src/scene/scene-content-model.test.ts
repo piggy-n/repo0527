@@ -100,6 +100,10 @@ describe('SceneContentModel', () => {
     const content: SceneContent = { tilesets: [tileset('a')], splats: [splat()], underground: null };
     model.set(content);
     expect(model.current).toBe(content);
+    const isolated: SceneContent = { ...content, isolatedSplat: 'cws' };
+    model.set(isolated);
+    expect(model.current).toBe(isolated);
+    model.set(content);
 
     const invalid: readonly (readonly [SceneContent, string])[] = [
       [{ tilesets: [], splats: [splat({ url: '3dt/cws.lcc2' })], underground: null }, '不是绝对地址'],
@@ -108,7 +112,18 @@ describe('SceneContentModel', () => {
       [{ tilesets: [], splats: [splat({ placement: { ...placement, lat: 91 } })], underground: null }, '纬度'],
       [{ tilesets: [tileset('cws')], splats: [splat()], underground: null }, 'ID 重复'],
       [{ tilesets: [], splats: [splat(), splat()], underground: null }, 'ID 重复'],
-      [{ tilesets: [], splats: [splat()], underground: { tilesetId: 'cws', surfaceOpacity: 0.25 } }, '钻地的瓦片集不存在']
+      [{ tilesets: [], splats: [splat()], underground: { tilesetId: 'cws', surfaceOpacity: 0.25 } }, '钻地的瓦片集不存在'],
+      // 隔离的泼溅（ADR 0156 R.5）：要是加载着的一份，不能和地下空间同时有
+      [{ tilesets: [], splats: [splat()], underground: null, isolatedSplat: 'other' }, '隔离的泼溅不存在：other'],
+      [
+        {
+          tilesets: [tileset('a')],
+          splats: [splat()],
+          underground: { tilesetId: 'a', surfaceOpacity: 0.25 },
+          isolatedSplat: 'cws'
+        },
+        '不能同时有地下空间'
+      ]
     ];
     for (const [item, message] of invalid) {
       expect(() => model.set(item)).toThrow(message);

@@ -128,7 +128,7 @@ session[Symbol.dispose]();
 
 ### SceneContentModel（ADR 0081 第 2 节）
 
-- 会话的 `scene`：`{ tilesets, splats?, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化。`splats` 是 LCC2 高斯泼溅（ADR 0149：`.lcc2` 索引的地址、配准后的 `placement`、显示、重试次数），没有时不写；只有能力声明 `splats` 的引擎画它
+- 会话的 `scene`：`{ tilesets, splats?, underground, isolatedSplat?, roam? }`（`isolatedSplat` 是漫游时隔离的那份泼溅，必须加载着、不能和 `underground` 同时有，ADR 0156 R.5），和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化。`splats` 是 LCC2 高斯泼溅（ADR 0149：`.lcc2` 索引的地址、配准后的 `placement`、显示、重试次数），没有时不写；只有能力声明 `splats` 的引擎画它
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；泼溅的地址是绝对地址、`attempt` 是非负整数、摆放的四个值是有限的数且纬度在 ±90 以内，泼溅和瓦片集的 ID 合在一起不重复（状态在同一份 `SceneStatus` 里），钻地只能指向瓦片集；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
 - 三维的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°，算上球心的椭球高：视线穿过球心，不是球心脚下的地面；有悬浮面板留白时球心会偏离可视区中心，模型越高偏得越多），缩放级和距离的换算是 `camera/camera-distance.ts`。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
