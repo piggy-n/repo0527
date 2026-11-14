@@ -138,10 +138,11 @@
   }
 }
 
-// 搜索和批量设置年份在一行
+// 搜索和筛选年份在一行；插槽给的内容可以折行（三维里目录的分页单独一行，ADR 0157）
 .filter {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   padding: 0 var(--space-lg) var(--space-sm);
 }

@@ -4,7 +4,15 @@ import { computed, shallowRef } from 'vue';
 import type { CatalogNode } from '@/shared/map/layer-panel/catalog-tree';
 import { sceneManifestSchema } from './api';
 import { buildModelCatalog } from './catalog';
-import { canRoamModel, modelCatalogNodes, modelIdOfKey, modelKey, modelRequests } from './layer-panel';
+import {
+  canRoamModel,
+  modelCatalogNodes,
+  modelCityNodes,
+  modelIdOfKey,
+  modelKey,
+  modelKindOptions,
+  modelRequests
+} from './layer-panel';
 
 const CATALOG = buildModelCatalog(
   sceneManifestSchema.parse({
@@ -66,6 +74,26 @@ describe('三维模型在资源图层面板上', () => {
     expect(outline(modelCatalogNodes(CATALOG, [], '三维'))).toHaveLength(6);
     expect(modelCatalogNodes(CATALOG, [], '地类')).toStrictEqual([]);
     expect(modelCatalogNodes([], [])).toStrictEqual([]);
+  });
+
+  it('三维里目录的"三维模型"页直接按市分组，可以只看一类；类型的选项只列清单里有的（用户 2026-11-15 方案乙）', () => {
+    expect(outline(modelCityNodes(CATALOG, ['white']))).toStrictEqual([
+      'model-city:320100 南京市',
+      '  model:city 新街口倾斜摄影 · 倾斜摄影',
+      'model-city:320500 苏州市',
+      '  model:station 苏州站地下空间 · 室内',
+      '  model:white 苏州白膜 · 白膜 ✓'
+    ]);
+    expect(outline(modelCityNodes(CATALOG, [], '苏州', 'white'))).toStrictEqual([
+      'model-city:320500 苏州市',
+      '  model:white 苏州白膜 · 白膜'
+    ]);
+    expect(modelCityNodes(CATALOG, [], '', 'splat')).toStrictEqual([]);
+    expect(modelKindOptions(CATALOG)).toStrictEqual([
+      { kind: 'oblique', label: '倾斜摄影' },
+      { kind: 'white', label: '白膜' },
+      { kind: 'indoor', label: '室内' }
+    ]);
   });
 
   it('有出生点或路线才能漫游', () => {

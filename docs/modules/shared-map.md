@@ -343,7 +343,7 @@ const readout = useMapReadout(map);
 
 | 文件 | 内容 |
 |---|---|
-| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；登记为贴左边的悬浮元素 |
+| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`（`catalogFilter` 那一行可以折行，现状底图在三维里把目录的分页单独放一行）；登记为贴左边的悬浮元素 |
 | `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：只有项能选中，Ctrl、Shift 多选，分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时是添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
 | `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签（二维里的模型组），`headless` 时不显示标题（只有这一组时） |

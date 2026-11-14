@@ -1,6 +1,6 @@
 import { Search } from '@element-plus/icons-vue';
 import { useMap } from '@mx/map-vue';
-import { ElButton, ElInput } from 'element-plus';
+import { ElButton, ElInput, ElSegmented } from 'element-plus';
 import { computed, defineComponent, nextTick, onScopeDispose, type PropType, ref, type VNode, watch } from 'vue';
 import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSelect';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
@@ -16,9 +16,16 @@ import {
   resourceKey
 } from '@/features/resource-map/layer-panel';
 import { legendEntry } from '@/features/resource-map/legend';
+import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSelect';
 import { ModelLayerRow } from '@/features/scene-models/components/ModelLayerRow';
 import type { SceneModels } from '@/features/scene-models/composables/useSceneModels';
-import { canRoamModel, modelCatalogNodes, modelIdOfKey, modelKey } from '@/features/scene-models/layer-panel';
+import {
+  canRoamModel,
+  modelCatalogNodes,
+  modelCityNodes,
+  modelIdOfKey,
+  modelKey
+} from '@/features/scene-models/layer-panel';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import {
   type CatalogSelection,
@@ -30,7 +37,8 @@ import {
   branchKeys,
   catalogCover,
   expandedByDefault,
-  findCatalogNode
+  findCatalogNode,
+  leavesOf
 } from '@/shared/map/layer-panel/catalog-tree';
 import { CatalogTree, type MenuPoint } from '@/shared/map/layer-panel/CatalogTree';
 import { CurrentLayerGroup, type RowAnimation } from '@/shared/map/layer-panel/CurrentLayerGroup';
@@ -55,6 +63,16 @@ const TABS = [
 const ENTER_MS = 900;
 const FLASH_MS = 1400;
 
+/** 三维里资源目录的两页（用户 2026-11-15 选的方案乙）：三维模型、二维资源 */
+type CatalogPage = 'models' | 'resources';
+
+const CATALOG_PAGES: readonly { readonly label: string; readonly value: CatalogPage }[] = [
+  { label: '三维模型', value: 'models' },
+  { label: '二维资源', value: 'resources' }
+];
+
+const isCatalogPage = (value: unknown): value is CatalogPage => value === 'models' || value === 'resources';
+
 /** 浮层：透明度或图例（用户 2026-11-14：两个分开，没有页签） */
 type PopoverKind = 'opacity' | 'legend';
 
@@ -78,7 +96,8 @@ type LoadStatus = 'ready' | 'loading' | 'failed';
  * 现状底图的资源图层面板（ADR 0157），二三维共用：上段"资源目录"找资源和三维模型、加入和移出，下段"当前图层"分"二维图层"
  * "三维模型"两组管地图上的内容，共用工具栏操作选中的一行。把 resource-map、scene-models 的目录、行、图例和 shared 的面板部件
  * 拼在一起；选中、浮层、菜单这些界面状态在这里，图层和模型的状态在各自的拥有者里。二维里模型组变淡、标"仅三维"，模型不能定位、
- * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）
+ * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）。三维里先体现模型（用户 2026-11-15 选的方案乙）：目录分"三维模型"
+ * "二维资源"两页、进入三维时回到"三维模型"页，当前图层里模型组在上
  */
 export const CurrentMapLayerPanel = defineComponent({
   name: 'CurrentMapLayerPanel',
@@ -120,12 +139,44 @@ export const CurrentMapLayerPanel = defineComponent({
     // ---------- 资源目录
     const keyword = ref('');
     const searching = computed(() => keyword.value.trim() !== '');
-    // 三维模型是目录最后一个分类
-    const nodes = computed(() => [
-      ...resourceCatalogNodes(state.value, keyword.value),
-      ...modelCatalogNodes(props.models.models.value, props.models.added.value, keyword.value)
-    ]);
+    // 三维里的页、"三维模型"页的类型筛选：界面状态，不持久化；进入三维时回到"三维模型"页
+    const page = ref<CatalogPage>('models');
+    const modelKind = ref<string | null>(null);
+    watch(scene, value => {
+      if (value) {
+        page.value = 'models';
+      }
+    });
+    const modelsPage = computed(() => scene.value && page.value === 'models');
+    const resourceNodes = computed(() => resourceCatalogNodes(state.value, keyword.value));
+    const cityNodes = computed(() =>
+      modelCityNodes(props.models.models.value, props.models.added.value, keyword.value, modelKind.value)
+    );
+    const pageNodes = (which: CatalogPage) => (which === 'models' ? cityNodes.value : resourceNodes.value);
+    // 二维里不分页，三维模型是目录最后一个分类；三维里只列当前这一页
+    const nodes = computed(() =>
+      scene.value
+        ? pageNodes(page.value)
+        : [...resourceNodes.value, ...modelCatalogNodes(props.models.models.value, props.models.added.value, keyword.value)]
+    );
+    // 搜索只搜当前页；另一页也有匹配时在列表下面提示，点了切过去
+    const otherPage = computed((): CatalogPage => (page.value === 'models' ? 'resources' : 'models'));
+    const otherMatches = computed(() =>
+      scene.value && searching.value ? pageNodes(otherPage.value).flatMap(leavesOf).length : 0
+    );
     const expanded = ref<ReadonlySet<string>>(new Set());
+    // 第一次显示"三维模型"页时展开各市，模型一眼能看到；之后不改用户的展开
+    let citiesOpened = false;
+    watch(
+      () => (modelsPage.value ? branchKeys(cityNodes.value) : []),
+      keys => {
+        if (!citiesOpened && keys.length > 0) {
+          citiesOpened = true;
+          expanded.value = new Set([...expanded.value, ...keys]);
+        }
+      },
+      { immediate: true }
+    );
     const selection = ref<CatalogSelection>(EMPTY_CATALOG_SELECTION);
     // 目录第一次到达时展开含有已加入资源的分类；之后目录刷新不改用户的展开
     watch(
@@ -150,14 +201,18 @@ export const CurrentMapLayerPanel = defineComponent({
     );
     const layersOpen = ref(true);
     const modelsOpen = ref(true);
-    // 两组按显示的先后接在一起；方向键跨组时只走展开着的组
-    const currentKeys = computed(() => [...layerKeys.value, ...modelKeys.value]);
     // 只有二维图层或只有三维模型时不显示组标题，这一组一直展开（用户 2026-11-15）
     const single = computed(() => layerKeys.value.length === 0 || modelKeys.value.length === 0);
-    const shownKeys = computed(() => [
-      ...(layersOpen.value || single.value ? layerKeys.value : []),
-      ...(modelsOpen.value || single.value ? modelKeys.value : [])
-    ]);
+    // 两组按显示的先后接在一起，三维里三维模型在上（方案乙）；方向键跨组时只走展开着的组
+    const inGroupOrder = <T,>(layersPart: readonly T[], modelsPart: readonly T[]) =>
+      scene.value ? [...modelsPart, ...layersPart] : [...layersPart, ...modelsPart];
+    const currentKeys = computed(() => inGroupOrder(layerKeys.value, modelKeys.value));
+    const shownKeys = computed(() =>
+      inGroupOrder(
+        layersOpen.value || single.value ? layerKeys.value : [],
+        modelsOpen.value || single.value ? modelKeys.value : []
+      )
+    );
     const groupKeysOf = (key: string) => (modelIdOfKey(key) === null ? layerKeys.value : modelKeys.value);
     const selected = ref<string | null>(null);
     const selectedCode = computed(() => (selected.value === null ? null : resourceCodeOfKey(selected.value)));
@@ -642,9 +697,9 @@ export const CurrentMapLayerPanel = defineComponent({
         animationOf,
         ...groupHandlers
       };
-      const groups: VNode[] = [];
+      const layersGroup: VNode[] = [];
       if (layerKeys.value.length > 0) {
-        groups.push(
+        layersGroup.push(
           <CurrentLayerGroup
             key="layers"
             group="layers"
@@ -661,8 +716,9 @@ export const CurrentMapLayerPanel = defineComponent({
         );
       }
       // 二维里整组变淡，标题旁标一次"仅三维"，不在每一行上写
+      const modelsGroup: VNode[] = [];
       if (modelKeys.value.length > 0) {
-        groups.push(
+        modelsGroup.push(
           <CurrentLayerGroup
             key="models"
             group="models"
@@ -680,12 +736,51 @@ export const CurrentMapLayerPanel = defineComponent({
           </CurrentLayerGroup>
         );
       }
-      return groups;
+      return inGroupOrder(layersGroup, modelsGroup);
     };
 
-    // 模型清单读不到时目录里没有"三维模型"：在目录最后提示，可以重试
+    // 目录是空的：三维模型页按清单的状态说明（失败时由下面的提示说明），其余是没有找到
+    const renderCatalogEmpty = (): VNode[] => {
+      if (!modelsPage.value) {
+        return [<div class={styles.empty}>没有找到资源</div>];
+      }
+      if (props.modelsStatus === 'failed') {
+        return [];
+      }
+      return [<div class={styles.empty}>{props.modelsStatus === 'loading' ? '三维模型清单加载中' : '没有找到模型'}</div>];
+    };
+
+    const renderCatalog = (): VNode[] =>
+      nodes.value.length === 0
+        ? renderCatalogEmpty()
+        : [
+            <CatalogTree
+              nodes={nodes.value}
+              expanded={expanded.value}
+              selection={selection.value}
+              searching={searching.value}
+              label="资源目录"
+              onUpdate:selection={(next: CatalogSelection) => (selection.value = next)}
+              onUpdate:expanded={(next: ReadonlySet<string>) => (expanded.value = next)}
+              onAdd={addKeys}
+              onRemove={removeKeys}
+              onLocate={locateInList}
+              onMenu={(key: string, point: MenuPoint) => (menu.value = { source: 'catalog', key, point })}
+            />
+          ];
+
+    const renderOtherMatches = (): VNode[] =>
+      otherMatches.value > 0
+        ? [
+            <button type="button" class={styles.otherPage} data-other-page onClick={() => (page.value = otherPage.value)}>
+              {`${otherPage.value === 'models' ? '三维模型' : '二维资源'}里还有 ${otherMatches.value} 项匹配`}
+            </button>
+          ]
+        : [];
+
+    // 模型清单读不到时目录里没有三维模型：在目录最后（三维里在"三维模型"页）提示，可以重试
     const renderModelsFailed = (): VNode[] =>
-      props.modelsStatus === 'failed'
+      props.modelsStatus === 'failed' && (!scene.value || page.value === 'models')
         ? [
             <div class={styles.modelsFailed} data-models-failed>
               <span>三维模型清单加载失败</span>
@@ -788,37 +883,42 @@ export const CurrentMapLayerPanel = defineComponent({
         {{
           catalogTools: () => [<PanelToolbar items={catalogTools.value} label="资源目录的操作" onAction={onCatalogTool} />],
           catalogFilter: () => [
+            ...(scene.value
+              ? [
+                  <ElSegmented
+                    class={styles.pages}
+                    modelValue={page.value}
+                    options={[...CATALOG_PAGES]}
+                    block
+                    ariaLabel="资源目录的分页"
+                    onUpdate:modelValue={(value: unknown) => {
+                      if (isCatalogPage(value)) {
+                        page.value = value;
+                      }
+                    }}
+                  />
+                ]
+              : []),
             <ElInput
               class={styles.search}
               modelValue={keyword.value}
               clearable
               prefixIcon={Search}
-              placeholder="搜索资源"
-              ariaLabel="搜索资源"
+              placeholder={modelsPage.value ? '搜索模型或城市' : '搜索资源'}
+              ariaLabel={modelsPage.value ? '搜索模型或城市' : '搜索资源'}
               onUpdate:modelValue={(value: string) => (keyword.value = value)}
             />,
-            <BatchYearSelect layers={props.resources} />
-          ],
-          catalog: () => [
-            nodes.value.length > 0 ? (
-              <CatalogTree
-                nodes={nodes.value}
-                expanded={expanded.value}
-                selection={selection.value}
-                searching={searching.value}
-                label="资源目录"
-                onUpdate:selection={(next: CatalogSelection) => (selection.value = next)}
-                onUpdate:expanded={(next: ReadonlySet<string>) => (expanded.value = next)}
-                onAdd={addKeys}
-                onRemove={removeKeys}
-                onLocate={locateInList}
-                onMenu={(key: string, point: MenuPoint) => (menu.value = { source: 'catalog', key, point })}
+            modelsPage.value ? (
+              <ModelKindSelect
+                models={props.models.models.value}
+                kind={modelKind.value}
+                onUpdate:kind={(kind: string | null) => (modelKind.value = kind)}
               />
             ) : (
-              <div class={styles.empty}>没有找到资源</div>
-            ),
-            ...renderModelsFailed()
+              <BatchYearSelect layers={props.resources} />
+            )
           ],
+          catalog: () => [...renderCatalog(), ...renderOtherMatches(), ...renderModelsFailed()],
           currentTools: () => [<PanelToolbar items={currentTools.value} label="当前图层的操作" onAction={onCurrentTool} />],
           current: () => renderCurrent(),
           floating: (context: PanelFloatingContext) => {

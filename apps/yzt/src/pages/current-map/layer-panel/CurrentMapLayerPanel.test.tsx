@@ -1,7 +1,7 @@
 import type { CameraState, SceneStatus } from '@mx/map-core';
 import { type MapContext, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElOption, ElSelect } from 'element-plus';
+import { ElOption, ElSegmented, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
@@ -11,6 +11,7 @@ import { useResourcePanelLayout } from '@/features/resource-map/composables/useR
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { sceneManifestSchema } from '@/features/scene-models/api';
 import { buildModelCatalog } from '@/features/scene-models/catalog';
+import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSelect';
 import { type SceneModels, useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { required } from '@/shared/testing/required';
@@ -137,6 +138,15 @@ function selectedRow(wrapper: VueWrapper): string | null {
 const popover = () => document.querySelector<HTMLElement>('[data-layer-popover]');
 // 右键菜单里的定位
 const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
+// 三维里目录的分页（方案乙）：显示着的节点、分段控制、选中的一页、切到某一页
+const catalogKeys = (wrapper: VueWrapper) =>
+  wrapper.findAll('[data-catalog-node]').map(item => item.attributes('data-catalog-node'));
+const pages = (wrapper: VueWrapper) => wrapper.findComponent(ElSegmented);
+const shownPage = (wrapper: VueWrapper) => wrapper.get('.el-segmented__item.is-selected').text();
+async function showPage(wrapper: VueWrapper, page: 'models' | 'resources') {
+  pages(wrapper).vm.$emit('update:modelValue', page);
+  await nextTick();
+}
 
 afterEach(() => {
   // Element 的提示挂在 body 下，不归组件管
@@ -482,5 +492,99 @@ describe('CurrentMapLayerPanel', () => {
     expect(currentOrder(wrapper)).toEqual(expect.arrayContaining(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']));
     expect(land().attributes('aria-selected')).toBeUndefined();
     expect(owner.state.value.displays.get('bgdc_cjdcq')?.added).toBe(true);
+  });
+
+  describe('三维里先体现三维模型（用户 2026-11-15 选的方案乙）', () => {
+
+    it('目录分"三维模型""二维资源"两页：进入三维是模型页，各市展开、能按类型筛选；回到二维不分页，再进三维回到模型页', async () => {
+      const { wrapper, map } = await mountPanel();
+      expect(pages(wrapper).exists()).toBe(false);
+
+      map.setDimension('3d');
+      await nextTick();
+      expect(shownPage(wrapper)).toBe('三维模型');
+      expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500', 'model:station', 'model:white']);
+      expect(wrapper.find('input[placeholder="搜索模型或城市"]').exists()).toBe(true);
+      // 类型只列清单里有的；"筛选年份"的位置换成类型
+      const kinds = wrapper.getComponent(ModelKindSelect).getComponent(ElSelect);
+      expect(kinds.findAllComponents(ElOption).map(option => option.props('label'))).toStrictEqual([
+        '全部类型',
+        '白膜',
+        '室内'
+      ]);
+      kinds.vm.$emit('update:modelValue', 'white');
+      await nextTick();
+      expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500', 'model:white']);
+
+      // 二维资源页：只有二维的分类，搜索框、筛选年份照旧
+      await showPage(wrapper, 'resources');
+      expect(catalogKeys(wrapper).some(key => key?.startsWith('model'))).toBe(false);
+      expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+      expect(wrapper.find('input[placeholder="搜索资源"]').exists()).toBe(true);
+      expect(wrapper.findComponent(ModelKindSelect).exists()).toBe(false);
+
+      map.setDimension('2d');
+      await nextTick();
+      expect(pages(wrapper).exists()).toBe(false);
+      expect(catalogKeys(wrapper).at(-1)).toBe('model-root');
+
+      map.setDimension('3d');
+      await nextTick();
+      expect(shownPage(wrapper)).toBe('三维模型');
+    });
+
+    it('搜索只搜当前页，另一页也有匹配时在列表下面提示，点了切过去；换页后看不见的项不再算选中', async () => {
+      const { wrapper, map } = await mountPanel();
+      map.setDimension('3d');
+      await nextTick();
+      await wrapper.get('[data-catalog-node="model:white"]').trigger('click');
+      expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('false');
+      await showPage(wrapper, 'resources');
+      expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('true');
+      expect(wrapper.find('[data-other-page]').exists()).toBe(false);
+
+      // 二维资源里没有"苏州"
+      await wrapper.get('input[placeholder="搜索资源"]').setValue('苏州');
+      expect(catalogKeys(wrapper)).toStrictEqual([]);
+      expect(wrapper.text()).toContain('没有找到资源');
+      expect(wrapper.find('[data-other-page]').exists()).toBe(true);
+      const hint = wrapper.get('[data-other-page]');
+      expect(hint.text()).toBe('三维模型里还有 2 项匹配');
+      await hint.trigger('click');
+      expect(shownPage(wrapper)).toBe('三维模型');
+      expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500', 'model:station', 'model:white']);
+      expect(wrapper.find('[data-other-page]').exists()).toBe(false);
+
+      await wrapper.get('input[placeholder="搜索模型或城市"]').setValue('地类');
+      expect(wrapper.text()).toContain('没有找到模型');
+      expect(wrapper.get('[data-other-page]').text()).toBe('二维资源里还有 1 项匹配');
+    });
+
+    it('当前图层里三维模型组在上，方向键先走模型；回到二维换回来', async () => {
+      const { wrapper, models, map } = await mountPanel();
+      models.add(['white']);
+      map.setDimension('3d');
+      await nextTick();
+      const groups = () => wrapper.findAll('[data-current-group]').map(group => group.attributes('data-current-group'));
+      expect(groups()).toStrictEqual(['models', 'layers']);
+      await wrapper.get('[data-current-row="model:white"]').trigger('click');
+      await wrapper.get('[data-current-row="model:white"]').trigger('keydown', { key: 'ArrowDown' });
+      expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+      await row(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'ArrowUp' });
+      expect(selectedRow(wrapper)).toBe('model:white');
+
+      map.setDimension('2d');
+      await nextTick();
+      expect(groups()).toStrictEqual(['layers', 'models']);
+    });
+
+    it('模型清单读不到时失败的提示在三维模型页，二维资源页不提示', async () => {
+      const { wrapper, map } = await mountPanel({ modelsStatus: 'failed' });
+      map.setDimension('3d');
+      await nextTick();
+      expect(wrapper.find('[data-models-failed]').exists()).toBe(true);
+      await showPage(wrapper, 'resources');
+      expect(wrapper.find('[data-models-failed]').exists()).toBe(false);
+    });
   });
 });

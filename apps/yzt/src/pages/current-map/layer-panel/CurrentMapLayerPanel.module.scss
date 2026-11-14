@@ -5,6 +5,32 @@
   min-width: 0;
 }
 
+// 三维里目录的两页：单独一行、占满宽（方案乙，用户 2026-11-15）
+.pages {
+  flex: 1 0 100%;
+}
+
+// 搜索时另一页也有匹配：列表下面一行虚线框，点了切过去
+.otherPage {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: var(--space-sm);
+  padding: 6px var(--space-sm);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+    background-color: var(--color-primary-bg-light);
+  }
+}
+
 .empty {
   padding: var(--space-lg) var(--space-sm);
   color: var(--color-text-secondary);

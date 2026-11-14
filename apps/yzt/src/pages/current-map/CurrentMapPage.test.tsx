@@ -701,9 +701,9 @@ function failNavigation() {
   return () => requests;
 }
 
-// 在资源目录里展开全部、选中模型，用工具栏加入当前地图（ADR 0157）
+// 在资源目录里展开全部、选中模型，用工具栏加入当前地图（ADR 0157）：二维里在"三维模型"分类下面，三维里在"三维模型"页
 async function addModel(wrapper: ReturnType<typeof mountPage>['wrapper'], id: string) {
-  await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(true));
+  await vi.waitFor(() => expect(wrapper.find('[data-catalog-node^="model-"]').exists()).toBe(true));
   await wrapper.get('[data-tool="expand-all"]').trigger('click');
   await wrapper.get(`[data-catalog-node="model:${id}"]`).trigger('click');
   await wrapper.get('[data-tool="add"]').trigger('click');
@@ -1827,7 +1827,7 @@ describe('CurrentMapPage', () => {
     // 三维视图按渲染器给出的包围球算出建议的相机；jsdom 里画布的高度是 0
     const MODEL_CAMERA = tilesetCamera(MODEL_SPHERE, 0);
 
-    it('二三维共用资源图层面板（ADR 0157）：进页面就读模型清单，模型在目录最后；切换时面板不换，搜索词、收起都还在', async () => {
+    it('二三维共用资源图层面板（ADR 0157）：进页面就读模型清单，二维里模型在目录最后；切到三维是"三维模型"页，面板不换，搜索词、收起都还在', async () => {
       const requests = mockManifest();
       const { wrapper } = await readyPage();
       await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(true));
@@ -1836,7 +1836,9 @@ describe('CurrentMapPage', () => {
 
       await switchTo(wrapper, '三维');
       expect(wrapper.find('[data-layer-panel]').exists()).toBe(true);
-      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索资源"]').element.value).toBe('苏州');
+      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或城市"]').element.value).toBe('苏州');
+      expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(false);
+      expect(wrapper.find('[data-catalog-node="model-city:320500"]').exists()).toBe(true);
       await button(wrapper, '收起资源图层').trigger('click');
       await switchTo(wrapper, '二维');
       expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(true);
@@ -2044,10 +2046,10 @@ describe('CurrentMapPage', () => {
       const page = await readyPage();
       const { wrapper } = page;
       const labels = () => wrapper.findAll('button').map(item => item.attributes('aria-label') ?? item.text());
-      const search = () => wrapper.get<HTMLInputElement>('input[placeholder="搜索资源"]');
+      const search = () => wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或城市"]');
       await button(wrapper, '图例').trigger('click');
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(true));
+      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node^="model-city:"]').exists()).toBe(true));
       // 搜索时目录全部展开
       await search().setValue('广');
       await wrapper.get('[data-catalog-node="model:square"]').trigger('click');
