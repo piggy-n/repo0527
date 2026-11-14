@@ -161,7 +161,7 @@
 | [0148](0148-tileset-external-roots-and-empty-errors.md) | 整理 3D Tiles 索引：外部索引的根节点换到引用它的位置，没有内容的节点不改小误差 | 已接受（修改 0081 第 3 节） |
 | [0149](0149-lcc2-gaussian-splats.md) | LCC2 高斯泼溅：只在 `maplibre` 引擎下用 gaussian-splat-lite 加载，位置按数据集配准 | 已接受（补充 0081 第 1 节：清单加 `kind: 'splat'`；`cesium` 下叠画布显示 LCC2 由 0152 定为不做；第 6 节的碰撞、步行、第一人称由 0156 补上） |
 | [0150](0150-default-3d-engine-maplibre.md) | 三维默认引擎改为 MapLibre + Three.js | 已接受（修改 0147 第 1 节的默认值、第 7 节 CI 的另一种引擎；待定的方案 B 由 0151、叠画布的 LCC2 由 0152 定为不做；Cesium 保留为可选由 0153 取代） |
-| [0151](0151-plan-b-not-migrated.md) | Cesium 下的资源图层（方案 B）不迁移，三维引擎仍按部署选择 | 已接受（修改 0147 第 6 节第 3 条、第 8 节的"之后"；第 3 条按部署选择引擎、第 5 条的开关由 0153 取代） |
+| [0151](0151-plan-b-not-migrated.md) | Cesium 下的资源图层（方案 B）不迁移，三维引擎仍按部署选择 | 已接受（修改 0147 第 6 节第 3 条、第 8 节的"之后"；第 3 条按部署选择引擎、第 5 条的开关由 0153 取代；0153 之后 app 注入收窄后的能力，收窄由 0157 取消） |
 | [0152](0152-cesium-lcc2-overlay-not-adopted.md) | Cesium 下的 LCC2（方案 3：叠 Three.js 画布）不做 | 已接受（结束 0149 的叠画布 PoC、0150 待定的叠画布 LCC2；Cesium 引擎由 0153 移除） |
 | [0153](0153-remove-cesium-engine.md) | 移除 Cesium 引擎，三维只用 MapLibre + Three.js | 已接受（取代 0147 第 1、3、6 节和第 7 节里 Cesium 的部分、0150 的 Cesium 可选、0151 第 3 条；三维资源图层的开关一并删掉；代码在标签 `cesium-engine-2026-11`；第 4 条注入收窄的能力由 0157 取消） |
 | [0154](0154-shipped-symbol-defaults.md) | 发布的默认符号：把某个人调好的图例样式作为默认 | 已接受（补充 0044 第 2 节，修改 0123 第 3 节） |

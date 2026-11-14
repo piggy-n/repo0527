@@ -103,11 +103,14 @@ export interface MapErrorEventLike {
 export interface MapLike extends StyleTarget {
   setStyle(style: StyleSpecification, options: { diff: boolean }): void;
   on(type: 'style.load', listener: () => void): MapSubscription;
-  /** 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId，瓦片的错误还带 tile；瓦片返回 404 时不报错 */
+  /**
+   * 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId，瓦片的错误还带 tile；瓦片返回 404 时不报错
+   * （栅格瓦片只把状态改成 errored，矢量瓦片当空瓦片照常发 data）
+   */
   on(type: 'error', listener: (event: MapErrorEventLike) => void): MapSubscription;
   /**
    * 开始加载：带 tile 的是数据源开始请求一张新瓦片，之后跟着 sourcedata、dataabort 或 error；已有瓦片的重新加载不发。
-   * 瓦片返回 404、没有变化时只改瓦片的状态，不发事件
+   * 栅格瓦片返回 404（状态改成 errored）、瓦片没有变化（状态改成 loaded）时只改状态，不发事件；矢量瓦片的 404 当空瓦片照常发 data
    */
   on(type: 'dataloading', listener: (event: SourceDataEventLike) => void): MapSubscription;
   /** 数据源的数据到了或变了：带 tile 的是一张瓦片到了 */

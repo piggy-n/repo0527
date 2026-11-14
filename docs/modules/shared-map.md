@@ -343,7 +343,7 @@ const readout = useMapReadout(map);
 
 | 文件 | 内容 |
 |---|---|
-| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；`views`、`view` 是资源目录标题后面的文字页签（样式同顶上的页签，现状底图用来切换目录显示全部、模型或资源）；登记为贴左边的悬浮元素 |
+| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；`views`、`view` 是资源目录标题后面的文字页签（样式同顶上的页签，现状底图用来切换目录显示全部、模型或资源）；`showCore` 是回到主页签的一次性命令（计数，每加一从"统计报表"这类页签切回两段，页面在当前图层里选中一行之前用）；登记为贴左边的悬浮元素 |
 | `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：只有项能选中，Ctrl、Shift 多选，分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时是添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
 | `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签 `tag` 和它的说明 `tagNote`（二维里的模型组，悬停标签看说明）；`headless` 时不显示标题（只有这一组时），有标签时标签和说明单独一行 |
