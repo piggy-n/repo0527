@@ -15,7 +15,7 @@ import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
-import { isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
+import { isDrawn, isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
 // 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
@@ -65,7 +65,7 @@ export interface PickResource {
   readonly layerCode: string;
 }
 
-/** 参与识别的资源，从上到下：勾选、当前级别显示、没被校验拦下的 */
+/** 参与识别的资源，从上到下：画在地图上（已加入并显示）、当前级别显示、没被校验拦下的 */
 export function pickResources(
   state: ResourceLayersState,
   invalid: ReadonlyMap<string, unknown>,
@@ -74,7 +74,7 @@ export function pickResources(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display?.checked || invalid.has(code) || zoom < (resource.minzoom ?? 0)) {
+    if (!resource || !display || !isDrawn(display) || invalid.has(code) || zoom < (resource.minzoom ?? 0)) {
       return [];
     }
     const layerCode = tilesetOf(code, display.year);
@@ -219,11 +219,19 @@ interface ClickArea {
   readonly prepared: (() => RegionScope | null) | null;
 }
 
+// 只打地面的拾取：框选、容差框的四角和像素大小都用它，落在三维模型上时取模型后面的地面（ADR 0157）
+const groundPicker =
+  (view: Pick<ToolView, 'pick'>) =>
+  (at: ScreenPoint): PickResult =>
+    view.pick(at, { ground: true });
+
 /**
  * 点击时就定下每个资源怎样识别（ADR 0047、0048 第 2 节）：屏幕上的查询、拾取都在这里同步做完，之后查后端只用地理范围，
  * 地图移动不影响结果。资源从上到下，遇到渲染要素的结果或范围太复杂时停下（下面的资源不会用到，同框选）；
  * 既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
- * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交
+ * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交。
+ * 三维里点到模型上时查模型脚下（ADR 0157 的规则甲）：命中点正下方的地面投影回屏幕，渲染要素、容差框都围着这一点，
+ * 四角只打地面；模型本身永远不是结果
  */
 export function planIdentify(
   targets: readonly PickResource[],
@@ -245,12 +253,14 @@ export function planIdentify(
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null = null
 ): IdentifyTask[] | null {
-  const pick = (at: ScreenPoint) => view.pick(at);
-  const clicked = pick(point);
+  const pick = groundPicker(view);
+  const clicked = view.pick(point);
   if (scope && (clicked.kind !== 'hit' || !scopeContains(scope, clicked.lngLat))) {
     return null;
   }
-  const pixelSize = once(() => pixelSizeAt(point, pick));
+  // 识别围着的屏幕点：点到模型时是模型脚下的地面，投影不到时（相机背后）仍用点击位置
+  const anchor = (clicked.kind === 'hit' && clicked.surface === 'model' && view.project(clicked.lngLat)) || point;
+  const pixelSize = once(() => pixelSizeAt(anchor, pick));
   const areas = new Map<ResourceGeometry, ClickArea>();
   const areaOf = (type: ResourceGeometry): ClickArea => {
     const cached = areas.get(type);
@@ -259,11 +269,11 @@ export function planIdentify(
     }
     const tolerance = PICK_TOLERANCES[type];
     // 求交范围：面只取包含点击位置的，点击位置在区划里，用整个区划过滤；线、点用容差框和区划的交集
-    const square = tolerance > 0 ? screenBoxPolygon(toleranceBox(point, tolerance), pick) : null;
+    const square = tolerance > 0 ? screenBoxPolygon(toleranceBox(anchor, tolerance), pick) : null;
     const area = scope && (tolerance === 0 ? scope : square && clipToScope(square, scope));
     const created: ClickArea = {
       area,
-      geometry: once(() => identifyGeometry(type, point, pick)),
+      geometry: once(() => identifyGeometry(type, anchor, pick)),
       prepared: area && once(() => queryGeometry(area, pixelSize()))
     };
     areas.set(type, created);
@@ -278,12 +288,12 @@ export function planIdentify(
       continue;
     }
     // 面的距离都是 0，没有范围时不用换算几何
-    const features = view.queryRendered(renderedArea(point, tolerance), {
+    const features = view.queryRendered(renderedArea(anchor, tolerance), {
       sources: [target.sourceId],
       withGeometry: tolerance > 0 || area !== null
     });
     const rendered = renderedCandidates(target, withinScope(features, area), shape =>
-      screenDistance(shape, point, lngLat => view.project(lngLat))
+      screenDistance(shape, anchor, lngLat => view.project(lngLat))
     );
     const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
     if (server) {
@@ -359,7 +369,8 @@ function screenBounds(area: RegionScope, project: (lngLat: LngLat) => ScreenPoin
  * 松手时定下框选怎样识别（ADR 0049 第 2 节、ADR 0050 第 1 节）：资源从上到下，识别方式同点选，先定方式再计数。
  * 查后端的资源用加权估数；只用渲染要素的按有效 guid 计数，为 0 时跳过。遇到渲染要素的结果、超过估数的上限
  * 或范围太复杂时停下。有区划范围时（ADR 0051 第 3 节）：框先和区划求交，框整个在区划外时为 null，不识别；
- * 渲染要素只留和求交范围相交的，估数只数求交范围在屏幕上的外包框里的
+ * 渲染要素只留和求交范围相交的，估数只数求交范围在屏幕上的外包框里的。三维里框的四角只打地面，落在模型上时取模型后面的
+ * 地面，和渲染要素查的是同一块（ADR 0157）
  */
 export function planBox(
   targets: readonly PickResource[],
@@ -381,7 +392,7 @@ export function planBox(
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null = null
 ): BoxTask[] | null {
-  const pick = (at: ScreenPoint) => view.pick(at);
+  const pick = groundPicker(view);
   const polygon = screenBoxPolygon(box, pick);
   const area = scope && polygon && clipToScope(polygon, scope);
   if (scope && !area) {

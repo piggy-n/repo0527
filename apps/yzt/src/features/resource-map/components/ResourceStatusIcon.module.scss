@@ -1,0 +1,65 @@
+// 资源的状态图标（ADR 0059）：16 × 16，级别的颜色由图标和提示里的小圆点共用
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  cursor: help;
+
+  &:focus-visible {
+    border-radius: 50%;
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.error {
+  color: var(--color-danger);
+
+  &.dot {
+    background-color: var(--color-danger);
+  }
+}
+
+.warning {
+  color: var(--color-warning);
+
+  &.dot {
+    background-color: var(--color-warning);
+  }
+}
+
+.info {
+  color: var(--color-text-secondary);
+
+  &.dot {
+    background-color: var(--color-text-secondary);
+  }
+}
+
+// 提示：按严重程度一条一行，前面一个同色的小圆点
+.tipList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tipItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}

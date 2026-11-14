@@ -55,7 +55,7 @@ import {
 } from '../feature-query';
 import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
-import type { ResourceLayersState } from '../resource-layers';
+import { isDrawn, type ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
 import { sourceLayerOf } from '../style-registry';
 import type { ResourceLayers } from './useResourceLayers';
@@ -198,17 +198,17 @@ function identityOf({ target, guid }: PickCandidate): SelectedFeature {
   return { sourceId: target.sourceId, featureId: guid };
 }
 
-// 资源仍然勾选、年份没变、还在目录里
+// 资源仍然画在地图上、年份没变、还在目录里
 function isShown(state: ResourceLayersState, target: PickResource): boolean {
   const { code } = target.resource;
   const display = state.displays.get(code);
-  return display?.checked === true && display.year === target.year && state.catalog?.resources.has(code) === true;
+  return isDrawn(display) && display?.year === target.year && state.catalog?.resources.has(code) === true;
 }
 
 // 参与识别的资源和年份，连同顺序；变了时进行中的识别作废
 function identifySignature(state: ResourceLayersState): string {
   return state.order
-    .filter(code => state.displays.get(code)?.checked && state.catalog?.resources.has(code))
+    .filter(code => isDrawn(state.displays.get(code)) && state.catalog?.resources.has(code))
     .map(code => `${code}@${state.displays.get(code)?.year}`)
     .join();
 }
@@ -622,9 +622,10 @@ export function useFeaturePick(
     }
   );
 
+  // 三维里照常识别（ADR 0157）：登记的数据集查后端（identifyStep），点到模型上时查模型脚下（planIdentify）
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
-    // 三维引擎不能识别时三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果。
-    // 能识别时（三维引擎的能力 identify 为 true；app 现在注入 false，ADR 0153）照常识别，三维的识别规则见 identifyStep
+    // 引擎不能在三维里识别（能力 identify 为 false）时三维期间单击、框选什么也不做，Esc 照样清除二维的结果（ADR 0080 第 5 节）；
+    // app 注入的引擎是 true（ADR 0157），这个分支留给别的引擎
     if (view.kind === '3d' && !map.sceneCapabilities.identify && event.type !== 'key' && event.type !== 'leave') {
       return false;
     }

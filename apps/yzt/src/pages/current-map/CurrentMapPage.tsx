@@ -2,22 +2,22 @@ import { useEventListener } from '@vueuse/core';
 import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
 import { MapCanvas, provideMap, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
-import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
+import { computed, defineComponent, KeepAlive, ref, shallowRef, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
-import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
 import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePick';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { resourceRequests } from '@/features/resource-map/layer-panel';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { roamPlaceOf } from '@/features/scene-models/catalog';
-import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
 import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
+import { modelIdOfKey, modelRequests } from '@/features/scene-models/layer-panel';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
@@ -36,6 +36,9 @@ import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
+import { mergedActivity, type RequestSource } from '@/shared/map/request-status/request-status';
+import { RequestStatusChip } from '@/shared/map/request-status/RequestStatusChip';
+import { useRequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
@@ -50,6 +53,7 @@ import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
+import { CurrentMapLayerPanel } from './layer-panel/CurrentMapLayerPanel';
 import { mapPageLayout } from './map-page-layout';
 
 // 功能标签、独立详情和底图分开管理，功能与详情同列上下排列（ADR 0070）
@@ -104,6 +108,10 @@ export const CurrentMapPage = defineComponent({
     const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });
     // 编辑时隐藏图例的全局恢复入口，保留当前图例和图层级操作
     const legendEditing = ref(false);
+    // 当前图层的图例浮层正在显示的资源：右侧图例在编辑同一个资源时回到浏览（ADR 0157）
+    const legendCode = ref<string | null>(null);
+    // 右侧图例正在编辑的资源：图例浮层开着同一个资源时关掉（ADR 0157）
+    const legendEditingCode = ref<string | null>(null);
     const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences, symbols });
     const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
@@ -111,11 +119,28 @@ export const CurrentMapPage = defineComponent({
     const location = useLocationPoint(map);
     // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
     const readout = useMapReadout(map);
-    // 三维模型（ADR 0081）：第一次切到三维时才读清单
-    const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
+    // 三维模型（ADR 0081）：资源目录里列出模型，二维里也能加入（ADR 0157），所以进页面就读清单
+    const sceneModelsQuery = useSceneModelsQuery(true);
     const models = useSceneModels(map, sceneModelsQuery.data);
+    // 地图数据的请求状态（ADR 0158）：资源图层、三维里的模型、底图（几个数据源合成一项）；状态栏右边的条目和当前图层的
+    // 行内转圈用同一份。接口请求不算，它们各自有加载状态
+    const requests = useRequestStatus(() => {
+      const activities = map.sourceActivity.value;
+      const basemapActivity = mergedActivity(
+        [...activities].flatMap(([sourceId, activity]) => (sourceId.startsWith('basemap') ? [activity] : []))
+      );
+      const sources: RequestSource[] = [
+        ...resourceRequests(resources.state.value, activities),
+        ...(map.dimension.value === '3d' ? modelRequests(models) : [])
+      ];
+      return basemapActivity
+        ? [...sources, { kind: 'tiles', key: 'basemap', name: '底图', icon: 'nav-current-map', activity: basemapActivity }]
+        : sources;
+    });
+    // 请求状态的明细里点了一行：在当前图层里选中它
+    const revealed = shallowRef<{ readonly key: string } | null>(null);
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
-    // 视图控件和状态栏都隐藏，不能勾选模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
+    // 视图控件和状态栏都隐藏，不能加入模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
     // 小地图、完整地图的叫法按漫游的模型：站点叫站内地图，高斯泼溅叫平面图（ADR 0156）
     const roamPlace = computed(() => {
@@ -145,11 +170,9 @@ export const CurrentMapPage = defineComponent({
     };
     // 资源面板的收起、分割线的位置按账号记住，顺序随资源图层记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
-    // 三维时左侧是三维模型面板，两个面板的收起各自保留（ADR 0081 第 7 节）；模型面板的不持久化
-    const modelsCollapsed = ref(false);
-    const leftCollapsed = computed(() =>
-      map.dimension.value === '3d' ? modelsCollapsed.value : panelLayout.collapsed.value
-    );
+    // 二三维共用资源图层面板（ADR 0157）；漫游时左侧是漫游面板，它的收起不持久化，每次漫游从展开开始
+    const roamCollapsed = ref(false);
+    const leftCollapsed = computed(() => (roaming.value ? roamCollapsed.value : panelLayout.collapsed.value));
     const sides = useSideExclusion({
       leftExpanded: () => !leftCollapsed.value,
       rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || detailOpen.value
@@ -207,8 +230,8 @@ export const CurrentMapPage = defineComponent({
     };
     // 展开左侧面板算操作左边：窄屏时右边让出来
     const changeLeftCollapsed = (collapsed: boolean) => {
-      if (map.dimension.value === '3d') {
-        modelsCollapsed.value = collapsed;
+      if (roaming.value) {
+        roamCollapsed.value = collapsed;
       } else {
         panelLayout.setCollapsed(collapsed);
       }
@@ -224,9 +247,10 @@ export const CurrentMapPage = defineComponent({
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
-    // 开始漫游时切回移动：测量、点选在漫游里不适用，退出后不恢复（ADR 0084、0097）
+    // 开始漫游时切回移动：测量、点选在漫游里不适用，退出后不恢复（ADR 0084、0097）；漫游面板展开
     watch(roaming, entered => {
       if (entered) {
+        roamCollapsed.value = false;
         map.activateTool(BROWSE_TOOL);
       }
     });
@@ -300,33 +324,33 @@ export const CurrentMapPage = defineComponent({
       </div>
     );
 
-    // 左侧一个面板：三维漫游时是漫游面板，其余二三维各一个。模型面板、资源面板切走时缓存起来，回来时搜索、展开这些
-    // 界面状态还在（停用期间按 ADR 0063 处理）；漫游面板不缓存，每次漫游重新开始
+    // 左侧一个面板：三维漫游时是漫游面板，其余时候是二三维共用的资源图层面板（ADR 0157）。资源图层面板漫游时缓存起来，
+    // 回来时搜索、展开、选中这些界面状态还在（停用期间按 ADR 0063 处理）；漫游面板不缓存，每次漫游重新开始
     const renderLeft = (scene: boolean) => {
       if (scene && roaming.value) {
         return (
           <RoamPanel models={models} collapsed={!sides.left.value} onUpdate:collapsed={changeLeftCollapsed} />
         );
       }
-      if (scene) {
-        return (
-          <SceneModelPanel
-            models={models}
-            failed={sceneModelsQuery.isError.value}
-            collapsed={!sides.left.value}
-            onRetry={() => void sceneModelsQuery.refetch()}
-            onUpdate:collapsed={changeLeftCollapsed}
-          />
-        );
-      }
+      const status = resources.state.value.catalog ? 'ready' : catalogQuery.isError.value ? 'failed' : 'loading';
+      const modelsStatus = models.hasCatalog.value ? 'ready' : sceneModelsQuery.isError.value ? 'failed' : 'loading';
       return (
-        <ResourceLayerPanel
-          layers={resources}
+        <CurrentMapLayerPanel
+          resources={resources}
+          symbols={symbols}
           layout={panelLayout}
-          failed={catalogQuery.isError.value}
+          models={models}
+          requests={requests}
+          reveal={revealed.value}
+          legendYield={legendEditingCode.value}
+          status={status}
+          modelsStatus={modelsStatus}
           collapsed={!sides.left.value}
+          sheet={layout.value.phone}
           onRetry={() => void catalogQuery.refetch()}
+          onRetryModels={() => void sceneModelsQuery.refetch()}
           onUpdate:collapsed={changeLeftCollapsed}
+          onLegendCode={(code: string | null) => (legendCode.value = code)}
         />
       );
     };
@@ -337,7 +361,7 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
-      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：三维引擎的能力 styleLayers 为 false（ADR 0153）
+      // 引擎的能力 styleLayers 为 false 时三维里不显示资源图层，图例只有说明（ADR 0080 第 5 节）；app 注入的是 true（ADR 0157），只有测试走得到
       const resourcesHidden = resources.hiddenInScene.value;
       const indoorMap = models.indoorMap.value;
       const player = models.roamPlayer.value;
@@ -401,7 +425,9 @@ export const CurrentMapPage = defineComponent({
                         symbols={symbols}
                         active={active}
                         scene={resourcesHidden}
+                        yieldCode={legendCode.value}
                         onEditingChange={value => (legendEditing.value = value)}
+                        onEditingCode={code => (legendEditingCode.value = code)}
                       />
                     ],
                     // 三维里不显示资源图层时图例只有说明，不显示全部恢复默认（ADR 0080 第 5 节）
@@ -442,7 +468,27 @@ export const CurrentMapPage = defineComponent({
             {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
             {!underground && (
               <div key="bottom" class={styles.bottom}>
-                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
+                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format}>
+                  {{
+                    after: () => [
+                      <RequestStatusChip
+                        status={requests}
+                        selectable={key => key !== 'basemap'}
+                        onSelect={(key: string) => {
+                          // 面板收起、窄屏时被右侧挤掉都看不到反应：先展开左侧，面板在下一轮渲染后滚到这一行、闪两下
+                          changeLeftCollapsed(false);
+                          revealed.value = { key };
+                        }}
+                        onRetry={(key: string) => {
+                          const id = modelIdOfKey(key);
+                          if (id !== null) {
+                            models.retry(id);
+                          }
+                        }}
+                      />
+                    ]
+                  }}
+                </MapStatusBar>
               </div>
             )}
             <div key="tools" class={styles.tools}>

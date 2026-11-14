@@ -56,8 +56,8 @@ describe('withRuntimeLoader', () => {
     expect(wrapper.text()).toBe('320100');
   });
 
-  it('注入的三维引擎：三维里不画样式图层、不识别（等页面重新设计），高斯泼溅照常', () => {
-    expect(injectedEngine().capabilities).toStrictEqual({ styleLayers: false, identify: false, splats: true });
+  it('注入的三维引擎：能力原样，三维里画样式图层、点/框选（ADR 0157），高斯泼溅照常', () => {
+    expect(injectedEngine().capabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
   });
 });
 

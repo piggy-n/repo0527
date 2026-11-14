@@ -10,6 +10,7 @@ export type { Unsubscribe } from './events';
 export type {
   CameraEventData,
   GestureHandlerLike,
+  MapErrorEventLike,
   MapLibreMapOptions,
   MapLike,
   MapMouseEventLike,
@@ -17,7 +18,9 @@ export type {
   MapMoveEventLike,
   MapSubscription,
   RenderedFeatureLike,
-  ScrollZoomLike
+  ScrollZoomLike,
+  SourceDataEventLike,
+  TileLike
 } from './maplibre/map-like';
 export { MapLibreView, type MapLibreViewOptions, type ScrollZoomRates } from './maplibre/maplibre-view';
 export type {
@@ -187,6 +190,15 @@ export {
   ToolModel,
   type ToolView
 } from './tool/tool-model';
+export {
+  isActivityLoading,
+  NO_SOURCE_ACTIVITY,
+  type SourceActivities,
+  type SourceActivity,
+  SourceActivityTracker,
+  type TileOutcome,
+  type TileProbe
+} from './view/source-activity';
 export {
   type FitBoundsOptions,
   type FlyToOptions,

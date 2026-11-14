@@ -1,0 +1,287 @@
+// 资源图层面板的外壳（ADR 0157）：宽 320，最高到所在列的高度；资源目录、当前图层两段在各自的滚动区里滚动
+
+// 不让列压缩：面板的高度只由内容决定，两段的高度由组件按列的高度算好，面板最高正好到列的高度
+.root {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.panelBox {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel {
+  flex: 1;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: 100%;
+
+  > header {
+    margin-bottom: var(--space-xs);
+  }
+}
+
+// 标题后面紧跟页签；MxTitle 默认占满剩下的宽度，这里按内容
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+
+  > :first-child {
+    flex: none;
+  }
+}
+
+// 放不下时（手机宽度）页签在自己的区域里横向滚动，收起按钮始终可见（设计稿 5D.8）
+.tabs {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: -6px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+// 资源目录标题后面的页签（用户 2026-11-15 选的方案一）：同上面的页签，间距收到 8，320 宽的面板里标题行刚好放得下工具栏；
+// 更窄时（手机宽度）同上面的页签一样收缩、在自己的区域里横向滚动，工具栏不被挤出去。滚动区会裁掉里面的东西：
+// 四周留 3 给焦点框（2 宽、离开 1），外边距抵消，位置不变
+.views {
+  gap: 8px;
+  margin: -3px -3px -6px 1px;
+  padding: 3px 3px 6px;
+
+  .tab:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.currentTab {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: -6px;
+    left: 0;
+    height: 2px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+}
+
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.sections {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.section {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+// 两段的标题：左边竖条加名称，右边是工具栏
+// 标题行是尺寸查询的容器：内容宽不到 280 时（面板窄于 308，手机宽度）里面的工具栏变紧凑，见 PanelToolbar.module.scss
+.sectionHead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 12px 0 var(--space-lg);
+  container-type: inline-size;
+}
+
+.sectionTitle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+
+  &::before {
+    content: '';
+    width: 4px;
+    height: 14px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+}
+
+// 搜索和筛选年份在一行
+.filter {
+  display: flex;
+  flex: none;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-sm);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.catalog {
+  padding: 0 var(--space-sm) var(--space-sm) var(--space-md);
+}
+
+// 下边距放在量本来高度的这一层里，算进当前图层的高度
+.current {
+  padding: 0 var(--space-sm) var(--space-md);
+}
+
+// 高 24，线在正中
+.splitter {
+  position: relative;
+  flex: none;
+  height: 24px;
+  cursor: row-resize;
+  touch-action: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 11px;
+    right: var(--space-lg);
+    left: var(--space-lg);
+    height: 2px;
+    border-radius: 999px;
+    background-color: var(--color-border);
+  }
+
+  &:not(.fixed):hover,
+  &:not(.fixed):active,
+  &:focus-visible {
+    outline: none;
+
+    &::before {
+      background-color: var(--color-primary-border-hover);
+    }
+
+    .splitterHandle {
+      color: var(--color-primary);
+      box-shadow:
+        0 0 0 2px var(--color-primary-border-hover),
+        0 1px 4px rgba(20, 52, 105, 0.24);
+    }
+  }
+}
+
+// 拖动改变不了两段时（都放得下）：不显示成能拖的样子，键盘焦点照常显示
+.fixed {
+  cursor: default;
+}
+
+.splitterHandle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  border-radius: 50%;
+  background-color: var(--color-bg-container);
+  box-shadow: 0 1px 4px rgba(20, 52, 105, 0.24);
+  color: var(--color-text-regular);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+}
+
+.placeholder {
+  justify-content: center;
+  padding-top: var(--space-xl);
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+}
+
+// 收起后是左上角的竖条（和分栏页面窄屏时的窄条一致）
+.strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 40px;
+  padding: 10px 0 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-strong);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.stripIcon {
+  color: var(--color-primary);
+}
+
+// 只有文字竖排：竖排的容器里 column 的主轴是水平方向，图标会排到文字旁边
+.stripLabel {
+  letter-spacing: 2px;
+  writing-mode: vertical-rl;
+}

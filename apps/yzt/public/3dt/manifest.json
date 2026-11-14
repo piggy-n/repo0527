@@ -76,8 +76,8 @@
       "underground": false,
       "effects": [
         { "id": "plain", "label": "无纹理", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/plain/tileset.json" },
-        { "id": "window", "label": "内置效果1", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/window/tileset.json" },
-        { "id": "tech", "label": "内置效果2", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/tech/tileset.json" }
+        { "id": "window", "label": "效果1", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/window/tileset.json" },
+        { "id": "tech", "label": "效果2", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/tech/tileset.json" }
       ]
     },
     {

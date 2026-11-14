@@ -1,0 +1,88 @@
+// 现状底图的资源图层面板（ADR 0157）：外壳、目录树、分组都是 shared 的部件，这里只有拼起来时的几处
+
+.search {
+  flex: 1;
+  min-width: 0;
+}
+
+// 只看模型或资源时搜索，另一项也有匹配：列表下面一行虚线框，点了切过去
+.otherView {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: var(--space-sm);
+  padding: 6px var(--space-sm);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+    background-color: var(--color-primary-bg-light);
+  }
+}
+
+.empty {
+  padding: var(--space-lg) var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+// 浮层标题：符号、名称、年份、按钮
+.popName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popYear {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.popButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &[aria-pressed='true'] {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+}
+
+// 目录里的一行说明和重试：模型清单读不到，"全部"里资源目录还没到或读不到
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}

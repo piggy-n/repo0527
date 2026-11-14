@@ -1,0 +1,199 @@
+// 资源目录的树（ADR 0157）：行高 32，每层缩进 18，下一层左边有引导线
+
+.tree,
+.children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.children {
+  position: relative;
+
+  // 引导线对着上一层箭头的中线：缩进加在行上、列表本身不缩进，所以按上一层的层级（--guide-depth）算位置，否则各层的线叠在一起
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 4px;
+    left: calc(var(--guide-depth, 0) * 18px + 7px);
+    width: 1px;
+    background-color: var(--color-border);
+  }
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-base);
+  cursor: default;
+  outline: none;
+  user-select: none;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--color-primary-border-hover);
+  }
+
+  // 悬停、键盘焦点时行尾换成操作
+  &:hover,
+  &:focus-visible {
+    .action {
+      display: inline-flex;
+    }
+
+    .mark,
+    .badge {
+      display: none;
+    }
+  }
+}
+
+.branch .name {
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+// 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；多选时每一行都这样
+.selected {
+  background-color: var(--color-primary-bg);
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: 3px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+
+  .name {
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .icon {
+    color: var(--color-primary);
+  }
+}
+
+.arrow {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+
+  :global(.el-icon) {
+    transition: transform 0.15s;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.open :global(.el-icon) {
+  transform: rotate(90deg);
+}
+
+.pad {
+  flex: none;
+  width: 16px;
+}
+
+.icon {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.badge {
+  flex: none;
+  min-width: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 18px;
+  text-align: center;
+}
+
+// 行尾一列，固定 30 宽、内容居中：分类的项数、项的勾、悬停时的添加、移除在同一条竖线上，悬停时替换，名称不跳动
+.end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 22px;
+}
+
+.mark {
+  display: inline-flex;
+  color: var(--color-success);
+}
+
+.action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-alpha-12);
+  }
+}
+
+.remove {
+  color: var(--color-text-secondary);
+
+  &:hover {
+    background-color: var(--color-danger-bg-solid);
+    color: var(--color-danger);
+  }
+}

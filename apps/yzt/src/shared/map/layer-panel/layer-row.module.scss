@@ -1,0 +1,109 @@
+// 当前图层一行里各 feature 共用的部分（ADR 0157）：符号、名称、状态紧跟名称、空白、行尾的框、移除
+
+// 名称前的符号：点了选中这一行并打开图例；模型的图标不是按钮
+.symbol {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+}
+
+button.symbol {
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-bg-container);
+    box-shadow: inset 0 0 0 1px var(--color-primary-border-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+// 名称按内容宽，放不下时省略；状态图标紧跟名称（用户 2026-11-14）
+.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fill {
+  flex: 1;
+  min-width: 0;
+}
+
+.status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+}
+
+// 行尾的年份、效果、漫游：同一个框，宽 56、高 24，边框常显（用户 2026-11-14：三个的样式和宽度统一；11-15：再窄一些）
+.trail {
+  flex: none;
+  box-sizing: border-box;
+  width: 56px;
+}
+
+// 只有一年的资源、不能操作时：同样的框，只有文字
+.trailText {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+// 移除：平时浅灰，悬停这一行或选中时变深，悬停图标本身时变红
+.remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+
+  :global([data-current-row]:hover) &,
+  :global([data-current-row][aria-selected='true']) & {
+    color: var(--color-text-secondary);
+  }
+
+  &:hover,
+  :global([data-current-row]) &:hover {
+    background-color: var(--color-danger-bg-solid);
+    color: var(--color-danger);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+// 状态里加载中的转圈：二维图层按请求状态（ADR 0158），模型按加载状态
+.spinner {
+  color: var(--color-primary);
+  font-size: 14px;
+}

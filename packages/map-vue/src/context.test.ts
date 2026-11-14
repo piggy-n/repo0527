@@ -7,12 +7,14 @@ import {
   type MapViewFailure,
   MapSession,
   NO_SCENE_STATUS,
+  NO_SOURCE_ACTIVITY,
   NO_SOURCE_ERRORS,
   type PickResult,
   type RenderedFeature,
   type ScreenPoint,
   type RoamStatus,
   type SceneStatus,
+  type SourceActivities,
   type SourceErrors,
   type ToolView,
   type Unsubscribe,
@@ -38,6 +40,7 @@ class FakeView implements MapView {
   state: ViewState = 'initializing';
   failure: MapViewFailure | null = null;
   sourceErrors: SourceErrors = NO_SOURCE_ERRORS;
+  sourceActivity: SourceActivities = NO_SOURCE_ACTIVITY;
   // 这一轮整体加载的结果，测试可以换成还没结束的 Promise
   ready: Promise<void> = Promise.resolve();
   readonly #listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -82,6 +85,7 @@ class FakeView implements MapView {
   on(event: 'resize', callback: () => void): Unsubscribe;
   on(event: 'settle', callback: () => void): Unsubscribe;
   on(event: 'sourceerrorchange', callback: (errors: SourceErrors) => void): Unsubscribe;
+  on(event: 'sourceactivitychange', callback: () => void): Unsubscribe;
   on(event: string, callback: (payload: never) => void): Unsubscribe {
     // 和 MapLibreView 一样，释放后不能再订阅
     if (this.disposed) {
@@ -117,6 +121,16 @@ class FakeView implements MapView {
   setSourceErrors(errors: SourceErrors): void {
     this.sourceErrors = errors;
     this.#fire('sourceerrorchange', errors);
+  }
+
+  onSourceActivityChange(callback: () => void): Unsubscribe {
+    return this.on('sourceactivitychange', callback);
+  }
+
+  /** 模拟瓦片请求的变化 */
+  setSourceActivity(activity: SourceActivities): void {
+    this.sourceActivity = activity;
+    this.#fire('sourceactivitychange', undefined);
   }
 
   disposed = false;
@@ -1451,5 +1465,34 @@ describe('MapContextState 的二三维切换（ADR 0079 第 8 节）', () => {
     state.context.setDimension('3d');
 
     expect(state.context.pointer.value).toBeNull();
+  });
+});
+
+// 一个数据源这一轮请求了几张瓦片
+const activity = (requested: number): SourceActivities =>
+  new Map([['resources-dltb', { requested, loaded: 0, failed: 0, startedAt: 0, finishedAt: null }]]);
+
+describe('MapContextState 的瓦片请求（ADR 0158）', () => {
+  it('挂上时取视图的统计；变化时一帧最多更新一次，读最新的；卸下后为空，取消还没写入的那一帧', () => {
+    using ctx = setupPointer();
+    expect(ctx.state.context.sourceActivity.value).toBe(NO_SOURCE_ACTIVITY);
+
+    ctx.view.setSourceActivity(activity(1));
+    ctx.view.setSourceActivity(activity(2));
+    expect(ctx.frames.pending).toBe(1);
+    expect(ctx.state.context.sourceActivity.value).toBe(NO_SOURCE_ACTIVITY);
+    ctx.frames.flush();
+    expect(ctx.state.context.sourceActivity.value).toBe(ctx.view.sourceActivity);
+
+    ctx.view.setSourceActivity(activity(3));
+    ctx.state.detachView(ctx.view);
+    expect(ctx.state.context.sourceActivity.value).toBe(NO_SOURCE_ACTIVITY);
+    ctx.frames.flush();
+    expect(ctx.state.context.sourceActivity.value).toBe(NO_SOURCE_ACTIVITY);
+
+    const next = new FakeView();
+    next.sourceActivity = activity(4);
+    ctx.state.attachView(next, CANVAS);
+    expect(ctx.state.context.sourceActivity.value).toBe(next.sourceActivity);
   });
 });

@@ -426,6 +426,11 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
       const hit = page.map.view.value?.pick({ x: WIDTH / 2, y: HEIGHT / 2 });
       return hit?.kind === 'hit' && hit.surface === 'model';
     }, '画布中心拾取到模型');
+    // 只打地面时穿过模型，落在它后面的地面上（ADR 0157：资源点/框选的四角）
+    expect(page.map.view.value?.pick({ x: WIDTH / 2, y: HEIGHT / 2 }, { ground: true })).toMatchObject({
+      kind: 'hit',
+      surface: 'map'
+    });
 
     expect(ready.camera.center[0]).toBeCloseTo(MODEL_AT[0], 3);
     // 夹具的球心离地 40 米：视线穿过球心，地面上的落点在球心以北 40·tan(俯角) 米

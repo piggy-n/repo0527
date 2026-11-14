@@ -1,0 +1,12 @@
+// Element 的选择框左右各留 12、箭头 14：放得下"筛选年份"四个字和回显的"2025 年"（用户 2026-11-15 改名、缩窄）
+.batch {
+  flex: none;
+  width: 104px;
+}
+
+// 下拉的一项：铺满整行（抵消 Element 选项左 20、右 32 的内边距），点哪里都能再执行一次回显着的那一年
+.option {
+  display: block;
+  margin: 0 -32px 0 -20px;
+  padding: 0 32px 0 20px;
+}

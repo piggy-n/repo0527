@@ -22,6 +22,11 @@ export interface PickOptions {
    * 每次可能几十毫秒，打到泼溅的地方按后面的模型或地面算。点击的落点、测量、坐标定位、点选不写；没有泼溅的引擎忽略它
    */
   readonly hover?: boolean;
+  /**
+   * 只打地面：跳过三维模型和泼溅（ADR 0157）。资源的点/框选用它取框和容差框的四角，模型永远不是识别的结果；
+   * 二维、没有模型的引擎忽略它
+   */
+  readonly ground?: boolean;
 }
 
 export interface Modifiers {

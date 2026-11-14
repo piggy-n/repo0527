@@ -23,6 +23,7 @@ import {
   type ViewState
 } from '../view/map-view';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/rendered-features';
+import { type SourceActivities, SourceActivityTracker, type TileOutcome } from '../view/source-activity';
 import type { LngLat, MapInputEvent, MapPointerEvent, PickOptions, PickResult, ScreenPoint } from '../view/view-input';
 import { canTransition, deferred, type LiveViewState } from '../view/view-lifecycle';
 import { applyStyleCommand } from './apply-style-command';
@@ -30,10 +31,13 @@ import { sameCenterOnGlobe, zoomFlightDuration } from './globe-fly';
 import type {
   CameraTransformLike,
   MapLibreMapOptions,
+  MapErrorEventLike,
   MapLike,
   MapMouseEventLike,
   MapMouseEventType,
-  MapMoveEventLike
+  MapMoveEventLike,
+  SourceDataEventLike,
+  TileLike
 } from './map-like';
 import { MapLibreScene, type SceneModuleState } from './maplibre-scene';
 import { MapLibreRoam } from './roam/maplibre-roam';
@@ -75,6 +79,7 @@ interface MapLibreViewEvents {
   resize: () => void;
   settle: () => void;
   sourceerrorchange: (errors: SourceErrors) => void;
+  sourceactivitychange: () => void;
   scenestatuschange: (status: SceneStatus) => void;
   roamstatuschange: (status: RoamStatus | null) => void;
 }
@@ -205,6 +210,8 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly #maxZoom2d: number;
   readonly #maxZoom3d: number;
   #sourceErrors = NO_SOURCE_ERRORS;
+  // 按数据源统计瓦片请求（ADR 0158）
+  readonly #activity = new SourceActivityTracker(() => this.#emitter.emit('sourceactivitychange'));
   #active: boolean;
   #mapStyle: MapStyle;
   // 正在进行的定位动画（flyTo、fitBounds）怎样直接到终点；动画结束、被打断时为 null
@@ -313,7 +320,10 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     for (const subscription of [
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
-      map.on('error', ({ error, sourceId }) => this.#guard(() => this.#onMapError(map, error, sourceId))),
+      map.on('error', event => this.#guard(() => this.#onMapError(map, event))),
+      map.on('dataloading', event => this.#guard(() => this.#onTileEvent(event, null))),
+      map.on('sourcedata', event => this.#guard(() => this.#onTileEvent(event, 'loaded'))),
+      map.on('dataabort', event => this.#guard(() => this.#onTileEvent(event, 'aborted'))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event))),
       map.on('movestart', event => this.#guard(() => this.#onMoveStart(event))),
       // 动画到达终点、被打断都算结束：暂停时不再需要直接到终点
@@ -461,6 +471,15 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.#sourceErrors;
   }
 
+  /** 每个数据源这一轮的瓦片请求（ADR 0158） */
+  get sourceActivity(): SourceActivities {
+    return this.#activity.activities;
+  }
+
+  onSourceActivityChange(callback: () => void): Unsubscribe {
+    return this.on('sourceactivitychange', callback);
+  }
+
   /** 三维时还要等这一次三维模块的加载 */
   whenReady(): Promise<void> {
     const scene = this.#scene;
@@ -579,7 +598,7 @@ export class MapLibreView<const G extends string> implements MapView {
   pick(point: ScreenPoint, options?: PickOptions): PickResult {
     const map = this.#readyMap();
     if (this.#kind === '3d') {
-      const model = this.#scene?.pick(point, options);
+      const model = options?.ground ? null : this.#scene?.pick(point, options);
       if (model) {
         return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
       }
@@ -709,7 +728,7 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  #onMapError(map: MapLike, error: Error, sourceId: unknown): void {
+  #onMapError(map: MapLike, { error, sourceId, tile }: MapErrorEventLike): void {
     this.#onError(error);
     if (this.#engineFailed) {
       return;
@@ -717,6 +736,7 @@ export class MapLibreView<const G extends string> implements MapView {
     // 数据源的错误只记下来：不算样式加载失败，应用命令期间收到也不整体重建（ADR 0041 第 6 节）
     if (typeof sourceId === 'string') {
       this.#recordSourceError(sourceId, error);
+      this.#onTileEvent({ dataType: 'source', sourceId, tile }, 'failed');
       return;
     }
     if (this.#applying) {
@@ -826,8 +846,10 @@ export class MapLibreView<const G extends string> implements MapView {
     } finally {
       this.#applying = false;
     }
-    // 数据源移除（包括换了地址的先移除再添加）后，旧的错误不再属于它
-    this.#forgetSourceErrors(commands.flatMap(({ command, args }) => (command === 'removeSource' ? [args[0]] : [])));
+    // 数据源移除（包括换了地址的先移除再添加）后，旧的错误、瓦片请求不再属于它
+    const removed = commands.flatMap(({ command, args }) => (command === 'removeSource' ? [args[0]] : []));
+    this.#forgetSourceErrors(removed);
+    this.#activity.forget(removed);
     if (applied && !this.#rejected) {
       const { style, images, sceneBefore } = snapshot;
       this.#mapStyle = { status: 'loaded', revision, style, images, sceneBefore };
@@ -868,8 +890,9 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#mapStyle = { status: 'loading', revision, style: current, images, sceneBefore };
     // 整体加载会去掉三维模型层，加载完成后再加上
     this.#syncScene();
-    // 所有数据源重新创建，错误会重新出现
+    // 所有数据源重新创建，错误、瓦片请求会重新出现
     this.#forgetSourceErrors();
+    this.#activity.forget();
     try {
       map.setStyle(current, { diff: false });
     } catch (error) {
@@ -897,6 +920,8 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图；三维模块还没加载好时也不算
   #onIdle(): void {
+    // 最后一张是栅格瓦片的 404（状态 errored）或没有变化的瓦片时，数据源之后没有事件：空闲时再看一眼还在等的瓦片
+    this.#activity.sweep();
     if (this.state === 'ready') {
       this.#emitter.emit('settle');
     }
@@ -1117,6 +1142,22 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#onError(error);
   }
 
+  // 瓦片的开始（outcome 为 null）和结果交给统计；数据源每有一个事件，再看一眼它还在等的瓦片（栅格瓦片的 404、没有变化的瓦片没有事件）
+  #onTileEvent({ dataType, sourceId, tile }: SourceDataEventLike, outcome: TileOutcome | null): void {
+    if (dataType !== 'source' || sourceId === undefined) {
+      return;
+    }
+    if (tile) {
+      const key = String(tile.tileID.key);
+      if (outcome === null) {
+        this.#activity.started(sourceId, key, () => settledOutcome(tile));
+      } else {
+        this.#activity.finished(sourceId, key, outcome);
+      }
+    }
+    this.#activity.sweep(sourceId);
+  }
+
   // 每个数据源只记第一条；MapLibre 移除数据源（包括整体 setStyle）时断开它的事件转发，之后不会再收到它的错误
   #recordSourceError(sourceId: string, error: Error): void {
     if (this.#sourceErrors.has(sourceId)) {
@@ -1184,4 +1225,13 @@ export class MapLibreView<const G extends string> implements MapView {
       throw new Error('MapLibreView 已释放');
     }
   }
+}
+
+// 引擎没发事件、瓦片却已经有了结果时的结果：栅格瓦片的 404（errored）算到了，没有变化的瓦片（loaded）也是；移出视野卸掉的算取消；
+// 还在加载时为 null
+function settledOutcome({ state }: TileLike): TileOutcome | null {
+  if (state === 'loaded' || state === 'errored') {
+    return 'loaded';
+  }
+  return state === 'unloaded' ? 'aborted' : null;
 }

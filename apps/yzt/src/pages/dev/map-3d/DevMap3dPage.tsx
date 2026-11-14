@@ -5,11 +5,11 @@ import { useEventListener } from '@vueuse/core';
 import { ElRadioButton, ElRadioGroup, ElSwitch } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
@@ -27,6 +27,7 @@ import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { RouteName } from '@/shared/router/route-names';
 import layout from '../../current-map/CurrentMapPage.module.scss';
+import { CurrentMapLayerPanel } from '../../current-map/layer-panel/CurrentMapLayerPanel';
 import { mapPageLayout } from '../../current-map/map-page-layout';
 import { SAMPLE_CATALOG, SAMPLE_THUMBNAILS } from '../map-ui/samples';
 import { MinimapSketch } from './MinimapSketch';
@@ -94,6 +95,8 @@ const MapPrototype = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const resources = useResourceLayers(map, { catalog, symbols });
+    // 这个原型的模型由 useModelDemo 模拟，二维的资源图层面板里不列模型
+    const models = useSceneModels(map, []);
     const panelLayout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const modelsCollapsed = ref(false);
@@ -225,9 +228,11 @@ const MapPrototype = defineComponent({
         );
       }
       return (
-        <ResourceLayerPanel
-          layers={resources}
+        <CurrentMapLayerPanel
+          resources={resources}
+          symbols={symbols}
           layout={panelLayout}
+          models={models}
           collapsed={!sides.left.value}
           onUpdate:collapsed={changeLeftCollapsed}
         />

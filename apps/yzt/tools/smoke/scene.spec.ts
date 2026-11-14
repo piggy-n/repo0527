@@ -136,12 +136,14 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await expect
       .poll(() => landShare(page, flat), { message: '三维画出静态底图的陆地', timeout: 60_000 })
       .toBeGreaterThan(MIN_LAND_SHARE);
-    // 三维里暂不显示资源图层（app 注入的能力，等页面重新设计，ADR 0153）：图例只有说明；放开时改这里
+    // 三维里照常显示资源图层（ADR 0157）：图例和二维一样，没有"三维里不显示"的说明
     const legend = page.getByRole('button', { name: '图例', exact: true });
     await legend.click();
-    await expect(page.locator('[data-legend-scene-note]')).toBeVisible();
-    await legend.click();
+    const legendPanel = page.locator('[data-panel-group]');
+    await expect(legendPanel).toContainText('图例');
+    await expect(legendPanel).not.toContainText('三维模式暂不显示资源图层');
     await expect(page.locator('[data-legend-scene-note]')).toHaveCount(0);
+    await legend.click();
 
     // 测距：在画布中间点两下、双击结束，得到一条可以删除的测量
     await page.getByRole('button', { name: '测距', exact: true }).click();
@@ -175,16 +177,22 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await pin.locator('svg').last().click();
     await expect(page.locator('[data-location-info]')).toBeVisible();
 
-    // 勾选生成的屋子，加载好以后定位
-    await page.locator('[data-model="smoke-room"] .el-checkbox').click();
-    const loaded = page.locator('[data-loaded="smoke-room"]');
-    const locate = loaded.getByRole('button', { name: '定位', exact: true });
-    await expect(locate).toBeEnabled({ timeout: 60_000 });
-    await locate.click();
+    // 在资源目录里加入生成的屋子（ADR 0157）：展开全部、选中、点"添加"；新加的一行被选中，加载好以后双击这一行定位
+    const addModel = async (id: string) => {
+      await page.locator('[data-tool="expand-all"]').click();
+      await page.locator(`[data-catalog-node="model:${id}"]`).click();
+      await page.locator('[data-tool="add"]').click();
+    };
+    // 定位：双击当前图层里的这一行（工具栏换成了移除，用户 2026-11-15）
+    const locate = (id: string) => page.locator(`[data-current-row="model:${id}"] [data-row-text]`).dblclick();
+    await addModel('smoke-room');
+    const room = page.locator('[data-roam="smoke-room"]');
+    await expect(room).toHaveAttribute('aria-disabled', 'false', { timeout: 60_000 });
+    await locate('smoke-room');
     await expect(page.locator('[data-map-status]')).toHaveCount(0);
 
-    // 已加载里的"漫游"：有出生点的从步行开始，地下的屋子抬高，黑幕下进站（ADR 0147 第 4 节）；退出时同样回到地面
-    await loaded.getByRole('button', { name: '漫游', exact: true }).click();
+    // 当前图层里的"漫游"：有出生点的从步行开始，地下的屋子抬高，黑幕下进站（ADR 0147 第 4 节）；退出时同样回到地面
+    await room.click();
     const bar = page.locator('[data-roam-panel]');
     await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
     expect(wasRequested(/\/assets\/nav-grid\.worker-[\w-]+\.js$/), '导航网格的 Worker 分块').toBe(true);
@@ -195,29 +203,33 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await expect(bar).toHaveCount(0);
     await expect(page.getByRole('button', { name: '二维', exact: true })).toBeVisible({ timeout: 30_000 });
 
-    // 高斯泼溅（ADR 0149）：库是单独的分块，勾选泼溅以前不下载；加载好以后定位，画出来
+    // 高斯泼溅（ADR 0149）：库是单独的分块，加入泼溅以前不下载；加载好以后定位，画出来
     // 分块按入口文件命名：gaussian-splat-lite.module-<hash>.js
     const splatChunk = /\/assets\/gaussian-splat-lite[\w.-]*\.js$/;
-    expect(wasRequested(splatChunk), '勾选泼溅以前不下载泼溅库').toBe(false);
-    await page.locator('[data-model="smoke-splat"] .el-checkbox').click();
-    const splat = page.locator('[data-loaded="smoke-splat"]');
-    await expect(splat.getByRole('button', { name: '定位', exact: true })).toBeEnabled({ timeout: 60_000 });
+    expect(wasRequested(splatChunk), '加入泼溅以前不下载泼溅库').toBe(false);
+    await addModel('smoke-splat');
+    const splat = page.locator('[data-current-row="model:smoke-splat"]');
+    await expect(splat.locator('[data-roam="smoke-splat"]')).toHaveAttribute('aria-disabled', 'false', {
+      timeout: 60_000
+    });
     // 泼溅里步行（ADR 0156）：碰撞网格在导航网格的 Worker 里建（buildScan），进去以后有小地图，叫法不是"站内"。
     // 退出时相机飞回开始前的位置，下面的定位作废这次飞行，之后的步骤都在退出以后
-    await splat.getByRole('button', { name: '漫游', exact: true }).click();
+    await splat.locator('[data-roam="smoke-splat"]').click();
     await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
     expect(wasRequested(/\/3dt\/.+\/data\/mesh\/0\.ply$/), '碰撞网格经 /3dt/ 下载').toBe(true);
     await expect(page.getByRole('button', { name: '小地图，点击查看完整地图', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(bar).toHaveCount(0);
-    await splat.getByRole('button', { name: '定位', exact: true }).click();
+    // 退出漫游后面板原样回来，泼溅这一行还选中着
+    await expect(splat).toHaveAttribute('aria-selected', 'true');
+    await locate('smoke-splat');
     // 底图里没有这种绿色：占比超过 0.5% 就是画出来了（斜着看，2026-11-10 实测约 1.7%）
     await expect
       .poll(() => greenShare(page, flat), { message: '画出绿色的泼溅', timeout: 60_000 })
       .toBeGreaterThan(0.005);
     expect(wasRequested(splatChunk), '泼溅库的分块').toBe(true);
     expect(wasRequested(/\/3dt\/.+\/data\/3dgs\/0\.ply$/), '数据块经 /3dt/ 下载').toBe(true);
-    await page.locator('[data-model="smoke-splat"] .el-checkbox').click();
+    await splat.locator('button[aria-label^="移除："]').click();
     await expect(splat).toHaveCount(0);
 
     // 三维的缩放上限 20 级、二维 18 级（JIANGSU_SCENE_ZOOM_RANGE）：三维放大到头，切回二维时收回到 18 级

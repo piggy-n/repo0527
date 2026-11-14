@@ -47,7 +47,7 @@
 
 | 文件 | 发布位置 | 仓库里的来源 | 作用 | ADR |
 |---|---|---|---|---|
-| 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json` | 三维模型面板列出哪些模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149 |
+| 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json` | 资源图层面板的目录里列出哪些三维模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149 |
 | 三维的设备档位 | `dist/scene-tier.json` | `apps/yzt/public/scene-tier.json` | 瓦片缓存、每帧上传、泼溅预算用哪一档：`auto`、`low`、`standard`、`high`，读不到时按 `auto`；逐项说明见 [scene-tier.md](scene-tier.md) | 0155 |
 | 资源的最小显示级别 | `dist/resource-min-zooms.json` | `apps/yzt/src/features/resource-map/resource-min-zooms.json` | 每个资源放大到几级才显示；读不到或格式不对时用构建时带上的，`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不读 | 0132、0137 |
 
@@ -68,4 +68,4 @@
 3. **部署以后要由运维调整、不想重新构建的数据**：运行时文件。写清楚格式、校验，以及读不到时退回什么（参照最小显示级别），写进 [deployment.md](../deployment.md) 和本页。
 4. **只影响本机开发或工具**：不带 `VITE_` 的变量或进程环境变量，写进 [env.md](env.md)"不放进 `.env` 的变量"。
 
-不在页面、feature 或包里散放开关常量；包里只放和项目无关的默认行为，项目的决定由 app 注入（例如三维引擎的能力由 app 收窄后注入，`app/map-runtime-provider.ts`）。
+不在页面、feature 或包里散放开关常量；包里只放和项目无关的默认行为，项目的决定由 app 注入（例如三维引擎和它的预算来源由 app 注入，`app/map-runtime-provider.ts`；能力现在原样注入，ADR 0157）。

@@ -1,40 +1,16 @@
-import { ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
-import { MxTitle } from '@mx/ui';
-import { ElButton, ElIcon, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
+import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
+import { ElIcon } from 'element-plus';
 import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
-import { type LegendEntry, landuseItemLabel, landuseLegendItems, legendEntries } from '../legend';
-import type { SymbolMode, SymbolTarget } from '../resource-symbols';
+import { type LegendEntry, legendEntries } from '../legend';
+import type { SymbolTarget } from '../resource-symbols';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
+import { LegendSettings } from './LegendSettings';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './ResourceLegend.module.scss';
-import { SymbolEditor } from './SymbolEditor';
 import { ValueLegend } from './ValueLegend';
-
-const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] = [
-  { value: 'classified', label: '按类别配色' },
-  { value: 'uniform', label: '统一配色' }
-];
-
-// 平铺目录供图层设置选择地类，不改变地图按编码或名称匹配符号的规则
-const LANDUSE_ITEMS = landuseLegendItems();
-
-// 图层设置只保留可搜索的条目选择，分类分组不再占用浏览区
-const choicesOf = (entry: LegendEntry) => {
-  if (entry.kind === 'landuse') {
-    return LANDUSE_ITEMS.map(item => ({
-      key: item.key,
-      name: item.name,
-      label: landuseItemLabel(item)
-    }));
-  }
-  if (entry.kind === 'values') {
-    return entry.values.map(item => ({ key: item.key, name: item.label, label: item.label }));
-  }
-  return [];
-};
 
 // 按属性配色的条目在名称前显示前三个取值的颜色（设计稿 5D.5）
 const renderColors = (colors: readonly string[]) => (
@@ -59,13 +35,20 @@ export const ResourceLegend = defineComponent({
     /** 正在显示；切到别的 Tab、让给另一边时为 false */
     active: { type: Boolean, default: true },
     /**
-     * 当前显示的是三维、三维里不显示资源图层（三维引擎的能力 `styleLayers` 为 false，app 注入的收窄能力，ADR 0153）：
+     * 当前显示的是三维、三维里不显示资源图层（三维引擎的能力 `styleLayers` 为 false；app 注入的是 true，现在走不到，ADR 0157）：
      * 只显示说明，和隐藏时一样卸载条目和编辑器，浏览和编辑目标保留（ADR 0080 第 5 节）；能力为 true 时三维照常显示资源图层，不传
      */
-    scene: { type: Boolean, default: false }
+    scene: { type: Boolean, default: false },
+    /**
+     * 当前图层的图例浮层正在编辑的资源（ADR 0157）：这里正在编辑同一个资源时回到浏览，免得两个符号编辑器对着同一个目标、
+     * 一边卸载时清掉另一边正在拖的取色预览
+     */
+    yieldCode: { type: String as PropType<string | null>, default: null }
   },
   emits: {
-    editingChange: (_editing: boolean) => true
+    editingChange: (_editing: boolean) => true,
+    /** 正在显示的符号编辑器对着的资源（ADR 0157）：页面据此关掉对着同一个资源的图例浮层，后打开编辑的一方为准 */
+    editingCode: (code: string | null) => code === null || typeof code === 'string'
   },
   setup(props, { emit }) {
     // 条目的收起是图例自己的界面状态，不持久化：复合图例默认展开，记下用户收起的
@@ -119,13 +102,30 @@ export const ResourceLegend = defineComponent({
         editing.value = null;
       }
     });
+    watch(
+      () => props.yieldCode,
+      code => {
+        if (code !== null && editing.value?.code === code) {
+          editing.value = null;
+        }
+      },
+      { immediate: true }
+    );
     // 外壳只在浏览视图提供全局恢复入口，关闭图例时清除外壳的编辑状态
     watch(
       () => editingEntry.value !== undefined,
       value => emit('editingChange', value),
       { immediate: true }
     );
-    onUnmounted(() => emit('editingChange', false));
+    watch(
+      () => (props.active && !props.scene && editingEntry.value ? editingEntry.value.code : null),
+      code => emit('editingCode', code),
+      { immediate: true }
+    );
+    onUnmounted(() => {
+      emit('editingChange', false);
+      emit('editingCode', null);
+    });
 
     const toggle = (code: string) => {
       const next = new Set(collapsed.value);
@@ -133,13 +133,6 @@ export const ResourceLegend = defineComponent({
         next.add(code);
       }
       collapsed.value = next;
-    };
-
-    const selectMode = (code: string, value: unknown) => {
-      const mode = MODES.find(item => item.value === value);
-      if (mode) {
-        props.symbols.setMode(code, mode.value);
-      }
     };
 
     // 展开只显示图例，样式方式和恢复默认由资源级配置入口单独显示
@@ -166,84 +159,19 @@ export const ResourceLegend = defineComponent({
       );
     };
 
-    const renderConfiguration = (entry: LegendEntry) => {
-      const directItem = editing.value?.item;
-      const classified = entry.kind !== 'symbol' && entry.mode === 'classified';
-      const choices = choicesOf(entry);
-      const selected = directItem ?? selectedItems.value.get(entry.code);
-      const item = choices.find(choice => choice.key === selected) ?? choices[0];
-      const target: SymbolTarget = item && (directItem !== undefined || classified)
-        ? { code: entry.code, item: item.key }
-        : { code: entry.code };
-      const name = directItem !== undefined && item ? item.name : entry.name;
-      return (
-        <div
-          class={styles.configuration}
-          data-legend-settings={entry.code}
-          style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}
-        >
-          <div class={styles.settingsHeading}>
-            <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={returnToLegend}>
-              返回图例
-            </ElButton>
-            <MxTitle>{name}</MxTitle>
-          </div>
-          {directItem === undefined && entry.kind !== 'symbol' && (
-            <div class={styles.modes}>
-              <span class={styles.label}>显示方式</span>
-              <ElRadioGroup
-                size="small"
-                aria-label="图层配色方式"
-                modelValue={entry.mode}
-                onUpdate:modelValue={value => selectMode(entry.code, value)}
-              >
-                {MODES.map(mode => (
-                  <ElRadioButton key={mode.value} value={mode.value}>
-                    {mode.label}
-                  </ElRadioButton>
-                ))}
-              </ElRadioGroup>
-              <p class={styles.description}>
-                {classified ? '各类别分别显示对应的颜色与样式' : '整个图层使用统一配色，不再按类别区分'}
-              </p>
-            </div>
-          )}
-          {directItem === undefined && classified && (
-            <ElSelect
-              size="small"
-              filterable
-              aria-label="选择要修改的图例"
-              modelValue={item?.key}
-              onUpdate:modelValue={(value: unknown) => {
-                if (typeof value === 'string' && choices.some(choice => choice.key === value)) {
-                  selectedItems.value = new Map([...selectedItems.value, [entry.code, value]]);
-                }
-              }}>
-              {choices.map(choice => <ElOption key={choice.key} value={choice.key} label={choice.label} />)}
-            </ElSelect>
-          )}
-          <SymbolEditor
-            symbols={props.symbols}
-            target={target}
-            name={target.item !== undefined && item ? item.name : entry.name}
-            resetLabel={target.item !== undefined ? '恢复此图例默认' : '恢复当前样式'}
-          />
-          {directItem === undefined && entry.kind !== 'symbol' && (
-            <ElButton
-              class={styles.resetLayer}
-              link
-              type="primary"
-              size="small"
-              disabled={!props.symbols.isCustomized(entry.code)}
-              aria-label={`恢复${entry.name}的默认符号`}
-              onClick={() => props.symbols.resetResource(entry.code)}
-            >
-              恢复本图层默认
-            </ElButton>
-          )}
-        </div>
-      );
-    };
+    const renderConfiguration = (entry: LegendEntry) => (
+      <LegendSettings
+        layers={props.layers}
+        symbols={props.symbols}
+        entry={entry}
+        item={editing.value?.item}
+        selected={selectedItems.value.get(entry.code)}
+        onBack={returnToLegend}
+        onUpdate:selected={(key: string) => {
+          selectedItems.value = new Map([...selectedItems.value, [entry.code, key]]);
+        }}
+      />
+    );
 
     // 复合图例收起时显示多色块摘要；单一符号直接展示，配置按钮不承担展开图例的动作
     const renderEntry = (entry: LegendEntry): VNode => {

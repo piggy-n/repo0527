@@ -126,7 +126,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 - map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），在这一层 `provide(MAP_SCENE_ENGINE, …)`、`MAP_RUNTIME_PRELOAD`、`MAP_ERROR_REPORTER`；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）。页面和拥有者不读引擎，照常放 `<MapCanvas>`，照常 `setDimension`、`bindScene`
 - 描述是对象 `{ capabilities, loadRenderer }`：`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它），由 `<MapCanvas>` 的视图在第一次切到三维（或预加载）时调用。map-vue 导出完整能力的 `MAPLIBRE_ENGINE`，没有 provide 时用它。测试可以注入假的 `loadRenderer`
-- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别，`splats` 是能显示 LCC2 高斯泼溅（ADR 0149）。`MAPLIBRE_ENGINE` 三项都是 true，app 注入时收窄：三维里暂不显示资源图层，注入的引擎前两项是 false、`splats` 仍是 true（[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
+- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别，`splats` 是能显示 LCC2 高斯泼溅（ADR 0149）。`MAPLIBRE_ENGINE` 三项都是 true，app 原样注入（2026-11-14 起不再收窄，ADR 0157，[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
 - app 注入的引擎（`createSceneEngine`）包一层 `loadRenderer`：打开三维时等设备档位准备好（读 `scene-tier.json`、问留下崩溃标记的页面），再把预算来源交给 `createSceneRenderer`；预加载时 app 把它换成只下载模块、读配置的函数（ADR 0155，[config/scene-tier.md](../config/scene-tier.md)）
 - 三维模块加载失败只让三维失败：视图的失败原因是 `module`，上下文的 `retry()` 调用视图的 `retry()` 只重新加载模块，不请画布重建（`retryRequests` 不变）
 
@@ -142,6 +142,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |
+| `sourceActivity` | 当前视图每个数据源这一轮的瓦片请求（ADR 0158）：视图通知变化后在下一帧读一次（`FrameScheduler`，和 `pointer` 一样），一帧里多次变化只读一次；挂上、切换视图时立即取新视图的统计，没有视图或视图不统计时是空表 |
 | `sceneStatus` | 当前视图报告的三维内容状态（按瓦片集 ID 的 `loading`、`ready` 带建议的相机、`failed` 带错误，ADR 0081）：只在当前视图是三维时有内容，二维、没有视图时是空表；切换、替换视图后取新视图的报告 |
 | `roamStatus` | 当前视图报告的漫游状态，按 `kind` 区分：路线的进度（ADR 0083）、步行的阶段、人称、提示和人的位置（ADR 0086、0087、0090）；没有在漫游、二维、没有视图时为 null |
 | `sceneCapabilities` | 三维引擎的能力（`styleLayers`、`identify`、`splats`，ADR 0147、0149）：静态，和 `dimension` 一起决定三维里显示什么 |

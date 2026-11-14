@@ -44,7 +44,7 @@ paths:
 - 贴边、会挡住定位的悬浮元素用 `useMapOverlay(element, edge)` 登记，`fitBounds`、`flyTo` 不传 `padding` 时自动避开；不定位、只要让被挡住的位置露出来时用相机控制的 `reveal`；页面不自己算定位用的 padding 和平移量，也不用布局的尺寸常量（ADR 0029、0037）
 - 相机事件带 `view` 和 `cause`（`user` / `program` / `sync`），不用时间窗口判断回声（ADR 0024）
 - 一个不合法的图层会让整个视图进入 `failed`，样式出现新版本时自动恢复（ADR 0026）；来自后端等外部配置的图层，由拥有者在配置变化时先校验自己的分组，不合法的不提交给会话
-- 带 `sourceId` 的错误（瓦片、GeoJSON 加载失败）不算样式失败，记在视图的数据源错误里；拥有者从上下文的 `sourceErrors` 按数据源 ID 推导自己的加载失败，不监听原生的 `error` 事件，也不自己清除（ADR 0041）
+- 带 `sourceId` 的错误（瓦片、GeoJSON 加载失败）不算样式失败，记在视图的数据源错误里；拥有者从上下文的 `sourceErrors` 按数据源 ID 推导自己的加载失败，不监听原生的 `error` 事件，也不自己清除（ADR 0041）；瓦片请求的进度从上下文的 `sourceActivity` 读（适配器按数据源统计这一轮的瓦片，一帧最多更新一次，ADR 0158），不听原生的 `dataloading` 这类事件
 - 地图的加载与失败提示由 `shared/map` 的 `describeMapStatus` 推导，界面只负责显示；引擎失败用上下文的 `retry()` 重建，不在页面里换画布的 `key`（ADR 0030）；MapLibre 引擎的三维模块加载失败（原因 `module`）只让三维失败，`retry()` 只重新加载模块（ADR 0147）
 
 ## 工具与工具栏

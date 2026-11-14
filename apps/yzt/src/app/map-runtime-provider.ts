@@ -19,12 +19,12 @@ import {
 export type PageSceneTier = SceneBudgetSource & Pick<SceneTierSource, 'prepare' | 'loadSetting'>;
 
 /**
- * 注入的三维引擎（ADR 0147 第 3 节）：三维里暂不显示资源图层、点/框选不识别，等页面重新设计（ADR 0153）；高斯泼溅照常（ADR 0149）。
+ * 注入的三维引擎（ADR 0147 第 3 节）：能力原样（三维里照常显示资源图层、点/框选，ADR 0157；高斯泼溅，ADR 0149）。
  * 打开三维时等部署的档位读到、问完留下崩溃标记的页面，再按档位创建渲染器（ADR 0155 第 4、6 节）
  */
 export function createSceneEngine(base: SceneEngine, sceneTier: () => PageSceneTier): SceneEngine {
   return Object.freeze({
-    capabilities: Object.freeze({ ...base.capabilities, styleLayers: false, identify: false }),
+    capabilities: base.capabilities,
     loadRenderer: async () => {
       const tier = sceneTier();
       const [create] = await Promise.all([base.loadRenderer(), tier.prepare()]);

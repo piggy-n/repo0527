@@ -1,7 +1,7 @@
 import type { Resource } from './catalog';
 import { classItems, legacyItem, OTHER_ITEM } from './classification';
 import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
-import type { ResourceLayersState } from './resource-layers';
+import { isDrawn, type ResourceLayersState } from './resource-layers';
 import {
   noSymbolOverride,
   type ResourceSymbolOverride,
@@ -132,8 +132,12 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   return { geometry: 'circle', fill: symbol.fillColor, stroke: symbol.strokeColor, radius, strokeWidth };
 }
 
-// 年份只用来显示（ADR 0052 第 3 节）：条目的身份、名称和符号仍按 code
-function legendEntry(resource: Resource, year: number, override: ResourceSymbolOverride | undefined): LegendEntry {
+/** 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code */
+export function legendEntry(
+  resource: Resource,
+  year: number,
+  override: ResourceSymbolOverride | undefined
+): LegendEntry {
   const { code, name } = resource;
   const style = resourceStyle(code);
   const rule = style.color;
@@ -165,7 +169,7 @@ export function legendEntries(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display?.checked || invalid.has(code)) {
+    if (!resource || !display || !isDrawn(display) || invalid.has(code)) {
       return [];
     }
     return [legendEntry(resource, display.year, overrideOf(code))];

@@ -2,6 +2,7 @@ import { bbox } from '@turf/bbox';
 import type { Geometry, LineString, Point, Polygon, Position } from 'geojson';
 import type {
   LngLat,
+  PickOptions,
   PickResult,
   RenderedFeature,
   RenderedQueryOptions,
@@ -62,7 +63,7 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number, checked = true): ResourceDisplay => ({ checked, opacity: 1, year });
+const display = (year: number, checked = true): ResourceDisplay => ({ added: true, checked, opacity: 1, year });
 
 // 从上到下：水域线、村级调查区、地类图斑、坑塘（没勾选）、公用设施点
 const STATE: ResourceLayersState = {
@@ -359,6 +360,34 @@ function fakeView(
   return { view, queries };
 }
 
+// 三维里一栋楼占着屏幕上 x 在 40～60、y 在 0～50 的地方
+const onModel = ({ x, y }: ScreenPoint) => x >= 40 && x <= 60 && y >= 0 && y <= 50;
+
+// 打到楼时命中点的经纬度是楼脚下的地面 [0.5, 0.6]，投影回屏幕在 (50, 60)；只打地面时穿过楼。地面上的点和投影都按 1 度 100 像素
+function sceneView(features: readonly RenderedFeature[]) {
+  const queries: [ScreenPoint | ScreenBox, RenderedQueryOptions][] = [];
+  const picks: (PickOptions | undefined)[] = [];
+  const view = {
+    kind: '3d' as const,
+    pick: (point: ScreenPoint, options?: PickOptions): PickResult => {
+      picks.push(options);
+      return onModel(point) && !options?.ground
+        ? { kind: 'hit', surface: 'model', lngLat: [0.5, 0.6], height: 30 }
+        : { kind: 'hit', surface: 'map', lngLat: [point.x / 100, point.y / 100] };
+    },
+    project: ([lng, lat]: LngLat): ScreenPoint => ({ x: lng * 100, y: lat * 100 }),
+    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => {
+      queries.push([area, options]);
+      return features.filter(({ sourceId }) => options.sources.includes(sourceId));
+    }
+  };
+  return { view, queries, picks };
+}
+
+// 只打地面的拾取得到的框：同 sceneView 的地面
+const groundBox = (box: ScreenBox) =>
+  screenBoxPolygon(box, ({ x, y }): PickResult => ({ kind: 'hit', surface: 'map', lngLat: [x / 100, y / 100] }));
+
 const SZY = targetOf('szy_kt', 2025);
 const LVLL = targetOf('csxhjctb_lvll', 2025);
 const LCTL = targetOf('csxhjctb_lctl', 2025);
@@ -435,6 +464,37 @@ describe('planIdentify', () => {
     expect(kindsOf(missed)).toStrictEqual([['bgdc_dltb', 'rendered']]);
     expect(planIdentify([DLTB], ORIGIN, 12, fakeView([], { miss: true }).view)).toStrictEqual([]);
   });
+
+  it('三维里点到模型上查模型脚下（ADR 0157 的规则甲）：渲染要素、容差框都围着脚下投影回屏幕的点，四角只打地面', () => {
+    const { view, queries, picks } = sceneView([]);
+
+    const tasks = planIdentify([LCTL, HYDL, DLTB], { x: 50, y: 20 }, 16, view);
+
+    const foot = { x: 50, y: 60 };
+    const square = { from: { x: 42, y: 52 }, to: { x: 58, y: 68 } };
+    expect(queries).toStrictEqual([
+      [square, { sources: [LCTL.sourceId], withGeometry: true }],
+      [{ from: { x: 42, y: 52 }, to: { x: 58, y: 68 } }, { sources: [HYDL.sourceId], withGeometry: true }],
+      [foot, { sources: [DLTB.sourceId], withGeometry: false }]
+    ]);
+    expect(tasks).toStrictEqual([
+      { kind: 'server', target: HYDL, geometry: groundBox(square) },
+      { kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0.5, 0.6] } }
+    ]);
+    // 只有点击本身先打模型，其余的拾取都只打地面
+    expect(picks[0]).toBeUndefined();
+    expect(picks.slice(1).every(options => options?.ground === true)).toBe(true);
+  });
+
+  it('三维里点在地面上照常围着点击位置；容差框的角落在模型上时取模型后面的地面', () => {
+    const { view, queries } = sceneView([]);
+
+    const tasks = planIdentify([HYDL], { x: 50, y: 55 }, 16, view);
+
+    const square = { from: { x: 42, y: 47 }, to: { x: 58, y: 63 } };
+    expect(queries.map(([area]) => area)).toStrictEqual([square]);
+    expect(tasks).toStrictEqual([{ kind: 'server', target: HYDL, geometry: groundBox(square) }]);
+  });
 });
 
 // n 个不同的 guid 的渲染要素
@@ -489,6 +549,16 @@ describe('planBox', () => {
       ['csxhjctb_hydl', 'server'],
       ['bgdc_dltb', 'server']
     ]);
+  });
+
+  it('三维里框的四角只打地面：角落在模型上时取模型后面的地面，和渲染要素查的是同一块（ADR 0157）', () => {
+    const { view, picks } = sceneView([]);
+    const box = { from: { x: 40, y: 10 }, to: { x: 60, y: 90 } };
+
+    const tasks = planBox([HYDL], box, 16, view);
+
+    expect(tasks).toStrictEqual([{ kind: 'server', target: HYDL, geometry: groundBox(box) }]);
+    expect(picks.every(options => options?.ground === true)).toBe(true);
   });
 
   it('框里去重后超过 5000 个时停在这个资源，不查后端；恰好 5000 个、重复的照常', () => {

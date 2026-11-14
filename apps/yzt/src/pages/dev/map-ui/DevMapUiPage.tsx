@@ -3,12 +3,12 @@ import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, ref, shallowRef } from 'vue';
 import { RouterLink } from 'vue-router';
-import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
@@ -21,6 +21,7 @@ import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { RouteName } from '@/shared/router/route-names';
+import { CurrentMapLayerPanel } from '../../current-map/layer-panel/CurrentMapLayerPanel';
 import styles from './DevMapUiPage.module.scss';
 import { SAMPLE_CATALOG, SAMPLE_THUMBNAILS } from './samples';
 
@@ -39,6 +40,8 @@ const MapUiSamples = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols });
+    // 样例只看资源：模型的目录是空的
+    const models = useSceneModels(map, []);
     const layout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const basemap = { ...useBasemap(), thumbnails: SAMPLE_THUMBNAILS };
@@ -46,11 +49,11 @@ const MapUiSamples = defineComponent({
     const collapsed = ref(false);
     const editing = ref(false);
     const basemapOpen = ref(false);
-    // 切换样例只改勾选，年份与样式继续由真实拥有者维护
+    // 切换样例只改加入当前地图的资源，年份与样式继续由真实拥有者维护
     const codes = [...SAMPLE_CATALOG.resources.keys()];
     const selectCount = (count: number) => {
-      layers.setCheckedMany(codes, false);
-      layers.setCheckedMany(codes.slice(0, count), true);
+      layers.remove(codes);
+      layers.add(codes.slice(0, count));
     };
     const open = (id: 'legend' | 'boundaries') => {
       panels.toggle(id, !collapsed.value);
@@ -76,12 +79,14 @@ const MapUiSamples = defineComponent({
         <div class={styles.grid}>
           <section class={styles.sample}>
             <MxTitle level="panel">资源列表</MxTitle>
-            <p class={styles.note}>勾选、搜索、年份、排序和透明度均可操作。已选择图层默认收起。</p>
+            <p class={styles.note}>添加、移除、搜索、年份、排序、透明度和图例均可操作（ADR 0157）。</p>
             <div class={styles.stage}>
               <div class={styles.resourceColumn}>
-                <ResourceLayerPanel
-                  layers={layers}
+                <CurrentMapLayerPanel
+                  resources={layers}
+                  symbols={symbols}
                   layout={layout}
+                  models={models}
                   collapsed={layout.collapsed.value}
                   onUpdate:collapsed={layout.setCollapsed}
                 />

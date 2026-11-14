@@ -1,0 +1,50 @@
+// 当前图层里模型行自己的部分（ADR 0157）：失败的状态，行尾的"漫游"
+
+.error {
+  display: inline-flex;
+  color: var(--color-danger);
+  cursor: help;
+
+  &:focus-visible {
+    border-radius: 50%;
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+// 和年份、效果同样的框（用户 2026-11-14）：图标加"漫游"二字；不能点时灰色，提示里写原因
+.roam {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-container);
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+
+  &[aria-disabled='true'] {
+    background-color: transparent;
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+
+    &:hover {
+      border-color: var(--color-border-light);
+    }
+  }
+}

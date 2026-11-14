@@ -19,8 +19,10 @@ import type {
   MapMouseEventLike,
   MapMouseEventType,
   MapMoveEventLike,
+  MapErrorEventLike,
   MapSubscription,
-  RenderedFeatureLike
+  RenderedFeatureLike,
+  SourceDataEventLike
 } from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
 import type { SceneRenderer, SceneRendererEvents } from './scene-renderer';
@@ -38,6 +40,8 @@ function settled<T>(promise: Promise<T>): Promise<T | 'pending'> {
 interface FakeEvent {
   readonly error?: Error;
   readonly sourceId?: string;
+  readonly dataType?: 'source' | 'style';
+  readonly tile?: { readonly tileID: { readonly key: string }; readonly state?: string };
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -186,7 +190,8 @@ class FakeMap implements MapLike {
   }
 
   on(type: 'style.load', listener: () => void): MapSubscription;
-  on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
+  on(type: 'error', listener: (event: MapErrorEventLike) => void): MapSubscription;
+  on(type: 'dataloading' | 'sourcedata' | 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
@@ -557,6 +562,16 @@ function tileGroup(id: string, year: number): StyleGroup {
   };
 }
 
+// 一张瓦片：状态由用例改，像 MapLibre 一样 404 时只改成 errored、不发事件
+const fakeTile = (key: string) => ({ tileID: { key }, state: 'loading' });
+
+// 数据源 sourceId 的一张瓦片的事件（ADR 0158）
+const tileEvent = (sourceId: string, tile: { readonly tileID: { readonly key: string } }): FakeEvent => ({
+  dataType: 'source',
+  sourceId,
+  tile
+});
+
 // 就绪后加上 tdt、dltb 两个数据源，返回之后数据源错误的每次变化
 async function addTwoSources(ctx: ReturnType<typeof setup>): Promise<SourceErrors[]> {
   ctx.map.fire('style.load');
@@ -828,6 +843,76 @@ describe('MapLibreView', () => {
 
       ctx.view[Symbol.dispose]();
       expect(ctx.view.sourceErrors).toBe(NO_SOURCE_ERRORS);
+    });
+  });
+
+  describe('瓦片请求的统计（ADR 0158）', () => {
+    it('按数据源统计：开始、到了、失败、取消；样式的加载不算；一张失败不结束这一轮，别的瓦片照常算', async () => {
+      using ctx = setup();
+      await addTwoSources(ctx);
+      const changed = vi.fn<() => void>();
+      ctx.view.onSourceActivityChange(changed);
+      const tiles = ['1', '2', '3', '4'].map(fakeTile);
+      const [first, second, third, fourth] = tiles;
+      if (!first || !second || !third || !fourth) {
+        throw new Error('没有瓦片');
+      }
+
+      ctx.map.fire('dataloading', { dataType: 'style' });
+      for (const tile of tiles) {
+        ctx.map.fire('dataloading', tileEvent('dltb', tile));
+      }
+      ctx.map.fire('sourcedata', tileEvent('dltb', first));
+      ctx.map.fire('dataabort', tileEvent('dltb', second));
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 3, loaded: 1, failed: 0, finishedAt: null });
+
+      // MapLibre 在一张瓦片失败以后报数据源已加载完（isSourceLoaded），不能当真：还在等的 4 号照常等（2026-11-14 审查发现）
+      ctx.map.fire('error', { ...tileEvent('dltb', third), isSourceLoaded: true, error: new Error('tile failed') } as FakeEvent);
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 3, loaded: 1, failed: 1, finishedAt: null });
+      // 数据源的错误照常记下
+      expect(ctx.view.sourceErrors.has('dltb')).toBe(true);
+
+      ctx.map.fire('sourcedata', tileEvent('dltb', fourth));
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 3, loaded: 2, failed: 1 });
+      expect(ctx.view.sourceActivity.get('dltb')?.finishedAt).not.toBeNull();
+      expect(changed).toHaveBeenCalledTimes(8);
+    });
+
+    it('不发事件的瓦片（栅格瓦片的 404、没有变化的瓦片）：数据源有别的事件、地图空闲时看瓦片的状态，到了就算到了', async () => {
+      using ctx = setup();
+      await addTwoSources(ctx);
+      const empty = fakeTile('1');
+      const pending = fakeTile('2');
+      ctx.map.fire('dataloading', tileEvent('dltb', empty));
+      ctx.map.fire('dataloading', tileEvent('dltb', pending));
+      empty.state = 'errored';
+
+      ctx.map.fire('sourcedata', { dataType: 'source', sourceId: 'dltb' });
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 1, finishedAt: null });
+
+      pending.state = 'errored';
+      ctx.map.fire('idle');
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 2 });
+      expect(ctx.view.sourceActivity.get('dltb')?.finishedAt).not.toBeNull();
+    });
+
+    it('地图空闲时还在加载的照常等；移除数据源、整体重建、释放时忘掉', async () => {
+      using ctx = setup();
+      await addTwoSources(ctx);
+      ctx.map.fire('dataloading', tileEvent('dltb', fakeTile('1')));
+      ctx.map.fire('dataloading', tileEvent('tdt', fakeTile('1')));
+      ctx.map.fire('idle');
+      expect([...ctx.view.sourceActivity.values()].every(({ finishedAt }) => finishedAt === null)).toBe(true);
+
+      ctx.session.style.setGroup('business', lineGroup('lcsh'));
+      await nextMicrotask();
+      expect([...ctx.view.sourceActivity.keys()]).toStrictEqual(['tdt']);
+
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      expect(names(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+      expect(ctx.view.sourceActivity.size).toBe(0);
     });
   });
 
@@ -2642,6 +2727,8 @@ describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => 
       height: 15
     });
     expect(ctx.view.project([118.8, 32.05], 15)).toStrictEqual({ x: 7, y: 9 });
+    // 只打地面时跳过模型（ADR 0157：框选、容差框的四角）
+    expect(ctx.view.pick({ x: 1, y: 1 }, { ground: true })).toMatchObject({ kind: 'hit', surface: 'map' });
 
     ctx.view.setKind('2d');
     expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'map' });

@@ -1,0 +1,20 @@
+// 按属性配色的摘要：前三个取值的颜色并排，和统一符号的预览一样 28 × 20
+.colors {
+  display: flex;
+  flex: none;
+  width: 28px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 2px;
+
+  i {
+    flex: 1;
+    height: 100%;
+  }
+}
+
+// 当前图层的行首：20 × 14
+.small {
+  width: 20px;
+  height: 14px;
+}

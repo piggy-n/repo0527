@@ -174,9 +174,9 @@ packages/icons/
 | `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
 | `close` | `x` | 取消勾选、关闭 |
 | `info` | `info-circle` | 带提示的信息图标 |
-| `status-error` | 自制（ADR 0059） | "已选择图层"的错误状态：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
-| `status-warning` | 自制（ADR 0059） | "已选择图层"的警告状态：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
-| `status-zoom` | `zoom-in` | "已选择图层"的说明状态（当前级别不显示） |
+| `status-error` | 自制（ADR 0059） | 当前图层的错误状态（资源、模型加载失败）：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
+| `status-warning` | 自制（ADR 0059） | 当前图层的警告状态、请求状态的"N 项加载失败"：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
+| `status-zoom` | `zoom-in` | 当前图层的说明状态（当前级别不显示） |
 | `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 | `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |
@@ -189,6 +189,11 @@ packages/icons/
 | `menu-list` | `list-details` | 数据下载页面内导航的数据列表（2026-11-02 加入，ADR 0127） |
 | `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
 | `vertex-edit` / `undo` / `trash` | `edit` / `arrow-back-up` / `trash` | 自定义范围弹窗的编辑节点、撤销、删除节点（2026-10-31 加入，ADR 0121） |
+| `layer-add` / `layer-remove` | `check` / `x`（2026-11-15 用户定为勾和叉，先后取代改绘的地图加减、简约的加减号）；图形和 `check` / `close` 相同，按用途另起名字，以后换图形只改这两个文件 | 资源图层面板的添加到当前地图、从当前地图移除（ADR 0157）：资源目录的标题和行尾、当前图层的工具栏和行尾、右键菜单 |
+| `tree-expand-all` / `tree-collapse-all` | 自绘，仿 `selector`：箭头向外、向内 | 资源目录的全部展开、全部收起（ADR 0157），和上移、下移的三角区分开 |
+| `move-top` / `move-bottom` | 自制：和 `move-up` / `move-down` 同样的实心三角，加一条到头的横线 | 当前图层的置顶、置底（ADR 0157） |
+| `eye` / `eye-off` | `eye` / `eye-off` | 当前图层右键菜单的显示、隐藏 |
+| `model-3d` / `roam-walk` | `box` / `walk` | 当前图层里三维模型的图标、行内的漫游按钮（ADR 0157） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

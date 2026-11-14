@@ -1,10 +1,13 @@
 import { EYE_HEIGHT, type WalkView } from '@mx/map-core';
 import { useShownElementSize } from '@mx/map-vue';
-import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
+import { computed, defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
 import { eyeText, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
 import styles from './MapStatusBar.module.scss';
+
+// 状态栏和后面插槽之间的距离，和样式里的一致
+const AFTER_GAP = 8;
 
 // 每种排法最多显示几段
 const LAYOUT_SEGMENTS: Readonly<Record<StatusLayout, number>> = { full: 3, 'no-angles': 2, 'scale-only': 1 };
@@ -46,7 +49,8 @@ const walkingSegments = (view: WalkView, heading: number) => [
 /**
  * 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：比例尺（三维是视点高度，ADR 0080 第 6 节）、鼠标所在的经纬度、
  * 不为 0 的旋转和俯仰；步行时是人称、眼高（第一人称）和朝向（ADR 0086 第 5 节、ADR 0090）。
- * 只显示、不拦截鼠标；三种排法的宽度由隐藏的量尺量出，放不下时按 fitStatusLayout 取舍
+ * 只显示、不拦截鼠标；三种排法的宽度由隐藏的量尺量出，放不下时按 fitStatusLayout 取舍。
+ * 插槽 after 紧跟在状态栏右边（如请求状态，ADR 0158），它的宽度先让出来；插槽里的内容自己决定拦不拦截鼠标
  */
 export const MapStatusBar = defineComponent({
   name: 'MapStatusBar',
@@ -55,8 +59,10 @@ export const MapStatusBar = defineComponent({
     /** 经纬度的写法，跟着坐标定位面板 */
     format: { type: String as PropType<CoordinateFormat>, required: true }
   },
-  setup(props) {
+  slots: Object as SlotsType<{ after?: () => VNode[] }>,
+  setup(props, { slots }) {
     const root = ref<HTMLElement>();
+    const after = ref<HTMLElement>();
     const fullRuler = ref<HTMLElement>();
     const noAnglesRuler = ref<HTMLElement>();
     const scaleOnlyRuler = ref<HTMLElement>();
@@ -67,10 +73,11 @@ export const MapStatusBar = defineComponent({
       'no-angles': useShownElementSize(noAnglesRuler, undefined, borderBox).width,
       'scale-only': useShownElementSize(scaleOnlyRuler, undefined, borderBox).width
     };
+    const { width: afterWidth } = useShownElementSize(after, undefined, borderBox);
     const layout = computed(() =>
       fitStatusLayout(
         { full: widths.full.value, 'no-angles': widths['no-angles'].value, 'scale-only': widths['scale-only'].value },
-        available.value
+        available.value - (slots.after ? afterWidth.value + AFTER_GAP : 0)
       )
     );
 
@@ -108,6 +115,11 @@ export const MapStatusBar = defineComponent({
     return () => (
       <div ref={root} class={styles.root} data-map-status-bar>
         {bar(layout.value)}
+        {slots.after && (
+          <div ref={after} class={styles.after}>
+            {slots.after()}
+          </div>
+        )}
         <div class={styles.rulers} aria-hidden="true">
           <div ref={fullRuler}>{bar('full')}</div>
           <div ref={noAnglesRuler}>{bar('no-angles')}</div>

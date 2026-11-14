@@ -18,8 +18,9 @@ const oblique = (id: string, extra: Partial<SceneModel> = {}): SceneModel => ({
   ...extra
 });
 
-const loaded = (ids: readonly string[]): SceneModelsState => ({
-  loaded: ids,
+const added = (ids: readonly string[]): SceneModelsState => ({
+  added: ids,
+  hidden: new Set(),
   effects: new Map(),
   shownEffects: new Map(),
   attempts: new Map(),
@@ -32,7 +33,7 @@ describe('deriveSceneContent', () => {
   it('清单给了屏幕误差上限的模型，瓦片集带上它；没给的不写这一项；倾斜摄影在泼溅的范围里不画（ADR 0149）', () => {
     const models = [oblique('jkq', { maximumScreenSpaceError: 8 }), oblique('jkq2')];
 
-    const { tilesets } = deriveSceneContent(models, loaded(['jkq', 'jkq2']));
+    const { tilesets } = deriveSceneContent(models, added(['jkq', 'jkq2']));
 
     expect(tilesets).toStrictEqual([
       {
@@ -54,7 +55,7 @@ describe('deriveSceneContent', () => {
       }
     ]);
     // 室内、白膜不裁
-    const indoor = deriveSceneContent([oblique('room', { kind: 'indoor', underground: true })], loaded(['room']));
+    const indoor = deriveSceneContent([oblique('room', { kind: 'indoor', underground: true })], added(['room']));
     expect(indoor.tilesets[0]).not.toHaveProperty('clippedBySplats');
   });
 
@@ -66,11 +67,11 @@ describe('deriveSceneContent', () => {
       oblique('cws', { kind: 'splat', effects: [], splat: { url, placement } })
     ];
 
-    const content = deriveSceneContent(models, { ...loaded(['cws', 'xz']), attempts: new Map([['cws', 2]]) });
+    const content = deriveSceneContent(models, { ...added(['cws', 'xz']), attempts: new Map([['cws', 2]]) });
 
     expect(content.tilesets.map(({ id }) => id)).toStrictEqual(['xz']);
     expect(content.splats).toStrictEqual([{ id: 'cws', url, placement, show: true, attempt: 2 }]);
-    expect('splats' in deriveSceneContent(models, loaded(['xz']))).toBe(false);
+    expect('splats' in deriveSceneContent(models, added(['xz']))).toBe(false);
   });
 
   it('漫游地下的模型时不显示地面上的泼溅，和地面上的瓦片集一样（ADR 0097 第 5 节）', () => {
@@ -85,7 +86,7 @@ describe('deriveSceneContent', () => {
     });
     const splat = { url: 'https://maps.test/3dt/cws/cws.lcc2', placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 } };
     const models = [station, oblique('cws', { kind: 'splat', effects: [], splat })];
-    const state = loaded(['station', 'cws']);
+    const state = added(['station', 'cws']);
     const roam: RouteChoice = { kind: 'route', modelId: 'station', routeId: 'enter', id: 'r1', playing: false, speed: 4, run: 0 };
 
     expect(deriveSceneContent(models, state).splats?.[0]?.show).toBe(true);
@@ -106,7 +107,7 @@ describe('deriveSceneContent', () => {
     });
     const other = oblique('cws', { kind: 'splat', effects: [], splat: { url: 'https://maps.test/3dt/cws/cws.lcc2', placement } });
     const models = [oblique('xz'), tomb, other];
-    const state = loaded(['xz', 'tomb', 'cws']);
+    const state = added(['xz', 'tomb', 'cws']);
     const roam: RouteChoice = { kind: 'route', modelId: 'tomb', routeId: 'in', id: 'r1', playing: false, speed: 4, run: 0 };
 
     const before = deriveSceneContent(models, state);

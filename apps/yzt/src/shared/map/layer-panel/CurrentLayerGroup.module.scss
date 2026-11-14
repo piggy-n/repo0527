@@ -1,0 +1,202 @@
+// 当前图层的一组（ADR 0157）：标题可以收起，行高 32；行里各 feature 的内容按下面的类名排
+
+.group + .group {
+  margin-top: 4px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 6px 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-regular);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.arrow {
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+
+.open {
+  transform: rotate(90deg);
+}
+
+.badge {
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-compact);
+}
+
+// 不显示标题时的标签和说明（只有这一组）：同标题的高度和字号，不能点
+.note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px 0 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.tag {
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+  line-height: 18px;
+}
+
+// 二维里的模型组：标题变灰，行的符号和名称变淡（用户 2026-11-14）
+.dimmed .head {
+  color: var(--color-text-placeholder);
+}
+
+.dimmed [data-row-dim] {
+  opacity: 0.5;
+}
+
+.rows {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 6px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-regular);
+  outline: none;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--color-primary-border-hover);
+  }
+}
+
+.selected {
+  background-color: var(--color-primary-bg);
+  color: var(--color-text-title);
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+}
+
+// 隐藏的行：名称、年份变淡，符号 40%
+.off [data-row-text] {
+  color: var(--color-text-placeholder);
+}
+
+.off [data-row-symbol] {
+  opacity: 0.4;
+}
+
+// 新加入的行：从上方滑入，浅蓝底淡出（用户 2026-11-14：添加时加轻量动效）
+.entering {
+  animation: row-enter 0.9s ease-out;
+}
+
+// 定位到的行闪两下
+.flash {
+  animation: row-flash 1.4s ease;
+}
+
+@keyframes row-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+    background-color: var(--color-primary-alpha-28);
+  }
+
+  30% {
+    opacity: 1;
+    transform: none;
+    background-color: var(--color-primary-alpha-28);
+  }
+}
+
+@keyframes row-flash {
+  0%,
+  18% {
+    background-color: var(--color-primary-alpha-28);
+  }
+
+  36% {
+    background-color: var(--color-primary-bg);
+  }
+
+  54%,
+  70% {
+    background-color: var(--color-primary-alpha-28);
+  }
+}
+
+// 手柄常显浅灰，悬停、选中时变深：一看就知道能拖
+.handle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-disabled);
+  cursor: grab;
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+.row:hover .handle,
+.selected .handle {
+  color: var(--color-text-secondary);
+}
+
+.checkbox {
+  flex: none;
+  height: auto;
+  margin-right: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entering,
+  .flash {
+    animation: none;
+  }
+}

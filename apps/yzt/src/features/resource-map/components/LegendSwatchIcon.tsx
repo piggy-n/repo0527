@@ -6,6 +6,9 @@ import styles from './LegendSwatchIcon.module.scss';
 // 预览框（设计稿 5D.5）；宽度和半径由 swatchOf 按上限给出，这里只负责画
 const WIDTH = 28;
 const HEIGHT = 20;
+// 小号：当前图层的行首（原型的大小）
+const SMALL_WIDTH = 20;
+const SMALL_HEIGHT = 14;
 
 // 线型以线宽为单位（同 MapLibre 的 line-dasharray），换成 SVG 的像素
 function dasharray(dash: readonly number[] | null, width: number): string | undefined {
@@ -41,7 +44,9 @@ function renderCircle(swatch: Extract<LegendSwatch, { geometry: 'circle' }>) {
 export const LegendSwatchIcon = defineComponent({
   name: 'LegendSwatchIcon',
   props: {
-    swatch: { type: Object as PropType<LegendSwatch>, required: true }
+    swatch: { type: Object as PropType<LegendSwatch>, required: true },
+    /** 小号 20 × 14：画法不变，整体按比例缩小（当前图层的行首） */
+    small: { type: Boolean, default: false }
   },
   setup(props) {
     // 同一页上有很多预览，花纹的 ID 不能重复
@@ -92,8 +97,8 @@ export const LegendSwatchIcon = defineComponent({
       return (
         <svg
           class={styles.swatch}
-          width={WIDTH}
-          height={HEIGHT}
+          width={props.small ? SMALL_WIDTH : WIDTH}
+          height={props.small ? SMALL_HEIGHT : HEIGHT}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           style={{ opacity: 'var(--legend-opacity, 1)' }}
           aria-hidden="true"

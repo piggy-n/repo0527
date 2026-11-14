@@ -73,12 +73,50 @@ export interface RenderedFeatureLike {
   readonly geometry: Geometry;
 }
 
+/**
+ * 瓦片事件里的瓦片：用键区分是哪一张，用状态看引擎没发事件的结果（MapLibre 6.12：栅格瓦片返回 404 时只把状态改成 `errored`，
+ * 矢量瓦片的 404 当作空瓦片照常发 `data`；304 时只改成 `loaded`）。状态不在公开的类型里，升级时由适配器的测试和页面上的检查发现变化
+ */
+export interface TileLike {
+  readonly tileID: { readonly key: string | number };
+  readonly state?: string;
+}
+
+/**
+ * 数据源的加载事件（ADR 0158）：dataType 为 source 时带 sourceId，和瓦片有关时带 tile；样式的加载事件 dataType 为 style。
+ * 不用事件里的 isSourceLoaded：数据源有一张瓦片失败以后，MapLibre 在下一次开始请求以前一直报 true
+ */
+export interface SourceDataEventLike {
+  readonly dataType: 'source' | 'style';
+  readonly sourceId?: string;
+  readonly tile?: TileLike;
+}
+
+/** 地图的错误事件：数据源上的错误由 MapLibre 转发时带上 sourceId，瓦片的错误还带 tile */
+export interface MapErrorEventLike {
+  readonly error: Error;
+  readonly sourceId?: unknown;
+  readonly tile?: TileLike;
+}
+
 /** 适配器用到的地图能力；MapLibre 的 Map 满足这个接口（见测试中的类型检查），测试时换成假地图 */
 export interface MapLike extends StyleTarget {
   setStyle(style: StyleSpecification, options: { diff: boolean }): void;
   on(type: 'style.load', listener: () => void): MapSubscription;
-  /** 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId；瓦片返回 404 时不报错 */
-  on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
+  /**
+   * 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId，瓦片的错误还带 tile；瓦片返回 404 时不报错
+   * （栅格瓦片只把状态改成 errored，矢量瓦片当空瓦片照常发 data）
+   */
+  on(type: 'error', listener: (event: MapErrorEventLike) => void): MapSubscription;
+  /**
+   * 开始加载：带 tile 的是数据源开始请求一张新瓦片，之后跟着 sourcedata、dataabort 或 error；已有瓦片的重新加载不发。
+   * 栅格瓦片返回 404（状态改成 errored）、瓦片没有变化（状态改成 loaded）时只改状态，不发事件；矢量瓦片的 404 当空瓦片照常发 data
+   */
+  on(type: 'dataloading', listener: (event: SourceDataEventLike) => void): MapSubscription;
+  /** 数据源的数据到了或变了：带 tile 的是一张瓦片到了 */
+  on(type: 'sourcedata', listener: (event: SourceDataEventLike) => void): MapSubscription;
+  /** 一张瓦片的请求取消了（移出视野） */
+  on(type: 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   /** 一次移动开始：用户的手势带原始的 DOM 事件（松手后的惯性在松手时算一次）；之后的每一帧只有 move */
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;

@@ -16,6 +16,7 @@ import {
   type MapSession,
   type MapSessionOptions,
   type MapSubscription,
+  type SourceDataEventLike,
   type RenderedFeatureLike,
   type SceneRenderer,
   tilesetCamera,
@@ -58,6 +59,8 @@ vi.mock('@mx/map-core', async importOriginal => {
 interface FakeEvent {
   readonly error?: Error;
   readonly sourceId?: string;
+  readonly dataType?: 'source' | 'style';
+  readonly tile?: { readonly tileID: { readonly key: string }; readonly state?: string };
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -117,6 +120,7 @@ class FakeMap implements MapLike {
 
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  on(type: 'dataloading' | 'sourcedata' | 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
@@ -343,17 +347,27 @@ async function freshModules(): Promise<PageModules> {
 
 /**
  * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
- * 三维是同一个视图，三维模块换成渲染器的替身，能力同 app 注入的（三维里不显示资源图层、不识别）。
+ * 三维是同一个视图，三维模块换成渲染器的替身，能力默认同 app 注入的（三项都是 true，ADR 0157），要测别的能力时传 capabilities。
  * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
  */
-function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAlive = false } = {}) {
+function mountPage({
+  failFirstCreation = false,
+  modules = STATIC_MODULES,
+  keepAlive = false,
+  capabilities = MAPLIBRE_ENGINE.capabilities
+}: {
+  failFirstCreation?: boolean;
+  modules?: PageModules;
+  keepAlive?: boolean;
+  capabilities?: SceneEngine['capabilities'];
+} = {}) {
   const canvasKey = ref(0);
   // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
   const pageShown = ref(true);
   const maps: FakeMap[] = [];
   const renderers: ReturnType<typeof fakeRenderer>[] = [];
   const engine: SceneEngine = {
-    capabilities: { ...MAPLIBRE_ENGINE.capabilities, styleLayers: false, identify: false },
+    capabilities,
     loadRenderer: () =>
       Promise.resolve(() => {
         const created = fakeRenderer();
@@ -409,10 +423,11 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   return { wrapper, maps, renderers, session, canvasKey, pageShown, updates };
 }
 
-// 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
+// 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应。进页面就读模型清单（ADR 0157），默认是空的
 const TREE_URL = '/backend/resource-map/base/tree';
 const server = setupServer(
   mock.get(TREE_URL, () => HttpResponse.json(resourceTreeResponse())),
+  mock.get('*/3dt/manifest.json', () => HttpResponse.json({ models: [] })),
   mock.get('*/3dt/*/tileset.json', () => HttpResponse.json(TILESET_JSON)),
   mock.get('*/resource-min-zooms.json', () => HttpResponse.json(builtInMinZooms()))
 );
@@ -604,12 +619,12 @@ function pinAt(wrapper: PageWrapper): [number, number] {
 
 // 资源图层面板目录树里某个资源的一行
 function resourceRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['get']> {
-  return wrapper.get(`[data-resource="${code}"]`);
+  return wrapper.get(`[data-catalog-node="resource:${code}"]`);
 }
 
-// "已选择图层"区里某个资源的一行：提示、透明度、顺序都在这里
+// 当前图层里某个资源的一行：状态、年份、移除都在这里
 function layerRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['get']> {
-  return wrapper.get(`[data-layer="${code}"]`);
+  return wrapper.get(`[data-current-row="resource:${code}"]`);
 }
 
 // 页面的分组；图层 ID 以分组名为前缀，basemap 和 basemap-labels、region 和 region-clip 的前缀重叠，按最长的算
@@ -627,6 +642,13 @@ const GROUPS = [
 function groupOf(id: string): string | undefined {
   return GROUPS.filter(group => id.startsWith(`${group}-`)).toSorted((a, b) => b.length - a.length)[0];
 }
+
+// 地类图斑的数据源的一张瓦片的事件（ADR 0158）
+const parcelTile = (key: string): FakeEvent => ({
+  dataType: 'source',
+  sourceId: 'resources-bgdc_dltb',
+  tile: { tileID: { key }, state: 'loading' }
+});
 
 // 某个分组新加入的图层：资源目录加载后地类图斑也会加入，与要检查的分组无关
 function addedLayersOf(map: FakeMap, group: string): [string, string | undefined][] {
@@ -689,11 +711,26 @@ function failNavigation() {
   return () => requests;
 }
 
-// 已加载里点"漫游"（车站有出生点，从步行开始），再在漫游面板上换成路线
+// 在资源目录里展开全部、选中模型，用工具栏加入当前地图（ADR 0157）：二维里在"三维模型"分类下面，三维里在"三维模型"页
+async function addModel(wrapper: ReturnType<typeof mountPage>['wrapper'], id: string) {
+  await vi.waitFor(() => expect(wrapper.find('[data-catalog-node^="model-"]').exists()).toBe(true));
+  await wrapper.get('[data-tool="expand-all"]').trigger('click');
+  await wrapper.get(`[data-catalog-node="model:${id}"]`).trigger('click');
+  await wrapper.get('[data-tool="add"]').trigger('click');
+  await settle();
+}
+
+// 当前图层里模型行的"漫游"（车站有出生点，从步行开始），再在漫游面板上换成路线
 async function startRoute(wrapper: ReturnType<typeof mountPage>['wrapper']) {
   await button(wrapper, '漫游').trigger('click');
   await settle();
   await wrapper.get('[data-roam-panel] [aria-label="漫游方式"]').findAll('input').at(1)?.setValue(true);
+  await settle();
+}
+
+// 在窗口上按一个键，等页面处理完（漫游的空格、Esc 监听在窗口上）
+async function pressKey(value: string) {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
   await settle();
 }
 
@@ -772,7 +809,9 @@ describe('CurrentMapPage', () => {
 
   it('行政区边界并入功能标签；底图的标注和透明度、行政区的透明度分别控制，关闭重开保留数值且默认收起', async () => {
     const { wrapper } = await readyPage();
-    const labels = wrapper.get('[role="toolbar"]').findAll('button').map(item => item.attributes('aria-label'));
+    // 地图的工具栏是竖排的；资源图层面板里的两个工具栏是横排的
+    const toolbar = wrapper.get('[role="toolbar"][aria-orientation="vertical"]');
+    const labels = toolbar.findAll('button').map(item => item.attributes('aria-label'));
     expect(labels.slice(-3)).toStrictEqual(['行政区边界', '图例', '清除测量与定位标记']);
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
@@ -1460,7 +1499,7 @@ describe('CurrentMapPage', () => {
     expect(pin(wrapper).attributes('style')).toContain('left: 200px; top: 100px;');
   });
 
-  it('资源目录加载后：默认勾选的地类图斑插在注记下面；在列表里勾上别的资源就加到地图上', async () => {
+  it('资源目录加载后：默认勾选的地类图斑插在注记下面；在列表里勾上别的资源就加到地图上，新加的在最上面（ADR 0157）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
 
@@ -1469,16 +1508,54 @@ describe('CurrentMapPage', () => {
     expect(wrapper.text()).toContain('土地资源');
     expect(wrapper.text()).not.toContain('海洋资源');
     expect(wrapper.text()).not.toContain('公共库');
-    await resourceRow(wrapper, 'csxhjctb_hydl').get('input').setValue(true);
+    await resourceRow(wrapper, 'csxhjctb_hydl').get('[data-node-action="add"]').trigger('click');
     await settle();
-    expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
+    expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
   });
 
-  it('平移和同一级内缩放不更新"已选择图层"列表，跨过最小级别才更新提示', async () => {
+  it('请求状态（ADR 0158）：瓦片加载超过 0.4 秒时状态栏右边出现条目、行内转圈；点开明细、点一行在当前图层里选中；都到了以后已加载完成', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    map.fire('dataloading', parcelTile('1'));
+    map.fire('dataloading', parcelTile('2'));
+    map.fire('sourcedata', parcelTile('1'));
+    await settle();
+    expect(wrapper.find('[data-request-chip]').exists()).toBe(false);
+
+    await vi.waitFor(() => expect(wrapper.find('[data-request-chip]').exists()).toBe(true), { timeout: 3000 });
+    expect(wrapper.get('[data-request-chip]').text()).toBe('正在加载 1 项 · 50%');
+    expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(true);
+
+    await wrapper.get('[data-request-chip]').trigger('click');
+    await wrapper.get('[data-request-row="resource:bgdc_dltb"]').trigger('click');
+    await nextTick();
+    expect(layerRow(wrapper, 'bgdc_dltb').attributes('aria-selected')).toBe('true');
+
+    map.fire('sourcedata', parcelTile('2'));
+    await vi.waitFor(() => expect(wrapper.get('[data-request-chip]').text()).toBe('已加载完成'));
+    expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(false);
+  });
+
+  it('请求明细里点一行时左侧面板收起着：先展开面板，再在当前图层里选中（2026-11-15 审查发现）', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    await button(wrapper, '收起资源图层').trigger('click');
+    expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(true);
+    map.fire('dataloading', parcelTile('1'));
+    await vi.waitFor(() => expect(wrapper.find('[data-request-chip]').exists()).toBe(true), { timeout: 3000 });
+
+    await wrapper.get('[data-request-chip]').trigger('click');
+    await wrapper.get('[data-request-row="resource:bgdc_dltb"]').trigger('click');
+    await settle();
+    expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(false);
+    expect(layerRow(wrapper, 'bgdc_dltb').attributes('aria-selected')).toBe('true');
+    map.fire('sourcedata', parcelTile('1'));
+  });
+
+  it('平移和同一级内缩放不更新当前图层的列表，跨过最小级别才更新提示', async () => {
     const { wrapper, map, updates } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
-    await button(wrapper, '展开已选择图层').trigger('click');
-    await resourceRow(wrapper, 'csxhjctb_lrdl').get('input').setValue(true);
+    await resourceRow(wrapper, 'csxhjctb_lrdl').get('[data-node-action="add"]').trigger('click');
     map.moveTo([119, 32], 8, {});
     await settle();
     updates.clear();
@@ -1488,25 +1565,24 @@ describe('CurrentMapPage', () => {
       // oxlint-disable-next-line no-await-in-loop -- 每次相机变化后让 Vue 完成更新，不能合并成一帧
       await nextTick();
     }
-    expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
+    expect(updates.get('CurrentLayerGroup') ?? 0).toBe(0);
     map.moveTo([119, 32], 9 - 1e-7, {});
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').find('[data-status="minzoom"]').exists()).toBe(true);
-    expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
+    expect(updates.get('CurrentLayerGroup') ?? 0).toBe(0);
 
     map.moveTo([119, 32], 9, {});
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').find('[data-status="minzoom"]').exists()).toBe(false);
-    expect(updates.get('CheckedLayerList')).toBe(1);
+    expect(updates.get('CurrentLayerGroup')).toBe(1);
   });
 
   it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
-    await button(wrapper, '展开已选择图层').trigger('click');
-    expect(wrapper.find('[data-layer="csxhjctb_lrdl"]').exists()).toBe(false);
+    expect(wrapper.find('[data-current-row="resource:csxhjctb_lrdl"]').exists()).toBe(false);
 
-    await resourceRow(wrapper, 'csxhjctb_lrdl').get('input').setValue(true);
+    await resourceRow(wrapper, 'csxhjctb_lrdl').get('[data-node-action="add"]').trigger('click');
     expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('放大至第 9 级显示');
     // 数据源的错误照样上报（默认打印到控制台）
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -1589,7 +1665,7 @@ describe('CurrentMapPage', () => {
     }
     expect(wrapper.find('[data-box-select-overlay] [data-pointer-hint]').exists()).toBe(true);
     expect(updates.get('BoxSelectOverlay')).toBeGreaterThan(0);
-    for (const name of ['CurrentMapPage', 'MapToolbar', 'ResourceLayerPanel']) {
+    for (const name of ['CurrentMapPage', 'MapToolbar', 'CurrentMapLayerPanel']) {
       expect(updates.get(name) ?? 0).toBe(0);
     }
 
@@ -1601,7 +1677,7 @@ describe('CurrentMapPage', () => {
     const box = wrapper.get('[data-box-select-overlay] [data-box]').element as HTMLElement;
     expect([box.style.width, box.style.height]).toStrictEqual(['100px', '60px']);
     expect(updates.get('BoxSelectOverlay')).toBeGreaterThan(0);
-    for (const name of ['CurrentMapPage', 'MapToolbar', 'ResourceLayerPanel']) {
+    for (const name of ['CurrentMapPage', 'MapToolbar', 'CurrentMapLayerPanel']) {
       expect(updates.get(name) ?? 0).toBe(0);
     }
   });
@@ -1777,56 +1853,51 @@ describe('CurrentMapPage', () => {
     // 三维视图按渲染器给出的包围球算出建议的相机；jsdom 里画布的高度是 0
     const MODEL_CAMERA = tilesetCamera(MODEL_SPHERE, 0);
 
-    it('三维时左侧换成三维模型面板、第一次切过去才读清单；两边的收起各自保留', async () => {
+    it('二三维共用资源图层面板（ADR 0157）：进页面就读模型清单，二维里模型在目录最后；切到三维是"三维模型"页，面板不换，搜索词、收起都还在', async () => {
       const requests = mockManifest();
       const { wrapper } = await readyPage();
-      expect(wrapper.find('[data-resource-layer-panel]').exists()).toBe(true);
-      expect(requests()).toBe(0);
-
-      await switchTo(wrapper, '三维');
-      expect(wrapper.find('[data-resource-layer-panel]').exists()).toBe(false);
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(true));
       expect(requests()).toBe(1);
+      await wrapper.get('input[placeholder="搜索资源"]').setValue('苏州');
 
-      await button(wrapper, '收起三维模型').trigger('click');
-      await switchTo(wrapper, '二维');
-      expect(wrapper.find('button[aria-label="收起资源图层"]').exists()).toBe(true);
       await switchTo(wrapper, '三维');
-      expect(wrapper.find('button[aria-label="展开三维模型"]').exists()).toBe(true);
+      expect(wrapper.find('[data-layer-panel]').exists()).toBe(true);
+      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或城市"]').element.value).toBe('苏州');
+      expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(false);
+      expect(wrapper.find('[data-catalog-node="model-city:320500"]').exists()).toBe(true);
+      await button(wrapper, '收起资源图层').trigger('click');
+      await switchTo(wrapper, '二维');
+      expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(true);
       expect(requests()).toBe(1);
     });
 
-    it('切走的面板缓存起来：回来时搜索词这些界面状态还在', async () => {
+    it('二维里加入的模型只进列表："三维模型"组标"仅三维"、不交给三维视图；切到三维才加载', async () => {
       mockManifest();
-      const { wrapper } = await readyPage();
-      await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
-      await wrapper.get('input[placeholder="搜索资源"]').setValue('坑塘');
+      const page = await readyPage();
+      const { wrapper } = page;
+      await addModel(wrapper, 'sz-station');
+      const group = wrapper.get('[data-current-group="models"]');
+      expect(group.text()).toContain('仅三维');
 
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
-      await wrapper.get('input[placeholder="搜索模型或所属市"]').setValue('苏州');
-      await switchTo(wrapper, '二维');
-      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索资源"]').element.value).toBe('坑塘');
-      await switchTo(wrapper, '三维');
-      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或所属市"]').element.value).toBe('苏州');
+      expect(wrapper.get('[data-current-group="models"]').text()).not.toContain('仅三维');
+      expect(sceneOf(page).session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
     });
 
-    it('勾选交给三维视图；定位地下的模型只飞过去，没有单独的钻地（ADR 0097 第 5 节）', async () => {
+    it('加入的模型交给三维视图；定位地下的模型只飞过去，没有单独的钻地（ADR 0097 第 5 节）', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper } = page;
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
-
-      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
-      await settle();
+      await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       expect(scene.session.scene.current.tilesets.map(({ id, lighting }) => [id, lighting])).toStrictEqual([
         ['sz-station', 'headlight']
       ]);
 
       await scene.ready('sz-station');
-      await button(wrapper, '定位').trigger('click');
+      // 定位：当前图层里双击这一行（工具栏换成了移除，用户 2026-11-15）
+      await wrapper.get('[data-current-row="model:sz-station"]').trigger('dblclick');
       await settle();
       expect(page.map.flyToCalls.at(-1)).toMatchObject({
         center: MODEL_CAMERA.center,
@@ -1834,7 +1905,7 @@ describe('CurrentMapPage', () => {
         pitch: MODEL_CAMERA.pitch
       });
       expect(scene.session.scene.current.underground).toBeNull();
-      expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
+      expect(wrapper.get('[data-current-row="model:sz-station"]').text()).not.toContain('钻地');
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
 
@@ -1852,9 +1923,7 @@ describe('CurrentMapPage', () => {
       await wrapper.get('[data-map-cards] button:last-child').trigger('click');
       await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
-      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
-      await settle();
+      await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
       await button(wrapper, '测距').trigger('click');
@@ -1894,16 +1963,10 @@ describe('CurrentMapPage', () => {
       const page = await readyPage();
       const { wrapper } = page;
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
-      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
-      await settle();
+      await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
       const start = () => startRoute(wrapper);
-      const key = async (value: string) => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
-        await settle();
-      };
 
       // 正在测距时开始：开始漫游切回移动，漫游不因此退出（ADR 0084、0097）
       await button(wrapper, '测距').trigger('click');
@@ -1911,11 +1974,11 @@ describe('CurrentMapPage', () => {
       expect(scene.session.tool.active).toBe('browse');
       expect(scene.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
       expect(wrapper.find('[data-roam-panel]').exists()).toBe(true);
-      await key(' ');
+      await pressKey(' ');
       expect(scene.session.scene.current.roam).toMatchObject({ playing: true });
-      await key(' ');
+      await pressKey(' ');
       expect(scene.session.scene.current.roam).toMatchObject({ playing: false });
-      await key('Escape');
+      await pressKey('Escape');
       expect(scene.session.scene.current.roam).toBeUndefined();
       expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
 
@@ -1930,7 +1993,7 @@ describe('CurrentMapPage', () => {
       await start();
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
       // 退出漫游同时回到地面，马上能切回二维（ADR 0097 第 5 节）
-      await key('Escape');
+      await pressKey('Escape');
       expect(scene.session.scene.current.underground).toBeNull();
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
@@ -1941,40 +2004,32 @@ describe('CurrentMapPage', () => {
       const page = await readyCachedPage();
       const { wrapper, pageShown } = page;
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
-      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
-      await settle();
+      await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
       await startRoute(wrapper);
-      const key = async (value: string) => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
-        await settle();
-      };
 
       pageShown.value = false;
       await nextTick();
-      await key(' ');
-      await key('Escape');
+      await pressKey(' ');
+      await pressKey('Escape');
       expect(scene.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false });
 
       pageShown.value = true;
       await nextTick();
-      await key(' ');
+      await pressKey(' ');
       expect(scene.session.scene.current.roam).toMatchObject({ playing: true });
-      await key('Escape');
+      await pressKey('Escape');
       expect(scene.session.scene.current.roam).toBeUndefined();
     });
 
-    it('步行（ADR 0086、0097）：已加载里点"漫游"从步行开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
+    it('步行（ADR 0086、0097）：当前图层里点"漫游"从步行开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
       mockManifest();
       const requests = failNavigation();
       const page = await readyPage();
       const { wrapper } = page;
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
-      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
-      await settle();
+      await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
 
@@ -1996,7 +2051,7 @@ describe('CurrentMapPage', () => {
       expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
     });
 
-    it('漫游（ADR 0097）：左侧换成漫游面板，工具栏、功能面板、底图、视图控件和状态栏都隐藏，地面上的模型也一样；退出后原样显示，模型面板的搜索还在', async () => {
+    it('漫游（ADR 0097）：左侧换成漫游面板，工具栏、功能面板、底图、视图控件和状态栏都隐藏，地面上的模型也一样；退出后原样显示，资源图层面板的搜索还在', async () => {
       server.use(
         mock.get('*/3dt/manifest.json', () =>
           HttpResponse.json({
@@ -2017,12 +2072,14 @@ describe('CurrentMapPage', () => {
       const page = await readyPage();
       const { wrapper } = page;
       const labels = () => wrapper.findAll('button').map(item => item.attributes('aria-label') ?? item.text());
-      const search = () => wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或所属市"]');
+      const search = () => wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或城市"]');
       await button(wrapper, '图例').trigger('click');
       await switchTo(wrapper, '三维');
-      await vi.waitFor(() => expect(wrapper.find('[data-model="square"]').exists()).toBe(true));
+      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node^="model-city:"]').exists()).toBe(true));
+      // 搜索时目录全部展开
       await search().setValue('广');
-      await wrapper.get('[data-model="square"] input[type="checkbox"]').setValue(true);
+      await wrapper.get('[data-catalog-node="model:square"]').trigger('click');
+      await wrapper.get('[data-tool="add"]').trigger('click');
       await settle();
       const scene = sceneOf(page);
       await scene.ready('square');
@@ -2031,7 +2088,7 @@ describe('CurrentMapPage', () => {
       await settle();
       expect(scene.session.scene.current.roam).toMatchObject({ kind: 'route', speed: 4 });
       expect(scene.session.scene.current.underground).toBeNull();
-      expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(false);
+      expect(wrapper.find('[data-layer-panel]').exists()).toBe(false);
       expect(wrapper.get('[data-roam-panel]').text()).toContain('广场 · 倾斜摄影');
       for (const label of ['测距', '图例', '放大', '二维', '三维', '默认视角']) {
         expect(labels()).not.toContain(label);
@@ -2069,7 +2126,37 @@ describe('CurrentMapPage', () => {
     expect(wrapper.text()).not.toContain('资源目录加载失败');
 
     release?.();
-    await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
+    await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
+  });
+
+  it('三维里资源图层和模型同时在：资源分组照常画、图例完整、模型交给三维视图（app 注入的能力，ADR 0157；2026-11-15 核对补上）', async () => {
+    mockManifest();
+    const page = await readyPage();
+    const { wrapper } = page;
+    await vi.waitFor(() => expect(page.map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    await switchTo(wrapper, '三维');
+    await addModel(wrapper, 'sz-station');
+    await button(wrapper, '图例').trigger('click');
+    await settle();
+
+    const scene = sceneOf(page);
+    expect(scene.session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
+    expect(scene.session.style.current.layers.map(({ id }) => id)).toContain('resources-bgdc_dltb');
+    expect(wrapper.find('[data-legend="bgdc_dltb"]').exists()).toBe(true);
+    expect(wrapper.find('[data-legend-scene-note]').exists()).toBe(false);
+  });
+
+  it('资源目录读不到时三维里照样能加入模型：模型清单是单独读的（2026-11-15 审查发现，main 上三维的模型面板只看模型清单）', async () => {
+    server.use(mock.get(TREE_URL, () => HttpResponse.json({ code: 500, msg: '系统异常', success: false, data: null })));
+    mockManifest();
+    const page = await readyPage();
+    const { wrapper } = page;
+    await vi.waitFor(() => expect(wrapper.text()).toContain('资源目录加载失败'));
+
+    await switchTo(wrapper, '三维');
+    await addModel(wrapper, 'sz-station');
+    expect(wrapper.find('[data-current-row="model:sz-station"]').exists()).toBe(true);
+    expect(sceneOf(page).session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
   });
 
   it('画布尺寸变化后（相机不变、投影变了），测量标签和图钉立即重新投影', async () => {
@@ -2167,7 +2254,7 @@ describe('CurrentMapPage', () => {
     it('总开关关闭：五项偏好都不读，资源列表照常显示', async () => {
       const { wrapper, store, get } = await pageWithStoredImagery({ VITE_PREFERENCES_ENABLED: 'false' });
 
-      await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
+      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
       expect(basemapCardOf(wrapper).text()).toBe('矢量');
       expect(get).not.toHaveBeenCalled();
 
@@ -2179,7 +2266,7 @@ describe('CurrentMapPage', () => {
     it('资源图层的开关关闭：不读这一项，目录照常合并进资源列表', async () => {
       const { wrapper, get } = await pageWithStoredImagery({ VITE_PREFERENCE_RESOURCE_LAYERS: 'false' });
 
-      await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
+      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
       expect(get).not.toHaveBeenCalledWith('zhangsan/resource-layers');
     });
   });

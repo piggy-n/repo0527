@@ -1,6 +1,6 @@
 # 三维模型清单（`apps/yzt/public/3dt/manifest.json`）
 
-三维模型面板列出哪些模型、在哪个市、是什么、数据在哪（ADR 0081）。随产物发布到 `dist/3dt/manifest.json`，部署时可以直接替换（[overview.md](overview.md)"运行时文件"）。格式由 `features/scene-models/api.ts` 的 zod 校验，严格对象：多写、写错位置的字段都让整份清单不合法，面板显示加载失败。
+资源图层面板的目录里列出哪些三维模型、在哪个市、是什么、数据在哪（ADR 0081、0157）。随产物发布到 `dist/3dt/manifest.json`，部署时可以直接替换（[overview.md](overview.md)"运行时文件"）。格式由 `features/scene-models/api.ts` 的 zod 校验，严格对象：多写、写错位置的字段都让整份清单不合法，目录最后提示"三维模型清单加载失败"。
 
 模型数据不入库，也不进构建产物（ADR 0083、0141）：本机放在 `local/3dt/`，服务器上由 nginx 在 `/3dt/` 下提供或转发（[local-files.md](local-files.md)、[deployment.md](../deployment.md)）。
 
@@ -38,7 +38,7 @@
 | 字段 | 说明 |
 |---|---|
 | `tileset` | `oblique`、`indoor`：`tileset.json` 的地址，相对清单，按段编码（见"目录层级"） |
-| `effects` | `white`：`[{ id, label, tileset }]`，第一种是默认效果 |
+| `effects` | `white`：`[{ id, label, tileset }]`，第一种是默认效果；`label` 显示在当前图层行尾 56 宽的框里，写短名（如"无纹理""效果1"），超过四个字会省略 |
 | `maximumScreenSpaceError` | 可选，屏幕误差上限（正数）；不写用默认值 8，只给放不下的模型写（[map-three.md](../modules/map-three.md)"渲染"的瓦片） |
 | `spawn` | 可选，步行的出生点 `{ lng, lat, height, heading }`：脚下地板的椭球高，朝向是正北为 0、顺时针的度数 |
 | `routes` | 可选，预置的漫游路线 `[{ id, name, path }]`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`，至少两个点；头顶低的地方可以多一个值，是视点在地板以上的米数（0～1.6，不写是 1.6，ADR 0156 第 3 节） |

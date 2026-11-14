@@ -27,7 +27,7 @@ const MANIFEST = {
       underground: false,
       effects: [
         { id: 'plain', label: '无纹理', tileset: 'SZ_WhiteModel/plain/tileset.json' },
-        { id: 'window', label: '内置效果1', tileset: 'SZ_WhiteModel/window/tileset.json' }
+        { id: 'window', label: '效果1', tileset: 'SZ_WhiteModel/window/tileset.json' }
       ]
     },
     {
