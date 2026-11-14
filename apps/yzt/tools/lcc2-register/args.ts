@@ -4,14 +4,15 @@ import { ToolError } from './errors.ts';
 
 export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement（ADR 0149 第 4 节，docs/config/3dt-manifest.md）
 
-用法：pnpm --filter yzt lcc2:register <索引> [选项]
+用法：pnpm --filter yzt lcc2:register <索引> --datum <米> [选项]
 
   <索引>                 .lcc2 索引的路径或完整的 http(s) 地址；相对路径从 local/3dt/ 下找（worktree 用 YZT_LOCAL_DIR 指回主目录），
                          设了环境变量 YZT_3DT_PROXY 时从 <它>/3dt/ 读，中文照写，工具会编码；
                          同级要有 info/poses.json（扫描轨迹）和索引 root.meshFiles 列的碰撞网格（data/mesh/*.ply）
   --shift <东,北,上>     人工修正（米），加在拟合的结果上，移动泼溅和网格；轨迹核对算上它
   --yaw <度>             人工的偏航（度），绕局部系原点逆时针转；拟合在转过的轨迹上求平移，轨迹核对算上它
-  --datum <米>           高程基准的差（米）：整体抬高，泼溅、网格、轨迹一起动，轨迹核对不算它
+  --datum <米>           必填。高程基准的差（米）：整体抬高，泼溅、网格、轨迹一起动，轨迹核对不算它；
+                         徐州的数据写 5.47，别处的数据没有量出差值时写 0（docs/config/3dt-manifest.md）
   --no-fit               不拟合轨迹和网格之间的平移，只用人工修正（轨迹不可信时）
   --roam                 再给出步行的出生点（清单的 spawn），并每 20 米列一行轨迹的概要，用来挑路线段（ADR 0156 第 4 节）
   --spawn-at <米>        出生点从轨迹的这个米数往后找（扫描不是从入口开始时），带上它就是 --roam
@@ -26,6 +27,7 @@ export interface Options {
   readonly index: string;
   readonly shift: Vec3;
   readonly yaw: number;
+  /** 高程基准的差：必填，没有默认值（漏写时按 0 算，模型会悄悄低几米） */
   readonly datum: number;
   readonly fit: boolean;
   /** 给出出生点、轨迹概要和路线 */
@@ -83,6 +85,7 @@ export function parseOptions(argv: readonly string[]): Options {
     help: false
   };
   const positional: string[] = [];
+  let datumGiven = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     // pnpm 会把 -- 原样传进来
@@ -116,6 +119,7 @@ export function parseOptions(argv: readonly string[]): Options {
         break;
       case '--datum':
         options.datum = finite(name, value());
+        datumGiven = true;
         break;
       case '--roam':
         noValue();
@@ -152,5 +156,9 @@ export function parseOptions(argv: readonly string[]): Options {
     throw new ToolError(`要给且只给一个 .lcc2 索引的路径，现在是 ${positional.length} 个`);
   }
   options.index = positional[0];
+  // 没有默认值：徐州的数据漏写时按 0 算，高度会悄悄低 5.47 米
+  if (!datumGiven) {
+    throw new ToolError('要写 --datum <米>（高程基准的差）：徐州的数据写 5.47，别处的数据没有量出差值时写 --datum 0');
+  }
   return options;
 }
