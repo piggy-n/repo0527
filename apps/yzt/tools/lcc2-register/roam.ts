@@ -308,7 +308,6 @@ function straighten(points: readonly RoamPoint[], grid: FloorGrid): RoamPoint[] 
   return simplify(placed, STRAIGHT_RESIDUAL);
 }
 
-
 /**
  * 轨迹上 from～to 米这一段做成路线：去掉两头脚下没有表面的点，中间的按前后插值；地板取中位数去抖，眼高按这个地板算、取前后的最小值，
  * 再拉直、抽稀（grid 是 trackOf 用的那份）。段不在轨迹范围里、有效的点不到两个时报错
