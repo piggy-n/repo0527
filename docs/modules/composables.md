@@ -81,7 +81,7 @@ useSortableList(list, {
 
 SortableJS 拖动时自己移动 DOM，Vue 不知道。放下后组合式函数先把元素放回原位，再调用 `onMove`：顺序只在拥有者里，Vue 按新的顺序重新渲染，DOM 和虚拟 DOM 保持一致。调用方不要在 `onMove` 里再动 DOM。
 
-键盘排序不经过它：手柄上按上下方向键，由组件直接调用拥有者同样的操作（写法见 `features/resource-map/components/CheckedLayerList.tsx`）。
+键盘排序不经过它：手柄上按上下方向键，由组件直接调用拥有者同样的操作（写法见 `shared/map/layer-panel/CurrentLayerGroup.tsx`）。
 
 ### 测试
 

@@ -51,7 +51,7 @@ if (preferences) {
 | `useBoundaries` | `boundaries` | 三个级别是否显示、透明度 | 读到后整体替换 |
 | `useResourceLayers` | `resource-layers` | 每个资源的勾选、透明度、年份，面板顺序 | 等目录和存储都就绪，按 ADR 0041 第 3 节合并；顺序不能有重复、和设置一一对应，否则整条作废 |
 | `useResourceSymbols` | `resource-symbols` | 每个资源的统一样式、样式方式（和默认方式不同、由调过的内容也推不出时才记）、分类样式各取值，都只记和默认（叠加了发布的默认符号）不同的字段（颜色已规范化），不存临时预览 | 读到后整体替换，空的部分去掉，目录里没有了的资源也保留；有一个字段越界、颜色解析不了，整条作废（ADR 0044、0154） |
-| `useResourcePanelLayout` | `resource-panel` | 资源图层面板是否收起、"已选择图层"区的高度比例 | 读到后整体替换 |
+| `useResourcePanelLayout` | `resource-panel` | 资源图层面板是否收起、"当前图层"段的高度比例（ADR 0157） | 读到后整体替换 |
 
 ## 开关（ADR 0140）
 

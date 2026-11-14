@@ -174,9 +174,9 @@ packages/icons/
 | `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
 | `close` | `x` | 取消勾选、关闭 |
 | `info` | `info-circle` | 带提示的信息图标 |
-| `status-error` | 自制（ADR 0059） | "已选择图层"的错误状态：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
-| `status-warning` | 自制（ADR 0059） | "已选择图层"的警告状态：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
-| `status-zoom` | `zoom-in` | "已选择图层"的说明状态（当前级别不显示） |
+| `status-error` | 自制（ADR 0059） | 当前图层的错误状态（资源、模型加载失败）：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
+| `status-warning` | 自制（ADR 0059） | 当前图层的警告状态、请求状态的"N 项加载失败"：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
+| `status-zoom` | `zoom-in` | 当前图层的说明状态（当前级别不显示） |
 | `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 | `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |

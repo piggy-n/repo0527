@@ -287,7 +287,7 @@ store.clear();
 
 **输入、拾取、投影与工具（5B.3，ADR 0034）**：
 
-- `pick(point, options?)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度。`options.hover`（`PickOptions`，ADR 0149）标出每帧都会调的悬停拾取：状态栏指针下的读数、绘制和逐点编辑跟着鼠标的预览传它，点击的落点、测量、坐标定位、点选不传。三维里悬停时不打高斯泼溅（射线拾取每次可能几十毫秒），打到泼溅的地方按后面的模型或地面算；`ToolView`、`MapView`、渲染器的 `pick` 都带这个参数。`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
+- `pick(point, options?)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度。`options.hover`（`PickOptions`，ADR 0149）标出每帧都会调的悬停拾取：状态栏指针下的读数、绘制和逐点编辑跟着鼠标的预览传它，点击的落点、测量、坐标定位、点选不传。三维里悬停时不打高斯泼溅（射线拾取每次可能几十毫秒），打到泼溅的地方按后面的模型或地面算；`ToolView`、`MapView`、渲染器的 `pick` 都带这个参数。`options.ground`（ADR 0157）只打地面，跳过模型和泼溅：资源的点/框选用它取框和容差框的四角，二维里没有区别。`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
 - 订阅 MapLibre 的 `mousedown`、`mousemove`、`mouseup`、`click`、`dblclick`、`mouseout`，转成 `down`、`move`、`up`、`click`、`dblclick`、`leave`，带画布上的点、按键和四个修饰键；地图容器上的 `keydown` 转成 `{ type: 'key', key }`（地图获得焦点时才收到，不影响页面上的输入框）
 - 当前工具是临时任务时，切换工具和进入 ready（首次就绪、重建、恢复显示）时把键盘焦点移到画布上（`focus({ preventScroll: true })`）：临时任务多由工具栏、面板上的按钮激活，焦点还在按钮上，Esc 到不了地图（5B 收尾时用户发现拾取开启后按 Esc 没反应）；加载期间开启的临时任务，就绪后补上焦点。常驻模式不移，进入页面时（"移动"）不会抢走焦点
 - 只有 `ready` 的视图把输入交给 `session.tool.dispatch`：初始化中、暂停（切到三维）时不转交，二三维切换时只有当前显示的视图在转交。交给工具的是冻结的 `{ kind, pick, project }`
@@ -313,6 +313,13 @@ store.clear();
 - 只在 `ready` 时可用；交给工具的 `ToolView` 和上下文的 `view` 都带它
 
 **这一步没做的**：三维期间的按需追上留到做三维时。
+
+### 数据源的瓦片请求（ADR 0158）
+
+- `SourceActivityTracker`（`view/source-activity.ts`）按数据源统计"这一轮"的瓦片：空闲以后请求第一张瓦片时开始，记请求、到了、失败的张数和开始、结束的时间（同 `performance.now`）。取消的不算请求，全部取消时这一轮不留下；不是这一轮在等的瓦片（重新加载）的结果不算；结束后保留到下一轮开始。读到的快照不可变，没有变化时是同一个对象
+- `MapLibreView` 把 `dataloading`（带 `tile` 的是新瓦片，已有瓦片的重新加载不发）、`sourcedata`、`dataabort` 和带 `tile` 的 `error` 交给它，瓦片按 `tile.tileID.key` 区分。MapLibre 6.12 对返回 404 的瓦片不发任何事件，没有变化的瓦片也不发：数据源的事件带着 `isSourceLoaded` 为 true 时、地图 `idle` 时，还在等的算到了
+- 数据源移除（包括换地址的先移除再添加）、样式整体重建时忘掉，和数据源错误一样
+- `MapView` 的 `sourceActivity`、`onSourceActivityChange` 是可选的；每张瓦片都可能通知一次，map-vue 的上下文一帧最多读一次
 
 ### app 的地图运行时与开发页
 

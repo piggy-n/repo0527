@@ -1,6 +1,6 @@
 # 三维模型清单（`apps/yzt/public/3dt/manifest.json`）
 
-三维模型面板列出哪些模型、在哪个市、是什么、数据在哪（ADR 0081）。随产物发布到 `dist/3dt/manifest.json`，部署时可以直接替换（[overview.md](overview.md)"运行时文件"）。格式由 `features/scene-models/api.ts` 的 zod 校验，严格对象：多写、写错位置的字段都让整份清单不合法，面板显示加载失败。
+资源图层面板的目录里列出哪些三维模型、在哪个市、是什么、数据在哪（ADR 0081、0157）。随产物发布到 `dist/3dt/manifest.json`，部署时可以直接替换（[overview.md](overview.md)"运行时文件"）。格式由 `features/scene-models/api.ts` 的 zod 校验，严格对象：多写、写错位置的字段都让整份清单不合法，目录最后提示"三维模型清单加载失败"。
 
 模型数据不入库，也不进构建产物（ADR 0083、0141）：本机放在 `local/3dt/`，服务器上由 nginx 在 `/3dt/` 下提供或转发（[local-files.md](local-files.md)、[deployment.md](../deployment.md)）。
 

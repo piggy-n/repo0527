@@ -38,7 +38,7 @@ $env:YZT_LOCAL_DIR = 'C:\work\repo0527\local'
 pnpm --filter yzt dev
 ```
 
-不设时 worktree 的 `local/` 是空的：`/3dt/manifest.json` 正常，模型在三维模型面板里显示加载失败，原型地址回退到单页应用。
+不设时 worktree 的 `local/` 是空的：`/3dt/manifest.json` 正常，加入的模型在三维里显示加载失败，原型地址回退到单页应用。
 
 工具脚本的默认输出同样跟着这个变量，所以 worktree 指回主目录后，实测和探查的结果也写进主目录。
 

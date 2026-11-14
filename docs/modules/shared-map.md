@@ -46,7 +46,9 @@
 | `view-controls/MapViewControls.tsx` | 基础组：层级、放大、缩小、指北针、行政区边界（页面给出拥有者才有）、默认视角、2D/3D（不支持三维的页面没有）（ADR 0053 第 3 节、ADR 0058、ADR 0111、ADR 0128） |
 | `status-bar/status-bar.ts` | 状态栏的纯函数：比例尺的整齐长度、视点高度的写法、显示的角度、放不下时的取舍（ADR 0053 第 5 节、ADR 0080 第 6 节） |
 | `status-bar/useMapReadout.ts` | 状态栏的读数：比例尺（三维是视点高度）、鼠标所在或画布中心的经纬度、角度，步行时的朝向，从地图上下文推导。鼠标所在的经纬度用悬停的拾取（跳过高斯泼溅，ADR 0149）：停在泼溅上时读的是后面的模型或地面，斜着看有视差 |
-| `status-bar/MapStatusBar.tsx` | 左下角的状态栏：只显示，按量出的宽度取舍 |
+| `status-bar/MapStatusBar.tsx` | 左下角的状态栏：只显示，按量出的宽度取舍；插槽 `after` 紧跟在右边（请求状态），宽度先让出来 |
+| `layer-panel/` | 资源图层面板的通用部件（ADR 0157）：外壳、目录树、当前图层的一组、工具栏、浮层、右键菜单、行的公共样式，目录的选择、节点、浮层位置、上下分割的纯函数（见"资源图层面板"） |
+| `request-status/` | 地图数据的请求状态（ADR 0158）：条目和明细 `RequestStatusChip`、`useRequestStatus`、纯函数（见"请求状态"） |
 | `area/area-geometry.ts` | 自定义范围的几何：限值 `AREA_LIMITS`、坐标检查、整理成有效的面、节点多时简化、面积与周长（见"自定义范围"，ADR 0121） |
 | `area/area-file.ts` | 读范围文件：GeoJSON、Shapefile 的压缩包或同一组文件；读不了时返回原因 |
 | `area/area-coverage.ts` | 范围与行政区求交：全部覆盖、部分覆盖、只在边界相交，以及在外面的面积；判定的容差 `COVER_RULES` |
@@ -334,6 +336,41 @@ const readout = useMapReadout(map);
 - Shift + 方向键旋转、俯仰后显示"旋转 -1° 俯仰 10°"
 - 比例尺和级别相符：5.4 级时 100 km、约 62 像素
 - 768 宽：展开资源面板时只剩比例尺（可用 128，卡片现在是两个 80 宽的联调按钮），收起后全部显示
+
+## 资源图层面板（ADR 0157）
+
+现状底图左侧的面板，二三维共用。和业务无关的部件在 `shared/map/layer-panel`，各 feature 给出目录节点和行的内容，`pages/current-map/layer-panel/CurrentMapLayerPanel` 拼起来。界面细节见 [current-map-reference.md](../design/current-map-reference.md)"资源图层面板"。
+
+| 文件 | 内容 |
+|---|---|
+| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；登记为贴左边的悬浮元素 |
+| `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：Ctrl、Shift 多选，键盘，行尾的添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
+| `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
+| `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签（二维里的模型组） |
+| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示）、右键菜单、开在面板右边的浮层（箭头对着选中的行，手机宽度时盖在下段上） |
+| `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度、在滚动区里露出一行（纯函数和小工具） |
+| `layer-row.module.scss` | 行的公共部分：符号、名称、紧跟名称的状态、行尾的框（宽 72）、移除、加载中的转圈 |
+
+- 选中、浮层、菜单这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
+- 页面给 `reveal` 一个新对象时，面板在当前图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行）；`requests` 给出加载超过 0.4 秒的行，资源行在名称后面转圈
+
+## 请求状态（ADR 0158）
+
+```tsx
+// 页面 setup：来源从各拥有者推导；条目放在状态栏的 after 插槽里
+const requests = useRequestStatus(() => [
+  ...resourceRequests(resources.state.value, map.sourceActivity.value),
+  ...(map.dimension.value === '3d' ? modelRequests(models) : [])
+]);
+<MapStatusBar readout={readout} format={format}>
+  {{ after: () => [<RequestStatusChip status={requests} selectable={key => key !== 'basemap'} onSelect={reveal} onRetry={retry} />] }}
+</MapStatusBar>
+```
+
+- 来源 `RequestSource`：瓦片是一个或几个数据源这一轮的请求（上下文的 `sourceActivity`，几个合成一项用 `mergedActivity`），模型只有加载中、就绪、失败。`useRequestStatus` 把它们整理成明细的各项，模型按状态变化记下开始、结束的时间
+- 时钟只在有加载、刚结束时每 250 毫秒走一格，只在 `RequestStatusChip` 里读，不带动页面重渲染；`loadingKeys`（加载超过 0.4 秒的项）内容不变时是同一个集合，用它的行不跟着时钟重渲染
+- 条目和明细的规则是纯函数：`requestSummary`（加载中、几项失败、已加载完成、不显示）、`requestGroups`、`requestRowText`；常量 `SHOW_DELAY`（0.4 秒）、`DONE_HOLD`（1.5 秒）、`SLOW_AFTER`（5 秒）
+- 条目自己拦截鼠标（状态栏不拦截）；明细用 `useLightDismiss`，点外面、Esc 关闭
 
 ## 自定义范围（ADR 0121）
 

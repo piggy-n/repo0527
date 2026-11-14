@@ -45,7 +45,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `false` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，各级都请求瓦片，低级别的瓦片可能有十几 MB。**现在暂时关着：** 用户 2026-11-04 确定先不打开（`88c4a99` 改成 `false`），层级表和部署的文件都不生效；层级表和实测的瓦片大小也还对不上（水域面层不在表里，永久基本农田图斑的 8 级偏低）。打开前按 [backlog](../backlog.md)"最小显示级别"两条重测层级，再在真实后端上换一次文件确认 |
 
-三维引擎不再用变量选择：Cesium 引擎已移除，`VITE_MAP_3D_ENGINE` 跟着删掉，三维只有 MapLibre + Three.js（ADR 0153）。三维里暂不显示资源图层、点/框选不识别，由 app 注入的能力决定，没有开关（ADR 0153）。
+三维引擎不再用变量选择：Cesium 引擎已移除，`VITE_MAP_3D_ENGINE` 跟着删掉，三维只有 MapLibre + Three.js（ADR 0153）。三维里显示资源图层、点/框选识别，由 app 注入的能力决定，没有开关（ADR 0157）。
 
 ## 两类变量
 
