@@ -340,11 +340,19 @@ export class ThreeSceneRenderer implements SceneRenderer {
       }
     }
     // 泼溅是半透明的、不写深度：在不透明的瓦片、模型之后画，用它们的深度做遮挡
+    // 隔离一份泼溅时，别的每帧按看不见更新、放掉数据；还占着的时候接着画帧，放完以后漫游的那份才拿全部预算
+    const isolating = lifted !== null && this.#splats.has(lifted.modelId);
     for (const [id, entry] of this.#splats) {
       if (lifted && id !== lifted.modelId) {
-        entry.skipFrame();
+        entry.skipFrame(isolating);
       } else if (entry.prepare(frame, surface)) {
         webgl.render(entry.scene, entry.camera);
+      }
+    }
+    if (isolating) {
+      this.#shareSplatBudget();
+      if ([...this.#splats].some(([id, entry]) => id !== lifted.modelId && entry.holding)) {
+        surface.requestRepaint();
       }
     }
     // 光环在瓦片之后画：深度测试用瓦片写下的深度，墙和柱子挡得住
@@ -739,13 +747,21 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#surface?.requestRepaint();
   }
 
-  // 总预算按份平分：多加一份不会让总的高斯个数翻倍。隔离一份泼溅时它拿全部预算，别的不画、只留 1（ADR 0156 R.5）
+  // 总预算按份平分：多加一份不会让总的高斯个数翻倍。隔离一份泼溅时别的不画、预算设成 1、放掉数据（render 里），
+  // 都放掉以后隔离的那份拿全部预算，之前仍按平分：任何时候总数不超过预算（ADR 0156 R.5）
   #shareSplatBudget(): void {
     const isolated = this.#activeLift()?.modelId;
     const alone = isolated !== undefined && this.#splats.has(isolated);
     const share = Math.max(1, Math.floor(this.#splatBudget / Math.max(1, this.#splats.size)));
+    const released = alone && [...this.#splats].every(([id, entry]) => id === isolated || !entry.holding);
     for (const [id, entry] of this.#splats) {
-      entry.setBudget(alone ? (id === isolated ? this.#splatBudget : 1) : share);
+      if (!alone) {
+        entry.setBudget(share);
+      } else if (id === isolated) {
+        entry.setBudget(released ? this.#splatBudget : share);
+      } else {
+        entry.setBudget(1);
+      }
     }
   }
 

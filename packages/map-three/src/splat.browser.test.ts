@@ -363,13 +363,13 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     expect(pickedHeight(ctx, { x: MIDDLE.x + 90, y: MIDDLE.y })).toBeCloseTo(5, 0);
   });
 
-  it('隔离一份泼溅（ADR 0156 R.5）：只画它、底色清屏，它拿全部预算；撤掉隔离后照常画、预算平分', async () => {
+  it('隔离一份泼溅（ADR 0156 R.5）：只画它、底色清屏；别的放掉数据以后它才拿全部预算，总数不超过；撤掉后照常画、平分', async () => {
     const ctx = await setup();
     const glb = await boxGlb(8);
     onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, 8), '/box/box.glb': glb }));
     const box: TilesetLayer = { id: 'box', url: `${FIXTURE_ORIGIN}/box/tileset.json`, show: true, lighting: 'sun', attempt: 0 };
-    // 立方体挡在正方形前面（同上一个用例）；另一份泼溅在 2 公里外，只用来分预算
-    const far = square({ id: 'far', placement: { lng: MODEL_AT[0] + 0.02, lat: MODEL_AT[1], height: GROUND, heading: 0 } });
+    // 立方体挡在正方形前面（同上一个用例）；另一份泼溅也在画面里（低 5 米），加载了数据、占着一半预算
+    const far = square({ id: 'far', placement: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 0, heading: 0 } });
     ctx.session.scene.set({
       tilesets: [box],
       splats: [square({ placement: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 5, heading: 0 } }), far],
@@ -378,6 +378,7 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     await until(() => ctx.view.sceneStatus.get('box')?.state === 'ready', '立方体就绪');
     await boxContentDrawn(ctx);
     await splatDrawn(ctx);
+    await until(() => (ctx.renderer.inspect().splats.far?.gpuBytes ?? 0) > 0, '另一份泼溅加载了数据');
     await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '立方体挡住泼溅');
     const total = ctx.renderer.inspect().splatBudget;
     const budgets = () => {
@@ -393,6 +394,10 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     // 角上没有模型的地方是底色（30, 34, 38），不是二维
     const [r, g, b] = pixel(ctx.canvas, corner);
     expect([Math.abs(r - 30), Math.abs(g - 34), Math.abs(b - 38)].every(difference => difference <= 2)).toBe(true);
+    // 另一份还占着数据时，隔离的那份仍按平分；它放掉（库的冷却 2 秒）以后才拿全部预算
+    expect(budgets()).toStrictEqual([total / 2, 1]);
+    await until(() => budgets()[0] === total, '另一份放掉数据后拿全部预算');
+    expect(ctx.renderer.inspect().splats.far?.gpuBytes).toBe(0);
     expect(budgets()).toStrictEqual([total, 1]);
 
     ctx.renderer.setLift(null);
