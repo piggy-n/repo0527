@@ -43,6 +43,9 @@ function mountLegend() {
   const active = ref(true);
   const scene = ref(false);
   const editing = ref(false);
+  // 图例浮层正在显示的资源，和报告给页面的正在编辑的资源（ADR 0157）
+  const yieldCode = ref<string | null>(null);
+  const editingCodes: (string | null)[] = [];
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const catalog = shallowRef(CATALOG);
@@ -57,9 +60,11 @@ function mountLegend() {
           symbols={symbols}
           active={active.value}
           scene={scene.value}
+          yieldCode={yieldCode.value}
           onEditingChange={value => {
             editing.value = value;
           }}
+          onEditingCode={code => editingCodes.push(code)}
         />
         {active.value && !editing.value && symbols.overrides.value.size > 0 && <ResourceLegendReset symbols={symbols} />}
       </>
@@ -69,7 +74,7 @@ function mountLegend() {
   if (!owner || !symbolsOwner) {
     throw new Error('页面没有创建资源图层和符号的拥有者');
   }
-  return { wrapper, owner, symbols: symbolsOwner, active, scene };
+  return { wrapper, owner, symbols: symbolsOwner, active, scene, yieldCode, editingCodes };
 }
 
 function button(wrapper: VueWrapper, label: string) {
@@ -490,5 +495,25 @@ describe('ResourceLegend', () => {
     await nextTick();
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
     expect(wrapper.find('[data-landuse="0101"]').exists()).toBe(true);
+  });
+
+  it('正在显示的编辑器对着的资源报告给页面，隐藏时报 null；图例浮层开着同一个资源时回到浏览（ADR 0157）', async () => {
+    const { wrapper, active, yieldCode, editingCodes } = mountLegend();
+    await nextTick();
+    expect(editingCodes).toStrictEqual([null]);
+    await button(wrapper, '编辑水田样式').trigger('click');
+    expect(editingCodes.at(-1)).toBe('bgdc_dltb');
+
+    active.value = false;
+    await nextTick();
+    expect(editingCodes.at(-1)).toBeNull();
+    active.value = true;
+    await nextTick();
+    expect(editingCodes.at(-1)).toBe('bgdc_dltb');
+
+    yieldCode.value = 'bgdc_dltb';
+    await nextTick();
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+    expect(editingCodes.at(-1)).toBeNull();
   });
 });

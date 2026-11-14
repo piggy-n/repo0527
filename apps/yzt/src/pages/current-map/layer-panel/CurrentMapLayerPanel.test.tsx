@@ -79,6 +79,7 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
     loadingKeys: computed(() => loadingKeys.value)
   };
   const reveal = shallowRef<{ readonly key: string } | null>(null);
+  const legendYield = shallowRef<string | null>(null);
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const catalog = shallowRef(CATALOG);
@@ -98,6 +99,7 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
         modelsStatus={modelsStatus}
         requests={requests}
         reveal={reveal.value}
+        legendYield={legendYield.value}
         onLegendCode={(code: string | null) => legendCodes.push(code)}
         onRetryModels={onRetryModels}
       />
@@ -108,7 +110,18 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
   if (!owner || !models || !context) {
     throw new Error('页面没有创建拥有者');
   }
-  return { wrapper, owner, models, map: context, sceneStatus, legendCodes, onRetryModels, loadingKeys, reveal };
+  return {
+    wrapper,
+    owner,
+    models,
+    map: context,
+    sceneStatus,
+    legendCodes,
+    onRetryModels,
+    loadingKeys,
+    reveal,
+    legendYield
+  };
 }
 
 const node = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-catalog-node="resource:${code}"]`);
@@ -383,5 +396,37 @@ describe('CurrentMapLayerPanel', () => {
     await nextTick();
     expect(owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
     expect(owner.state.value.displays.get('bgdc_dltb')?.year).toBe(2024);
+  });
+
+  it('键盘的 Delete 移除以后焦点到新选中的行；选中的行在收起的组里时 Tab 落到第一行（2026-11-14 审查发现）', async () => {
+    const { wrapper, owner, models } = await mountPanel();
+    owner.add(['bgdc_cjdcq']);
+    models.add(['white']);
+    await nextTick();
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    wrapper.get<HTMLElement>('[data-current-row="resource:bgdc_cjdcq"]').element.focus();
+    await row(wrapper, 'bgdc_cjdcq').trigger('keydown', { key: 'Delete' });
+    await nextTick();
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+    expect(document.activeElement).toBe(row(wrapper, 'bgdc_dltb').element);
+
+    // 选中的模型所在的组收起：二维图层的第一行能用 Tab 进入
+    await wrapper.get('[data-current-row="model:white"]').trigger('click');
+    await wrapper.get('[data-current-group="models"] button[aria-expanded]').trigger('click');
+    expect(wrapper.find('[data-current-row="model:white"]').exists()).toBe(false);
+    expect(row(wrapper, 'bgdc_dltb').attributes('tabindex')).toBe('0');
+  });
+
+  it('右侧图例开始编辑图例浮层正开着的同一个资源时，图例浮层关掉，后打开编辑的一方为准（2026-11-14 审查发现）', async () => {
+    const { wrapper, legendYield } = await mountPanel();
+    await row(wrapper, 'bgdc_dltb').get('[data-row-symbol]').trigger('click');
+    expect(popover()).not.toBeNull();
+
+    legendYield.value = 'bgdc_cjdcq';
+    await nextTick();
+    expect(popover()).not.toBeNull();
+    legendYield.value = 'bgdc_dltb';
+    await nextTick();
+    expect(popover()).toBeNull();
   });
 });

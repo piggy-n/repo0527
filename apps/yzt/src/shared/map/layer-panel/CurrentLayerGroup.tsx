@@ -91,6 +91,12 @@ export const CurrentLayerGroup = defineComponent({
       void focusHandle(key);
     };
 
+    // 移动以后 Vue 挪动行的 DOM，挪走的行失去焦点：重新聚焦到它
+    const focusRow = async (key: string) => {
+      await nextTick();
+      list.value?.querySelector<HTMLElement>(`[data-current-row="${CSS.escape(key)}"]`)?.focus();
+    };
+
     const onRowKeydown = (event: KeyboardEvent, key: string) => {
       if (event.target !== event.currentTarget) {
         return;
@@ -101,6 +107,7 @@ export const CurrentLayerGroup = defineComponent({
         const to = index + step;
         if (to >= 0 && to < props.keys.length) {
           emit('move', key, to);
+          void focusRow(key);
         }
       } else if (step !== 0) {
         emit('step', key, step);

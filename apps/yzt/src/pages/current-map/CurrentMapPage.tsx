@@ -110,6 +110,8 @@ export const CurrentMapPage = defineComponent({
     const legendEditing = ref(false);
     // 当前图层的图例浮层正在显示的资源：右侧图例在编辑同一个资源时回到浏览（ADR 0157）
     const legendCode = ref<string | null>(null);
+    // 右侧图例正在编辑的资源：图例浮层开着同一个资源时关掉（ADR 0157）
+    const legendEditingCode = ref<string | null>(null);
     const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences, symbols });
     const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
@@ -340,6 +342,7 @@ export const CurrentMapPage = defineComponent({
           models={models}
           requests={requests}
           reveal={revealed.value}
+          legendYield={legendEditingCode.value}
           status={status}
           modelsStatus={modelsStatus}
           collapsed={!sides.left.value}
@@ -424,6 +427,7 @@ export const CurrentMapPage = defineComponent({
                         scene={resourcesHidden}
                         yieldCode={legendCode.value}
                         onEditingChange={value => (legendEditing.value = value)}
+                        onEditingCode={code => (legendEditingCode.value = code)}
                       />
                     ],
                     // 三维里不显示资源图层时图例只有说明，不显示全部恢复默认（ADR 0080 第 5 节）

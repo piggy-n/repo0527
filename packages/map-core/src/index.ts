@@ -196,7 +196,8 @@ export {
   type SourceActivities,
   type SourceActivity,
   SourceActivityTracker,
-  type TileOutcome
+  type TileOutcome,
+  type TileProbe
 } from './view/source-activity';
 export {
   type FitBoundsOptions,

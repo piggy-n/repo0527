@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 import { CurrentLayerGroup } from './CurrentLayerGroup';
 
 // 行的内容像各 feature 一样放在插槽里：名称和一个按钮
@@ -84,5 +84,40 @@ describe('CurrentLayerGroup', () => {
     await row('c').get('[data-drag-handle="layers"]').trigger('keydown', { key: 'ArrowDown' });
 
     expect(events).toStrictEqual([['select', 'c'], ['move', 'c', 1]]);
+  });
+
+  it('Alt 加上下移动以后焦点还在这一行，可以接着移动（2026-11-14 审查发现）', async () => {
+    const keys = ref(['a', 'b', 'c']);
+    const wrapper = mount(
+      defineComponent(() => () => (
+        <CurrentLayerGroup
+          group="layers"
+          title="二维图层"
+          keys={keys.value}
+          selected="c"
+          tabbable="c"
+          visibleOf={() => true}
+          nameOf={key => key}
+          dragTip="拖动调整叠放顺序"
+          onMove={(key: string, to: number) => {
+            keys.value = keys.value.filter(item => item !== key).toSpliced(to, 0, key);
+          }}
+        >
+          {{ row: ({ key }: { key: string }) => [<span data-row-text>{key}</span>] }}
+        </CurrentLayerGroup>
+      )),
+      { attachTo: document.body }
+    );
+    const row = () => wrapper.get<HTMLElement>('[data-current-row="c"]');
+    row().element.focus();
+
+    await row().trigger('keydown', { key: 'ArrowUp', altKey: true });
+    await nextTick();
+    expect(keys.value).toStrictEqual(['a', 'c', 'b']);
+    expect(document.activeElement).toBe(row().element);
+    await row().trigger('keydown', { key: 'ArrowUp', altKey: true });
+    await nextTick();
+    expect(keys.value).toStrictEqual(['c', 'a', 'b']);
+    expect(document.activeElement).toBe(row().element);
   });
 });

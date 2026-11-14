@@ -60,8 +60,7 @@ interface FakeEvent {
   readonly error?: Error;
   readonly sourceId?: string;
   readonly dataType?: 'source' | 'style';
-  readonly isSourceLoaded?: boolean;
-  readonly tile?: { readonly tileID: { readonly key: string } };
+  readonly tile?: { readonly tileID: { readonly key: string }; readonly state?: string };
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -635,11 +634,10 @@ function groupOf(id: string): string | undefined {
 }
 
 // 地类图斑的数据源的一张瓦片的事件（ADR 0158）
-const parcelTile = (key: string, isSourceLoaded = false): FakeEvent => ({
+const parcelTile = (key: string): FakeEvent => ({
   dataType: 'source',
   sourceId: 'resources-bgdc_dltb',
-  isSourceLoaded,
-  tile: { tileID: { key } }
+  tile: { tileID: { key }, state: 'loading' }
 });
 
 // 某个分组新加入的图层：资源目录加载后地类图斑也会加入，与要检查的分组无关
@@ -1523,7 +1521,7 @@ describe('CurrentMapPage', () => {
     await nextTick();
     expect(layerRow(wrapper, 'bgdc_dltb').attributes('aria-selected')).toBe('true');
 
-    map.fire('sourcedata', parcelTile('2', true));
+    map.fire('sourcedata', parcelTile('2'));
     await vi.waitFor(() => expect(wrapper.get('[data-request-chip]').text()).toBe('已加载完成'));
     expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(false);
   });

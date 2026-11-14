@@ -41,8 +41,7 @@ interface FakeEvent {
   readonly error?: Error;
   readonly sourceId?: string;
   readonly dataType?: 'source' | 'style';
-  readonly isSourceLoaded?: boolean;
-  readonly tile?: { readonly tileID: { readonly key: string } };
+  readonly tile?: { readonly tileID: { readonly key: string }; readonly state?: string };
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -563,12 +562,14 @@ function tileGroup(id: string, year: number): StyleGroup {
   };
 }
 
+// 一张瓦片：状态由用例改，像 MapLibre 一样 404 时只改成 errored、不发事件
+const fakeTile = (key: string) => ({ tileID: { key }, state: 'loading' });
+
 // 数据源 sourceId 的一张瓦片的事件（ADR 0158）
-const tileEvent = (sourceId: string, key: string, isSourceLoaded = false): FakeEvent => ({
+const tileEvent = (sourceId: string, tile: { readonly tileID: { readonly key: string } }): FakeEvent => ({
   dataType: 'source',
   sourceId,
-  isSourceLoaded,
-  tile: { tileID: { key } }
+  tile
 });
 
 // 就绪后加上 tdt、dltb 两个数据源，返回之后数据源错误的每次变化
@@ -846,41 +847,62 @@ describe('MapLibreView', () => {
   });
 
   describe('瓦片请求的统计（ADR 0158）', () => {
-    it('按数据源统计：开始、到了、失败、取消；数据源加载完时还在等的（404 的空瓦片）算到了；样式的加载不算', async () => {
+    it('按数据源统计：开始、到了、失败、取消；样式的加载不算；一张失败不结束这一轮，别的瓦片照常算', async () => {
       using ctx = setup();
       await addTwoSources(ctx);
       const changed = vi.fn<() => void>();
       ctx.view.onSourceActivityChange(changed);
+      const tiles = ['1', '2', '3', '4'].map(fakeTile);
+      const [first, second, third, fourth] = tiles;
+      if (!first || !second || !third || !fourth) {
+        throw new Error('没有瓦片');
+      }
 
       ctx.map.fire('dataloading', { dataType: 'style' });
-      ctx.map.fire('dataloading', tileEvent('dltb', '1'));
-      ctx.map.fire('dataloading', tileEvent('dltb', '2'));
-      ctx.map.fire('dataloading', tileEvent('dltb', '3'));
-      ctx.map.fire('dataloading', tileEvent('tdt', '1'));
-      ctx.map.fire('sourcedata', tileEvent('dltb', '1'));
-      ctx.map.fire('dataabort', tileEvent('dltb', '2'));
-      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 1, failed: 0, finishedAt: null });
+      for (const tile of tiles) {
+        ctx.map.fire('dataloading', tileEvent('dltb', tile));
+      }
+      ctx.map.fire('sourcedata', tileEvent('dltb', first));
+      ctx.map.fire('dataabort', tileEvent('dltb', second));
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 3, loaded: 1, failed: 0, finishedAt: null });
 
-      ctx.map.fire('error', { ...tileEvent('tdt', '1', true), error: new Error('tile failed') });
-      expect(ctx.view.sourceActivity.get('tdt')).toMatchObject({ requested: 1, failed: 1 });
-      expect(ctx.view.sourceActivity.get('tdt')?.finishedAt).not.toBeNull();
+      // MapLibre 在一张瓦片失败以后报数据源已加载完（isSourceLoaded），不能当真：还在等的 4 号照常等（2026-11-14 审查发现）
+      ctx.map.fire('error', { ...tileEvent('dltb', third), isSourceLoaded: true, error: new Error('tile failed') } as FakeEvent);
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 3, loaded: 1, failed: 1, finishedAt: null });
       // 数据源的错误照常记下
-      expect(ctx.view.sourceErrors.has('tdt')).toBe(true);
+      expect(ctx.view.sourceErrors.has('dltb')).toBe(true);
 
-      // 3 号是 404：MapLibre 不发事件，数据源别的事件带着 isSourceLoaded
-      ctx.map.fire('sourcedata', { dataType: 'source', sourceId: 'dltb', isSourceLoaded: true });
-      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 2 });
+      ctx.map.fire('sourcedata', tileEvent('dltb', fourth));
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 3, loaded: 2, failed: 1 });
       expect(ctx.view.sourceActivity.get('dltb')?.finishedAt).not.toBeNull();
       expect(changed).toHaveBeenCalledTimes(8);
     });
 
-    it('地图空闲时都结束；移除数据源、整体重建、释放时忘掉', async () => {
+    it('404 的空瓦片没有事件：数据源有别的事件、地图空闲时看瓦片的状态，到了就算到了', async () => {
       using ctx = setup();
       await addTwoSources(ctx);
-      ctx.map.fire('dataloading', tileEvent('dltb', '1'));
-      ctx.map.fire('dataloading', tileEvent('tdt', '1'));
+      const empty = fakeTile('1');
+      const pending = fakeTile('2');
+      ctx.map.fire('dataloading', tileEvent('dltb', empty));
+      ctx.map.fire('dataloading', tileEvent('dltb', pending));
+      empty.state = 'errored';
+
+      ctx.map.fire('sourcedata', { dataType: 'source', sourceId: 'dltb' });
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 1, finishedAt: null });
+
+      pending.state = 'errored';
       ctx.map.fire('idle');
-      expect([...ctx.view.sourceActivity.values()].every(({ finishedAt }) => finishedAt !== null)).toBe(true);
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 2 });
+      expect(ctx.view.sourceActivity.get('dltb')?.finishedAt).not.toBeNull();
+    });
+
+    it('地图空闲时还在加载的照常等；移除数据源、整体重建、释放时忘掉', async () => {
+      using ctx = setup();
+      await addTwoSources(ctx);
+      ctx.map.fire('dataloading', tileEvent('dltb', fakeTile('1')));
+      ctx.map.fire('dataloading', tileEvent('tdt', fakeTile('1')));
+      ctx.map.fire('idle');
+      expect([...ctx.view.sourceActivity.values()].every(({ finishedAt }) => finishedAt === null)).toBe(true);
 
       ctx.session.style.setGroup('business', lineGroup('lcsh'));
       await nextMicrotask();

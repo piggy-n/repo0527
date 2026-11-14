@@ -36,7 +36,8 @@ import type {
   MapMouseEventLike,
   MapMouseEventType,
   MapMoveEventLike,
-  SourceDataEventLike
+  SourceDataEventLike,
+  TileLike
 } from './map-like';
 import { MapLibreScene, type SceneModuleState } from './maplibre-scene';
 import { MapLibreRoam } from './roam/maplibre-roam';
@@ -727,7 +728,7 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  #onMapError(map: MapLike, { error, sourceId, tile, isSourceLoaded }: MapErrorEventLike): void {
+  #onMapError(map: MapLike, { error, sourceId, tile }: MapErrorEventLike): void {
     this.#onError(error);
     if (this.#engineFailed) {
       return;
@@ -735,7 +736,7 @@ export class MapLibreView<const G extends string> implements MapView {
     // 数据源的错误只记下来：不算样式加载失败，应用命令期间收到也不整体重建（ADR 0041 第 6 节）
     if (typeof sourceId === 'string') {
       this.#recordSourceError(sourceId, error);
-      this.#onTileEvent({ dataType: 'source', sourceId, tile, isSourceLoaded }, 'failed');
+      this.#onTileEvent({ dataType: 'source', sourceId, tile }, 'failed');
       return;
     }
     if (this.#applying) {
@@ -918,9 +919,9 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图；三维模块还没加载好时也不算
-  // 视野里请求的瓦片都到了：还在等的（只有 404 的空瓦片之后没有别的事件）都算到了
   #onIdle(): void {
-    this.#activity.settleAll();
+    // 最后一张是 404 的空瓦片时数据源之后没有事件：空闲时再看一眼还在等的瓦片
+    this.#activity.sweep();
     if (this.state === 'ready') {
       this.#emitter.emit('settle');
     }
@@ -1141,22 +1142,20 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#onError(error);
   }
 
-  // 瓦片的开始（outcome 为 null）和结果交给统计；数据源没有在请求时，还在等的（404 的空瓦片）算到了
-  #onTileEvent({ dataType, sourceId, tile, isSourceLoaded }: SourceDataEventLike, outcome: TileOutcome | null): void {
+  // 瓦片的开始（outcome 为 null）和结果交给统计；数据源每有一个事件，再看一眼它还在等的瓦片（404 的空瓦片没有事件）
+  #onTileEvent({ dataType, sourceId, tile }: SourceDataEventLike, outcome: TileOutcome | null): void {
     if (dataType !== 'source' || sourceId === undefined) {
       return;
     }
     if (tile) {
       const key = String(tile.tileID.key);
       if (outcome === null) {
-        this.#activity.started(sourceId, key);
+        this.#activity.started(sourceId, key, () => settledOutcome(tile));
       } else {
         this.#activity.finished(sourceId, key, outcome);
       }
     }
-    if (isSourceLoaded === true && outcome !== null) {
-      this.#activity.settled(sourceId);
-    }
+    this.#activity.sweep(sourceId);
   }
 
   // 每个数据源只记第一条；MapLibre 移除数据源（包括整体 setStyle）时断开它的事件转发，之后不会再收到它的错误
@@ -1226,4 +1225,12 @@ export class MapLibreView<const G extends string> implements MapView {
       throw new Error('MapLibreView 已释放');
     }
   }
+}
+
+// 引擎没发事件、瓦片却已经有了结果时的结果：404 的空瓦片算到了，没有变化的瓦片也是；移出视野卸掉的算取消；还在加载时为 null
+function settledOutcome({ state }: TileLike): TileOutcome | null {
+  if (state === 'loaded' || state === 'errored') {
+    return 'loaded';
+  }
+  return state === 'unloaded' ? 'aborted' : null;
 }

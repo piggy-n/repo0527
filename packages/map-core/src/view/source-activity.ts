@@ -24,9 +24,12 @@ export function isActivityLoading(activity: SourceActivity): boolean {
   return activity.finishedAt === null;
 }
 
-// 一个数据源的计数：还在请求的瓦片按 MapLibre 的瓦片键记，同一张不重复算
+/** 一张瓦片已经有了结果、引擎却没有发事件时的结果；还在加载时为 null */
+export type TileProbe = () => TileOutcome | null;
+
+// 一个数据源的计数：还在请求的瓦片按引擎的瓦片键记，同一张不重复算；能看出结果的带着查看的函数
 interface Round {
-  readonly pending: Set<string>;
+  readonly pending: Map<string, TileProbe | null>;
   requested: number;
   loaded: number;
   failed: number;
@@ -36,6 +39,17 @@ interface Round {
 
 /** 瓦片请求的结果：到了、失败、取消（不再需要，不算这一轮的请求） */
 export type TileOutcome = 'loaded' | 'failed' | 'aborted';
+
+// 一张瓦片的结果记进这一轮
+function count(round: Round, outcome: TileOutcome): void {
+  if (outcome === 'aborted') {
+    round.requested--;
+  } else if (outcome === 'loaded') {
+    round.loaded++;
+  } else {
+    round.failed++;
+  }
+}
 
 /**
  * 按数据源统计瓦片请求（ADR 0158）：适配器把引擎的瓦片事件交给它，它只计数，每次变化通知一次，由使用方决定多久读一次；
@@ -70,17 +84,20 @@ export class SourceActivityTracker {
     return this.#snapshot;
   }
 
-  /** 开始请求一张新的瓦片；数据源空闲时开始新的一轮 */
-  started(sourceId: string, tileKey: string): void {
+/**
+   * 开始请求一张新的瓦片；数据源空闲时开始新的一轮。probe 看这张瓦片是不是已经有了结果，给引擎不发事件的情况用
+   * （MapLibre 的 404、没有变化的瓦片），由 sweep 调用
+   */
+  started(sourceId: string, tileKey: string, probe: TileProbe | null = null): void {
     let round = this.#rounds.get(sourceId);
     if (!round || round.pending.size === 0) {
-      round = { pending: new Set(), requested: 0, loaded: 0, failed: 0, startedAt: this.#now(), finishedAt: null };
+      round = { pending: new Map(), requested: 0, loaded: 0, failed: 0, startedAt: this.#now(), finishedAt: null };
       this.#rounds.set(sourceId, round);
     }
     if (round.pending.has(tileKey)) {
       return;
     }
-    round.pending.add(tileKey);
+    round.pending.set(tileKey, probe);
     round.requested++;
     this.#changed();
   }
@@ -91,37 +108,38 @@ export class SourceActivityTracker {
     if (!round?.pending.delete(tileKey)) {
       return;
     }
-    if (outcome === 'aborted') {
-      round.requested--;
-    } else if (outcome === 'loaded') {
-      round.loaded++;
-    } else {
-      round.failed++;
-    }
+    count(round, outcome);
     this.#finishIfDone(sourceId, round);
     this.#changed();
   }
 
   /**
-   * 引擎说这个数据源没有在请求了：还在等的都算到了。后端返回 404 的空瓦片、没有变化的瓦片引擎不发事件，靠这里结束这一轮
+   * 看一眼还在等的瓦片：已经有了结果、引擎却没有发事件的（404 的空瓦片、没有变化的瓦片）按 probe 的结果算。
+   * 不传时看全部数据源。适配器在数据源有事件时、地图空闲时调用
    */
-  settled(sourceId: string): void {
-    const round = this.#rounds.get(sourceId);
-    if (!round || round.pending.size === 0) {
-      return;
-    }
-    round.loaded += round.pending.size;
-    round.pending.clear();
-    this.#finishIfDone(sourceId, round);
-    this.#changed();
-  }
-
-  /** 引擎说所有数据源都没有在请求了（视野里的瓦片都到了） */
-  settleAll(): void {
-    for (const [sourceId, round] of this.#rounds) {
-      if (round.pending.size > 0) {
-        this.settled(sourceId);
+  sweep(sourceId?: string): void {
+    const rounds = sourceId === undefined ? [...this.#rounds] : [[sourceId, this.#rounds.get(sourceId)] as const];
+    let changed = false;
+    for (const [id, round] of rounds) {
+      if (!round) {
+        continue;
       }
+      let settled = false;
+      for (const [tileKey, probe] of round.pending) {
+        const outcome = probe?.() ?? null;
+        if (outcome !== null) {
+          round.pending.delete(tileKey);
+          count(round, outcome);
+          settled = true;
+        }
+      }
+      if (settled) {
+        this.#finishIfDone(id, round);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.#changed();
     }
   }
 

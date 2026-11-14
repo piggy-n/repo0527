@@ -97,7 +97,9 @@ export const CurrentMapLayerPanel = defineComponent({
     /** 地图数据的请求状态（ADR 0158）：二维图层加载超过 0.4 秒时行内转圈 */
     requests: { type: Object as PropType<RequestStatus>, default: undefined },
     /** 在当前图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
-    reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null }
+    reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null },
+    /** 右侧"图例"页正在编辑的资源：图例浮层开着同一个资源时关掉，后打开编辑的一方为准（ADR 0157） */
+    legendYield: { type: String as PropType<string | null>, default: null }
   },
   emits: {
     retry: () => true,
@@ -277,6 +279,15 @@ export const CurrentMapLayerPanel = defineComponent({
       void flash(key);
       void scrollToRow(key, 'center');
     };
+
+    watch(
+      () => props.legendYield,
+      code => {
+        if (code !== null && popover.value?.kind === 'legend' && selectedCode.value === code) {
+          popover.value = null;
+        }
+      }
+    );
 
     watch(
       () => props.reveal,
@@ -606,7 +617,11 @@ export const CurrentMapLayerPanel = defineComponent({
       onVisible: setVisible,
       onMove: moveTo,
       onActivate: locate,
-      onRemove: (key: string) => removeKeys([key]),
+      // 键盘的 Delete：移除的行带着焦点卸掉了，焦点给新选中的行
+      onRemove: (key: string) => {
+        removeKeys([key]);
+        void nextTick(() => (selected.value === null ? null : rowElement(selected.value))?.focus());
+      },
       onMenu: (key: string, point: MenuPoint) => (menu.value = { source: 'current', key, point })
     };
 
@@ -614,8 +629,9 @@ export const CurrentMapLayerPanel = defineComponent({
       if (currentKeys.value.length === 0) {
         return [<div class={styles.empty}>当前地图还没有图层</div>];
       }
-      // 只有一行能用 Tab 进入：选中的，没有选中时是第一行
-      const tabbable = selected.value ?? shownKeys.value[0] ?? null;
+      // 只有一行能用 Tab 进入：选中的（在收起的组里时不算），否则是第一行
+      const tabbable =
+        selected.value !== null && shownKeys.value.includes(selected.value) ? selected.value : (shownKeys.value[0] ?? null);
       const common = {
         selected: selected.value,
         tabbable,

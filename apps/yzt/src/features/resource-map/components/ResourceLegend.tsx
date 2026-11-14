@@ -46,7 +46,9 @@ export const ResourceLegend = defineComponent({
     yieldCode: { type: String as PropType<string | null>, default: null }
   },
   emits: {
-    editingChange: (_editing: boolean) => true
+    editingChange: (_editing: boolean) => true,
+    /** 正在显示的符号编辑器对着的资源（ADR 0157）：页面据此关掉对着同一个资源的图例浮层，后打开编辑的一方为准 */
+    editingCode: (code: string | null) => code === null || typeof code === 'string'
   },
   setup(props, { emit }) {
     // 条目的收起是图例自己的界面状态，不持久化：复合图例默认展开，记下用户收起的
@@ -115,7 +117,15 @@ export const ResourceLegend = defineComponent({
       value => emit('editingChange', value),
       { immediate: true }
     );
-    onUnmounted(() => emit('editingChange', false));
+    watch(
+      () => (props.active && !props.scene && editingEntry.value ? editingEntry.value.code : null),
+      code => emit('editingCode', code),
+      { immediate: true }
+    );
+    onUnmounted(() => {
+      emit('editingChange', false);
+      emit('editingCode', null);
+    });
 
     const toggle = (code: string) => {
       const next = new Set(collapsed.value);

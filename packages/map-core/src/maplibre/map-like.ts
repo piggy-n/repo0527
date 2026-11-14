@@ -73,28 +73,30 @@ export interface RenderedFeatureLike {
   readonly geometry: Geometry;
 }
 
-/** 瓦片事件里的瓦片：只用它的键区分是哪一张 */
+/**
+ * 瓦片事件里的瓦片：用键区分是哪一张，用状态看引擎没发事件的结果（MapLibre 6.12：返回 404 时只把状态改成 `errored`，
+ * 没有变化时只改成 `loaded`）。状态不在公开的类型里，升级时由适配器的测试和页面上的检查发现变化
+ */
 export interface TileLike {
   readonly tileID: { readonly key: string | number };
+  readonly state?: string;
 }
 
 /**
- * 数据源的加载事件（ADR 0158）：dataType 为 source 时带 sourceId 和当时数据源是否没有在请求（isSourceLoaded），
- * 和瓦片有关时带 tile；样式的加载事件 dataType 为 style
+ * 数据源的加载事件（ADR 0158）：dataType 为 source 时带 sourceId，和瓦片有关时带 tile；样式的加载事件 dataType 为 style。
+ * 不用事件里的 isSourceLoaded：数据源有一张瓦片失败以后，MapLibre 在下一次开始请求以前一直报 true
  */
 export interface SourceDataEventLike {
   readonly dataType: 'source' | 'style';
   readonly sourceId?: string;
-  readonly isSourceLoaded?: boolean;
   readonly tile?: TileLike;
 }
 
-/** 地图的错误事件：数据源上的错误由 MapLibre 转发时带上 sourceId 和 isSourceLoaded，瓦片的错误还带 tile */
+/** 地图的错误事件：数据源上的错误由 MapLibre 转发时带上 sourceId，瓦片的错误还带 tile */
 export interface MapErrorEventLike {
   readonly error: Error;
   readonly sourceId?: unknown;
   readonly tile?: TileLike;
-  readonly isSourceLoaded?: boolean;
 }
 
 /** 适配器用到的地图能力；MapLibre 的 Map 满足这个接口（见测试中的类型检查），测试时换成假地图 */
@@ -105,7 +107,7 @@ export interface MapLike extends StyleTarget {
   on(type: 'error', listener: (event: MapErrorEventLike) => void): MapSubscription;
   /**
    * 开始加载：带 tile 的是数据源开始请求一张新瓦片，之后跟着 sourcedata、dataabort 或 error；已有瓦片的重新加载不发。
-   * 瓦片返回 404、没有变化时只有 isSourceLoaded 变成 true，不单独发事件
+   * 瓦片返回 404、没有变化时只改瓦片的状态，不发事件
    */
   on(type: 'dataloading', listener: (event: SourceDataEventLike) => void): MapSubscription;
   /** 数据源的数据到了或变了：带 tile 的是一张瓦片到了 */
