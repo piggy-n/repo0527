@@ -86,7 +86,7 @@ describe('sceneManifestSchema', () => {
       withModel({ cityCode: '110100' }),
       withModel({ cityCode: '320102' }),
       withModel({ color: 'red' }),
-      // 路线少于两个点、点不是三个或四个数、眼高不在 0～1.6 米之间
+      // 路线少于两个点、点不是三个或四个数、眼高超过 1.6 米或者是 0（要大于 0、不超过 1.6）
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0]] }] }),
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31], [121, 31]] }] }),
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 1, 1], [121, 31, 0]] }] }),
@@ -144,6 +144,17 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     expect(lengths).toStrictEqual([125, 133, 58, 211, 156, 47, 190, 155]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
+  });
+
+  // 有出生点就能步行（startWalk 不看种类）：倾斜摄影、白膜写了会悄悄打开步行、下载全部叶节点建导航网格。
+  // 失败时不改这条断言，先和用户讨论（docs/config/3dt-manifest.md"新增一个模型"）
+  it('写了出生点的瓦片集只能是室内', () => {
+    const { models } = sceneManifestSchema.parse(JSON.parse(manifestText));
+    const offenders = models
+      .filter(model => model.kind !== 'splat' && model.kind !== 'indoor' && model.spawn !== undefined)
+      .map(({ id, kind }) => `${id}（${kind}）`);
+
+    expect(offenders).toStrictEqual([]);
   });
 });
 

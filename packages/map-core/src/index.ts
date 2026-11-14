@@ -135,6 +135,7 @@ export {
   chooseSpawn,
   type ClickRefusal,
   type ClickResolution,
+  HEAD_CLEARANCE,
   headingToYaw,
   type MovePlan,
   planMove,

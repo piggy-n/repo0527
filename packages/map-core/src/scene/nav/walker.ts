@@ -21,8 +21,8 @@ const EYE_LAG_BELOW = 0.4;
 const EYE_LAG_ABOVE = 0.15;
 const EYE_FOLLOW = 12;
 const MAX_PITCH = (80 * Math.PI) / 180;
-// 矮墓道里视点离顶板至少这么远（ADR 0156 第 3 节）：视点 = 地板 + min(眼高, 净空 - 这个值)，净空 1.8 米以上的视点不变
-const HEAD_CLEARANCE = 0.2;
+/** 矮墓道里视点离顶板至少这么远（ADR 0156 第 3 节）：视点 = 地板 + min(眼高, 净空 - 这个值)，净空 1.8 米以上的视点不变；生成路线眼高的工具用同一个值 */
+export const HEAD_CLEARANCE = 0.2;
 // 前方被挡时依次尝试偏转这些角度（弧度），斜墙也能顺着滑过去
 const SLIDE_ANGLES = [0, 0.5, -0.5, 1, -1];
 // 走不到的（隔着闸机、栏杆）：同一层、离得近、中间只隔一小段站不住的地方，并且视点高度没东西挡着，
