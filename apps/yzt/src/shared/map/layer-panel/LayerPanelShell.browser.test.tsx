@@ -173,7 +173,13 @@ async function headsAt(width: number) {
   return {
     catalogInside: inside('catalog', '资源目录的操作'),
     currentInside: inside('current', '当前图层的操作'),
-    viewsScroll: views.scrollWidth > views.clientWidth
+    viewsScroll: views.scrollWidth > views.clientWidth,
+    // 页签离滚动区的上边、左边至少 3：焦点框（2 宽、离开 1）不被滚动区裁掉（2026-11-15 核对发现）
+    focusRoom: (() => {
+      const area = views.getBoundingClientRect();
+      const first = views.querySelector('[role="tab"]')?.getBoundingClientRect();
+      return first !== undefined && first.top - area.top >= 3 && first.left - area.left >= 3;
+    })()
   };
 }
 
@@ -321,8 +327,13 @@ describe('LayerPanelShell（真实的布局）', () => {
   );
 
   it('手机宽度（294 宽的面板）：两段标题行的工具栏都在面板里，最右的按钮完整可见；目录的页签收缩、横向滚动（2026-11-15 审查发现）', async () => {
-    expect(await headsAt(320)).toStrictEqual({ catalogInside: true, currentInside: true, viewsScroll: false });
-    expect(await headsAt(294)).toStrictEqual({ catalogInside: true, currentInside: true, viewsScroll: true });
+    expect(await headsAt(320)).toStrictEqual({
+      catalogInside: true,
+      currentInside: true,
+      viewsScroll: false,
+      focusRoom: true
+    });
+    expect(await headsAt(294)).toStrictEqual({ catalogInside: true, currentInside: true, viewsScroll: true, focusRoom: true });
   });
 
   it('所在页面被缓存：停用期间量到的 0 不采用，再次激活的那一刻两段的高度和停用前一样（ADR 0063）', async () => {

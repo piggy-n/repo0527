@@ -6,18 +6,13 @@ import rowStyles from '@/shared/map/layer-panel/layer-row.module.scss';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import { MODEL_KIND_LABELS } from '../catalog';
 import type { SceneModels } from '../composables/useSceneModels';
-import { canRoamModel } from '../layer-panel';
+import { canRoamModel, roamUnavailable } from '../layer-panel';
 import styles from './ModelLayerRow.module.scss';
 
-/** 行尾"漫游"不能点时的原因；能点时是"漫游" */
+/** 行尾"漫游"的提示：不能点时带上原因 */
 export function roamTip(scene: boolean, hidden: boolean, ready: boolean): string {
-  if (!scene) {
-    return '漫游（切换到三维后可用）';
-  }
-  if (hidden) {
-    return '漫游（显示后可用）';
-  }
-  return ready ? '漫游' : '漫游（加载完成后可用）';
+  const reason = roamUnavailable(scene, hidden, ready);
+  return reason === undefined ? '漫游' : `漫游（${reason}）`;
 }
 
 /**

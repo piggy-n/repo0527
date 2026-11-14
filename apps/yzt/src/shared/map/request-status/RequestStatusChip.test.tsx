@@ -89,18 +89,31 @@ describe('RequestStatusChip', () => {
     expect(wrapper.find('[data-request-popover]').exists()).toBe(false);
   });
 
-  it('明细里能选的行用键盘也能选：能用 Tab 到达，回车、空格选中；底图那行不能（2026-11-15 审查发现）', async () => {
-    const { wrapper } = mountChip([item('resource:a'), item('basemap', { name: '底图' })]);
+  it('明细里能选的行，名称是按钮（键盘能到达），行本身仍是列表项；失败模型行的"重试"不套在名称按钮里；底图那行没有按钮（2026-11-15 审查发现）', async () => {
+    const { wrapper } = mountChip([
+      item('resource:a'),
+      item('basemap', { name: '底图' }),
+      item('model:m', { kind: 'model', requested: 0, loaded: 0, failed: 1, finishedAt: 500, icon: 'model-3d' })
+    ]);
     await wrapper.get('[data-request-chip]').trigger('click');
     const row = wrapper.get('[data-request-row="resource:a"]');
-    expect(row.attributes('tabindex')).toBe('0');
-    expect(row.attributes('role')).toBe('button');
-    expect(wrapper.get('[data-request-row="basemap"]').attributes('tabindex')).toBeUndefined();
+    expect(row.element.tagName).toBe('LI');
+    expect(row.attributes('role')).toBeUndefined();
+    expect(row.find('button[data-request-select]').exists()).toBe(true);
+    const name = row.get('button[data-request-select]');
+    expect(name.text()).toBe('resource:a 的名称');
+    expect(wrapper.find('[data-request-row="basemap"] button').exists()).toBe(false);
+    const model = wrapper.get('[data-request-row="model:m"]');
+    expect(model.findAll('button').map(button => button.attributes('data-request-select') !== undefined)).toStrictEqual([
+      true,
+      false
+    ]);
 
-    await row.trigger('keydown', { key: 'Enter' });
-    await row.trigger('keydown', { key: ' ' });
-    await wrapper.get('[data-request-row="basemap"]').trigger('keydown', { key: 'Enter' });
-    expect(wrapper.emitted('select')).toStrictEqual([['resource:a'], ['resource:a']]);
+    // 按钮的回车、空格就是点击
+    await name.trigger('click');
+    await model.get('button[aria-label="重新加载：model:m 的名称"]').trigger('click');
+    expect(wrapper.emitted('select')).toStrictEqual([['resource:a']]);
+    expect(wrapper.emitted('retry')).toStrictEqual([['model:m']]);
   });
 
   it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {

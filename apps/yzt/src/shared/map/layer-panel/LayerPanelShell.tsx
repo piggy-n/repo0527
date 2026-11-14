@@ -50,7 +50,9 @@ export const LayerPanelShell = defineComponent({
     /** 资源目录标题后面的文字页签（目录显示什么，ADR 0157）；空的时候没有 */
     views: { type: Array as PropType<readonly PanelTab[]>, default: () => [] },
     /** 选中的那个页签的 id */
-    view: { type: String, default: '' }
+    view: { type: String, default: '' },
+    /** 回到主页签的次数：每加一，从"统计报表"这类页签切回两段（在当前图层里选中一行之前，一次性命令写成计数） */
+    showCore: { type: Number, default: 0 }
   },
   emits: {
     retry: () => true,
@@ -73,6 +75,10 @@ export const LayerPanelShell = defineComponent({
     const list = ref<HTMLElement>();
     const tab = ref(props.tabs[0]?.id ?? '');
     const core = computed(() => tab.value === props.tabs[0]?.id);
+    watch(
+      () => props.showCore,
+      () => (tab.value = props.tabs[0]?.id ?? '')
+    );
 
     // 两段最多能用的高度：面板所在的列的高度，减去面板的标题和分割线。不用两段量到的高度：它又由分法决定，会来回重算
     const column = computed(() => element.value?.parentElement ?? null);

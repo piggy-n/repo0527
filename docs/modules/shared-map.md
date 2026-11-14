@@ -90,7 +90,7 @@ const { goToDefaultView } = useDefaultView(map);
 <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} />
 ```
 
-- `JIANGSU_MAP_OPTIONS` 的 `transformRequest` 每次请求时读取当前 token，只发给 `appConfig.apiBaseUrl` 下的地址，天地图和站内静态文件不带；MapLibre 在主线程转换请求，再连同请求头交给 Worker，所以 Worker 里发出的瓦片请求也带 token。token 放请求头、不拼进地址，避免进入日志和缓存的键。三维不显示矢量瓦片，不经过它
+- `JIANGSU_MAP_OPTIONS` 的 `transformRequest` 每次请求时读取当前 token，只发给 `appConfig.apiBaseUrl` 下的地址，天地图和站内静态文件不带；MapLibre 在主线程转换请求，再连同请求头交给 Worker，所以 Worker 里发出的瓦片请求也带 token。token 放请求头、不拼进地址，避免进入日志和缓存的键。三维是同一个 MapLibre 视图，矢量瓦片同样经过它（ADR 0147、0157）
 - `reportMapError` 由 app 的 `withRuntimeLoader` 通过 `MAP_ERROR_REPORTER` 提供给所有地图页，页面不用传 `onError`。带 token 发往后端的瓦片返回 401 时，它调用 `onUnauthorized`，和接口的 401 同样结束会话、提示并回到登录页；第三方地址的 401、没带 token 发出的瓦片（如未登录时的 `/dev/resources`）和其他错误只打印到控制台。瓦片的错误只带状态码和地址，带不回请求头，所以交给 `onUnauthorized` 的是最后发给后端的 token。回到登录页后地图已卸载，不会再收到这批瓦片的错误；只有其他标签页同一账号重新登录、这个标签页又立刻发出了新瓦片时，旧瓦片晚到的 401 才分辨不出来（见 [auth.md](auth.md) 的"旧会话的 401"）
 - `JIANGSU_BOUNDS` 是省界数据的实际范围向外取整（`[116.35, 30.75, 121.98, 35.15]`），由测试检查它包含省界的全部范围、四边多出的不超过 0.05°。5A 时的 `[116.3, 30.7, 121.9, 35.2]` 东边界切掉了启东一角
 - `JIANGSU_ZOOM_RANGE` 是 5～18 级，与旧项目一致：5 级能看到江苏和周边，天地图只有 18 级以内的数据
@@ -346,13 +346,13 @@ const readout = useMapReadout(map);
 | `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；`views`、`view` 是资源目录标题后面的文字页签（样式同顶上的页签，现状底图用来切换目录显示全部、模型或资源）；登记为贴左边的悬浮元素 |
 | `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：只有项能选中，Ctrl、Shift 多选，分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时是添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
-| `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签（二维里的模型组），`headless` 时不显示标题（只有这一组时） |
-| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示）、右键菜单、开在面板右边的浮层（箭头对着选中的行，手机宽度时盖在下段上） |
+| `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签 `tag` 和它的说明 `tagNote`（二维里的模型组，悬停标签看说明）；`headless` 时不显示标题（只有这一组时），有标签时标签和说明单独一行 |
+| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示；标题行窄时变紧凑）、右键菜单（项的 `hint` 是不能用的原因，代替快捷键显示；`returnFocus` 给出关闭以后接焦点的元素，焦点在菜单里时才还）、开在面板右边的浮层（箭头对着页面给的 `anchor`：选中的行，组收起时是组的标题；手机宽度时盖在下段上；面板停用时不响应 Esc；关闭时焦点在里面的还给 `anchor`） |
 | `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度、在滚动区里露出一行（纯函数和小工具） |
 | `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 
 - 选中、浮层、菜单这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
-- 页面给 `reveal` 一个新对象时，面板在当前图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行）；`requests` 给出加载超过 0.4 秒的行，资源行在名称后面转圈
+- 页面给 `reveal` 一个新对象时，面板切回两段（头部在"统计报表"这类页签上时），在当前图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行；页面先展开左侧面板）；`requests` 给出加载超过 0.4 秒的行，资源行在名称后面转圈
 
 ## 请求状态（ADR 0158）
 
@@ -363,7 +363,10 @@ const requests = useRequestStatus(() => [
   ...(map.dimension.value === '3d' ? modelRequests(models) : [])
 ]);
 <MapStatusBar readout={readout} format={format}>
-  {{ after: () => [<RequestStatusChip status={requests} selectable={key => key !== 'basemap'} onSelect={reveal} onRetry={retry} />] }}
+  {{
+    // onSelect：先展开左侧面板（changeLeftCollapsed(false)），再给资源图层面板一个新的 reveal
+    after: () => [<RequestStatusChip status={requests} selectable={key => key !== 'basemap'} onSelect={reveal} onRetry={retry} />]
+  }}
 </MapStatusBar>
 ```
 

@@ -24,7 +24,8 @@ import {
   modelCatalogNodes,
   modelCityNodes,
   modelIdOfKey,
-  modelKey
+  modelKey,
+  roamUnavailable
 } from '@/features/scene-models/layer-panel';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import {
@@ -371,10 +372,13 @@ export const CurrentMapLayerPanel = defineComponent({
       }
     );
 
+    // 请求状态的明细里点了一行：面板头部在"统计报表"这类页签上时先切回两段，再选中、滚到、闪
+    const showCore = ref(0);
     watch(
       () => props.reveal,
       request => {
         if (request) {
+          showCore.value++;
           locateInList(request.key);
         }
       }
@@ -612,7 +616,15 @@ export const CurrentMapLayerPanel = defineComponent({
           hint: info.reason
         },
         ...(id !== null && model && canRoamModel(model)
-          ? [{ key: 'roam', label: '漫游', icon: 'roam-walk', disabled: !roamable(id) } satisfies PanelMenuEntry]
+          ? [
+              {
+                key: 'roam',
+                label: '漫游',
+                icon: 'roam-walk',
+                disabled: !roamable(id),
+                hint: roamUnavailable(scene.value, props.models.hidden.value.has(id), props.models.stateOf(id) === 'ready')
+              } satisfies PanelMenuEntry
+            ]
           : []),
         ...(id !== null && modelFailed(id)
           ? [{ key: 'retry', label: '重新加载', icon: 'undo' } satisfies PanelMenuEntry]
@@ -627,10 +639,10 @@ export const CurrentMapLayerPanel = defineComponent({
       ];
     });
 
-    // 菜单关闭以后接过焦点的元素：当前图层是选中的行（打开菜单时选中了它，移除了是新选中的那行），目录是右键的那一项
+    // 菜单关闭以后接过焦点的元素：打开菜单的那一行（键盘打开时不一定是选中的行），它被移除了是新选中的行；目录是打开菜单的那一项
     const menuReturn = (current: PanelMenuState) => (): HTMLElement | null => {
       if (current.source === 'current') {
-        return selected.value === null ? null : rowElement(selected.value);
+        return rowElement(current.key) ?? (selected.value === null ? null : rowElement(selected.value));
       }
       return floating?.panel()?.querySelector<HTMLElement>(`[data-catalog-node="${CSS.escape(current.key)}"]`) ?? null;
     };
@@ -756,7 +768,7 @@ export const CurrentMapLayerPanel = defineComponent({
           </CurrentLayerGroup>
         );
       }
-      // 二维里整组变淡，标题旁标一次"仅三维"，不在每一行上写
+      // 二维里整组变淡，标题旁标一次"仅三维"，不在每一行上写；只有这一组、不显示标题时，标签和说明单独一行
       const modelsGroup: VNode[] = [];
       if (modelKeys.value.length > 0) {
         modelsGroup.push(
@@ -956,6 +968,7 @@ export const CurrentMapLayerPanel = defineComponent({
         onUpdate:ratio={(ratio: number) => props.layout.setCheckedRatio(ratio)}
         views={CATALOG_VIEWS}
         view={view.value}
+        showCore={showCore.value}
         onUpdate:view={(id: string) => (view.value = catalogViewOf(id) ?? view.value)}
       >
         {{

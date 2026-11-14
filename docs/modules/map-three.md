@@ -49,7 +49,7 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 - `MAPLIBRE_ENGINE.capabilities` 是 `{ styleLayers: true, identify: true, splats: true }`；上下文给出 `sceneCapabilities`（[map-vue.md](map-vue.md)"三维引擎的注入"）。
 - **不再收窄**：2026-11-09 到 11-14 之间，app 注入引擎时（`app/map-runtime-provider.ts`）把能力收成 `{ styleLayers: false, identify: false, splats: true }`，等页面重新设计（ADR 0153）。资源图层面板改版以后（ADR 0157）注入的能力原样，三项都是 true，没有开关。
 - 现状底图：三维里资源图层、图例、点/框选和二维一样。点/框选的识别规则：登记的数据集在三维里一律查后端（ADR 0048）；点到模型上时查模型脚下，命中点正下方的地面投影回屏幕，渲染要素和容差框围着它；框和容差框的四角用只打地面的拾取（`pick(point, { ground: true })`，跳过模型和泼溅），模型永远不是结果（ADR 0157 第 4 节）。`styleLayers` 为 false 时的推导（`hiddenInScene`：资源分组为空、批量高亮撤下、图例只有说明）和 `identify` 为 false 时的推导（三维期间单击、框选不识别，提示"三维模式暂不支持点/框选"）都还留着，现在的引擎走不到。
-- 能识别时（`MAPLIBRE_ENGINE` 本身的能力，测试和契约测试用它）沿用 ADR 0048、0049 给三维定的规则，不改识别的代码：能后端识别的资源查后端，其余用渲染要素（`identifyStep` 的"后端拾取不到时退回渲染要素"）。MapLibre 的三维有渲染要素，二维 14 级以上只用渲染要素的规则在三维不用：俯仰大时远处是低级别的瓦片，以画面中心的级别为准不可靠。
+- 能识别时（`MAPLIBRE_ENGINE` 本身的能力，app 原样注入它，测试和契约测试也用它）沿用 ADR 0048、0049 给三维定的规则，不改识别的代码：能后端识别的资源查后端，其余用渲染要素（`identifyStep` 的"后端拾取不到时退回渲染要素"）。MapLibre 的三维有渲染要素，二维 14 级以上只用渲染要素的规则在三维不用：俯仰大时远处是低级别的瓦片，以画面中心的级别为准不可靠。
 
 ## 加载失败和重试（3C.2）
 

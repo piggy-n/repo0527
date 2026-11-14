@@ -878,7 +878,7 @@ describe('MapLibreView', () => {
       expect(changed).toHaveBeenCalledTimes(8);
     });
 
-    it('404 的空瓦片没有事件：数据源有别的事件、地图空闲时看瓦片的状态，到了就算到了', async () => {
+    it('不发事件的瓦片（栅格瓦片的 404、没有变化的瓦片）：数据源有别的事件、地图空闲时看瓦片的状态，到了就算到了', async () => {
       using ctx = setup();
       await addTwoSources(ctx);
       const empty = fakeTile('1');

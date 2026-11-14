@@ -159,6 +159,23 @@
   white-space: nowrap;
 }
 
+// 能选的行的名称：看起来同文字，键盘能到达
+.nameButton {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
 .state {
   display: inline-flex;
   align-items: center;

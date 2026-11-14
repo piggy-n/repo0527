@@ -156,6 +156,7 @@ const popover = () => document.querySelector<HTMLElement>('[data-layer-popover]'
 // 右键菜单里的定位；焦点在不在右键菜单里
 const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
 const menuHasFocus = () => Boolean(document.activeElement?.closest('[data-panel-menu]'));
+const roamItem = () => required(document.querySelector<HTMLButtonElement>('[data-menu-item="roam"]'), '漫游');
 // 目录显示的内容（用户 2026-11-15）：显示着的节点、标题后面选中的页签、点某个页签
 const catalogKeys = (wrapper: VueWrapper) =>
   wrapper.findAll('[data-catalog-node]').map(item => item.attributes('data-catalog-node'));
@@ -449,6 +450,19 @@ describe('CurrentMapLayerPanel', () => {
     expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500']);
   });
 
+  it('在"模型"里全部展开，"资源"里原来展开的分类仍然展开（2026-11-15 核对发现）', async () => {
+    const { wrapper, map } = await mountPanel();
+    map.setDimension('3d');
+    await nextTick();
+    await showView(wrapper, 'resources');
+    expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+
+    await showView(wrapper, 'models');
+    await tool(wrapper, 'expand-all').trigger('click');
+    await showView(wrapper, 'resources');
+    expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+  });
+
   it('三维里模型组照常：选中模型时定位能用，交给拥有者飞过去（还没加载完的等加载完）', async () => {
     const { wrapper, models, map } = await mountPanel();
     models.add(['station']);
@@ -642,6 +656,85 @@ describe('CurrentMapLayerPanel', () => {
     await nextTick();
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
     expect(document.activeElement).toBe(element('bgdc_dltb'));
+  });
+
+  it('没有选中时用键盘在一行上开菜单再关，焦点回到这一行；目录里同样回到打开菜单的那一项（2026-11-15 核对发现）', async () => {
+    const { wrapper } = await mountPanel();
+    const first = wrapper.get<HTMLElement>('[data-current-row="resource:bgdc_dltb"]');
+    expect(selectedRow(wrapper)).toBeNull();
+    first.element.focus();
+    await first.trigger('keydown', { key: 'F10', shiftKey: true });
+    await nextTick();
+    await nextTick();
+    expect(menuHasFocus()).toBe(true);
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    await nextTick();
+    expect(document.activeElement).toBe(first.element);
+
+    await tool(wrapper, 'expand-all').trigger('click');
+    const leaf = wrapper.get<HTMLElement>('[data-catalog-node="resource:bgdc_cjdcq"]');
+    leaf.element.focus();
+    await leaf.trigger('keydown', { key: 'F10', shiftKey: true });
+    await nextTick();
+    await nextTick();
+    expect(menuHasFocus()).toBe(true);
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    await nextTick();
+    expect(document.activeElement).toBe(leaf.element);
+  });
+
+  it('页面里的浮层卸载时焦点在里面（点了浮层的关闭），还给选中的行（2026-11-15 核对发现）', async () => {
+    const { wrapper } = await mountPanel();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    const close = required(popover()?.querySelector<HTMLButtonElement>('button[aria-label="关闭"]'), '浮层的关闭');
+    close.focus();
+    close.click();
+    await nextTick();
+    await nextTick();
+    expect(popover()).toBeNull();
+    expect(document.activeElement).toBe(row(wrapper, 'bgdc_dltb').element);
+  });
+
+  it('右键菜单里不能用的漫游写出原因：二维里、隐藏着、还没加载完（2026-11-15 核对发现）', async () => {
+    const { wrapper, models, map } = await mountPanel();
+    models.add(['station']);
+    await nextTick();
+    const openMenu = async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await nextTick();
+      await wrapper.get('[data-current-row="model:station"]').trigger('contextmenu');
+    };
+
+    await openMenu();
+    expect([roamItem().disabled, roamItem().textContent]).toStrictEqual([true, '漫游切换到三维后可用']);
+
+    map.setDimension('3d');
+    await nextTick();
+    await openMenu();
+    expect(roamItem().textContent).toBe('漫游加载完成后可用');
+
+    models.setVisible('station', false);
+    await nextTick();
+    await openMenu();
+    expect(roamItem().textContent).toBe('漫游显示后可用');
+  });
+
+  it('面板头部在"统计报表"这类页签上时，请求明细里点了一行：先切回两段，再在当前图层里选中（2026-11-15 核对发现）', async () => {
+    const { wrapper, reveal } = await mountPanel();
+    await required(
+      wrapper.findAll('[role="tab"]').find(tab => tab.text() === '统计报表'),
+      '统计报表'
+    ).trigger('click');
+    expect(wrapper.find('[data-panel-section="current"]').exists()).toBe(false);
+
+    reveal.value = { key: 'resource:bgdc_dltb' };
+    await nextTick();
+    await nextTick();
+    expect(wrapper.find('[data-panel-section="current"]').exists()).toBe(true);
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
   });
 
   it('选中的行所在的组收起时，浮层的箭头对着组的标题（2026-11-15 审查发现）', async () => {

@@ -5,7 +5,7 @@
 export interface SourceActivity {
   /** 这一轮请求的瓦片数：取消的不算 */
   readonly requested: number;
-  /** 已经到了的，包括后端返回 404 的空瓦片 */
+  /** 已经到了的，包括后端返回 404 的（矢量瓦片当空瓦片照常有事件，栅格瓦片的状态是 errored、没有事件） */
   readonly loaded: number;
   readonly failed: number;
   /** 这一轮开始、结束的时间（毫秒，同 performance.now）；还在请求时没有结束时间 */
@@ -86,7 +86,7 @@ export class SourceActivityTracker {
 
 /**
    * 开始请求一张新的瓦片；数据源空闲时开始新的一轮。probe 看这张瓦片是不是已经有了结果，给引擎不发事件的情况用
-   * （MapLibre 的 404、没有变化的瓦片），由 sweep 调用
+   * （MapLibre 的栅格瓦片 404、没有变化的瓦片；矢量瓦片的 404 当空瓦片照常有事件），由 sweep 调用
    */
   started(sourceId: string, tileKey: string, probe: TileProbe | null = null): void {
     let round = this.#rounds.get(sourceId);
@@ -114,7 +114,7 @@ export class SourceActivityTracker {
   }
 
   /**
-   * 看一眼还在等的瓦片：已经有了结果、引擎却没有发事件的（404 的空瓦片、没有变化的瓦片）按 probe 的结果算。
+   * 看一眼还在等的瓦片：已经有了结果、引擎却没有发事件的（栅格瓦片的 404 是 errored、没有变化的瓦片是 loaded）按 probe 的结果算。
    * 不传时看全部数据源。适配器在数据源有事件时、地图空闲时调用
    */
   sweep(sourceId?: string): void {

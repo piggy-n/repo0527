@@ -21,6 +21,17 @@ export function modelIdOfKey(key: string): string | null {
   return key.startsWith(MODEL_PREFIX) ? key.slice(MODEL_PREFIX.length) : null;
 }
 
+/** 能漫游的模型现在不能漫游的原因：二维里、隐藏着、还没加载完；能漫游时为 undefined（行尾的提示、右键菜单共用） */
+export function roamUnavailable(scene: boolean, hidden: boolean, ready: boolean): string | undefined {
+  if (!scene) {
+    return '切换到三维后可用';
+  }
+  if (hidden) {
+    return '显示后可用';
+  }
+  return ready ? undefined : '加载完成后可用';
+}
+
 /** 能漫游：清单里有出生点或路线（ADR 0097 第 1 节、0156） */
 export function canRoamModel(model: Pick<SceneModel, 'spawn' | 'routes'>): boolean {
   return model.spawn !== undefined || model.routes.length > 0;

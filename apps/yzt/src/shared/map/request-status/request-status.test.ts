@@ -122,6 +122,10 @@ describe('mergedActivity', () => {
     const quick = { ...labels, loaded: 6, finishedAt: 600_050 };
     expect(mergedActivity([basemap, quick])).toStrictEqual(quick);
 
+    // 较早一段的失败还算：底图上一轮缺了 3 张，地名加载完以后仍然报失败
+    const brokenBasemap = { ...basemap, loaded: 17, failed: 3 };
+    expect(mergedActivity([brokenBasemap, quick])).toStrictEqual({ ...quick, failed: 3 });
+
     // 同一轮里先结束的照样算
     const early = { requested: 4, loaded: 4, failed: 0, startedAt: 600_010, finishedAt: 600_020 };
     expect(mergedActivity([basemap, labels, early])).toStrictEqual({

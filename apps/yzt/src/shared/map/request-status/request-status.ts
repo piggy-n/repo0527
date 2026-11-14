@@ -127,14 +127,15 @@ export function requestRowText(
 }
 
 /**
- * 几个数据源这一轮的请求合成一项：从最早开始，都结束时才结束。只算最近的一轮：按开始的先后连起时间上重叠的，
- * 和最后一段不重叠的（上一轮早已结束、结果还留着的数据源，如打开地名时的底图）不算，免得开始时间拉到几分钟前（ADR 0158）
+ * 几个数据源这一轮的请求合成一项：从最早开始，都结束时才结束。张数、开始和结束只算最近一段：按开始的先后连起时间上重叠的，
+ * 和最后一段不重叠的（上一轮早已结束、结果还留着的数据源，如打开地名时的底图）不算，免得开始时间拉到几分钟前；
+ * 失败的张数算全部数据源的，失败按数据源显示到它的下一次请求为止（ADR 0158）
  */
 export function mergedActivity(activities: readonly SourceActivity[]): SourceActivity | null {
   if (activities.length === 0) {
     return null;
   }
-  // 最近一轮：从后往前看，开始得比前面那段的结束还晚的就断开
+  // 最近一段：按开始的先后往后走，开始得比前面那段的结束还晚的就断开，重新开始一段
   let latest: SourceActivity[] = [];
   let end = -Infinity;
   for (const activity of activities.toSorted((a, b) => a.startedAt - b.startedAt)) {
@@ -148,7 +149,7 @@ export function mergedActivity(activities: readonly SourceActivity[]): SourceAct
   return {
     requested: latest.reduce((sum, activity) => sum + activity.requested, 0),
     loaded: latest.reduce((sum, activity) => sum + activity.loaded, 0),
-    failed: latest.reduce((sum, activity) => sum + activity.failed, 0),
+    failed: activities.reduce((sum, activity) => sum + activity.failed, 0),
     startedAt: Math.min(...latest.map(activity => activity.startedAt)),
     finishedAt: pending ? null : Math.max(...latest.map(activity => activity.finishedAt ?? 0))
   };

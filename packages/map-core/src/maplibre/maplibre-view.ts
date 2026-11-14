@@ -920,7 +920,7 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图；三维模块还没加载好时也不算
   #onIdle(): void {
-    // 最后一张是 404 的空瓦片时数据源之后没有事件：空闲时再看一眼还在等的瓦片
+    // 最后一张是栅格瓦片的 404（状态 errored）或没有变化的瓦片时，数据源之后没有事件：空闲时再看一眼还在等的瓦片
     this.#activity.sweep();
     if (this.state === 'ready') {
       this.#emitter.emit('settle');
@@ -1142,7 +1142,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#onError(error);
   }
 
-  // 瓦片的开始（outcome 为 null）和结果交给统计；数据源每有一个事件，再看一眼它还在等的瓦片（404 的空瓦片没有事件）
+  // 瓦片的开始（outcome 为 null）和结果交给统计；数据源每有一个事件，再看一眼它还在等的瓦片（栅格瓦片的 404、没有变化的瓦片没有事件）
   #onTileEvent({ dataType, sourceId, tile }: SourceDataEventLike, outcome: TileOutcome | null): void {
     if (dataType !== 'source' || sourceId === undefined) {
       return;
@@ -1227,7 +1227,8 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 }
 
-// 引擎没发事件、瓦片却已经有了结果时的结果：404 的空瓦片算到了，没有变化的瓦片也是；移出视野卸掉的算取消；还在加载时为 null
+// 引擎没发事件、瓦片却已经有了结果时的结果：栅格瓦片的 404（errored）算到了，没有变化的瓦片（loaded）也是；移出视野卸掉的算取消；
+// 还在加载时为 null
 function settledOutcome({ state }: TileLike): TileOutcome | null {
   if (state === 'loaded' || state === 'errored') {
     return 'loaded';

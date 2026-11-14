@@ -63,7 +63,7 @@ describe('SourceActivityTracker', () => {
     expect(tracker.activities).toBe(NO_SOURCE_ACTIVITY);
   });
 
-  it('引擎没发事件的瓦片（404 的空瓦片）：看一眼时按 probe 的结果算，还在加载的不动；都有了结果时结束这一轮', () => {
+  it('引擎没发事件的瓦片（栅格瓦片的 404、没有变化的瓦片）：看一眼时按 probe 的结果算，还在加载的不动；都有了结果时结束这一轮', () => {
     const { tracker, onChange } = setup();
     // 每张瓦片的结果由用例改
     const outcomes = new Map<string, TileOutcome | null>([

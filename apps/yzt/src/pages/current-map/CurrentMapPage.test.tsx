@@ -2129,6 +2129,23 @@ describe('CurrentMapPage', () => {
     await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
   });
 
+  it('三维里资源图层和模型同时在：资源分组照常画、图例完整、模型交给三维视图（app 注入的能力，ADR 0157；2026-11-15 核对补上）', async () => {
+    mockManifest();
+    const page = await readyPage();
+    const { wrapper } = page;
+    await vi.waitFor(() => expect(page.map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    await switchTo(wrapper, '三维');
+    await addModel(wrapper, 'sz-station');
+    await button(wrapper, '图例').trigger('click');
+    await settle();
+
+    const scene = sceneOf(page);
+    expect(scene.session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
+    expect(scene.session.style.current.layers.map(({ id }) => id)).toContain('resources-bgdc_dltb');
+    expect(wrapper.find('[data-legend="bgdc_dltb"]').exists()).toBe(true);
+    expect(wrapper.find('[data-legend-scene-note]').exists()).toBe(false);
+  });
+
   it('资源目录读不到时三维里照样能加入模型：模型清单是单独读的（2026-11-15 审查发现，main 上三维的模型面板只看模型清单）', async () => {
     server.use(mock.get(TREE_URL, () => HttpResponse.json({ code: 500, msg: '系统异常', success: false, data: null })));
     mockManifest();

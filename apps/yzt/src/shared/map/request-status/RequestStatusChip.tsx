@@ -106,23 +106,28 @@ export const RequestStatusChip = defineComponent({
           key={item.key}
           class={[styles.row, selectable && styles.selectable]}
           title={selectable ? '在当前图层中选中' : undefined}
-          role={selectable ? 'button' : undefined}
-          tabindex={selectable ? 0 : undefined}
           data-request-row={item.key}
           onClick={(event: MouseEvent) => {
+            // 点在行的空白处也选中；名称、重试是按钮，自己处理
             if (selectable && !(event.target instanceof Element && event.target.closest('button'))) {
-              emit('select', item.key);
-            }
-          }}
-          onKeydown={(event: KeyboardEvent) => {
-            if (selectable && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-              event.preventDefault();
               emit('select', item.key);
             }
           }}
         >
           <SvgIcon class={styles.icon} name={item.icon} size={16} />
-          <span class={styles.name}>{item.name}</span>
+          {selectable ? (
+            // 能选的行，名称是按钮：键盘能到达，回车、空格选中；行本身保持列表项，"重试"不套在里面（2026-11-15 审查）
+            <button
+              type="button"
+              class={[styles.name, styles.nameButton]}
+              data-request-select
+              onClick={() => emit('select', item.key)}
+            >
+              {item.name}
+            </button>
+          ) : (
+            <span class={styles.name}>{item.name}</span>
+          )}
           <span class={[styles.state, tone === 'slow' && styles.slow, tone === 'error' && styles.error]}>
             {text}
             {failedModel && (
