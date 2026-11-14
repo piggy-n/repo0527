@@ -6,7 +6,7 @@ import { ElButton, ElIcon, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } 
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
-import { MODEL_KIND_LABELS, type RoamPlace, roamPlaceOf, type SceneModel } from '../catalog';
+import { MODEL_KIND_LABELS, type RoamPlace, roamPlaceOf, routeTimeline, type SceneModel } from '../catalog';
 import type { RoamMode, RoutePhase, SceneModels, WalkStage } from '../composables/useSceneModels';
 import { DEFAULT_ROAM_SPEED, ROAM_SPEEDS, type RouteChoice, type WalkChoice } from '../scene-content';
 import styles from './RoamPanel.module.scss';
@@ -285,7 +285,8 @@ export const RoamPanel = defineComponent({
       }
       const status = models.roamStatus.value;
       const walked = Math.min(status?.kind === 'route' ? status.distance : 0, route.length);
-      const remaining = (route.length - walked) / choice.speed;
+      // 按播放的规则估算（转弯放慢也算进去，ADR 0156 R.5）
+      const remaining = routeTimeline(route, choice.speed).remaining(walked);
       return (
         <>
           <ul class={styles.routes} role="radiogroup" aria-label="预置路线">

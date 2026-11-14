@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import manifestText from '../../../public/3dt/manifest.json?raw';
 import { type SceneManifest, sceneManifestSchema } from './api';
-import { buildModelCatalog, groupByCity } from './catalog';
+import { buildModelCatalog, groupByCity, routeTimeline } from './catalog';
 
 const MANIFEST_URL = 'https://maps.test/yzt/3dt/manifest.json';
 
@@ -182,6 +182,25 @@ function layoutProblem(model: ManifestModel, path: string): string | null {
   const placed = type === '3dtiles' && directory === model.name && rest.at(-1) === 'tileset.json';
   return placed ? null : `${path}：不是 3dtiles/<模型名>/…/tileset.json`;
 }
+
+describe('入库的清单：路线按播放的规则估算的时间（ADR 0156 R.5）', () => {
+  it('星海广场站三条路线：锁住播放的规则（转头限速、转弯放慢），改了规则这里要跟着看', () => {
+    const models = buildModelCatalog(sceneManifestSchema.parse(JSON.parse(manifestText)), MANIFEST_URL);
+    const station = models.find(({ id }) => id === 'sz-station');
+    // 4 m/s、1.6 m/s 走完的秒数，到 0.1 秒
+    const seconds = (station?.routes ?? []).map(route => [
+      route.id,
+      Math.round(routeTimeline(route, 4).total * 10) / 10,
+      Math.round(routeTimeline(route, 1.6).total * 10) / 10
+    ]);
+    // 按长度和速度是 31.3、33.2、14.4 秒（4 m/s），78.2、82.9、36.1 秒（1.6 m/s）：只有进站乘车的弯放慢得明显
+    expect(seconds).toStrictEqual([
+      ['enter', 33.5, 78.7],
+      ['concourse', 33.5, 82.9],
+      ['platform', 14.5, 36.1]
+    ]);
+  });
+});
 
 describe('入库的清单的目录层级', () => {
   it('3D Tiles 在 <市>/3dtiles/<模型名>/ 下，LCC2 在 <市>/lcc2/<目录>/lcc2-sog-result/ 下，每一段按 URL 编码', () => {

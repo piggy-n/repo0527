@@ -334,7 +334,8 @@ describe('漫游的入口和面板（ADR 0097）', () => {
     await textButton(wrapper, '开始')?.trigger('click');
     expect(owner.routePhase.value).toBe('playing');
     await progress(53);
-    expect(panel().text()).toContain('53 m / 106 m · 剩余 0:13');
+    // 剩余时间按播放的规则估算，北拐的弯放慢也算进去（ADR 0156 R.5）：按长度和速度是 13.3 秒、写 0:13
+    expect(panel().text()).toContain('53 m / 106 m · 剩余 0:14');
     await textButton(wrapper, '暂停')?.trigger('click');
     expect(textButton(wrapper, '继续')).toBeDefined();
     expect(panel().text()).toContain('暂停时拖动查看四周，继续后回到路线视角');

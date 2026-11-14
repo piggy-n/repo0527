@@ -1,4 +1,4 @@
-import { RoutePath, type SplatSource } from '@mx/map-core';
+import { RoutePath, RouteTimeline, type SplatSource } from '@mx/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import type { ManifestModel, SceneManifest } from './api';
 
@@ -99,6 +99,22 @@ function cityNameOf(code: string): string {
 // 路线带上长度（三维，楼梯的高差也算）
 const routesOf = ({ routes = [] }: ManifestModel): ModelRoute[] =>
   routes.map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total }));
+
+// 按路线、速度缓存：一条路线模拟一遍要几毫秒
+const timelines = new WeakMap<ModelRoute, Map<number, RouteTimeline>>();
+
+/** 路线按播放的规则（转弯放慢）走要多久（ADR 0156 R.5，补充 ADR 0083 的"剩余时间按长度和速度算"） */
+export function routeTimeline(route: ModelRoute, speed: number): RouteTimeline {
+  const bySpeed = timelines.get(route) ?? new Map<number, RouteTimeline>();
+  timelines.set(route, bySpeed);
+  const cached = bySpeed.get(speed);
+  if (cached) {
+    return cached;
+  }
+  const timeline = new RouteTimeline(new RoutePath(route.path), speed);
+  bySpeed.set(speed, timeline);
+  return timeline;
+}
 
 /** 清单换成目录：地址按清单的地址解析成绝对地址（ADR 0081 第 1 节） */
 export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string): readonly SceneModel[] {
