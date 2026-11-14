@@ -54,3 +54,14 @@
     color: var(--color-primary);
   }
 }
+
+// 模型清单读不到：目录最后一行说明和重试
+.modelsFailed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}

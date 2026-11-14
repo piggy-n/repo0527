@@ -9,6 +9,7 @@ import { ResourceLegend } from '@/features/resource-map/components/ResourceLegen
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
@@ -94,6 +95,8 @@ const MapPrototype = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const resources = useResourceLayers(map, { catalog, symbols });
+    // 这个原型的模型由 useModelDemo 模拟，二维的资源图层面板里不列模型
+    const models = useSceneModels(map, []);
     const panelLayout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const modelsCollapsed = ref(false);
@@ -229,6 +232,7 @@ const MapPrototype = defineComponent({
           resources={resources}
           symbols={symbols}
           layout={panelLayout}
+          models={models}
           collapsed={!sides.left.value}
           onUpdate:collapsed={changeLeftCollapsed}
         />

@@ -12,7 +12,6 @@ import { useResourcePanelLayout } from '@/features/resource-map/composables/useR
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { roamPlaceOf } from '@/features/scene-models/catalog';
-import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
 import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
@@ -113,11 +112,11 @@ export const CurrentMapPage = defineComponent({
     const location = useLocationPoint(map);
     // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
     const readout = useMapReadout(map);
-    // 三维模型（ADR 0081）：第一次切到三维时才读清单
-    const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
+    // 三维模型（ADR 0081）：资源目录里列出模型，二维里也能加入（ADR 0157），所以进页面就读清单
+    const sceneModelsQuery = useSceneModelsQuery(true);
     const models = useSceneModels(map, sceneModelsQuery.data);
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
-    // 视图控件和状态栏都隐藏，不能勾选模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
+    // 视图控件和状态栏都隐藏，不能加入模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
     // 小地图、完整地图的叫法按漫游的模型：站点叫站内地图，高斯泼溅叫平面图（ADR 0156）
     const roamPlace = computed(() => {
@@ -147,11 +146,9 @@ export const CurrentMapPage = defineComponent({
     };
     // 资源面板的收起、分割线的位置按账号记住，顺序随资源图层记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
-    // 三维时左侧是三维模型面板，两个面板的收起各自保留（ADR 0081 第 7 节）；模型面板的不持久化
-    const modelsCollapsed = ref(false);
-    const leftCollapsed = computed(() =>
-      map.dimension.value === '3d' ? modelsCollapsed.value : panelLayout.collapsed.value
-    );
+    // 二三维共用资源图层面板（ADR 0157）；漫游时左侧是漫游面板，它的收起不持久化，每次漫游从展开开始
+    const roamCollapsed = ref(false);
+    const leftCollapsed = computed(() => (roaming.value ? roamCollapsed.value : panelLayout.collapsed.value));
     const sides = useSideExclusion({
       leftExpanded: () => !leftCollapsed.value,
       rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || detailOpen.value
@@ -209,8 +206,8 @@ export const CurrentMapPage = defineComponent({
     };
     // 展开左侧面板算操作左边：窄屏时右边让出来
     const changeLeftCollapsed = (collapsed: boolean) => {
-      if (map.dimension.value === '3d') {
-        modelsCollapsed.value = collapsed;
+      if (roaming.value) {
+        roamCollapsed.value = collapsed;
       } else {
         panelLayout.setCollapsed(collapsed);
       }
@@ -226,9 +223,10 @@ export const CurrentMapPage = defineComponent({
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
-    // 开始漫游时切回移动：测量、点选在漫游里不适用，退出后不恢复（ADR 0084、0097）
+    // 开始漫游时切回移动：测量、点选在漫游里不适用，退出后不恢复（ADR 0084、0097）；漫游面板展开
     watch(roaming, entered => {
       if (entered) {
+        roamCollapsed.value = false;
         map.activateTool(BROWSE_TOOL);
       }
     });
@@ -302,35 +300,28 @@ export const CurrentMapPage = defineComponent({
       </div>
     );
 
-    // 左侧一个面板：三维漫游时是漫游面板，其余二三维各一个。模型面板、资源面板切走时缓存起来，回来时搜索、展开这些
-    // 界面状态还在（停用期间按 ADR 0063 处理）；漫游面板不缓存，每次漫游重新开始
+    // 左侧一个面板：三维漫游时是漫游面板，其余时候是二三维共用的资源图层面板（ADR 0157）。资源图层面板漫游时缓存起来，
+    // 回来时搜索、展开、选中这些界面状态还在（停用期间按 ADR 0063 处理）；漫游面板不缓存，每次漫游重新开始
     const renderLeft = (scene: boolean) => {
       if (scene && roaming.value) {
         return (
           <RoamPanel models={models} collapsed={!sides.left.value} onUpdate:collapsed={changeLeftCollapsed} />
         );
       }
-      if (scene) {
-        return (
-          <SceneModelPanel
-            models={models}
-            failed={sceneModelsQuery.isError.value}
-            collapsed={!sides.left.value}
-            onRetry={() => void sceneModelsQuery.refetch()}
-            onUpdate:collapsed={changeLeftCollapsed}
-          />
-        );
-      }
       const status = resources.state.value.catalog ? 'ready' : catalogQuery.isError.value ? 'failed' : 'loading';
+      const modelsStatus = models.hasCatalog.value ? 'ready' : sceneModelsQuery.isError.value ? 'failed' : 'loading';
       return (
         <CurrentMapLayerPanel
           resources={resources}
           symbols={symbols}
           layout={panelLayout}
+          models={models}
           status={status}
+          modelsStatus={modelsStatus}
           collapsed={!sides.left.value}
           sheet={layout.value.phone}
           onRetry={() => void catalogQuery.refetch()}
+          onRetryModels={() => void sceneModelsQuery.refetch()}
           onUpdate:collapsed={changeLeftCollapsed}
           onLegendCode={(code: string | null) => (legendCode.value = code)}
         />

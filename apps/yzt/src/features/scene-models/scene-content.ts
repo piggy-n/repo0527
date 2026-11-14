@@ -57,8 +57,10 @@ export const DEFAULT_ROAM_SPEED = 4;
 
 /** 拥有者推导三维内容用到的状态 */
 export interface SceneModelsState {
-  /** 勾选的模型，按勾选的先后 */
-  readonly loaded: readonly string[];
+  /** 加入当前地图的模型，按当前图层里的先后（ADR 0157） */
+  readonly added: readonly string[];
+  /** 隐藏的模型：交给会话时不显示，数据留着 */
+  readonly hidden: ReadonlySet<string>;
   /** 白膜当前的效果；没记的用第一种 */
   readonly effects: ReadonlyMap<string, string>;
   /** 白膜显示过的效果：留在场景里，换回来不用重新下载 */
@@ -89,28 +91,29 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
 }
 
 /**
- * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：勾选的模型各一个瓦片集，白膜显示过的效果都留着、只显示当前的；
+ * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：加入的模型各一个瓦片集，隐藏的不显示（ADR 0157），白膜显示过的效果都留着、只显示当前的；
  * 地下、室内的用头灯光照；高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，倾斜摄影在泼溅的范围里不画。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：
  * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）；MapLibre 引擎抬高这个模型期间隐藏全部二维图层，地表的不透明度没有视图读（ADR 0153）。
  * 漫游高斯泼溅时隔离它（ADR 0156 R.5）：别的模型都不显示，视图隐藏二维、用底色清屏，这份拿全部泼溅预算
  */
 export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
   const byId = new Map(models.map(model => [model.id, model]));
-  const roaming = state.roam && state.loaded.includes(state.roam.modelId) ? byId.get(state.roam.modelId) : undefined;
+  const roaming = state.roam && state.added.includes(state.roam.modelId) ? byId.get(state.roam.modelId) : undefined;
   // 抬高只给瓦片集；泼溅不抬高，隔离
   const undergroundModel = roaming?.underground && !roaming.splat ? roaming : undefined;
   const isolated = roaming?.splat ? roaming : undefined;
   const tilesets: TilesetLayer[] = [];
   const splats: SplatLayer[] = [];
-  for (const id of state.loaded) {
+  for (const id of state.added) {
     const model = byId.get(id);
     if (!model) {
       continue;
     }
+    const shown = !state.hidden.has(id);
     if (model.splat) {
       const { url, placement } = model.splat;
       const hidden = (!model.underground && undergroundModel !== undefined) || (isolated !== undefined && id !== isolated.id);
-      splats.push({ id, url, placement, show: !hidden, attempt: state.attempts.get(id) ?? 0 });
+      splats.push({ id, url, placement, show: shown && !hidden, attempt: state.attempts.get(id) ?? 0 });
       continue;
     }
     const current = currentEffect(model, state.effects);
@@ -126,7 +129,7 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
       tilesets.push({
         id: tilesetId,
         url: effect.url,
-        show: effect.id === current && !hidden,
+        show: shown && effect.id === current && !hidden,
         lighting,
         attempt: state.attempts.get(tilesetId) ?? 0,
         ...(model.kind === 'white' ? { group: model.id } : {}),
@@ -149,12 +152,12 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
   return roam ? { ...content, roam } : content;
 }
 
-// 漫游的模型还勾选着、路线还在时才交给会话；步行要等导航网格建好
+// 漫游的模型还在当前地图里、路线还在时才交给会话；步行要等导航网格建好
 function roamOf(
   byId: ReadonlyMap<string, SceneModel>,
-  { roam, loaded, navigations, avatar }: SceneModelsState
+  { roam, added, navigations, avatar }: SceneModelsState
 ): SceneRoam | null {
-  const model = roam && loaded.includes(roam.modelId) ? byId.get(roam.modelId) : undefined;
+  const model = roam && added.includes(roam.modelId) ? byId.get(roam.modelId) : undefined;
   if (!roam || !model) {
     return null;
   }

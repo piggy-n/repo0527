@@ -8,6 +8,7 @@ import { ResourceLegendReset } from '@/features/resource-map/components/Resource
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
@@ -39,6 +40,8 @@ const MapUiSamples = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols });
+    // 样例只看资源：模型的目录是空的
+    const models = useSceneModels(map, []);
     const layout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const basemap = { ...useBasemap(), thumbnails: SAMPLE_THUMBNAILS };
@@ -83,6 +86,7 @@ const MapUiSamples = defineComponent({
                   resources={layers}
                   symbols={symbols}
                   layout={layout}
+                  models={models}
                   collapsed={layout.collapsed.value}
                   onUpdate:collapsed={layout.setCollapsed}
                 />

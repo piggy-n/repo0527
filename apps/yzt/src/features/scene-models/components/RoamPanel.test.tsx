@@ -10,15 +10,14 @@ import {
 } from '@mx/map-core';
 import { type CameraControl, MAPLIBRE_ENGINE, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
 import { buildModelCatalog, type SceneModel } from '../catalog';
 import { type SceneModels, useSceneModels } from '../composables/useSceneModels';
+import { ModelLayerRow } from './ModelLayerRow';
 import { RoamPanel } from './RoamPanel';
-import { SceneModelPanel } from './SceneModelPanel';
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
 
@@ -62,17 +61,15 @@ const CATALOG = buildModelCatalog(
 );
 
 /**
- * 页面创建地图和拥有者，和现状底图一样漫游时左侧是漫游面板、否则是模型面板；状态报告和相机操作换成
- * 测试控制的。null 表示清单还没到；personSwitch 是页面让漫游面板显示人称切换
+ * 页面创建地图和拥有者，和现状底图一样漫游时左侧是漫游面板、否则是当前图层里的模型行（ADR 0157）；状态报告和相机操作换成
+ * 测试控制的，在三维里。personSwitch 是页面让漫游面板显示人称切换
  */
-function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwitch = false } = {}) {
-  const source = shallowRef(catalog ?? undefined);
+function mountPanel(catalog: readonly SceneModel[] = CATALOG, { personSwitch = false } = {}) {
+  const source = shallowRef(catalog);
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const roamStatus = shallowRef<RoamStatus | null>(null);
   const flyTo = vi.fn<CameraControl['flyTo']>();
   const control = { flyTo } as unknown as CameraControl;
-  const failed = ref(false);
-  const onRetry = vi.fn<() => void>();
   const collapsed = ref(false);
   // 建导航网格换成用例控制的；高斯泼溅的也放进同一个列表
   const builds: { resolve: (navigation: Navigation) => void; reject: (error: Error) => void }[] = [];
@@ -89,6 +86,7 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
         sceneStatus,
         roamStatus,
         sceneCapabilities: MAPLIBRE_ENGINE.capabilities,
+        dimension: ref('3d'),
         runCameraOperation: action => action(control),
         beginCameraOperation: () => ({ signal: new AbortController().signal, run: action => action(control) })
       },
@@ -106,13 +104,13 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
             onUpdate:collapsed={value => (collapsed.value = value)}
           />
         ) : (
-          <SceneModelPanel
-            models={models}
-            failed={failed.value}
-            collapsed={collapsed.value}
-            onRetry={onRetry}
-            onUpdate:collapsed={value => (collapsed.value = value)}
-          />
+          <ul data-current-list>
+            {models.added.value.map(id => (
+              <li key={id} data-current-row={id}>
+                <ModelLayerRow models={models} id={id} scene />
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     );
@@ -144,148 +142,39 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
     return nextTick();
   };
   const ownerOf = required(owner, '页面没有创建拥有者');
-  return { wrapper, owner: ownerOf, source, failed, onRetry, collapsed, flyTo, report, progress, builds, walk };
+  return { wrapper, owner: ownerOf, collapsed, report, progress, builds, walk };
 }
 
-function button(wrapper: VueWrapper, label: string, within = '') {
-  return wrapper.get(`${within} button[aria-label="${label}"]`);
+function button(wrapper: VueWrapper, label: string) {
+  return wrapper.get(`button[aria-label="${label}"]`);
 }
 
 // 文字按钮（漫游面板的开始、暂停等）
 const textButton = (wrapper: VueWrapper, label: string) =>
   wrapper.findAll('button').find(item => item.text() === label);
 
-const check = (wrapper: VueWrapper, id: string, value: boolean) =>
-  wrapper.get(`[data-model="${id}"] input[type="checkbox"]`).setValue(value);
-
-const loadedIds = (wrapper: VueWrapper) => wrapper.findAll('[data-loaded]').map(row => row.attributes('data-loaded'));
-
-const cityRows = (wrapper: VueWrapper) =>
-  wrapper.findAll('button[aria-expanded]').filter(row => row.text().includes('市')).map(row => row.text());
-
-describe('SceneModelPanel', () => {
-  it('清单还没到时显示加载中；失败时显示重试；空清单显示暂无三维模型', async () => {
-    const { wrapper, source, failed, onRetry } = mountPanel(null);
-    expect(wrapper.text()).toContain('正在加载模型清单…');
-
-    failed.value = true;
-    await nextTick();
-    await wrapper.findAll('button').find(item => item.text() === '重试')?.trigger('click');
-    expect(onRetry).toHaveBeenCalledOnce();
-
-    source.value = [];
-    await nextTick();
-    expect(wrapper.text()).toContain('暂无三维模型');
-  });
-
-  it('按市分组、按区划代码排、默认展开，带数量；点市收起；搜索时只列匹配的、不能收起，没有匹配时提示', async () => {
-    const { wrapper } = mountPanel();
-    expect(cityRows(wrapper)).toStrictEqual(['南京市1', '苏州市2']);
-    expect(wrapper.findAll('[data-model]').map(row => row.attributes('data-model'))).toStrictEqual([
-      'city',
-      'station',
-      'white'
-    ]);
-
-    await wrapper.findAll('button[aria-expanded]')[0]?.trigger('click');
-    expect(wrapper.findAll('[data-model]').map(row => row.attributes('data-model'))).toStrictEqual(['station', 'white']);
-
-    await wrapper.get('input[placeholder="搜索模型或所属市"]').setValue('白膜');
-    expect(cityRows(wrapper)).toStrictEqual(['苏州市1']);
-    expect(wrapper.findAll('[data-model]').map(row => row.attributes('data-model'))).toStrictEqual(['white']);
-    expect(wrapper.get('button[aria-expanded]').attributes('disabled')).toBeDefined();
-
-    await wrapper.get('input[placeholder="搜索模型或所属市"]').setValue('没有的');
-    expect(wrapper.text()).toContain('没有找到模型');
-  });
-
-  it('勾选即加载：已加载按勾选的先后；加载中不能定位，失败可以重试，就绪后显示市和类型', async () => {
-    const { wrapper, owner, report } = mountPanel();
-    await check(wrapper, 'city', true);
-    await check(wrapper, 'station', true);
-
-    expect(loadedIds(wrapper)).toStrictEqual(['city', 'station']);
-    expect(wrapper.text()).toContain('已加载2');
-    expect(wrapper.find('[data-model="station"] [aria-label="加载中"]').exists()).toBe(true);
-    expect(wrapper.find('[data-model="white"] [aria-label="加载中"]').exists()).toBe(false);
-    expect(wrapper.get('[data-loaded="station"]').text()).toContain('加载中…');
-    expect(button(wrapper, '定位', '[data-loaded="station"]').attributes('disabled')).toBeDefined();
-
-    await report({ station: 'failed', city: 'ready' });
-    expect(wrapper.get('[data-model="station"]').text()).toContain('失败');
-    const station = wrapper.get('[data-loaded="station"]');
-    expect(station.text()).toContain('加载失败');
-    await station.findAll('button').find(item => item.text() === '重试')?.trigger('click');
-    expect(owner.deriveContent().tilesets.find(({ id }) => id === 'station')?.attempt).toBe(1);
-
-    expect(wrapper.get('[data-loaded="city"]').text()).toContain('南京市 · 倾斜摄影');
-    expect(button(wrapper, '定位', '[data-loaded="city"]').attributes('disabled')).toBeUndefined();
-  });
-
-  it('定位：飞到报告的相机；地下的模型也只是飞过去，没有钻地的标签（ADR 0097 第 5 节）', async () => {
-    const { wrapper, owner, flyTo, report } = mountPanel();
-    await check(wrapper, 'station', true);
-    await report({ station: 'ready' });
-
-    await button(wrapper, '定位', '[data-loaded="station"]').trigger('click');
-
-    expect(flyTo).toHaveBeenCalledWith(CAMERA);
-    expect(wrapper.get('[data-loaded="station"]').text()).not.toContain('钻地');
-    expect(owner.deriveContent().underground).toBeNull();
-  });
-
-  it('白膜就绪后可以换效果；卸载从已加载里去掉并取消勾选，全部卸载后不显示已加载', async () => {
-    const { wrapper, owner, report } = mountPanel();
-    await check(wrapper, 'white', true);
-    await report({ 'white/plain': 'ready' });
-
-    const select = wrapper.get('[data-loaded="white"]').findComponent(ElSelect);
-    expect(select.props('modelValue')).toBe('plain');
-    expect(select.findAllComponents(ElOption).map(option => option.props('label'))).toStrictEqual([
-      '无纹理',
-      '内置效果1'
-    ]);
-    select.vm.$emit('update:modelValue', 'window');
-    await nextTick();
-    expect(owner.effectOf('white')).toBe('window');
-    // 新效果还没有报告，回到加载中
-    expect(wrapper.get('[data-loaded="white"]').text()).toContain('加载中…');
-
-    await button(wrapper, '卸载', '[data-loaded="white"]').trigger('click');
-    expect(owner.loaded.value).toStrictEqual([]);
-    expect(wrapper.get<HTMLInputElement>('[data-model="white"] input[type="checkbox"]').element.checked).toBe(false);
-    expect(wrapper.text()).not.toContain('已加载');
-  });
-
-  it('已加载可以收起；面板收起后是竖条，点竖条展开', async () => {
-    const { wrapper, collapsed } = mountPanel();
-    await check(wrapper, 'city', true);
-    await wrapper.findAll('button').find(item => item.text().startsWith('已加载'))?.trigger('click');
-    expect(loadedIds(wrapper)).toStrictEqual([]);
-    expect(wrapper.text()).toContain('展开');
-
-    await button(wrapper, '收起三维模型').trigger('click');
-    expect(collapsed.value).toBe(true);
-    expect(wrapper.find('[data-model]').exists()).toBe(false);
-    await button(wrapper, '展开三维模型').trigger('click');
-    expect(collapsed.value).toBe(false);
-  });
-});
+// 加入当前地图（面板的目录、工具栏最后都调它）
+const add = (owner: SceneModels, id: string) => {
+  owner.add([id]);
+  return nextTick();
+};
 
 describe('漫游的入口和面板（ADR 0097）', () => {
-  it('加载完成、有出生点或路线的模型在第二行最右边有"漫游"；点了换成漫游面板，从步行开始；退出后换回模型面板', async () => {
+  it('当前图层里加载完成、有出生点或路线的模型行尾有"漫游"；点了换成漫游面板，从步行开始；退出后换回当前图层', async () => {
     const { wrapper, owner, report } = mountPanel();
-    await check(wrapper, 'station', true);
-    await check(wrapper, 'white', true);
-    expect(textButton(wrapper, '漫游')).toBeUndefined();
-    await report({ station: 'ready', 'white/plain': 'ready' });
-    expect(wrapper.get('[data-loaded="white"]').text()).not.toContain('漫游');
-    const entry = wrapper.get('[data-loaded="station"]').findAll('button').find(item => item.text() === '漫游');
-    expect(entry?.element.parentElement?.lastElementChild).toBe(entry?.element);
+    await add(owner, 'station');
+    await add(owner, 'white');
+    expect(wrapper.find('[data-roam="white"]').exists()).toBe(false);
+    const entry = () => wrapper.get('[data-roam="station"]');
+    expect(entry().attributes('aria-disabled')).toBe('true');
+    await entry().trigger('click');
+    expect(owner.roam.value).toBeNull();
 
-    await entry?.trigger('click');
+    await report({ station: 'ready', 'white/plain': 'ready' });
+    expect(entry().attributes('aria-disabled')).toBe('false');
+    await entry().trigger('click');
     expect(owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'station', speed: 4 });
-    expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(false);
+    expect(wrapper.find('[data-current-list]').exists()).toBe(false);
     const panel = wrapper.get('[data-roam-panel]');
     expect(panel.get('header').text()).toContain('漫游苏州站地下空间 · 室内');
     expect(panel.get('[aria-label="漫游方式"] .is-active').text()).toBe('步行');
@@ -294,16 +183,16 @@ describe('漫游的入口和面板（ADR 0097）', () => {
     await textButton(wrapper, '退出漫游')?.trigger('click');
     expect(owner.roam.value).toBeNull();
     expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
-    expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(true);
+    expect(wrapper.find('[data-current-list]').exists()).toBe(true);
   });
 
   it('没有出生点的模型从第一条路线开始，步行那一段不可用；选路线停在它的起点', async () => {
     const [station, ...others] = CATALOG;
     const { wrapper, owner, report } = mountPanel([{ ...required(station, '目录里没有车站'), spawn: undefined }, ...others]);
-    await check(wrapper, 'station', true);
+    await add(owner, 'station');
     await report({ station: 'ready' });
 
-    await textButton(wrapper, '漫游')?.trigger('click');
+    await wrapper.get('[data-roam="station"]').trigger('click');
     expect(owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter', playing: false, speed: 4 });
     const panel = () => wrapper.get('[data-roam-panel]');
     const modes = panel().findAll('[aria-label="漫游方式"] label');
@@ -325,7 +214,7 @@ describe('漫游的入口和面板（ADR 0097）', () => {
 
   it('路线：开始后是暂停，走过一段后暂停是继续，到终点是重新开始；速度改剩余时间', async () => {
     const { wrapper, owner, report, progress } = mountPanel();
-    await check(wrapper, 'station', true);
+    await add(owner, 'station');
     await report({ station: 'ready' });
     owner.startRoute('station', 'enter');
     await nextTick();
@@ -352,7 +241,7 @@ describe('漫游的入口和面板（ADR 0097）', () => {
 
   it('换方式：步行、路线之间切换，速度不变；面板可以收起成竖条', async () => {
     const { wrapper, owner, report, collapsed } = mountPanel();
-    await check(wrapper, 'station', true);
+    await add(owner, 'station');
     await report({ station: 'ready' });
     owner.startRoam('station');
     owner.setSpeed(2.5);
@@ -402,7 +291,7 @@ describe('漫游面板里的步行（ADR 0086、0097）', () => {
 
   it('建好后进入站内、行走：调速、回到起始点、脱困改意图；提示几秒后消失，同样的提示再来一次重新显示', async () => {
     const { wrapper, owner, report, builds, walk } = mountPanel();
-    await check(wrapper, 'station', true);
+    await add(owner, 'station');
     await report({ station: 'ready' });
     owner.startWalk('station');
     builds[0]?.resolve(NAVIGATION);
@@ -441,7 +330,7 @@ describe('漫游面板里的步行（ADR 0086、0097）', () => {
 
   it('人称切换由页面决定显示（ADR 0090）：默认没有，操作说明是第一人称的；显示时点第三人称改意图、换操作说明', async () => {
     const hidden = mountPanel();
-    await check(hidden.wrapper, 'station', true);
+    await add(hidden.owner, 'station');
     await hidden.report({ station: 'ready' });
     hidden.owner.startWalk('station');
     hidden.builds[0]?.resolve(NAVIGATION);
@@ -452,7 +341,7 @@ describe('漫游面板里的步行（ADR 0086、0097）', () => {
     expect(hiddenPanel.text()).toContain('右键拖动转向滚轮缩放视野');
 
     const { wrapper, owner, report, builds, walk } = mountPanel(CATALOG, { personSwitch: true });
-    await check(wrapper, 'station', true);
+    await add(owner, 'station');
     await report({ station: 'ready' });
     owner.startWalk('station');
     builds[0]?.resolve(NAVIGATION);
@@ -468,7 +357,7 @@ describe('漫游面板里的步行（ADR 0086、0097）', () => {
 
   it('分析失败可以重试；附近找不到能站的地方时提示，只能退出', async () => {
     const { wrapper, owner, report, builds, walk } = mountPanel();
-    await check(wrapper, 'station', true);
+    await add(owner, 'station');
     await report({ station: 'ready' });
     owner.startWalk('station');
     builds[0]?.reject(new Error('瓦片下载失败（404）'));
@@ -512,10 +401,9 @@ describe('高斯泼溅的漫游（ADR 0156）', () => {
 
   it('有出生点的泼溅也有"漫游"，从步行开始；叫法不是站内：分析中、失败、进入、找不到能站的地方', async () => {
     const { wrapper, owner, report, builds, walk } = mountPanel(SPLATS);
-    await check(wrapper, 'tomb', true);
+    await add(owner, 'tomb');
     await report({ tomb: 'ready' });
-    const entry = wrapper.get('[data-loaded="tomb"]').findAll('button').find(item => item.text() === '漫游');
-    await entry?.trigger('click');
+    await wrapper.get('[data-roam="tomb"]').trigger('click');
     expect(owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'tomb' });
     const panel = () => wrapper.get('[data-roam-panel]');
     expect(panel().get('header').text()).toContain('漫游土山墓 · 高斯泼溅');

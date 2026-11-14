@@ -1,13 +1,16 @@
-import type { CameraState } from '@mx/map-core';
-import { provideMap } from '@mx/map-vue';
+import type { CameraState, SceneStatus } from '@mx/map-core';
+import { type MapContext, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
 import { buildCatalog } from '@/features/resource-map/catalog';
 import { type ResourceLayers, useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { sceneManifestSchema } from '@/features/scene-models/api';
+import { buildModelCatalog } from '@/features/scene-models/catalog';
+import { type SceneModels, useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -32,32 +35,68 @@ const CATALOG = buildCatalog([
   { code: 'jt', name: '交通', children: [layer('csxhjctb_lrdl', '公路线层', 'Line')] }
 ] satisfies ResourceTreeCategory[]);
 
-// 页面创建地图和拥有者，渲染面板；没有画布，只看面板和拥有者的状态
-async function mountPanel() {
+// 两个三维模型：车站能漫游，白膜能换效果
+const MODELS = buildModelCatalog(
+  sceneManifestSchema.parse({
+    models: [
+      {
+        id: 'station',
+        name: '苏州站地下空间',
+        cityCode: '320500',
+        kind: 'indoor',
+        underground: true,
+        tileset: 'S.json',
+        routes: [{ id: 'enter', name: '进站', path: [[120.666, 31.3175, -5.1], [120.667, 31.3175, -5.1]] }]
+      },
+      {
+        id: 'white',
+        name: '苏州白膜',
+        cityCode: '320500',
+        kind: 'white',
+        underground: false,
+        effects: [{ id: 'plain', label: '无纹理', tileset: 'W/plain.json' }]
+      }
+    ]
+  }),
+  'https://maps.test/3dt/manifest.json'
+);
+
+// 页面创建地图和拥有者，渲染面板；没有画布，只看面板和拥有者的状态。模型的状态报告由用例给
+async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' | 'failed' } = {}) {
   let owner: ResourceLayers | undefined;
+  let models: SceneModels | undefined;
+  let context: MapContext | undefined;
   const legendCodes: (string | null)[] = [];
+  const sceneStatus = shallowRef<SceneStatus>(new Map());
+  const onRetryModels = vi.fn<() => void>();
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const catalog = shallowRef(CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols, tileBase: 'http://localhost/tiles/' });
     const layout = useResourcePanelLayout();
+    const sceneModels = useSceneModels({ ...map, sceneStatus }, MODELS);
     owner = layers;
+    models = sceneModels;
+    context = map;
     return () => (
       <CurrentMapLayerPanel
         resources={layers}
         symbols={symbols}
         layout={layout}
+        models={sceneModels}
+        modelsStatus={modelsStatus}
         onLegendCode={(code: string | null) => legendCodes.push(code)}
+        onRetryModels={onRetryModels}
       />
     );
   });
   const wrapper = mount(Page, { attachTo: document.body });
   await nextTick();
-  if (!owner) {
+  if (!owner || !models || !context) {
     throw new Error('页面没有创建拥有者');
   }
-  return { wrapper, owner, legendCodes };
+  return { wrapper, owner, models, map: context, sceneStatus, legendCodes, onRetryModels };
 }
 
 const node = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-catalog-node="resource:${code}"]`);
@@ -215,5 +254,88 @@ describe('CurrentMapLayerPanel', () => {
     await nextTick();
     expect(owner.state.value.displays.get('bgdc_dltb')?.checked).toBe(false);
     expect(document.querySelector('[data-panel-menu]')).toBeNull();
+  });
+
+  it('三维模型在目录最后、按市分组；加入后进"三维模型"组，资源、模型一起加时各自放在本组最上面（ADR 0157）', async () => {
+    const { wrapper, models } = await mountPanel();
+    await tool(wrapper, 'expand-all').trigger('click');
+    const keys = wrapper.findAll('[data-catalog-node]').map(item => item.attributes('data-catalog-node'));
+    expect(keys.slice(-4)).toStrictEqual(['model-root', 'model-city:320500', 'model:station', 'model:white']);
+    expect(wrapper.get('[data-catalog-node="model:white"]').text()).toContain('白膜');
+
+    await node(wrapper, 'csxhjctb_lrdl').trigger('click');
+    await wrapper.get('[data-catalog-node="model:white"]').trigger('click', { ctrlKey: true });
+    await tool(wrapper, 'add').trigger('click');
+    expect(models.added.value).toStrictEqual(['white']);
+    expect(wrapper.findAll('[data-current-group]').map(group => group.attributes('data-current-group'))).toStrictEqual([
+      'layers',
+      'models'
+    ]);
+    expect(wrapper.findAll('[data-current-row]').map(item => item.attributes('data-current-row'))).toStrictEqual([
+      'resource:csxhjctb_lrdl',
+      'resource:bgdc_dltb',
+      'model:white'
+    ]);
+    expect(selectedRow(wrapper)).toBe('csxhjctb_lrdl');
+  });
+
+  it('二维里模型组变淡、标"仅三维"：不能定位、不能漫游，没有透明度和图例，移动只改列表顺序；勾选、移动、移除照常', async () => {
+    const { wrapper, models } = await mountPanel();
+    models.add(['white', 'station']);
+    await nextTick();
+    const group = wrapper.get('[data-current-group="models"]');
+    expect(group.classes().join(' ')).toMatch(/dimmed/);
+    expect(group.text()).toContain('仅三维');
+    const station = () => wrapper.get('[data-current-row="model:station"]');
+
+    await station().trigger('click');
+    await station().trigger('dblclick');
+    expect(station().attributes('aria-selected')).toBe('true');
+    expect(tool(wrapper, 'locate').attributes('aria-disabled')).toBe('true');
+    expect(tool(wrapper, 'opacity').attributes('aria-disabled')).toBe('true');
+    expect(tool(wrapper, 'legend').attributes('aria-disabled')).toBe('true');
+    expect(wrapper.get('[data-roam="station"]').attributes('aria-disabled')).toBe('true');
+
+    await tool(wrapper, 'move-up').trigger('click');
+    expect(models.added.value).toStrictEqual(['station', 'white']);
+    await station().trigger('keydown', { key: ' ' });
+    expect(models.hidden.value).toStrictEqual(new Set(['station']));
+    await station().trigger('keydown', { key: 'Delete' });
+    expect(models.added.value).toStrictEqual(['white']);
+    expect(selectedRow(wrapper)).toBe('model:white');
+  });
+
+  it('三维里模型组照常：选中模型时定位能用，交给拥有者飞过去（还没加载完的等加载完）', async () => {
+    const { wrapper, models, map } = await mountPanel();
+    models.add(['station']);
+    map.setDimension('3d');
+    await nextTick();
+    const group = wrapper.get('[data-current-group="models"]');
+    expect(group.text()).not.toContain('仅三维');
+    const locate = vi.spyOn(models, 'locate');
+
+    await wrapper.get('[data-current-row="model:station"]').trigger('click');
+    expect(tool(wrapper, 'locate').attributes('aria-disabled')).toBe('false');
+    await tool(wrapper, 'locate').trigger('click');
+    expect(locate).toHaveBeenCalledExactlyOnceWith('station');
+  });
+
+  it('上下方向键跨组换选中：二维图层的最后一行往下是第一个模型', async () => {
+    const { wrapper, models } = await mountPanel();
+    models.add(['white']);
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await row(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'ArrowDown' });
+    expect(selectedRow(wrapper)).toBe('model:white');
+    await wrapper.get('[data-current-row="model:white"]').trigger('keydown', { key: 'ArrowUp' });
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+  });
+
+  it('模型清单读不到时目录最后提示，可以重试', async () => {
+    const { wrapper, onRetryModels } = await mountPanel({ modelsStatus: 'failed' });
+    const failed = wrapper.get('[data-models-failed]');
+    expect(failed.text()).toContain('三维模型清单加载失败');
+    await failed.get('button').trigger('click');
+    expect(onRetryModels).toHaveBeenCalledOnce();
   });
 });

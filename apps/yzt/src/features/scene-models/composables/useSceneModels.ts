@@ -51,10 +51,13 @@ import {
   type WalkChoice
 } from '../scene-content';
 
-/** 拥有者用到的上下文：引擎不支持高斯泼溅时（sceneCapabilities.splats）目录里不列出这类模型（ADR 0149） */
+/**
+ * 拥有者用到的上下文：引擎不支持高斯泼溅时（sceneCapabilities.splats）目录里不列出这类模型（ADR 0149）；
+ * 二维里加入的模型只进列表，不飞过去、不能定位（ADR 0157）
+ */
 export type SceneModelsContext = Pick<
   MapContext,
-  'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation' | 'sceneCapabilities'
+  'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation' | 'sceneCapabilities' | 'dimension'
 >;
 
 /** 漫游的方式：步行或路线，同一次漫游里在面板上切换（ADR 0097 第 2 节） */
@@ -93,22 +96,36 @@ export interface SceneModels {
   readonly models: ComputedRef<readonly SceneModel[]>;
   /** 清单已经到了：区分"还没有目录"和"目录是空的" */
   readonly hasCatalog: ComputedRef<boolean>;
-  /** 勾选的模型，按勾选的先后 */
-  readonly loaded: Readonly<ShallowRef<readonly string[]>>;
-  /** 模型当前显示的瓦片集的状态；没勾选、还没有报告时是 loading */
+  /** 加入当前地图的模型（ADR 0157）：当前图层里的先后，新加入的在最前；三维里加入即加载 */
+  readonly added: Readonly<ShallowRef<readonly string[]>>;
+  /** 隐藏的模型：三维内容里不显示，数据留着，再显示时不重新下载 */
+  readonly hidden: Readonly<ShallowRef<ReadonlySet<string>>>;
+  /** 模型当前显示的瓦片集的状态；没加入、还没有报告时是 loading */
   readonly stateOf: (id: string) => ModelLoadState;
   readonly effectOf: (id: string) => string;
-  /** 每次勾选一个模型都等它就绪后飞过去，不看已经勾了几个；取消勾选不动相机 */
-  readonly setChecked: (id: string, checked: boolean) => void;
+  /**
+   * 加入当前地图：没加入过的整批放在最前，批内保持给出的先后；已经加入的不动。三维里等第一个新加入的就绪后飞过去，
+   * 不看已经加入了几个；二维里只进列表，切到三维时也不飞
+   */
+  readonly add: (ids: readonly string[]) => void;
+  /** 移出当前地图：效果、重试次数、导航网格一起忘掉，在它里面的漫游一并结束；不动相机 */
+  readonly remove: (ids: readonly string[]) => void;
+  /** 显示、隐藏已加入的模型；隐藏时放弃飞向它，在它里面的漫游一并结束 */
+  readonly setVisible: (id: string, visible: boolean) => void;
+  /** 在已加入的模型里移到 to：只改列表的先后，遮挡按模型在空间里的位置。to 超出范围时抛错 */
+  readonly moveModel: (id: string, to: number) => void;
   readonly setEffect: (id: string, effectId: string) => void;
-  /** 一次新的相机操作：飞到模型；地下的模型也只是飞过去，没有单独的钻地（ADR 0097 第 5 节） */
+  /**
+   * 一次新的相机操作：飞到模型，还没就绪时等就绪后飞（失败了就等重试）；地下的模型也只是飞过去，没有单独的钻地
+   * （ADR 0097 第 5 节）。只在三维里、显示着的模型能定位
+   */
   readonly locate: (id: string) => void;
   /** 失败的瓦片集重新加载 */
   readonly retry: (id: string) => void;
   /** 正在进行的漫游：路线（ADR 0083）或步行（ADR 0086）；漫游地下的模型时在地下空间（ADR 0097 第 5 节） */
   readonly roam: Readonly<ShallowRef<RoamChoice | null>>;
   /**
-   * 已加载里的"漫游"（ADR 0097 第 1 节）：清单里有出生点的从步行开始，否则停在上次走的（没走过就是第一条）路线的起点；
+   * 当前图层里的"漫游"（ADR 0097 第 1 节、0157）：清单里有出生点的从步行开始，否则停在上次走的（没走过就是第一条）路线的起点；
    * 只有加载完成、有出生点或路线的模型能开始
    */
   readonly startRoam: (id: string) => void;
@@ -168,7 +185,7 @@ type NavigationBuild =
   | { readonly modelId: string; readonly state: 'failed'; readonly error: unknown };
 
 /**
- * 三维模型的拥有者（ADR 0081、0083、0086、0097）：持有勾选、白膜效果、重试、定位和漫游，推导会话的三维内容；
+ * 三维模型的拥有者（ADR 0081、0083、0086、0097、0157）：持有加入、显隐、先后、白膜效果、重试、定位和漫游，推导会话的三维内容；
  * 状态来自上下文的 sceneStatus、roamStatus。参数不合法时抛错
  */
 export function useSceneModels(
@@ -184,7 +201,8 @@ export function useSceneModels(
     (toValue(catalog) ?? []).filter(model => model.kind !== 'splat' || map.sceneCapabilities.splats)
   );
   const hasCatalog = computed(() => toValue(catalog) !== undefined);
-  const loaded = shallowRef<readonly string[]>([]);
+  const added = shallowRef<readonly string[]>([]);
+  const hidden = shallowRef<ReadonlySet<string>>(new Set());
   const effects = shallowRef<ReadonlyMap<string, string>>(new Map());
   const shownEffects = shallowRef<ReadonlyMap<string, readonly string[]>>(new Map());
   const attempts = shallowRef<ReadonlyMap<string, number>>(new Map());
@@ -193,7 +211,7 @@ export function useSceneModels(
   const navigationBuild = shallowRef<NavigationBuild | null>(null);
   // 路线漫游时打开完整地图：记下打开前是否在播放，关上时接着播放
   const routeMap = shallowRef<{ readonly resume: boolean } | null>(null);
-  // 新勾选的模型等就绪后要飞过去：勾选时开始的相机操作，取消勾选它时放弃，再勾选别的或有了别的定位时由 run 放弃
+  // 等就绪后要飞过去的模型：加入、定位时开始的相机操作；移出、隐藏它时放弃，再加入别的或有了别的定位时由 run 放弃
   const pendingLocate = shallowRef<{ readonly modelId: string; readonly operation: CameraOperation } | null>(null);
   // 漫游开始时的相机操作：中止（有了别的定位）就退出漫游
   let roamSignal: AbortSignal | null = null;
@@ -217,38 +235,91 @@ export function useSceneModels(
   const statusOf = (model: SceneModel): TilesetStatus | undefined =>
     map.sceneStatus.value.get(currentTilesetId(model, effects.value));
 
-  const assertLoaded = (id: string) => {
-    if (!loaded.value.includes(id)) {
-      throw new Error(`模型 ${id} 没有加载`);
+  const assertAdded = (id: string) => {
+    if (!added.value.includes(id)) {
+      throw new Error(`模型 ${id} 没有加入`);
     }
   };
 
-  const setChecked = (id: string, checked: boolean) => {
-    const model = modelOf(id);
-    if (checked === loaded.value.includes(id)) {
-      return;
-    }
-    if (checked) {
-      loaded.value = [...loaded.value, id];
-      // 每次勾选都飞到新勾选的这个，不看已经勾了几个；新的相机操作作废还没飞的上一个
-      pendingLocate.value = { modelId: id, operation: map.beginCameraOperation() };
-      return;
-    }
-    // 取消勾选不动相机，只放弃飞向它自己
+  // 等它就绪后飞过去；新的相机操作作废还没飞的上一个
+  const flyWhenReady = (id: string) => {
+    pendingLocate.value = { modelId: id, operation: map.beginCameraOperation() };
+  };
+
+  // 不再飞向它，在它里面的漫游一并结束
+  const letGo = (id: string) => {
     if (pendingLocate.value?.modelId === id) {
       pendingLocate.value = null;
     }
-    loaded.value = loaded.value.filter(item => item !== id);
-    // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面漫游的一并结束
-    shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
-    // 重试次数按瓦片集 ID 记；高斯泼溅没有瓦片集，按模型 ID 记
-    const attemptIds = new Set(model.splat ? [model.id] : model.effects.map(effect => tilesetIdOf(model, effect.id)));
-    attempts.value = new Map([...attempts.value].filter(([attemptId]) => !attemptIds.has(attemptId)));
-    if (navigations.value.has(id)) {
-      navigations.value = new Map([...navigations.value].filter(([modelId]) => modelId !== id));
-    }
     if (roam.value?.modelId === id) {
       exitRoam();
+    }
+  };
+
+  const add = (ids: readonly string[]) => {
+    const fresh = [...new Set(ids)].filter(id => {
+      modelOf(id);
+      return !added.value.includes(id);
+    });
+    const [first] = fresh;
+    if (first === undefined) {
+      return;
+    }
+    added.value = [...fresh, ...added.value];
+    if (map.dimension.value === '3d') {
+      flyWhenReady(first);
+    }
+  };
+
+  const remove = (ids: readonly string[]) => {
+    const gone = new Set(ids.filter(id => added.value.includes(id)));
+    if (gone.size === 0) {
+      return;
+    }
+    for (const id of gone) {
+      letGo(id);
+    }
+    added.value = added.value.filter(id => !gone.has(id));
+    if ([...gone].some(id => hidden.value.has(id))) {
+      hidden.value = new Set([...hidden.value].filter(id => !gone.has(id)));
+    }
+    // 移出时这些模型的效果、重试次数、导航网格一起忘掉
+    shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => !gone.has(modelId)));
+    // 重试次数按瓦片集 ID 记；高斯泼溅没有瓦片集，按模型 ID 记
+    const attemptIds = new Set(
+      [...gone].flatMap(id => {
+        const model = modelOf(id);
+        return model.splat ? [model.id] : model.effects.map(effect => tilesetIdOf(model, effect.id));
+      })
+    );
+    attempts.value = new Map([...attempts.value].filter(([attemptId]) => !attemptIds.has(attemptId)));
+    if ([...gone].some(id => navigations.value.has(id))) {
+      navigations.value = new Map([...navigations.value].filter(([modelId]) => !gone.has(modelId)));
+    }
+  };
+
+  const setVisible = (id: string, visible: boolean) => {
+    assertAdded(id);
+    if (visible !== hidden.value.has(id)) {
+      return;
+    }
+    if (visible) {
+      hidden.value = new Set([...hidden.value].filter(item => item !== id));
+      return;
+    }
+    letGo(id);
+    hidden.value = new Set([...hidden.value, id]);
+  };
+
+  const moveModel = (id: string, to: number) => {
+    assertAdded(id);
+    const list = added.value;
+    if (!(Number.isInteger(to) && to >= 0 && to < list.length)) {
+      throw new RangeError(`位置应在 0～${list.length - 1} 之间，收到 ${to}`);
+    }
+    const from = list.indexOf(id);
+    if (from !== to) {
+      added.value = list.toSpliced(from, 1).toSpliced(to, 0, id);
     }
   };
 
@@ -270,13 +341,20 @@ export function useSceneModels(
   };
 
   const locate = (id: string) => {
-    assertLoaded(id);
-    const status = statusOf(modelOf(id));
-    if (status?.state !== 'ready') {
-      throw new Error(`模型 ${id} 还不能定位`);
+    assertAdded(id);
+    if (map.dimension.value !== '3d') {
+      throw new Error('二维里不能定位三维模型');
     }
-    const { camera } = status;
-    map.runCameraOperation(control => control.flyTo(camera));
+    if (hidden.value.has(id)) {
+      throw new Error(`模型 ${id} 隐藏着，不能定位`);
+    }
+    const status = statusOf(modelOf(id));
+    if (status?.state === 'ready') {
+      const { camera } = status;
+      map.runCameraOperation(control => control.flyTo(camera));
+    } else {
+      flyWhenReady(id);
+    }
   };
 
   // 加载失败时继续等，重试后就绪的照样飞过去
@@ -297,7 +375,7 @@ export function useSceneModels(
   );
 
   const retry = (id: string) => {
-    assertLoaded(id);
+    assertAdded(id);
     const tilesetId = currentTilesetId(modelOf(id), effects.value);
     attempts.value = new Map([...attempts.value, [tilesetId, (attempts.value.get(tilesetId) ?? 0) + 1]]);
   };
@@ -391,6 +469,9 @@ export function useSceneModels(
   };
 
   const assertRoamable = (model: SceneModel, what: string) => {
+    if (hidden.value.has(model.id)) {
+      throw new Error(`模型 ${model.id} 隐藏着，不能${what}`);
+    }
     if (loadStateOf(statusOf(model)) !== 'ready') {
       throw new Error(`模型 ${model.id} 还不能${what}`);
     }
@@ -451,7 +532,7 @@ export function useSceneModels(
   };
 
   const startRoute = (id: string, routeId: string) => {
-    assertLoaded(id);
+    assertAdded(id);
     const model = modelOf(id);
     if (!model.routes.some(route => route.id === routeId)) {
       throw new Error(`模型 ${id} 没有路线 ${routeId}`);
@@ -491,7 +572,7 @@ export function useSceneModels(
   };
 
   const startWalk = (id: string) => {
-    assertLoaded(id);
+    assertAdded(id);
     const model = modelOf(id);
     if (!model.spawn) {
       throw new Error(`模型 ${id} 的清单里没有出生点，不能步行`);
@@ -689,7 +770,8 @@ export function useSceneModels(
   };
 
   const state = (): SceneModelsState => ({
-    loaded: loaded.value,
+    added: added.value,
+    hidden: hidden.value,
     effects: effects.value,
     shownEffects: shownEffects.value,
     attempts: attempts.value,
@@ -701,10 +783,14 @@ export function useSceneModels(
   return {
     models,
     hasCatalog,
-    loaded: shallowReadonly(loaded),
-    stateOf: id => (loaded.value.includes(id) ? loadStateOf(statusOf(modelOf(id))) : 'loading'),
+    added: shallowReadonly(added),
+    hidden: shallowReadonly(hidden),
+    stateOf: id => (added.value.includes(id) ? loadStateOf(statusOf(modelOf(id))) : 'loading'),
     effectOf: id => currentEffect(modelOf(id), effects.value),
-    setChecked,
+    add,
+    remove,
+    setVisible,
+    moveModel,
     setEffect,
     locate,
     retry,

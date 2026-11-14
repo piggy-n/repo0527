@@ -1,6 +1,6 @@
 import { Search } from '@element-plus/icons-vue';
 import { useMap } from '@mx/map-vue';
-import { ElInput } from 'element-plus';
+import { ElButton, ElInput } from 'element-plus';
 import { computed, defineComponent, nextTick, onScopeDispose, type PropType, ref, type VNode, watch } from 'vue';
 import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSelect';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
@@ -16,6 +16,9 @@ import {
   resourceKey
 } from '@/features/resource-map/layer-panel';
 import { legendEntry } from '@/features/resource-map/legend';
+import { ModelLayerRow } from '@/features/scene-models/components/ModelLayerRow';
+import type { SceneModels } from '@/features/scene-models/composables/useSceneModels';
+import { canRoamModel, modelCatalogNodes, modelIdOfKey, modelKey } from '@/features/scene-models/layer-panel';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import {
   type CatalogSelection,
@@ -61,9 +64,20 @@ interface PanelMenuState {
   readonly point: MenuPoint;
 }
 
+/** 定位能不能用：工具栏的提示、菜单的名称 */
+interface LocateInfo {
+  readonly enabled: boolean;
+  readonly tip: string;
+  readonly label: string;
+}
+
+type LoadStatus = 'ready' | 'loading' | 'failed';
+
 /**
- * 现状底图的资源图层面板（ADR 0157）：上段"资源目录"找资源、加入和移出，下段"当前图层"管地图上的图层，共用工具栏操作选中的一行。
- * 把 resource-map 的目录、行、图例和 shared 的面板部件拼在一起；选中、浮层、菜单这些界面状态在这里，图层的状态在拥有者里
+ * 现状底图的资源图层面板（ADR 0157），二三维共用：上段"资源目录"找资源和三维模型、加入和移出，下段"当前图层"分"二维图层"
+ * "三维模型"两组管地图上的内容，共用工具栏操作选中的一行。把 resource-map、scene-models 的目录、行、图例和 shared 的面板部件
+ * 拼在一起；选中、浮层、菜单这些界面状态在这里，图层和模型的状态在各自的拥有者里。二维里模型组变淡、标"仅三维"，模型不能定位、
+ * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）
  */
 export const CurrentMapLayerPanel = defineComponent({
   name: 'CurrentMapLayerPanel',
@@ -71,14 +85,18 @@ export const CurrentMapLayerPanel = defineComponent({
     resources: { type: Object as PropType<ResourceLayers>, required: true },
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     layout: { type: Object as PropType<ResourcePanelLayout>, required: true },
+    models: { type: Object as PropType<SceneModels>, required: true },
     /** 资源目录的查询：还没到、加载失败 */
-    status: { type: String as PropType<'ready' | 'loading' | 'failed'>, default: 'ready' },
+    status: { type: String as PropType<LoadStatus>, default: 'ready' },
+    /** 三维模型清单的查询：失败时目录最后提示、可以重试 */
+    modelsStatus: { type: String as PropType<LoadStatus>, default: 'ready' },
     collapsed: { type: Boolean, default: false },
     /** 手机宽度：浮层盖在面板下段上 */
     sheet: { type: Boolean, default: false }
   },
   emits: {
     retry: () => true,
+    retryModels: () => true,
     'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean',
     /** 图例浮层正在显示的资源，右侧图例在编辑同一个资源时回到浏览；关闭时为 null */
     legendCode: (code: string | null) => code === null || typeof code === 'string'
@@ -89,11 +107,17 @@ export const CurrentMapLayerPanel = defineComponent({
     // 登记表的最小级别都是整数：只在跨级时更新行，不把显示层级的浮点容差用于可见性判断
     const level = computed(() => Math.floor(camera.value.zoom));
     const state = computed(() => props.resources.state.value);
+    const scene = computed(() => map.dimension.value === '3d');
+    const modelOf = (id: string) => props.models.models.value.find(model => model.id === id);
 
     // ---------- 资源目录
     const keyword = ref('');
     const searching = computed(() => keyword.value.trim() !== '');
-    const nodes = computed(() => resourceCatalogNodes(state.value, keyword.value));
+    // 三维模型是目录最后一个分类
+    const nodes = computed(() => [
+      ...resourceCatalogNodes(state.value, keyword.value),
+      ...modelCatalogNodes(props.models.models.value, props.models.added.value, keyword.value)
+    ]);
     const expanded = ref<ReadonlySet<string>>(new Set());
     const selection = ref<CatalogSelection>(EMPTY_CATALOG_SELECTION);
     // 目录第一次到达时展开含有已加入资源的分类；之后目录刷新不改用户的展开
@@ -113,7 +137,19 @@ export const CurrentMapLayerPanel = defineComponent({
     // ---------- 当前图层
     const layers = computed(() => currentLayers(state.value));
     const layerKeys = computed(() => layers.value.map(layer => resourceKey(layer.code)));
-    const groupOpen = ref(true);
+    // 拥有者的目录里还有的模型（清单刷新后没有了的不显示）
+    const modelKeys = computed(() =>
+      props.models.added.value.flatMap(id => (modelOf(id) ? [modelKey(id)] : []))
+    );
+    const layersOpen = ref(true);
+    const modelsOpen = ref(true);
+    // 两组按显示的先后接在一起；方向键跨组时只走展开着的组
+    const currentKeys = computed(() => [...layerKeys.value, ...modelKeys.value]);
+    const shownKeys = computed(() => [
+      ...(layersOpen.value ? layerKeys.value : []),
+      ...(modelsOpen.value ? modelKeys.value : [])
+    ]);
+    const groupKeysOf = (key: string) => (modelIdOfKey(key) === null ? layerKeys.value : modelKeys.value);
     const selected = ref<string | null>(null);
     const selectedCode = computed(() => (selected.value === null ? null : resourceCodeOfKey(selected.value)));
     const popover = ref<{ readonly kind: PopoverKind; readonly configuring: boolean } | null>(null);
@@ -122,13 +158,14 @@ export const CurrentMapLayerPanel = defineComponent({
     let floating: PanelFloatingContext | null = null;
 
     // 选中的行不在当前图层里了（别处移出、目录刷新）：没有选中，浮层关闭
-    watch(layerKeys, keys => {
+    watch(currentKeys, keys => {
       if (selected.value !== null && !keys.includes(selected.value)) {
         selected.value = null;
       }
     });
+    // 浮层跟着换到选中的一项；模型没有透明度和图例，选中模型时关闭
     watch(selected, () => {
-      if (selected.value === null) {
+      if (selectedCode.value === null) {
         popover.value = null;
       } else if (popover.value) {
         popover.value = { kind: popover.value.kind, configuring: false };
@@ -181,39 +218,56 @@ export const CurrentMapLayerPanel = defineComponent({
       selected.value = key;
     };
 
+    // 加入：资源、模型各自整批放在本组最上面；第一个新行被选中、滚到它，新行滑入
     const addKeys = (keys: readonly string[]) => {
       const codes = keys.flatMap(key => resourceCodeOfKey(key) ?? []);
-      if (codes.length === 0) {
+      const ids = keys.flatMap(key => modelIdOfKey(key) ?? []);
+      const added = [...codes.map(resourceKey), ...ids.map(modelKey)];
+      const [first] = added;
+      if (first === undefined) {
         return;
       }
-      props.resources.add(codes);
-      const added = new Set(codes.map(resourceKey));
-      entering.value = new Set([...entering.value, ...added]);
-      later(ENTER_MS, () => (entering.value = new Set([...entering.value].filter(key => !added.has(key)))));
-      groupOpen.value = true;
-      const [first] = codes;
-      if (first !== undefined) {
-        choose(resourceKey(first));
-        void scrollToRow(resourceKey(first));
+      if (codes.length > 0) {
+        props.resources.add(codes);
+        layersOpen.value = true;
       }
+      if (ids.length > 0) {
+        props.models.add(ids);
+        modelsOpen.value = true;
+      }
+      const fresh = new Set(added);
+      entering.value = new Set([...entering.value, ...fresh]);
+      later(ENTER_MS, () => (entering.value = new Set([...entering.value].filter(key => !fresh.has(key)))));
+      choose(first);
+      void scrollToRow(first);
     };
 
     const removeKeys = (keys: readonly string[]) => {
       const codes = keys.flatMap(key => resourceCodeOfKey(key) ?? []);
-      if (codes.length === 0) {
+      const ids = keys.flatMap(key => modelIdOfKey(key) ?? []);
+      if (codes.length === 0 && ids.length === 0) {
         return;
       }
-      const removed = new Set(codes.map(resourceKey));
-      choose(selectionAfterRemoval(layerKeys.value, removed, selected.value));
-      props.resources.remove(codes);
+      const removed = new Set([...codes.map(resourceKey), ...ids.map(modelKey)]);
+      choose(selectionAfterRemoval(currentKeys.value, removed, selected.value));
+      if (codes.length > 0) {
+        props.resources.remove(codes);
+      }
+      if (ids.length > 0) {
+        props.models.remove(ids);
+      }
     };
 
     // 目录里的定位：在当前图层里选中、滚到中间、闪两下（用户 2026-11-14：双击改为定位）
     const locateInList = (key: string) => {
-      if (!layerKeys.value.includes(key)) {
+      if (!currentKeys.value.includes(key)) {
         return;
       }
-      groupOpen.value = true;
+      if (modelIdOfKey(key) === null) {
+        layersOpen.value = true;
+      } else {
+        modelsOpen.value = true;
+      }
       choose(key);
       void flash(key);
       void scrollToRow(key, 'center');
@@ -225,18 +279,50 @@ export const CurrentMapLayerPanel = defineComponent({
       const minzoom = code === null ? undefined : props.resources.minzoomOf(code);
       return minzoom !== undefined && level.value < minzoom ? minzoom : null;
     };
-    const locate = (key: string) => {
+    // 模型只在三维里、显示着时飞过去，还没加载完的等加载完（用户 2026-11-14：二维里不能定位模型）
+    const locateInfo = (key: string | null): LocateInfo => {
+      const id = key === null ? null : modelIdOfKey(key);
+      if (id !== null) {
+        if (!scene.value) {
+          return { enabled: false, tip: '定位（切换到三维后可用）', label: '定位' };
+        }
+        return props.models.hidden.value.has(id)
+          ? { enabled: false, tip: '定位（显示后可用）', label: '定位' }
+          : { enabled: true, tip: '定位', label: '定位' };
+      }
       const zoom = locateTarget(key);
       if (zoom !== null) {
+        return { enabled: true, tip: `放大到第 ${zoom} 级`, label: `放大到第 ${zoom} 级` };
+      }
+      return { enabled: false, tip: key === null ? '定位' : '定位（图层已在可见级别）', label: '定位' };
+    };
+    const locate = (key: string) => {
+      if (!locateInfo(key).enabled) {
+        return;
+      }
+      const id = modelIdOfKey(key);
+      const zoom = locateTarget(key);
+      if (id !== null) {
+        props.models.locate(id);
+      } else if (zoom !== null) {
         map.runCameraOperation(control => control.flyTo({ zoom }));
       }
     };
 
-    const move = (key: string, action: MoveAction) => {
+    const moveTo = (key: string, to: number) => {
+      const id = modelIdOfKey(key);
       const code = resourceCodeOfKey(key);
-      const to = moveIndex(layerKeys.value, key, action);
-      if (code !== null && to !== null) {
+      if (id !== null) {
+        props.models.moveModel(id, to);
+      } else if (code !== null) {
         props.resources.moveLayer(code, to);
+      }
+    };
+
+    const move = (key: string, action: MoveAction) => {
+      const to = moveIndex(groupKeysOf(key), key, action);
+      if (to !== null) {
+        moveTo(key, to);
         void scrollToRow(key);
       }
     };
@@ -246,11 +332,27 @@ export const CurrentMapLayerPanel = defineComponent({
     };
 
     const setVisible = (key: string, visible: boolean) => {
+      const id = modelIdOfKey(key);
       const code = resourceCodeOfKey(key);
-      if (code !== null) {
+      if (id !== null) {
+        props.models.setVisible(id, visible);
+      } else if (code !== null) {
         props.resources.setVisible(code, visible);
       }
     };
+
+    const visibleOf = (key: string) => {
+      const id = modelIdOfKey(key);
+      return id === null
+        ? (layers.value.find(layer => resourceKey(layer.code) === key)?.visible ?? false)
+        : !props.models.hidden.value.has(id);
+    };
+
+    // 模型行尾的漫游、失败后的重新加载能不能用：同行内的按钮
+    const roamable = (id: string) =>
+      scene.value && !props.models.hidden.value.has(id) && props.models.stateOf(id) === 'ready';
+    const modelFailed = (id: string) =>
+      scene.value && !props.models.hidden.value.has(id) && props.models.stateOf(id) === 'failed';
 
     // ---------- 工具栏
     const catalogTools = computed((): PanelToolItem[] => {
@@ -291,38 +393,41 @@ export const CurrentMapLayerPanel = defineComponent({
 
     const currentTools = computed((): PanelToolItem[] => {
       const key = selected.value;
-      const canMove = (action: MoveAction) => key !== null && moveIndex(layerKeys.value, key, action) !== null;
-      const zoom = locateTarget(key);
+      const model = key !== null && modelIdOfKey(key) !== null;
+      const canMove = (action: MoveAction) => key !== null && moveIndex(groupKeysOf(key), key, action) !== null;
+      // 模型的先后只影响列表，遮挡按模型在空间里的位置
+      const note = model ? '（只改列表顺序）' : '';
+      const info = locateInfo(key);
       return [
-        { key: 'move-up', icon: 'move-up', label: '图层上移', tip: '上移', disabled: !canMove('move-up') },
-        { key: 'move-down', icon: 'move-down', label: '图层下移', tip: '下移', disabled: !canMove('move-down') },
-        { key: 'move-top', icon: 'move-top', label: '图层置顶', tip: '置顶', disabled: !canMove('move-top') },
-        { key: 'move-bottom', icon: 'move-bottom', label: '图层置底', tip: '置底', disabled: !canMove('move-bottom') },
+        { key: 'move-up', icon: 'move-up', label: '图层上移', tip: `上移${note}`, disabled: !canMove('move-up') },
+        { key: 'move-down', icon: 'move-down', label: '图层下移', tip: `下移${note}`, disabled: !canMove('move-down') },
+        { key: 'move-top', icon: 'move-top', label: '图层置顶', tip: `置顶${note}`, disabled: !canMove('move-top') },
+        {
+          key: 'move-bottom',
+          icon: 'move-bottom',
+          label: '图层置底',
+          tip: `置底${note}`,
+          disabled: !canMove('move-bottom')
+        },
         'divider',
         {
           key: 'opacity',
           icon: 'layer-opacity',
           label: '图层透明度',
-          tip: '透明度',
-          disabled: key === null,
+          tip: model ? '三维模型没有透明度' : '透明度',
+          disabled: key === null || model,
           pressed: popover.value?.kind === 'opacity'
         },
         {
           key: 'legend',
           icon: 'map-legend',
           label: '图层图例',
-          tip: '图例',
-          disabled: key === null,
+          tip: model ? '三维模型没有图例' : '图例',
+          disabled: key === null || model,
           pressed: popover.value?.kind === 'legend'
         },
         'divider',
-        {
-          key: 'locate',
-          icon: 'focus',
-          label: '定位图层',
-          tip: zoom !== null ? `放大到第 ${zoom} 级` : key === null ? '定位' : '定位（图层已在可见级别）',
-          disabled: zoom === null
-        }
+        { key: 'locate', icon: 'focus', label: '定位图层', tip: info.tip, disabled: !info.enabled }
       ];
     });
 
@@ -331,7 +436,7 @@ export const CurrentMapLayerPanel = defineComponent({
       if (key === null) {
         return;
       }
-      if (action === 'opacity' || action === 'legend') {
+      if ((action === 'opacity' || action === 'legend') && resourceCodeOfKey(key) !== null) {
         togglePopover(action);
       } else if (action === 'locate') {
         locate(key);
@@ -376,27 +481,28 @@ export const CurrentMapLayerPanel = defineComponent({
           }
         ];
       }
-      const layer = layers.value.find(item => resourceKey(item.code) === current.key);
-      const canMove = (action: MoveAction) => moveIndex(layerKeys.value, current.key, action) !== null;
-      const zoom = locateTarget(current.key);
+      const visible = visibleOf(current.key);
+      const canMove = (action: MoveAction) => moveIndex(groupKeysOf(current.key), current.key, action) !== null;
+      const info = locateInfo(current.key);
+      const id = modelIdOfKey(current.key);
+      const model = id === null ? undefined : modelOf(id);
       return [
-        {
-          key: 'visible',
-          label: layer?.visible ? '隐藏' : '显示',
-          icon: layer?.visible ? 'eye-off' : 'eye',
-          shortcut: '空格'
-        },
+        { key: 'visible', label: visible ? '隐藏' : '显示', icon: visible ? 'eye-off' : 'eye', shortcut: '空格' },
         'divider',
-        { key: 'opacity', label: '透明度', icon: 'layer-opacity' },
-        { key: 'legend', label: '图例', icon: 'map-legend' },
-        'divider',
-        {
-          key: 'locate',
-          label: zoom !== null ? `放大到第 ${zoom} 级` : '定位',
-          icon: 'focus',
-          disabled: zoom === null,
-          shortcut: '双击'
-        },
+        ...(id === null
+          ? ([
+              { key: 'opacity', label: '透明度', icon: 'layer-opacity' },
+              { key: 'legend', label: '图例', icon: 'map-legend' },
+              'divider'
+            ] satisfies PanelMenuEntry[])
+          : []),
+        { key: 'locate', label: info.label, icon: 'focus', disabled: !info.enabled, shortcut: '双击' },
+        ...(id !== null && model && canRoamModel(model)
+          ? [{ key: 'roam', label: '漫游', icon: 'roam-walk', disabled: !roamable(id) } satisfies PanelMenuEntry]
+          : []),
+        ...(id !== null && modelFailed(id)
+          ? [{ key: 'retry', label: '重新加载', icon: 'undo' } satisfies PanelMenuEntry]
+          : []),
         'divider',
         { key: 'move-up', label: '上移', icon: 'move-up', disabled: !canMove('move-up'), shortcut: 'Alt+↑' },
         { key: 'move-down', label: '下移', icon: 'move-down', disabled: !canMove('move-down'), shortcut: 'Alt+↓' },
@@ -423,12 +529,16 @@ export const CurrentMapLayerPanel = defineComponent({
         }
         return;
       }
-      const layer = layers.value.find(item => resourceKey(item.code) === current.key);
+      const id = modelIdOfKey(current.key);
       if (action === 'visible') {
-        setVisible(current.key, !layer?.visible);
-      } else if (action === 'opacity' || action === 'legend') {
+        setVisible(current.key, !visibleOf(current.key));
+      } else if ((action === 'opacity' || action === 'legend') && id === null) {
         choose(current.key);
         popover.value = { kind: action, configuring: false };
+      } else if (action === 'roam' && id !== null && roamable(id)) {
+        props.models.startRoam(id);
+      } else if (action === 'retry' && id !== null) {
+        props.models.retry(id);
       } else if (action === 'remove') {
         removeKeys([current.key]);
       } else if (action === 'locate') {
@@ -439,64 +549,117 @@ export const CurrentMapLayerPanel = defineComponent({
     };
 
     // ---------- 渲染
-    const renderCurrent = () => {
-      if (layers.value.length === 0) {
-        return <div class={styles.empty}>当前地图还没有图层</div>;
-      }
-      return (
-        <CurrentLayerGroup
-          group="layers"
-          title="二维图层"
-          open={groupOpen.value}
-          keys={layerKeys.value}
-          selected={selected.value}
-          tabbable={selected.value ?? layerKeys.value[0] ?? null}
-          visibleOf={key => layers.value.find(layer => resourceKey(layer.code) === key)?.visible ?? false}
-          nameOf={key => layers.value.find(layer => resourceKey(layer.code) === key)?.name ?? key}
-          animationOf={animationOf}
-          dragTip="拖动调整叠放顺序（上层优先显示）"
-          onUpdate:open={(open: boolean) => (groupOpen.value = open)}
-          onSelect={choose}
-          onStep={(key: string, delta: number) => {
-            const next = steppedKey(layerKeys.value, key, delta);
-            choose(next);
-            void nextTick(() => rowElement(next)?.focus());
-          }}
-          onVisible={setVisible}
-          onMove={(key: string, to: number) => {
-            const code = resourceCodeOfKey(key);
-            if (code !== null) {
-              props.resources.moveLayer(code, to);
-            }
-          }}
-          onActivate={locate}
-          onRemove={(key: string) => removeKeys([key])}
-          onMenu={(key: string, point: MenuPoint) => (menu.value = { source: 'current', key, point })}
-        >
-          {{
-            row: ({ key }: { key: string }) => {
-              const code = resourceCodeOfKey(key);
-              return code === null
-                ? []
-                : [
-                    <ResourceLayerRow
-                      layers={props.resources}
-                      symbols={props.symbols}
-                      code={code}
-                      level={level.value}
-                      onLegend={() => {
-                        const open = popover.value?.kind === 'legend' && selected.value === key;
-                        choose(key);
-                        popover.value = open ? null : { kind: 'legend', configuring: false };
-                      }}
-                      onRemove={() => removeKeys([key])}
-                    />
-                  ];
-            }
-          }}
-        </CurrentLayerGroup>
-      );
+    const nameOf = (key: string) => {
+      const id = modelIdOfKey(key);
+      return id === null
+        ? (layers.value.find(layer => resourceKey(layer.code) === key)?.name ?? key)
+        : (modelOf(id)?.name ?? key);
     };
+
+    const renderRow = (key: string) => {
+      const id = modelIdOfKey(key);
+      if (id !== null) {
+        return [<ModelLayerRow models={props.models} id={id} scene={scene.value} onRemove={() => removeKeys([key])} />];
+      }
+      const code = resourceCodeOfKey(key);
+      return code === null
+        ? []
+        : [
+            <ResourceLayerRow
+              layers={props.resources}
+              symbols={props.symbols}
+              code={code}
+              level={level.value}
+              onLegend={() => {
+                const open = popover.value?.kind === 'legend' && selected.value === key;
+                choose(key);
+                popover.value = open ? null : { kind: 'legend', configuring: false };
+              }}
+              onRemove={() => removeKeys([key])}
+            />
+          ];
+    };
+
+    // 两组共用的：选中、方向键跨组、显隐、定位、移除、右键
+    const groupHandlers = {
+      onSelect: choose,
+      onStep: (key: string, delta: number) => {
+        const next = steppedKey(shownKeys.value, key, delta);
+        choose(next);
+        void nextTick(() => rowElement(next)?.focus());
+      },
+      onVisible: setVisible,
+      onMove: moveTo,
+      onActivate: locate,
+      onRemove: (key: string) => removeKeys([key]),
+      onMenu: (key: string, point: MenuPoint) => (menu.value = { source: 'current', key, point })
+    };
+
+    const renderCurrent = (): VNode[] => {
+      if (currentKeys.value.length === 0) {
+        return [<div class={styles.empty}>当前地图还没有图层</div>];
+      }
+      // 只有一行能用 Tab 进入：选中的，没有选中时是第一行
+      const tabbable = selected.value ?? shownKeys.value[0] ?? null;
+      const common = {
+        selected: selected.value,
+        tabbable,
+        visibleOf,
+        nameOf,
+        animationOf,
+        ...groupHandlers
+      };
+      const groups: VNode[] = [];
+      if (layerKeys.value.length > 0) {
+        groups.push(
+          <CurrentLayerGroup
+            key="layers"
+            group="layers"
+            title="二维图层"
+            open={layersOpen.value}
+            keys={layerKeys.value}
+            dragTip="拖动调整叠放顺序（上层优先显示）"
+            onUpdate:open={(open: boolean) => (layersOpen.value = open)}
+            {...common}
+          >
+            {{ row: ({ key }: { key: string }) => renderRow(key) }}
+          </CurrentLayerGroup>
+        );
+      }
+      // 二维里整组变淡，标题旁标一次"仅三维"，不在每一行上写
+      if (modelKeys.value.length > 0) {
+        groups.push(
+          <CurrentLayerGroup
+            key="models"
+            group="models"
+            title="三维模型"
+            tag={scene.value ? undefined : '仅三维'}
+            dimmed={!scene.value}
+            open={modelsOpen.value}
+            keys={modelKeys.value}
+            dragTip="拖动调整列表顺序"
+            onUpdate:open={(open: boolean) => (modelsOpen.value = open)}
+            {...common}
+          >
+            {{ row: ({ key }: { key: string }) => renderRow(key) }}
+          </CurrentLayerGroup>
+        );
+      }
+      return groups;
+    };
+
+    // 模型清单读不到时目录里没有"三维模型"：在目录最后提示，可以重试
+    const renderModelsFailed = (): VNode[] =>
+      props.modelsStatus === 'failed'
+        ? [
+            <div class={styles.modelsFailed} data-models-failed>
+              <span>三维模型清单加载失败</span>
+              <ElButton class="button-inline" link type="primary" size="small" onClick={() => emit('retryModels')}>
+                重试
+              </ElButton>
+            </div>
+          ]
+        : [];
 
     const renderPopover = (context: PanelFloatingContext): VNode | null => {
       const code = selectedCode.value;
@@ -618,10 +781,11 @@ export const CurrentMapLayerPanel = defineComponent({
               />
             ) : (
               <div class={styles.empty}>没有找到资源</div>
-            )
+            ),
+            ...renderModelsFailed()
           ],
           currentTools: () => [<PanelToolbar items={currentTools.value} label="当前图层的操作" onAction={onCurrentTool} />],
-          current: () => [renderCurrent()],
+          current: () => renderCurrent(),
           floating: (context: PanelFloatingContext) => {
             floating = context;
             const items: VNode[] = [];
