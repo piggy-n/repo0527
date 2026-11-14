@@ -47,22 +47,41 @@ export interface RoamPoint {
   readonly eye: number;
 }
 
-/** 轨迹（网格的局部系）每 0.25 米取一个点，算累计的米数（三维）和脚下、头顶的表面 */
+/**
+ * 轨迹（网格的局部系）每 0.25 米取一个点，算累计的米数（三维）和脚下、头顶的表面。头顶是扫描仪上方的第一层表面，
+ * 原始轨迹（几厘米一个点）的每个点都看，归到最近的取样点：取样点之间的细横杆、门楣也算进去
+ */
 export function trackOf(trajectory: readonly Vec3[], grid: FloorGrid): TrackSample[] {
+  const samples = samplePath(trajectory, ROUTE_SPACING);
+  // 取样点在原始轨迹里的序号（samplePath 取的就是原始的点）
+  const indices: number[] = [];
+  for (let i = 0; i < trajectory.length && indices.length < samples.length; i++) {
+    if (trajectory[i] === samples[indices.length]) {
+      indices.push(i);
+    }
+  }
+  const above = trajectory.map(([x, y, z]) => floorsAt(grid, x, y).find((height) => height > z));
   let distance = 0;
   let previous: Vec3 | undefined;
-  return samplePath(trajectory, ROUTE_SPACING).map((point) => {
+  return samples.map((point, i) => {
     if (previous) {
       distance += Math.hypot(point[0] - previous[0], point[1] - previous[1], point[2] - previous[2]);
     }
     previous = point;
     const [x, y, z] = point;
     let floor: number | undefined;
-    let ceiling: number | undefined;
     for (const height of floorsAt(grid, x, y)) {
       if (height <= z - FIT_WINDOW.min && height >= z - FIT_WINDOW.max) {
         floor = height;
-      } else if (height > z && ceiling === undefined) {
+      }
+    }
+    // 前后两个取样点之间各一半的原始点
+    const from = i === 0 ? 0 : Math.ceil((indices[i - 1] + indices[i]) / 2);
+    const to = i === samples.length - 1 ? trajectory.length - 1 : Math.floor((indices[i] + indices[i + 1]) / 2);
+    let ceiling: number | undefined;
+    for (let k = from; k <= to; k++) {
+      const height = above[k];
+      if (height !== undefined && (ceiling === undefined || height < ceiling)) {
         ceiling = height;
       }
     }
@@ -243,7 +262,8 @@ function straighten(points: readonly RoamPoint[], grid: FloorGrid): RoamPoint[] 
         eye: p.eye + (q.eye - p.eye) * t
       };
       const wanted = t < 0.5 ? roomy[k] : roomy[Math.min(k + 1, last)];
-      if (!clearAt(grid, point.x, point.y, point.floor, point.floor + point.eye, nearby)) {
+      // 两侧不查的地方（门洞这类本来就窄的）中线不跨洞：门框下没有地面，跨过去直线就切进门框
+      if (!clearAt(grid, point.x, point.y, point.floor, point.floor + point.eye, wanted ? nearby : [])) {
         return false;
       }
       if (wanted && !clearAside(grid, point, nx, ny)) {
@@ -287,6 +307,7 @@ function straighten(points: readonly RoamPoint[], grid: FloorGrid): RoamPoint[] 
   }
   return simplify(placed, STRAIGHT_RESIDUAL);
 }
+
 
 /**
  * 轨迹上 from～to 米这一段做成路线：去掉两头脚下没有表面的点，中间的按前后插值；地板取中位数去抖，眼高按这个地板算、取前后的最小值，

@@ -168,6 +168,53 @@ describe('routeOf', () => {
     expect(inWall).toStrictEqual([]);
   });
 
+  it('拉直不切门框：门两侧没有余量的地方，中线不跨相邻格的"洞"（门框下没有地面）', () => {
+    // x 9.6～10.8 是 1.2 米厚的墙，门洞 y 1.8～2.2（0.4 米宽，扫描的人在门洞中间两侧都不空）；
+    // 首尾连线在墙里 y 约 1.72～1.76，在门框里，旁边一格就是门洞的地面
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 9.6, 4, 0),
+      rectangle(10.8, 0, 20, 4, 0),
+      rectangle(9.6, 1.8, 10.8, 2.2, 0)
+    ]);
+    const track = trackOf(
+      walk(
+        [
+          { from: [0, 1.4], to: [9.4, 2] },
+          { from: [9.4, 2], to: [11, 2] },
+          { from: [11, 2], to: [20, 2] }
+        ],
+        () => 0
+      ),
+      grid
+    );
+    const route = routeOf(track, 1, 19, grid);
+    const inJamb = along(route).filter(({ x, y }) => x > 9.6 && x < 10.8 && (y < 1.8 || y > 2.2));
+    expect(inJamb).toStrictEqual([]);
+  });
+
+  it('取样点之间的细横杆：原始轨迹每个点都看头顶、归到最近的取样点，视点降到杆下', () => {
+    // 这条轨迹每 0.1 米一个点、从 x 0.05 起，取样每 0.3 米一个：x 9.95、10.25 落在 0.2 米的方格 [9.8, 10.0)、[10.2, 10.4) 的里面；
+    // x 10.05～10.15 离地 1.5 米的横杆只在 [10.0, 10.2) 里，没有取样点看到
+    const grid = buildFloorGrid([rectangle(0, 0, 20, 4, 0), rectangle(10.05, 0, 10.15, 4, 1.5)]);
+    const track = trackOf(walk([{ from: [0.05, 2], to: [20, 2] }], () => 0), grid);
+    // 没有取样点落在横杆的方格里
+    expect(track.filter(({ point: [x] }) => x >= 10 && x < 10.2)).toStrictEqual([]);
+    const route = routeOf(track, 1, 19, grid);
+    const eyeAt = (x: number) => {
+      const next = route.findIndex(point => point.x >= x);
+      const a = route[next - 1];
+      const b = route[next];
+      if (!a || !b) {
+        throw new Error(`路线在 x ${x} 两边没有点`);
+      }
+      return a.eye + ((b.eye - a.eye) * (x - a.x)) / (b.x - a.x);
+    };
+    // 杆在 1.5 米，视点离它留 0.2 米
+    expect(eyeAt(10.1)).toBeLessThanOrEqual(1.3 + 0.08);
+    expect(eyeAt(5)).toBe(EYE_HEIGHT);
+    expect(eyeAt(15)).toBe(EYE_HEIGHT);
+  });
+
   it('拉直以后，梁下面的低眼高还在原来的地方', () => {
     // x 10.0～10.3 头顶 1.4 米有一道梁
     const grid = corridor(rectangle(10, 0, 10.3, 1.2, 1.4));
