@@ -33,6 +33,15 @@ describe('IndoorMapDialog', () => {
     expect(wrapper.get('canvas').attributes('aria-label')).toBe('站内地图');
   });
 
+  it('标题按模型的叫法（高斯泼溅叫平面图，ADR 0156）：标题、关闭按钮和画布的名称都跟着换', () => {
+    const wrapper = mount(IndoorMapDialog, { props: { map, player, title: '平面图' } });
+
+    expect(wrapper.get('header').text()).toContain('平面图');
+    expect(wrapper.text()).not.toContain('站内');
+    expect(wrapper.find('button[aria-label="关闭平面图"]').exists()).toBe(true);
+    expect(wrapper.get('canvas').attributes('aria-label')).toBe('平面图，双击瞬移');
+  });
+
   it('×、点遮罩、Esc 关闭；点面板里面不关；Esc 不传到页面（页面上 Esc 是退出漫游）', async () => {
     const wrapper = mount(IndoorMapDialog, { props: { map, player }, attachTo: document.body });
     const onWindowKey = vi.fn<(event: KeyboardEvent) => void>();

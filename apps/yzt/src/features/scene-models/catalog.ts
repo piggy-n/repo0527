@@ -1,11 +1,9 @@
-import { RoutePath, type SplatSource } from '@mx/map-core';
+import { RoutePath, RouteTimeline, type SplatSource } from '@mx/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import type { ManifestModel, SceneManifest } from './api';
 
 export type ModelKind = ManifestModel['kind'];
 
-// 瓦片集模型的清单项：出生点、路线只在它们上面
-type TilesetManifestModel = Exclude<ManifestModel, { kind: 'splat' }>;
 
 export const MODEL_KIND_LABELS: Readonly<Record<ModelKind, string>> = {
   oblique: '倾斜摄影',
@@ -13,6 +11,39 @@ export const MODEL_KIND_LABELS: Readonly<Record<ModelKind, string>> = {
   indoor: '室内',
   splat: '高斯泼溅'
 };
+
+/** 漫游时界面上对模型里空间的叫法 */
+export interface RoamPlace {
+  /** 建导航网格时分析的是什么："正在分析{space}" */
+  readonly space: string;
+  readonly entering: string;
+  readonly noSpawn: string;
+  /** 完整地图的标题 */
+  readonly map: string;
+  readonly minimap: string;
+}
+
+const STATION_PLACE: RoamPlace = {
+  space: '站内空间',
+  entering: '正在进入站内…',
+  noSpawn: '附近没有找到可以站立的室内位置',
+  map: '站内地图',
+  minimap: '站内小地图'
+};
+
+// 高斯泼溅多是墓、保护厅、露天的入口，不叫"站内"（ADR 0156）
+const SCAN_PLACE: RoamPlace = {
+  space: '可行走的空间',
+  entering: '正在进入…',
+  noSpawn: '附近没有找到可以站立的位置',
+  map: '平面图',
+  minimap: '小地图'
+};
+
+/** 漫游时的叫法：瓦片集按站点（ADR 0086、0087 确认的说法），高斯泼溅用不限于室内的说法 */
+export function roamPlaceOf(model: Pick<SceneModel, 'kind'>): RoamPlace {
+  return model.kind === 'splat' ? SCAN_PLACE : STATION_PLACE;
+}
 
 export interface ModelEffect {
   readonly id: string;
@@ -25,7 +56,7 @@ export interface ModelEffect {
 export interface ModelRoute {
   readonly id: string;
   readonly name: string;
-  readonly path: NonNullable<TilesetManifestModel['routes']>[number]['path'];
+  readonly path: NonNullable<ManifestModel['routes']>[number]['path'];
   readonly length: number;
 }
 
@@ -43,7 +74,7 @@ export interface SceneModel {
   readonly effects: readonly ModelEffect[];
   /** 默认的效果：白膜的第一种 */
   readonly defaultEffect: string;
-  readonly spawn: TilesetManifestModel['spawn'];
+  readonly spawn: ManifestModel['spawn'];
   readonly routes: readonly ModelRoute[];
   /** 高斯泼溅（ADR 0149）的索引地址和摆放；其他模型为 null */
   readonly splat: SplatSource | null;
@@ -65,6 +96,26 @@ function cityNameOf(code: string): string {
   return region.name;
 }
 
+// 路线带上长度（三维，楼梯的高差也算）
+const routesOf = ({ routes = [] }: ManifestModel): ModelRoute[] =>
+  routes.map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total }));
+
+// 按路线、速度缓存：一条路线模拟一遍要几毫秒
+const timelines = new WeakMap<ModelRoute, Map<number, RouteTimeline>>();
+
+/** 路线按播放的规则（转弯放慢）走要多久（ADR 0156 R.5，补充 ADR 0083 的"剩余时间按长度和速度算"） */
+export function routeTimeline(route: ModelRoute, speed: number): RouteTimeline {
+  const bySpeed = timelines.get(route) ?? new Map<number, RouteTimeline>();
+  timelines.set(route, bySpeed);
+  const cached = bySpeed.get(speed);
+  if (cached) {
+    return cached;
+  }
+  const timeline = new RouteTimeline(new RoutePath(route.path), speed);
+  bySpeed.set(speed, timeline);
+  return timeline;
+}
+
 /** 清单换成目录：地址按清单的地址解析成绝对地址（ADR 0081 第 1 节） */
 export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string): readonly SceneModel[] {
   const resolve = (path: string) => new URL(path, manifestUrl).href;
@@ -79,7 +130,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
     };
     if (model.kind === 'splat') {
       const splat = { url: resolve(model.lcc2), placement: model.placement };
-      return { ...shared, effects: [], defaultEffect: '', spawn: undefined, routes: [], splat };
+      return { ...shared, effects: [], defaultEffect: '', spawn: model.spawn, routes: routesOf(model), splat };
     }
     return {
       ...shared,
@@ -90,7 +141,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
           : [{ id: '', label: '', url: resolve(model.tileset) }],
       defaultEffect: model.kind === 'white' ? model.effects[0].id : '',
       spawn: model.spawn,
-      routes: (model.routes ?? []).map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total })),
+      routes: routesOf(model),
       splat: null
     };
   });

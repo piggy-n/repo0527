@@ -1,7 +1,7 @@
 import { EYE_HEIGHT } from '../route-path';
 import type { Point3 } from './nav-frame';
 import type { NavGrid, NavPoint } from './nav-grid';
-import { findSpawn } from './spawn';
+import { findSpawn, type SpawnOptions } from './spawn';
 
 /** 键盘行走、转向用到的键（KeyboardEvent.code） */
 export const WALK_KEYS: ReadonlySet<string> = new Set([
@@ -21,8 +21,8 @@ const EYE_LAG_BELOW = 0.4;
 const EYE_LAG_ABOVE = 0.15;
 const EYE_FOLLOW = 12;
 const MAX_PITCH = (80 * Math.PI) / 180;
-// 每挪 0.1 米（半格）做一次碰撞，不会一步跨过一格
-const SUBSTEP = 0.1;
+// 矮墓道里视点离顶板至少这么远（ADR 0156 第 3 节）：视点 = 地板 + min(眼高, 净空 - 这个值)，净空 1.8 米以上的视点不变
+const HEAD_CLEARANCE = 0.2;
 // 前方被挡时依次尝试偏转这些角度（弧度），斜墙也能顺着滑过去
 const SLIDE_ANGLES = [0, 0.5, -0.5, 1, -1];
 // 走不到的（隔着闸机、栏杆）：同一层、离得近、中间只隔一小段站不住的地方，并且视点高度没东西挡着，
@@ -32,8 +32,8 @@ const THROUGH_MAX_BLOCKED = 3;
 const THROUGH_MAX_RISE = 0.5;
 // 点击移动寻路最多展开这么多节点（约 25 万格的范围），同一区域里再远也够用；万一不够就闪切
 const PATH_MAX_NODES = 1_500_000;
-// 小于这么多格（100 平方米）的区域：脱困不去（电梯轿厢之类）；和脚下不在同一高度的，点击也不去（闸机、设备柜的顶面）
-const MIN_REGION = 2500;
+// 小于这么大（平方米）的区域：脱困不去（电梯轿厢之类）；和脚下不在同一高度的，点击也不去（闸机、设备柜的顶面）
+const MIN_REGION_AREA = 100;
 const UNSTUCK_RADIUS = 30;
 // "开阔"：周围这么大范围内都能站人
 const OPEN_RADIUS = 0.6;
@@ -100,6 +100,8 @@ export function walkAxes(keys: ReadonlySet<string>): { forward: number; strafe: 
  */
 export class Walker {
   readonly grid: NavGrid;
+  // 每挪半格做一次碰撞，不会一步跨过一格
+  readonly #substep: number;
   #x = 0;
   #y = 0;
   #floor = 0;
@@ -112,6 +114,7 @@ export class Walker {
 
   constructor(grid: NavGrid, pose: WalkPose) {
     this.grid = grid;
+    this.#substep = grid.meta.cellSize / 2;
     this.placeAt(pose);
     this.#yaw = pose.yaw;
   }
@@ -145,7 +148,7 @@ export class Walker {
     this.#x = x;
     this.#y = y;
     this.#floor = floor;
-    this.#eye = floor + EYE_HEIGHT;
+    this.#eye = floor + this.#eyeOffset();
   }
 
   /** 设朝向：俯仰限制在范围里（默认 ±80°） */
@@ -177,8 +180,8 @@ export class Walker {
     const dy = forward * cos - strafe * sin;
     const length = Math.hypot(dx, dy);
     let moved = false;
-    for (let remaining = distance; remaining > 1e-6; remaining -= SUBSTEP) {
-      if (!this.#stepToward(dx / length, dy / length, Math.min(SUBSTEP, remaining))) {
+    for (let remaining = distance; remaining > 1e-6; remaining -= this.#substep) {
+      if (!this.#stepToward(dx / length, dy / length, Math.min(this.#substep, remaining))) {
         break;
       }
       moved = true;
@@ -211,7 +214,7 @@ export class Walker {
         route.index++;
         continue;
       }
-      const step = Math.min(SUBSTEP, budget, gap);
+      const step = Math.min(this.#substep, budget, gap);
       const x = this.#x + (dx / gap) * step;
       const y = this.#y + (dy / gap) * step;
       const floor = route.through
@@ -239,9 +242,9 @@ export class Walker {
     return 'arrived';
   }
 
-  /** 视点高度平滑地跟着地板，上下楼梯不抖；返回是否还没到位 */
+  /** 视点高度平滑地跟着地板，上下楼梯不抖，进矮墓道时跟着净空降低；返回是否还没到位 */
   settleEye(dt: number): boolean {
-    const target = this.#floor + EYE_HEIGHT;
+    const target = this.#floor + this.#eyeOffset();
     const eased = this.#eye + (target - this.#eye) * Math.min(1, dt * EYE_FOLLOW);
     this.#eye = clamp(eased, target - EYE_LAG_BELOW, target + EYE_LAG_ABOVE);
     if (Math.abs(target - this.#eye) < 1e-3) {
@@ -249,6 +252,12 @@ export class Walker {
       return false;
     }
     return true;
+  }
+
+  // 视点在脚下地板以上多高：净空够时是眼高，矮的地方离顶板留 HEAD_CLEARANCE；站不住的地方（穿闸机途中）按眼高
+  #eyeOffset(): number {
+    const node = this.grid.standNode(this.#x, this.#y, this.#floor);
+    return node === -1 ? EYE_HEIGHT : Math.min(EYE_HEIGHT, this.grid.nodeHeadroom(node) - HEAD_CLEARANCE);
   }
 
   #stepToward(dx: number, dy: number, length: number): boolean {
@@ -314,7 +323,10 @@ export function resolveClick(walker: Walker, picked: Point3 | null, visible: Vis
   if (targetComponent === component) {
     return { kind: 'go', target, reachable: true };
   }
-  if (Math.abs(target.floor - here.floor) > THROUGH_MAX_RISE && grid.componentSize(targetComponent) < MIN_REGION) {
+  if (
+    Math.abs(target.floor - here.floor) > THROUGH_MAX_RISE &&
+    grid.componentArea(targetComponent) < MIN_REGION_AREA
+  ) {
     return { kind: 'refuse', reason: 'not-standable' };
   }
   if (!target.direct && !visible([target.x, target.y, target.floor + 0.05], 0.4)) {
@@ -376,7 +388,7 @@ export function unstuckSpot(walker: Walker): UnstuckResult {
   const here = grid.standNode(x, y, floor);
   if (
     here !== -1 &&
-    grid.componentSize(grid.componentOf(here)) >= MIN_REGION &&
+    grid.componentArea(grid.componentOf(here)) >= MIN_REGION_AREA &&
     grid.isOpen(x, y, floor, OPEN_RADIUS)
   ) {
     return { kind: 'open' };
@@ -384,7 +396,7 @@ export function unstuckSpot(walker: Walker): UnstuckResult {
   const spot = findSpawn(
     grid,
     { x, y, z: floor },
-    { mode: 'near', maxRadius: UNSTUCK_RADIUS, clearRadius: OPEN_RADIUS, minReach: MIN_REGION }
+    { mode: 'near', maxRadius: UNSTUCK_RADIUS, clearRadius: OPEN_RADIUS, minArea: MIN_REGION_AREA }
   );
   return spot ? { kind: 'move', spot } : { kind: 'none' };
 }
@@ -407,13 +419,14 @@ export interface SpawnContext {
 
 /**
  * 进站的出生点（ADR 0086 第 3 节），依次：相机已经在站内地下，就落到脚下附近的地板；贴近地面、画布中心对着模型，
- * 从那里下到最上面一层室内空间；清单的出生点；模型中心附近最上面一层。找不到返回 null
+ * 从那里下到最上面一层室内空间；清单的出生点；模型中心附近最上面一层。找不到返回 null。
+ * 不要求遮盖的网格（扫描模型，ADR 0156 第 4 节）没有"地面以下的室内"，画布中心、模型中心都落到附近离它最近的地板上
  */
 export function chooseSpawn(
   grid: NavGrid,
   { eye, eyeHeight, ground, yaw, preferred, groundHeight }: SpawnContext
 ): WalkPose | null {
-  const below = groundHeight - 2;
+  const descend: SpawnOptions = grid.requireCover ? { mode: 'top', below: groundHeight - 2 } : { mode: 'near' };
   const [ex, ey, ez] = eye;
   if (ez < groundHeight - 1 && grid.cellOf(ex, ey)) {
     const spot = findSpawn(grid, { x: ex, y: ey, z: ez - EYE_HEIGHT }, { mode: 'near', maxRadius: 30 });
@@ -422,7 +435,7 @@ export function chooseSpawn(
     }
   }
   if (eyeHeight < NEAR_GROUND && ground && grid.cellOf(ground[0], ground[1])) {
-    const spot = findSpawn(grid, { x: ground[0], y: ground[1], z: ground[2] }, { mode: 'top', below, maxRadius: 40 });
+    const spot = findSpawn(grid, { x: ground[0], y: ground[1], z: ground[2] }, { ...descend, maxRadius: 40 });
     if (spot) {
       return { ...spot, yaw };
     }
@@ -436,6 +449,6 @@ export function chooseSpawn(
   }
   const { minX, minY, cellSize, width, height } = grid.meta;
   const center = { x: minX + (width * cellSize) / 2, y: minY + (height * cellSize) / 2, z: groundHeight };
-  const spot = findSpawn(grid, center, { mode: 'top', below, maxRadius: 300 });
+  const spot = findSpawn(grid, center, { ...descend, maxRadius: 300 });
   return spot ? { ...spot, yaw } : null;
 }

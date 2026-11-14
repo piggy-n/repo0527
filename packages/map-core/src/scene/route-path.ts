@@ -9,11 +9,12 @@ const MAX_PITCH = 30;
 const A = 6378137;
 const E2 = 0.00669437999014;
 
-/** 路线上一点的视点：视点的椭球高，朝向（度，正北为 0、顺时针），俯仰（度，向下为负） */
+/** 路线上一点的视点：视点的椭球高，脚下地板的椭球高，朝向（度，正北为 0、顺时针），俯仰（度，向下为负） */
 export interface RoutePose {
   readonly lng: number;
   readonly lat: number;
   readonly height: number;
+  readonly floor: number;
   readonly heading: number;
   readonly pitch: number;
 }
@@ -22,13 +23,16 @@ interface LocalPoint {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+  /** 视点在地板以上的米数 */
+  readonly eye: number;
 }
 
 const toDegrees = (radians: number) => (radians * 180) / Math.PI;
 
 /**
  * 路线的几何（ADR 0083 第 3 节）：按起点的切平面把经纬度换成米（站内几百米，误差在厘米以下），
- * 累计三维长度（楼梯的高差也算）；走过的距离换成视点，朝向看前方 4 米的点
+ * 累计三维长度（楼梯的高差也算）；走过的距离换成视点，朝向看前方 4 米的点。点上写了眼高的（矮墓道，ADR 0156 第 3 节）
+ * 视点按它算，前后之间插值
  */
 export class RoutePath {
   /** 总长，米 */
@@ -55,10 +59,11 @@ export class RoutePath {
     this.#lat0 = lat0;
     this.#metersPerLng = (n * Math.cos(phi) * Math.PI) / 180;
     this.#metersPerLat = (m * Math.PI) / 180;
-    this.#points = path.map(([lng, lat, floor]) => ({
+    this.#points = path.map(([lng, lat, floor, eye = EYE_HEIGHT]) => ({
       x: (lng - lng0) * this.#metersPerLng,
       y: (lat - lat0) * this.#metersPerLat,
-      z: floor
+      z: floor,
+      eye
     }));
     const cumulative = [0];
     for (let i = 1; i < this.#points.length; i++) {
@@ -91,7 +96,8 @@ export class RoutePath {
     return {
       lng: this.#lng0 + here.x / this.#metersPerLng,
       lat: this.#lat0 + here.y / this.#metersPerLat,
-      height: here.z + EYE_HEIGHT,
+      height: here.z + here.eye,
+      floor: here.z,
       heading: (toDegrees(Math.atan2(dx, dy)) + 360) % 360,
       pitch: Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch))
     };
@@ -111,7 +117,12 @@ export class RoutePath {
     const start = cumulative[index - 1] ?? 0;
     const length = (cumulative[index] ?? 0) - start;
     const t = length > 0 ? (distance - start) / length : 0;
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      z: a.z + (b.z - a.z) * t,
+      eye: a.eye + (b.eye - a.eye) * t
+    };
   }
 
   // 最后一个和终点不重合的点
@@ -124,7 +135,7 @@ export class RoutePath {
         return point;
       }
     }
-    return points[0] ?? { x: 0, y: 0, z: 0 };
+    return points[0] ?? { x: 0, y: 0, z: 0, eye: EYE_HEIGHT };
   }
 }
 

@@ -916,7 +916,7 @@ export class MapLibreView<const G extends string> implements MapView {
     );
   }
 
-  // 漫游接管、抬高变了：抬高时隐藏二维图层；接管结束后按当前工具恢复手势、光标
+  // 漫游接管、抬高变了：抬高（含隔离泼溅，ADR 0156 R.5）时隐藏二维图层；接管结束后按当前工具恢复手势、光标
   #onRoamTakeover(map: MapLike, { engaged, lifted }: { readonly engaged: boolean; readonly lifted: boolean }): void {
     if (lifted !== this.#layersHidden) {
       this.#layersHidden = lifted;

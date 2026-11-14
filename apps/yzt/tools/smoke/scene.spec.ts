@@ -79,7 +79,8 @@ async function greenShare(page: Page, canvas: Locator): Promise<number> {
 }
 
 // 三维的产物装配（ADR 0065 的范围、ADR 0147）：动态加载的 map-three 分块、预加载、一块画布担任二三维；静态底图、测距、
-// 坐标定位的位置点、三维模型在三维里可用；步行进站只为确认导航网格的 Worker 在产物里能加载、构建，抬高后能进出，不测业务细节
+// 坐标定位的位置点、三维模型在三维里可用；步行进站、进泼溅只为确认导航网格的 Worker 在产物里能加载、构建（瓦片和碰撞网格两条路），
+// 抬高后能进出，不测业务细节
 test('三维：二维稳定后预加载三维模块，切到三维还是同一块画布，底图、测距、位置点、模型、步行都可用', async ({
   context,
   page
@@ -201,6 +202,14 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await page.locator('[data-model="smoke-splat"] .el-checkbox').click();
     const splat = page.locator('[data-loaded="smoke-splat"]');
     await expect(splat.getByRole('button', { name: '定位', exact: true })).toBeEnabled({ timeout: 60_000 });
+    // 泼溅里步行（ADR 0156）：碰撞网格在导航网格的 Worker 里建（buildScan），进去以后有小地图，叫法不是"站内"。
+    // 退出时相机飞回开始前的位置，下面的定位作废这次飞行，之后的步骤都在退出以后
+    await splat.getByRole('button', { name: '漫游', exact: true }).click();
+    await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
+    expect(wasRequested(/\/3dt\/.+\/data\/mesh\/0\.ply$/), '碰撞网格经 /3dt/ 下载').toBe(true);
+    await expect(page.getByRole('button', { name: '小地图，点击查看完整地图', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(bar).toHaveCount(0);
     await splat.getByRole('button', { name: '定位', exact: true }).click();
     // 底图里没有这种绿色：占比超过 0.5% 就是画出来了（斜着看，2026-11-10 实测约 1.7%）
     await expect

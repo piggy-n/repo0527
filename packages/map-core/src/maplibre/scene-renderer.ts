@@ -56,11 +56,12 @@ export interface ScenePick {
 }
 
 /**
- * 抬高（ADR 0147 第 4 节）：MapLibre 把相机限制在 0 米以上，漫游地下的模型时把它抬高 meters 米。
- * 抬高期间只画这个瓦片集，画模型之前用 backdrop 清屏，盖住二维和天空
+ * 抬高（ADR 0147 第 4 节）：MapLibre 把相机限制在 0 米以上，漫游地下的瓦片集时把它抬高 meters 米。
+ * 抬高期间只画这一份模型，画之前用 backdrop 清屏，盖住二维和天空。漫游泼溅时同样只画它（隔离，ADR 0156 R.5），
+ * 泼溅不抬高、meters 是 0，这份拿全部泼溅预算。modelId 是瓦片集或泼溅的 ID（两者共用一个空间）
  */
 export interface SceneLift {
-  readonly tilesetId: string;
+  readonly modelId: string;
   readonly meters: number;
   /** CSS 颜色 */
   readonly backdrop: string;

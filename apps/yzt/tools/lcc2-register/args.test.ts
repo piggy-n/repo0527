@@ -10,6 +10,9 @@ describe('parseOptions', () => {
       yaw: 0,
       datum: 0,
       fit: true,
+      roam: false,
+      spawnAt: 0,
+      routes: [],
       help: false
     });
   });
@@ -49,6 +52,26 @@ describe('parseOptions', () => {
     expect(() => parseOptions([])).toThrow('0 个');
     expect(() => parseOptions(['a.lcc2', 'b.lcc2'])).toThrow('2 个');
     expect(() => parseOptions(['a.lcc2', '--fit'])).toThrow('不认识');
+  });
+
+  it('出生点和路线（ADR 0156）：--spawn-at、--route 带上就是 --roam，路线可以写多次', () => {
+    expect(parseOptions(['a.lcc2', '--roam'])).toMatchObject({ roam: true, spawnAt: 0, routes: [] });
+    const options = parseOptions([
+      'a.lcc2',
+      '--spawn-at',
+      '25',
+      '--route',
+      'tomb:进墓室:15-250',
+      '--route=loop:墓外环路:300.5-460'
+    ]);
+    expect(options.roam).toBe(true);
+    expect(options.spawnAt).toBe(25);
+    expect(options.routes).toStrictEqual([
+      { id: 'tomb', name: '进墓室', from: 15, to: 250 },
+      { id: 'loop', name: '墓外环路', from: 300.5, to: 460 }
+    ]);
+    expect(() => parseOptions(['a.lcc2', '--route', '进墓室:15-250'])).toThrow('ID:名称:起-止');
+    expect(() => parseOptions(['a.lcc2', '--roam=1'])).toThrow('不带值');
   });
 
   it('--help、-h 不要求索引', () => {

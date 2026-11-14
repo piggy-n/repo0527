@@ -130,3 +130,33 @@ export function twoLevelStation(): Float32Array {
     floorQuad(0, 0, 32, 29, -1)
   );
 }
+
+/**
+ * 把局部系里的三角形写成 LCC2 碰撞网格那样的 PLY：二进制小端，顶点三个 float，面是 uchar 个数加 int 序号。
+ * 每个三角形三个顶点，不共用
+ */
+export function plyOf(points: Float32Array): ArrayBuffer {
+  const vertices = points.length / 3;
+  const faces = vertices / 3;
+  const header = new TextEncoder().encode(
+    `ply\nformat binary_little_endian 1.0\ncomment meshSplit\nelement vertex ${vertices}\n` +
+      'property float x\nproperty float y\nproperty float z\n' +
+      `element face ${faces}\nproperty list uchar int vertex_indices\nend_header\n`
+  );
+  const out = new ArrayBuffer(header.length + vertices * 12 + faces * 13);
+  const view = new DataView(out);
+  new Uint8Array(out).set(header);
+  let offset = header.length;
+  for (const value of points) {
+    view.setFloat32(offset, value, true);
+    offset += 4;
+  }
+  for (let face = 0; face < faces; face++) {
+    view.setUint8(offset, 3);
+    for (let k = 0; k < 3; k++) {
+      view.setInt32(offset + 1 + k * 4, face * 3 + k, true);
+    }
+    offset += 13;
+  }
+  return out;
+}

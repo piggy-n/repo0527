@@ -1,21 +1,24 @@
 import type { NavGrid, NavPoint } from './nav-grid';
 
 export interface SpawnOptions {
-  /** top：取不高于 below 的最上面一层室内地板（从地面下来，先到的是站厅这一层）；near：取离 target.z 最近的 */
+  /**
+   * top：取不高于 below 的最上面一层室内地板（从地面下来，先到的是站厅这一层）；near：取离 target.z 最近的。
+   * 不要求遮盖的网格（扫描模型）室外的地板也算
+   */
   readonly mode?: 'top' | 'near';
   readonly below?: number;
   readonly maxRadius?: number;
   /** 四周这么大的范围内都要能站人 */
   readonly clearRadius?: number;
-  /** 所在区域至少这么多格，避免落在柜顶、电梯轿厢里 */
-  readonly minReach?: number;
+  /** 所在区域至少这么大（平方米），避免落在柜顶、电梯轿厢里 */
+  readonly minArea?: number;
 }
 
-/** 在 target 附近由近及远找一个适合出生的室内位置（需要已算好区域）；找不到返回 null */
+/** 在 target 附近由近及远找一个适合出生的位置（需要已算好区域）；要求遮盖的网格只找室内；找不到返回 null */
 export function findSpawn(
   grid: NavGrid,
   target: { readonly x: number; readonly y: number; readonly z: number },
-  { mode = 'top', below = -2, maxRadius = 80, clearRadius = 0.6, minReach = 2500 }: SpawnOptions = {}
+  { mode = 'top', below = -2, maxRadius = 80, clearRadius = 0.6, minArea = 100 }: SpawnOptions = {}
 ): NavPoint | null {
   const { cellSize, minX, minY } = grid.meta;
   const tx = Math.floor((target.x - minX) / cellSize);
@@ -31,7 +34,7 @@ export function findSpawn(
     grid.floorsAtCell(cx, cy, floors, covered);
     let floor: number | null = null;
     floors.forEach((value, i) => {
-      if (covered[i] && better(value, floor)) {
+      if ((covered[i] || !grid.requireCover) && better(value, floor)) {
         floor = value;
       }
     });
@@ -39,7 +42,7 @@ export function findSpawn(
       return null;
     }
     const [x, y] = grid.cellCenter(cx, cy);
-    const big = grid.componentSize(grid.componentAt(x, y, floor)) >= minReach;
+    const big = grid.componentArea(grid.componentAt(x, y, floor)) >= minArea;
     return big && grid.isOpen(x, y, floor, clearRadius) ? { x, y, floor } : null;
   };
   for (let r = 0; r <= maxRing; r++) {

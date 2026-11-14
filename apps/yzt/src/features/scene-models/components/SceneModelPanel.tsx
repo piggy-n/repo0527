@@ -141,7 +141,7 @@ export const SceneModelPanel = defineComponent({
               ))}
             </ElSelect>
           )}
-          {/* 有出生点或路线的才能漫游，在第二行最右边（ADR 0097 第 1 节） */}
+          {/* 有出生点或路线的才能漫游，在第二行最右边（ADR 0097 第 1 节）；高斯泼溅也一样（ADR 0156） */}
           {(model.spawn || model.routes.length > 0) && (
             <ElButton class={styles.roam} size="small" type="primary" link onClick={() => models.startRoam(model.id)}>
               漫游

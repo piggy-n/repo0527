@@ -1,26 +1,30 @@
 import { abortReason, WorkerHost, type WorkerEndpoint } from '@mx/utils';
 import type { PreparedTileset } from '../prepare-tileset';
-import type { NavOptions } from './nav-data';
-import { type NavFrame, navigationFrame } from './nav-frame';
+import { type NavGridData, type NavOptions, SCAN_NAV_OPTIONS } from './nav-data';
+import { type NavFrame, navigationFrame, type Point3 } from './nav-frame';
 import { NavGrid } from './nav-grid';
 import { navigationLeaves, rootTransform } from './nav-leaves';
-import type { NavTile, NavWorkerProtocol } from './nav-worker-protocol';
+import type { NavWorkerProtocol } from './nav-worker-protocol';
 
-/** 同时下载的瓦片数 */
+/** 同时下载的文件数 */
 const DOWNLOADS = 4;
 
-/** 构建的进度：先下载叶节点瓦片，再在 Worker 里构建 */
+/** 扫描模型的碰撞网格最多读这么多个三角形（ADR 0156 第 2 节）：0.1 米的格子，两个调试模型约 80 万个、构建约 1 秒 */
+export const SCAN_MAX_TRIANGLES = 2_000_000;
+
+/** 构建的进度：先下载叶节点瓦片（扫描模型是碰撞网格），再在 Worker 里构建 */
 export type NavBuildProgress =
   | { readonly stage: 'download'; readonly done: number; readonly total: number }
   | { readonly stage: 'build' };
 
 export interface BuildNavigationOptions {
   readonly signal: AbortSignal;
-  /** 下载一个瓦片，默认用 fetch */
+  /** 下载一个文件，默认用 fetch */
   readonly download?: (url: string, signal: AbortSignal) => Promise<ArrayBuffer>;
   /** 创建 Worker，默认是 nav-grid.worker.ts；测试注入同一线程里的端点 */
   readonly createWorker?: () => WorkerEndpoint;
   readonly onProgress?: (progress: NavBuildProgress) => void;
+  /** 构建参数；扫描模型不写的用 SCAN_NAV_OPTIONS，瓦片集不写的用 NAV_DEFAULTS */
   readonly options?: Partial<NavOptions>;
 }
 
@@ -30,10 +34,37 @@ export interface Navigation {
   readonly frame: NavFrame;
 }
 
-async function fetchTile(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
+/** 扫描模型（LCC2）的一个碰撞网格：索引里带网格的节点；包围盒在 LCC2 的局部系里，也就是导航网格的局部系 */
+export interface ScanMesh {
+  readonly url: string;
+  /** 三角形数（索引里的面数） */
+  readonly triangles: number;
+  readonly min: Point3;
+  readonly max: Point3;
+}
+
+/** 扫描模型的导航网格从哪来：碰撞网格、局部系（splatNavigationFrame），网格太多时从 near 附近读起 */
+export interface ScanSource {
+  readonly meshes: readonly ScanMesh[];
+  readonly frame: NavFrame;
+  /** 局部系里的一点（一般是出生点）；没有时从全部网格的中心读起 */
+  readonly near: Point3 | null;
+}
+
+/** 扫描模型的导航网格；partial 是网格太多、只读了 near 附近的一部分，走到边上走不出去 */
+export interface ScanNavigation extends Navigation {
+  readonly partial: boolean;
+}
+
+export interface BuildScanNavigationOptions extends BuildNavigationOptions {
+  /** 最多读这么多个三角形，默认 SCAN_MAX_TRIANGLES */
+  readonly maxTriangles?: number;
+}
+
+async function fetchFile(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
   const response = await fetch(url, { signal });
   if (!response.ok) {
-    throw new Error(`瓦片下载失败（${response.status}）：${url}`);
+    throw new Error(`下载失败（${response.status}）：${url}`);
   }
   return response.arrayBuffer();
 }
@@ -47,7 +78,7 @@ const createNavWorker = (): WorkerEndpoint =>
  */
 export async function buildNavigation(
   tileset: PreparedTileset,
-  { signal, download = fetchTile, createWorker = createNavWorker, onProgress, options = {} }: BuildNavigationOptions
+  { signal, download = fetchFile, createWorker = createNavWorker, onProgress, options = {} }: BuildNavigationOptions
 ): Promise<Navigation> {
   signal.throwIfAborted();
   const frame = navigationFrame(rootTransform(tileset));
@@ -55,52 +86,170 @@ export async function buildNavigation(
   if (leaves.length === 0) {
     throw new Error('瓦片集没有可用的叶节点');
   }
-  const tiles = await downloadTiles(leaves, download, signal, onProgress);
+  const buffers = await downloadAll(
+    leaves.map(leaf => leaf.url),
+    download,
+    signal,
+    onProgress
+  );
+  const tiles = buffers.map((buffer, i) => ({ buffer, toLocal: leaves[i].toLocal }));
   onProgress?.({ stage: 'build' });
   using host = new WorkerHost<NavWorkerProtocol>({ createWorker, maxRestarts: 0 });
-  const data = await host.request(
-    'build',
-    { tiles, options },
-    { signal, transfer: tiles.map(({ buffer }) => buffer) }
-  );
+  const data = await host.request('build', { tiles, options }, { signal, transfer: buffers });
   return { grid: new NavGrid(data), frame };
 }
 
-// 最多同时下载 DOWNLOADS 个；一个失败就停下其余的
-async function downloadTiles(
-  leaves: readonly { readonly url: string; readonly toLocal: Float64Array }[],
+// 一个数到区间的距离，在区间里为 0
+const gap = (value: number, low: number, high: number) => Math.max(low - value, 0, value - high);
+
+// 点到包围盒的距离，在盒子里为 0
+function boxDistance([x, y, z]: Point3, { min, max }: ScanMesh): number {
+  return Math.hypot(gap(x, min[0], max[0]), gap(y, min[1], max[1]), gap(z, min[2], max[2]));
+}
+
+/**
+ * 挑要读的碰撞网格（ADR 0156 第 2 节）：总数不超过 maxTriangles 全读；超过时按包围盒离 near 由近到远读，下一个放不下就停
+ * （至少读最近的一个），只读到的一片连在一起。near 为 null 时从全部网格的中心读起
+ */
+export function selectScanMeshes(
+  meshes: readonly ScanMesh[],
+  near: Point3 | null,
+  maxTriangles: number
+): { readonly meshes: readonly ScanMesh[]; readonly partial: boolean } {
+  const total = meshes.reduce((sum, mesh) => sum + mesh.triangles, 0);
+  if (total <= maxTriangles) {
+    return { meshes, partial: false };
+  }
+  const center = (axis: number) =>
+    (Math.min(...meshes.map(mesh => mesh.min[axis])) + Math.max(...meshes.map(mesh => mesh.max[axis]))) / 2;
+  const from: Point3 = near ?? [center(0), center(1), center(2)];
+  const picked: ScanMesh[] = [];
+  let sum = 0;
+  for (const mesh of meshes.toSorted((a, b) => boxDistance(from, a) - boxDistance(from, b))) {
+    if (picked.length > 0 && sum + mesh.triangles > maxTriangles) {
+      break;
+    }
+    picked.push(mesh);
+    sum += mesh.triangles;
+  }
+  return { meshes: picked, partial: true };
+}
+
+// 出生点附近找主区域的范围（米）、上下的范围（米）
+const SPAWN_SEARCH = 5;
+const SPAWN_RISE = 1;
+// 主区域至少这么大（平方米）：扫描开头常有几块小的，出生点落在小块上时留全图最大的；同 Walker、findSpawn 的小区域
+const MAIN_MIN_AREA = 100;
+
+// 出生点附近（水平 SPAWN_SEARCH、上下 SPAWN_RISE 以内）面积最大的区域，没有时为 0
+function largestNear(grid: NavGrid, [x, y, z]: Point3): number {
+  const cell = grid.cellOf(x, y);
+  if (!cell) {
+    return 0;
+  }
+  const { cellSize } = grid.meta;
+  const rings = Math.ceil(SPAWN_SEARCH / cellSize);
+  let best = 0;
+  for (let dy = -rings; dy <= rings; dy++) {
+    for (let dx = -rings; dx <= rings; dx++) {
+      const id = grid.componentOf(grid.nodeNear(cell[0] + dx, cell[1] + dy, z, SPAWN_RISE));
+      if (id && Math.hypot(dx, dy) * cellSize <= SPAWN_SEARCH && grid.componentSize(id) > grid.componentSize(best)) {
+        best = id;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * 只留一个区域能站（ADR 0156 第 1 节）：不要求遮盖时屋顶、展柜顶也成了能站的大块地面，点过去会闪切上去，平面图上也盖住屋里。
+ * 留出生点附近最大的区域；没有出生点、附近只有小块（不到 100 平方米）时留全图最大的；其余的标成站不住
+ */
+export function keepMainRegion(data: NavGridData, near: Point3 | null): NavGridData {
+  const grid = new NavGrid(data);
+  let main = near ? largestNear(grid, near) : 0;
+  if (grid.componentArea(main) < MAIN_MIN_AREA) {
+    data.sizes.forEach((size, id) => {
+      if (id > 0 && size > data.sizes[main]) {
+        main = id;
+      }
+    });
+  }
+  const labels = data.labels.map(label => (label === main ? label : 0));
+  const sizes = data.sizes.map((size, id) => (id === main ? size : 0));
+  return { ...data, labels, sizes };
+}
+
+/**
+ * 由碰撞网格构建扫描模型（LCC2）的导航网格（ADR 0156 第 2 节）：挑网格、主线程下载、Worker 里解析 PLY、构建、算区域，
+ * 参数默认 SCAN_NAV_OPTIONS，只留出生点所在的区域（keepMainRegion）。中止的规则同 buildNavigation
+ */
+export async function buildScanNavigation(
+  { meshes, frame, near }: ScanSource,
+  {
+    signal,
+    download = fetchFile,
+    createWorker = createNavWorker,
+    onProgress,
+    options = {},
+    maxTriangles = SCAN_MAX_TRIANGLES
+  }: BuildScanNavigationOptions
+): Promise<ScanNavigation> {
+  signal.throwIfAborted();
+  if (meshes.length === 0) {
+    throw new Error('模型没有碰撞网格');
+  }
+  const selection = selectScanMeshes(meshes, near, maxTriangles);
+  const buffers = await downloadAll(
+    selection.meshes.map(mesh => mesh.url),
+    download,
+    signal,
+    onProgress
+  );
+  onProgress?.({ stage: 'build' });
+  using host = new WorkerHost<NavWorkerProtocol>({ createWorker, maxRestarts: 0 });
+  const data = await host.request(
+    'buildScan',
+    { meshes: buffers, options: { ...SCAN_NAV_OPTIONS, ...options } },
+    { signal, transfer: buffers }
+  );
+  return { grid: new NavGrid(keepMainRegion(data, near)), frame, partial: selection.partial };
+}
+
+// 最多同时下载 DOWNLOADS 个，结果和 urls 一一对应；一个失败就停下其余的
+async function downloadAll(
+  urls: readonly string[],
   download: (url: string, signal: AbortSignal) => Promise<ArrayBuffer>,
   signal: AbortSignal,
   onProgress: ((progress: NavBuildProgress) => void) | undefined
-): Promise<NavTile[]> {
+): Promise<ArrayBuffer[]> {
   const controller = new AbortController();
   const stop = () => controller.abort(abortReason(signal));
   signal.addEventListener('abort', stop, { once: true });
-  const tiles: NavTile[] = [];
+  const buffers: ArrayBuffer[] = [];
   let next = 0;
   let done = 0;
   const run = async () => {
-    while (next < leaves.length && !controller.signal.aborted) {
+    while (next < urls.length && !controller.signal.aborted) {
       const index = next++;
-      const leaf = leaves[index];
       // oxlint-disable-next-line no-await-in-loop -- 每个通道依次下载，同时下载的个数由通道数决定
-      const buffer = await download(leaf.url, controller.signal);
+      const buffer = await download(urls[index], controller.signal);
       controller.signal.throwIfAborted();
-      tiles[index] = { buffer, toLocal: leaf.toLocal };
+      buffers[index] = buffer;
       done++;
-      onProgress?.({ stage: 'download', done, total: leaves.length });
+      onProgress?.({ stage: 'download', done, total: urls.length });
     }
   };
   try {
     await Promise.all(
-      Array.from({ length: Math.min(DOWNLOADS, leaves.length) }, () =>
+      Array.from({ length: Math.min(DOWNLOADS, urls.length) }, () =>
         run().catch((error: unknown) => {
           controller.abort(error);
           throw error;
         })
       )
     );
-    return tiles;
+    return buffers;
   } finally {
     signal.removeEventListener('abort', stop);
   }

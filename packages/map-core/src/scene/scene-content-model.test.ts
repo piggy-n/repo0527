@@ -100,6 +100,10 @@ describe('SceneContentModel', () => {
     const content: SceneContent = { tilesets: [tileset('a')], splats: [splat()], underground: null };
     model.set(content);
     expect(model.current).toBe(content);
+    const isolated: SceneContent = { ...content, isolatedSplat: 'cws' };
+    model.set(isolated);
+    expect(model.current).toBe(isolated);
+    model.set(content);
 
     const invalid: readonly (readonly [SceneContent, string])[] = [
       [{ tilesets: [], splats: [splat({ url: '3dt/cws.lcc2' })], underground: null }, '不是绝对地址'],
@@ -108,7 +112,18 @@ describe('SceneContentModel', () => {
       [{ tilesets: [], splats: [splat({ placement: { ...placement, lat: 91 } })], underground: null }, '纬度'],
       [{ tilesets: [tileset('cws')], splats: [splat()], underground: null }, 'ID 重复'],
       [{ tilesets: [], splats: [splat(), splat()], underground: null }, 'ID 重复'],
-      [{ tilesets: [], splats: [splat()], underground: { tilesetId: 'cws', surfaceOpacity: 0.25 } }, '钻地的瓦片集不存在']
+      [{ tilesets: [], splats: [splat()], underground: { tilesetId: 'cws', surfaceOpacity: 0.25 } }, '钻地的瓦片集不存在'],
+      // 隔离的泼溅（ADR 0156 R.5）：要是加载着的一份，不能和地下空间同时有
+      [{ tilesets: [], splats: [splat()], underground: null, isolatedSplat: 'other' }, '隔离的泼溅不存在：other'],
+      [
+        {
+          tilesets: [tileset('a')],
+          splats: [splat()],
+          underground: { tilesetId: 'a', surfaceOpacity: 0.25 },
+          isolatedSplat: 'cws'
+        },
+        '不能同时有地下空间'
+      ]
     ];
     for (const [item, message] of invalid) {
       expect(() => model.set(item)).toThrow(message);
@@ -118,6 +133,8 @@ describe('SceneContentModel', () => {
 
   it('漫游：至少两个点、坐标是数、速度是正数、遍数是非负整数（ADR 0083）', () => {
     using model = new SceneContentModel();
+    const lowEye = roam({ path: [[120.666, 31.3175, -5.1, 1.2], [120.6665, 31.3175, -5.1]] });
+    model.set({ tilesets: [], underground: null, roam: lowEye });
     const valid: SceneContent = { tilesets: [], underground: null, roam: roam({ playing: true, speed: 0.5, run: 2 }) };
     model.set(valid);
     expect(model.current).toBe(valid);
@@ -125,6 +142,8 @@ describe('SceneContentModel', () => {
     const invalid: [RouteRoam, string][] = [
       [roam({ path: [[120.666, 31.3175, -5.1]] }), '路线少于两个点'],
       [roam({ path: [[120.666, 31.3175, -5.1], [120.6665, Number.NaN, -5.1]] }), '有不是数的坐标'],
+      [roam({ path: [[120.666, 31.3175, -5.1, 1.7], [120.6665, 31.3175, -5.1]] }), '眼高不在 0～1.6 米之间'],
+      [roam({ path: [[120.666, 31.3175, -5.1, 0], [120.6665, 31.3175, -5.1]] }), '眼高不在 0～1.6 米之间'],
       [roam({ speed: 0 }), '速度不是正数'],
       [roam({ speed: Number.POSITIVE_INFINITY }), '速度不是正数'],
       [roam({ run: 0.5 }), '遍数不是非负整数']

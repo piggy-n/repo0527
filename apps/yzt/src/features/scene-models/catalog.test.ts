@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import manifestText from '../../../public/3dt/manifest.json?raw';
 import { type SceneManifest, sceneManifestSchema } from './api';
-import { buildModelCatalog, groupByCity } from './catalog';
+import { buildModelCatalog, groupByCity, routeTimeline } from './catalog';
 
 const MANIFEST_URL = 'https://maps.test/yzt/3dt/manifest.json';
 
@@ -66,6 +66,15 @@ describe('sceneManifestSchema', () => {
     expect(parse({ models: [] }).success).toBe(true);
   });
 
+  it('高斯泼溅也可以写出生点和路线，路线的点可以多一个眼高（ADR 0156）', () => {
+    const spawn = { lng: 117.06, lat: 34.27, height: 58.1, heading: 20 };
+    const path = [
+      [117.06, 34.27, 58.1],
+      [117.0601, 34.27, 58.1, 1.2]
+    ];
+    expect(parse(withSplat({ spawn, routes: [{ id: 'tomb', name: '进墓室', path }] })).success).toBe(true);
+  });
+
   it('任何一处不合法都整份不通过', () => {
     const invalid: unknown[] = [
       // 白膜写了 tileset、没有效果；其他模型写了 effects
@@ -77,19 +86,23 @@ describe('sceneManifestSchema', () => {
       withModel({ cityCode: '110100' }),
       withModel({ cityCode: '320102' }),
       withModel({ color: 'red' }),
-      // 路线少于两个点、点不是三个数
+      // 路线少于两个点、点不是三个或四个数、眼高不在 0～1.6 米之间
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0]] }] }),
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31], [121, 31]] }] }),
+      withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 1, 1], [121, 31, 0]] }] }),
+      withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 1.7], [121, 31, 0]] }] }),
+      withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 0], [121, 31, 0]] }] }),
       // ID 重复
       { models: [MANIFEST.models[2], MANIFEST.models[2]] },
-      // 高斯泼溅（ADR 0149）：没有索引、没有摆放、摆放缺一项或超出范围、写了瓦片集的字段（第一版不漫游）
+      // 高斯泼溅（ADR 0149）：没有索引、没有摆放、摆放缺一项或超出范围、写了瓦片集的字段
       withSplat({ lcc2: undefined }),
       withSplat({ placement: undefined }),
       withSplat({ placement: { lng: 117.06, lat: 34.27, height: 59.7 } }),
       withSplat({ placement: { lng: 117.06, lat: 94.27, height: 59.7, heading: 0 } }),
       withSplat({ tileset: 'a/tileset.json' }),
-      withSplat({ routes: [] }),
       withSplat({ maximumScreenSpaceError: 8 }),
+      // 有路线、没有出生点的泼溅：导航网格按出生点留区域，没有时会留下屋顶这类最大的一片（ADR 0156）
+      withSplat({ spawn: undefined, routes: [{ id: 'r', name: 'R', path: [[117.06, 34.27, 58], [117.0601, 34.27, 58]] }] }),
       'not a manifest'
     ];
 
@@ -127,7 +140,8 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       `https://maps.test/yzt/3dt/xuzhou/lcc2/${chuwangshan}/lcc2-sog-result/${chuwangshan}.lcc2`
     );
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
-    expect(lengths).toStrictEqual([125, 133, 58]);
+    // 星海广场站三条，驮篮山1号两条、土山墓三条（泼溅的路线取自扫描轨迹、拉直过，ADR 0156 第 4 节）
+    expect(lengths).toStrictEqual([125, 133, 58, 211, 156, 47, 190, 155]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
   });
@@ -168,6 +182,25 @@ function layoutProblem(model: ManifestModel, path: string): string | null {
   const placed = type === '3dtiles' && directory === model.name && rest.at(-1) === 'tileset.json';
   return placed ? null : `${path}：不是 3dtiles/<模型名>/…/tileset.json`;
 }
+
+describe('入库的清单：路线按播放的规则估算的时间（ADR 0156 R.5）', () => {
+  it('星海广场站三条路线：锁住播放的规则（转头限速、转弯放慢），改了规则这里要跟着看', () => {
+    const models = buildModelCatalog(sceneManifestSchema.parse(JSON.parse(manifestText)), MANIFEST_URL);
+    const station = models.find(({ id }) => id === 'sz-station');
+    // 4 m/s、1.6 m/s 走完的秒数，到 0.1 秒
+    const seconds = (station?.routes ?? []).map(route => [
+      route.id,
+      Math.round(routeTimeline(route, 4).total * 10) / 10,
+      Math.round(routeTimeline(route, 1.6).total * 10) / 10
+    ]);
+    // 按长度和速度是 31.3、33.2、14.4 秒（4 m/s），78.2、82.9、36.1 秒（1.6 m/s）：只有进站乘车的弯放慢得明显
+    expect(seconds).toStrictEqual([
+      ['enter', 33.5, 78.7],
+      ['concourse', 33.5, 82.9],
+      ['platform', 14.5, 36.1]
+    ]);
+  });
+});
 
 describe('入库的清单的目录层级', () => {
   it('3D Tiles 在 <市>/3dtiles/<模型名>/ 下，LCC2 在 <市>/lcc2/<目录>/lcc2-sog-result/ 下，每一段按 URL 编码', () => {

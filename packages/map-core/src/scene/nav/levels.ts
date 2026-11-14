@@ -2,18 +2,18 @@
 import { NAV_EMPTY } from './nav-data';
 import type { NavGrid, NavPoint } from './nav-grid';
 
-/** 小于这么多格（10 平方米）的区域不上地图：闸机柜顶、设备顶、电梯轿厢 */
-export const MIN_REGION_CELLS = 250;
+/** 小于这么大（平方米）的区域不上地图：闸机柜顶、设备顶、电梯轿厢 */
+export const MIN_REGION_AREA = 10;
 /** 分楼层时高度直方图的步长（米） */
 const BIN = 0.1;
 // 同一高度的地面面积要达到最大那一片的这个比例（且不少于 5 平方米）才参与分层：楼梯、扶梯、坡道每个高度只有几平米，
 // 不能让它们把上下两层连成一片
 const MAJOR_BIN_RATIO = 0.05;
-const MIN_BIN_CELLS = 125;
+const MIN_BIN_AREA = 5;
 /** 两片地面高差超过这么多算不同楼层（层高一般 3 米以上） */
 const LEVEL_GAP = 2;
-/** 一层至少这么多格（200 平方米），更小的（屋面设备平台之类）并入相邻楼层 */
-const MIN_LEVEL_CELLS = 5000;
+/** 一层至少这么大（平方米），更小的（屋面设备平台之类）并入相邻楼层 */
+const MIN_LEVEL_AREA = 200;
 /** 场景配置的楼层名按高度匹配时的容差 */
 const NAME_TOLERANCE = 0.5;
 /** 比地面低不到这么多的楼层还算首层（1F），再往下才是地下层 */
@@ -56,14 +56,15 @@ export function detectLevels(grid: NavGrid, { groundHeight, names = [] }: LevelO
   if (labels) {
     for (let i = 0; i < labels.length; i++) {
       const label = labels[i];
-      if (label && grid.componentSize(label) >= MIN_REGION_CELLS) {
+      if (label && grid.componentArea(label) >= MIN_REGION_AREA) {
         const bin = Math.round(grid.nodeFloor(i) / BIN);
         bins.set(bin, (bins.get(bin) ?? 0) + 1);
       }
     }
   }
   const clusters: Cluster[] = [];
-  const minCells = Math.max(MIN_BIN_CELLS, Math.max(0, ...bins.values()) * MAJOR_BIN_RATIO);
+  const cellArea = grid.meta.cellSize ** 2;
+  const minCells = Math.max(MIN_BIN_AREA / cellArea, Math.max(0, ...bins.values()) * MAJOR_BIN_RATIO);
   [...bins.entries()]
     .filter(([, cells]) => cells >= minCells)
     .toSorted((a, b) => a[0] - b[0])
@@ -81,7 +82,7 @@ export function detectLevels(grid: NavGrid, { groundHeight, names = [] }: LevelO
         clusters.push({ zMin: z, zMax: z, cells, peak: cells, height: z });
       }
     });
-  const kept = clusters.filter(cluster => cluster.cells >= MIN_LEVEL_CELLS).toReversed();
+  const kept = clusters.filter(cluster => cluster.cells * cellArea >= MIN_LEVEL_AREA).toReversed();
   const ground = groundHeight ?? null;
   const underground = ground === null ? [] : kept.filter(cluster => cluster.height < ground - GROUND_MARGIN);
   const aboveGround = ground === null ? [] : kept.filter(cluster => !underground.includes(cluster));
@@ -126,7 +127,7 @@ export function nodeOnLevel(grid: NavGrid, cx: number, cy: number, level: NavLev
     const index = base + i;
     const label = grid.componentOf(index);
     const z = grid.nodeFloor(index);
-    if (label && grid.componentSize(label) >= MIN_REGION_CELLS && z >= level.from && z < level.to) {
+    if (label && grid.componentArea(label) >= MIN_REGION_AREA && z >= level.from && z < level.to) {
       const diff = Math.abs(z - level.height);
       if (diff < bestDiff) {
         best = index;
@@ -153,7 +154,7 @@ export function levelBounds(
     const start = block * blockSize;
     for (let i = start; i < start + blockSize; i++) {
       const label = grid.componentOf(i);
-      if (grid.data[i] === NAV_EMPTY || !label || grid.componentSize(label) < MIN_REGION_CELLS) {
+      if (grid.data[i] === NAV_EMPTY || !label || grid.componentArea(label) < MIN_REGION_AREA) {
         continue;
       }
       const z = grid.nodeFloor(i);

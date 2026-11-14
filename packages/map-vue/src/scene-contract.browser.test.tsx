@@ -305,6 +305,10 @@ function pixel({ x, y }: ScreenPoint): [number, number, number] {
   return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
 }
 
+// 漫游时隔离、抬高的底色 #1e2226
+const isBackdrop = (color: readonly number[]) =>
+  [30, 34, 38].every((value, index) => Math.abs((color[index] ?? 0) - value) <= 3);
+
 // 某个通道明显压过另外两个
 const dominant = (color: readonly number[], channel: 0 | 1 | 2) =>
   color.every((value, index) => index === channel || (color[channel] ?? 0) > value * 2) && (color[channel] ?? 0) > 60;
@@ -746,6 +750,40 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
       expect(page.errors).toStrictEqual([]);
     }
   );
+
+  it('漫游泼溅时隔离它（ADR 0156 R.5）：天空、二维处是底色，泼溅照常画；结束后恢复', async () => {
+    const page = await mountPage();
+    const url = await writtenSplat();
+    const splats = [splatLayer(url)];
+    page.content.value = { tilesets: [], splats, underground: null };
+    await until(() => page.stateOf('square') === 'ready', '泼溅就绪');
+    // 60 米见方的泼溅铺在 0 米；路线贴着它，视点在 1.6 米、朝东平视：上半是天空，下半是泼溅
+    const [lng, lat] = MODEL_AT;
+    const route: RouteRoam = {
+      kind: 'route',
+      id: 'route-1',
+      path: [
+        [lng - 0.0001, lat, 0],
+        [lng + 0.0001, lat, 0]
+      ],
+      playing: false,
+      speed: 2,
+      run: 0
+    };
+    const top = { x: WIDTH / 2, y: 10 };
+    const bottom = { x: WIDTH / 2, y: HEIGHT - 10 };
+
+    page.content.value = { tilesets: [], splats, underground: null, isolatedSplat: 'square', roam: route };
+    await until(() => page.map.roamStatus.value?.kind === 'route', '开始路线');
+    await until(() => eyeOnFloor(page, 0), '放到起点');
+    await until(() => isBackdrop(pixel(top)), '天空处是底色');
+    await until(() => dominant(pixel(bottom), 1), '脚下画出泼溅');
+
+    page.content.value = { tilesets: [], splats, underground: null };
+    await until(() => page.map.roamStatus.value === null, '漫游结束');
+    await until(() => !isBackdrop(pixel(top)), '结束后不再是底色');
+    expect(page.errors).toStrictEqual([]);
+  });
 
   it('离地的泼溅：按建议的相机定位后，画布中心是模型，不是它脚下的地面', async () => {
     const page = await mountPage();

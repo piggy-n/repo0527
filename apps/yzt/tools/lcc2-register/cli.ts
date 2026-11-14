@@ -4,7 +4,10 @@ import { CHECK_PASS_RATIO, type TrajectoryCheck } from './check.ts';
 import { ToolError } from './errors.ts';
 import { FIT_WINDOW, SCANNER_WINDOW } from './fit.ts';
 import type { Vec3 } from './lcc2-data.ts';
-import { type Placement, roundPlacement } from './placement.ts';
+import { type Placement, roundPlacement, trajectoryToMesh } from './placement.ts';
+import { gridProjection } from './projection.ts';
+import { manifestRoute, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
+import { trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
 
@@ -26,6 +29,41 @@ const json = (placement: Placement) => {
   const { lng, lat, height, heading } = roundPlacement(placement);
   return `{ "lng": ${lng}, "lat": ${lat}, "height": ${height}, "heading": ${heading} }`;
 };
+
+// 出生点、轨迹的概要和路线（ADR 0156 第 4 节）：轨迹按这次的修正换到网格的局部系，贴着同一份地面方格
+function printRoam(
+  result: Awaited<ReturnType<typeof register>>,
+  model: Awaited<ReturnType<typeof readModel>>,
+  options: ReturnType<typeof parseOptions>
+): void {
+  const { index, trajectory } = model;
+  const frame: RoamFrame = {
+    projection: gridProjection(index.epsg),
+    offset: index.offset,
+    correction: result.correction,
+    datum: options.datum,
+    placement: result.placement
+  };
+  const track = trackOf(
+    trajectory.map((point) => trajectoryToMesh(point, result.correction)),
+    result.grid
+  );
+  console.log(`轨迹共 ${(track.at(-1)?.distance ?? 0).toFixed(0)} 米，概要（局部系，米）：`);
+  outline(track).forEach((line) => console.log(line));
+  const spawn = manifestSpawn(track, options.spawnAt, frame);
+  console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
+  if (options.routes.length > 0) {
+    const routes = options.routes.map((span) => manifestRoute(track, span, frame, result.grid));
+    const lines = routes.map(
+      ({ id, name, path }) =>
+        `    { "id": ${JSON.stringify(id)}, "name": ${JSON.stringify(name)}, "path": [\n` +
+        path.map((point) => `      ${JSON.stringify(point)}`).join(',\n') +
+        '\n    ] }'
+    );
+    const counts = routes.map(({ path }) => `${path.length} 个点`).join('、');
+    console.log(`路线（${counts}）："routes": [\n${lines.join(',\n')}\n  ]`);
+  }
+}
 
 /** 跑一遍配准并打印，返回退出码 */
 async function main(): Promise<number> {
@@ -76,6 +114,9 @@ async function main(): Promise<number> {
   );
 
   console.log(`按 offset 原样换算（对照）："placement": ${json(result.asIsPlacement)}`);
+  if (options.roam) {
+    printRoam(result, model, options);
+  }
   if (result.failed) {
     console.error(`核对不通过，不要写进清单："placement": ${json(result.placement)}`);
     return 1;

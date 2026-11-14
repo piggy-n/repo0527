@@ -91,7 +91,7 @@ export {
   levelBounds,
   levelOf,
   type LevelOptions,
-  MIN_REGION_CELLS,
+  MIN_REGION_AREA,
   type NavLevel,
   nearestOnLevel,
   nodeOnLevel
@@ -99,11 +99,32 @@ export {
 export {
   type BuildNavigationOptions,
   buildNavigation,
+  type BuildScanNavigationOptions,
+  buildScanNavigation,
   type NavBuildProgress,
-  type Navigation
+  type Navigation,
+  SCAN_MAX_TRIANGLES,
+  type ScanMesh,
+  type ScanNavigation,
+  type ScanSource
 } from './scene/nav/nav-build';
-export { NAV_DEFAULTS, type NavGridData, type NavMeta, type NavOptions, type RawNavGrid } from './scene/nav/nav-data';
-export { fromEcef, type NavFrame, navigationFrame, type Point3, toEcef } from './scene/nav/nav-frame';
+export {
+  NAV_DEFAULTS,
+  type NavGridData,
+  type NavMeta,
+  type NavOptions,
+  type RawNavGrid,
+  SCAN_NAV_OPTIONS
+} from './scene/nav/nav-data';
+export {
+  type FramePlacement,
+  fromEcef,
+  type NavFrame,
+  navigationFrame,
+  type Point3,
+  splatNavigationFrame,
+  toEcef
+} from './scene/nav/nav-frame';
 export { NavGrid, type NavGridSource, type NavPoint } from './scene/nav/nav-grid';
 export { findSpawn, type SpawnOptions } from './scene/nav/spawn';
 export { seeThroughAvatar, startPitch, WalkCycle, WalkRig } from './scene/nav/third-person';
@@ -131,6 +152,7 @@ export {
 } from './scene/nav/walker';
 export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';
 export { EYE_HEIGHT, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
+export { RouteTimeline } from './scene/route-play';
 export {
   mergeSceneStatus,
   SceneSplatSync,

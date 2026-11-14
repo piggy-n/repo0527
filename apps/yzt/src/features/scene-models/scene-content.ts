@@ -91,12 +91,15 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
 /**
  * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：勾选的模型各一个瓦片集，白膜显示过的效果都留着、只显示当前的；
  * 地下、室内的用头灯光照；高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，倾斜摄影在泼溅的范围里不画。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：
- * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）；MapLibre 引擎抬高这个模型期间隐藏全部二维图层，地表的不透明度没有视图读（ADR 0153）
+ * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）；MapLibre 引擎抬高这个模型期间隐藏全部二维图层，地表的不透明度没有视图读（ADR 0153）。
+ * 漫游高斯泼溅时隔离它（ADR 0156 R.5）：别的模型都不显示，视图隐藏二维、用底色清屏，这份拿全部泼溅预算
  */
 export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
   const byId = new Map(models.map(model => [model.id, model]));
   const roaming = state.roam && state.loaded.includes(state.roam.modelId) ? byId.get(state.roam.modelId) : undefined;
-  const undergroundModel = roaming?.underground ? roaming : undefined;
+  // 抬高只给瓦片集；泼溅不抬高，隔离
+  const undergroundModel = roaming?.underground && !roaming.splat ? roaming : undefined;
+  const isolated = roaming?.splat ? roaming : undefined;
   const tilesets: TilesetLayer[] = [];
   const splats: SplatLayer[] = [];
   for (const id of state.loaded) {
@@ -106,7 +109,7 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
     }
     if (model.splat) {
       const { url, placement } = model.splat;
-      const hidden = !model.underground && undergroundModel !== undefined;
+      const hidden = (!model.underground && undergroundModel !== undefined) || (isolated !== undefined && id !== isolated.id);
       splats.push({ id, url, placement, show: !hidden, attempt: state.attempts.get(id) ?? 0 });
       continue;
     }
@@ -119,7 +122,7 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
         continue;
       }
       const tilesetId = tilesetIdOf(model, effect.id);
-      const hidden = !model.underground && undergroundModel !== undefined;
+      const hidden = (!model.underground && undergroundModel !== undefined) || isolated !== undefined;
       tilesets.push({
         id: tilesetId,
         url: effect.url,
@@ -137,7 +140,12 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
     ? { tilesetId: currentTilesetId(undergroundModel, state.effects), surfaceOpacity: SURFACE_OPACITY }
     : null;
   const roam = roamOf(byId, state);
-  const content: SceneContent = splats.length > 0 ? { tilesets, splats, underground } : { tilesets, underground };
+  const content: SceneContent =
+    splats.length === 0
+      ? { tilesets, underground }
+      : isolated
+        ? { tilesets, splats, underground, isolatedSplat: isolated.id }
+        : { tilesets, splats, underground };
   return roam ? { ...content, roam } : content;
 }
 

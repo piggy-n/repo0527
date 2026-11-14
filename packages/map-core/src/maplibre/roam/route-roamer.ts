@@ -1,11 +1,11 @@
-import { type RoutePath, type RoutePose, smoothAngle } from '../../scene/route-path';
+import type { RoutePath, RoutePose } from '../../scene/route-path';
+import { angleTo, routeAdvance, routeTurn } from '../../scene/route-play';
 import { eyeOf, type RoamEye } from './roam-camera';
 import type { RoamHost } from './roam-host';
 
 // 室内要比二维（约 37°）宽得多的竖直视场角
 const ROAM_FOVY = (60 * Math.PI) / 180;
-// 朝向、俯仰向路线方向靠近的时间常数；暂停时转头的偏移在继续后回正的时间常数（约 0.6 秒回正）
-const SMOOTHING = 0.4;
+// 暂停时转头的偏移在继续后回正的时间常数（约 0.6 秒回正）
 const LOOK_RETURN = 0.2;
 // 一帧最多按这么多秒推进：页面停用、卡顿回来不跳一大段
 const MAX_FRAME = 0.1;
@@ -26,7 +26,8 @@ export interface RouteRoamerEvents {
 
 /**
  * 路线漫游的相机（ADR 0083 第 3 节）：放到起点以后，播放时每帧按真实流逝的时间推进，
- * 朝向看前方并平滑；暂停时左键拖动原地转头，继续后转回路线的朝向。进出、抬高和黑幕由 MapLibreRoam 负责
+ * 朝向看前方并平滑，转头限速、转弯时放慢（ADR 0156 R.5，规则在 scene/route-play，估算剩余时间也用它）；暂停时左键拖动原地转头，继续后转回路线的朝向。
+ * 进出、抬高和黑幕由 MapLibreRoam 负责
  */
 export class RouteRoamer implements Disposable {
   readonly #host: RoamHost;
@@ -137,7 +138,7 @@ export class RouteRoamer implements Disposable {
     this.#eye = null;
   }
 
-  /** 每帧：播放时推进，朝向平滑地转向路线的方向；暂停时停在原处，只按转头的偏移 */
+  /** 每帧：播放时推进（朝向还没转过来时放慢），朝向平滑、限速地转向路线的方向；暂停时停在原处，只按转头的偏移 */
   tick(now: number): void {
     const path = this.#path;
     if (!path || !this.#placed) {
@@ -146,7 +147,7 @@ export class RouteRoamer implements Disposable {
     const dt = this.#last === null ? 0 : Math.min((now - this.#last) / 1000, MAX_FRAME);
     this.#last = now;
     if (this.#playing) {
-      this.#distance = Math.min(path.total, this.#distance + dt * this.#speed);
+      this.#distance = routeAdvance(path, this.#distance, this.#heading, dt, this.#speed);
       this.#events.progress(this.#distance);
       if (this.#distance >= path.total) {
         this.#playing = false;
@@ -158,8 +159,7 @@ export class RouteRoamer implements Disposable {
       return;
     }
     const pose = path.pose(this.#distance);
-    this.#heading = smoothAngle(this.#heading, pose.heading, dt, SMOOTHING);
-    this.#pitch += (pose.pitch - this.#pitch) * (1 - Math.exp(-dt / SMOOTHING));
+    ({ heading: this.#heading, pitch: this.#pitch } = routeTurn(pose, this.#heading, this.#pitch, dt));
     const returning = this.#playing && (Math.abs(this.#lookHeading) > 0.05 || Math.abs(this.#lookPitch) > 0.05);
     if (this.#playing) {
       const keep = Math.exp(-dt / LOOK_RETURN);
@@ -167,7 +167,7 @@ export class RouteRoamer implements Disposable {
       this.#lookPitch *= keep;
     }
     this.#apply(pose);
-    const turning = Math.abs(((((pose.heading - this.#heading) % 360) + 540) % 360) - 180) > 0.05;
+    const turning = Math.abs(angleTo(this.#heading, pose.heading)) > 0.05;
     if (this.#playing || returning || turning) {
       this.#host.requestFrame();
     } else {

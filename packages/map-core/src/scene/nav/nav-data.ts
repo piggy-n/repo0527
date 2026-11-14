@@ -31,6 +31,8 @@ export interface NavOptions {
   readonly agentRadius: number;
   /** 能直接跨上、跨下的高度，楼梯踏步一般 0.15～0.2 米 */
   readonly stepHeight: number;
+  /** 头顶要有遮盖（室内）才算能站：车站的地面、屋顶不让走；露天也要走的扫描模型关掉 */
+  readonly requireCover: boolean;
 }
 
 export const NAV_DEFAULTS: NavOptions = {
@@ -40,7 +42,19 @@ export const NAV_DEFAULTS: NavOptions = {
   flagMergeThreshold: 0.2,
   maxLevels: 4,
   agentRadius: 0.3,
-  stepHeight: 0.45
+  stepHeight: 0.45,
+  requireCover: true
+};
+
+/**
+ * 扫描模型（LCC2 的碰撞网格）的参数（ADR 0156 第 1 节）：墓道的地板只有 0.6～0.8 米宽、墙根是圆角，要更细的格子和更小的半径；
+ * 矮墓道要更低的身高；入口、保护厅外的路是露天的
+ */
+export const SCAN_NAV_OPTIONS: Partial<NavOptions> = {
+  cellSize: 0.1,
+  agentRadius: 0.15,
+  agentHeight: 1.2,
+  requireCover: false
 };
 
 /** 网格的尺寸与统计 */
@@ -71,6 +85,7 @@ export interface RawNavGrid {
 export interface NavGridData extends RawNavGrid {
   readonly agentRadius: number;
   readonly stepHeight: number;
+  readonly requireCover: boolean;
   readonly labels: Uint16Array;
   readonly sizes: Uint32Array;
 }

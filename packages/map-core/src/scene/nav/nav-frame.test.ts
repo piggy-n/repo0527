@@ -1,6 +1,15 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { fromEcef, identity, invertRigid, multiply, navigationFrame, toEcef, translation } from './nav-frame';
+import {
+  fromEcef,
+  identity,
+  invertRigid,
+  multiply,
+  navigationFrame,
+  splatNavigationFrame,
+  toEcef,
+  translation
+} from './nav-frame';
 
 // 在 (lng, lat, height) 处的东北天坐标系，局部 y 轴从正北顺时针转 bearing 度
 function enuTransform(lng: number, lat: number, height: number, bearing = 0): number[] {
@@ -46,5 +55,31 @@ describe('矩阵与地心坐标', () => {
     Array.from(identity()).forEach((value, i) => expect(product[i]).toBeCloseTo(value, 6));
     const [lng, lat, height] = fromEcef(toEcef(119.5, 33.25, -12));
     expect([lng, lat, height].map(value => value.toFixed(6))).toStrictEqual(['119.500000', '33.250000', '-12.000000']);
+  });
+});
+
+describe('splatNavigationFrame', () => {
+  // 土山墓的摆放
+  const placement = { lng: 117.1810873, lat: 34.2525473, height: 41.98, heading: -0.102 };
+
+  it('原点在摆放的经纬度、椭球高；局部 x 轴从正东逆时针转 heading，北的方位角是 -heading', () => {
+    const frame = splatNavigationFrame(placement);
+    const [lng, lat, height] = frame.toLngLat([0, 0, 0]);
+    expect(lng).toBeCloseTo(placement.lng, 9);
+    expect(lat).toBeCloseTo(placement.lat, 9);
+    expect(height).toBeCloseTo(placement.height, 6);
+    expect(frame.north).toBeCloseTo(0.102, 9);
+    expect(splatNavigationFrame({ ...placement, heading: 30 }).north).toBeCloseTo(330, 9);
+    // 转 90° 以后局部 x 指向的地方，就是不转时局部 y 指向的地方
+    const turned = splatNavigationFrame({ ...placement, heading: 90 }).toLngLat([100, 0, -5]);
+    const plain = splatNavigationFrame({ ...placement, heading: 0 }).toLngLat([0, 100, -5]);
+    turned.forEach((value, i) => expect(value).toBeCloseTo(plain[i], 6));
+    const point = [12.3, -45.6, -5.5] as const;
+    frame.toLocal(...frame.toLngLat(point)).forEach((value, i) => expect(value).toBeCloseTo(point[i], 6));
+  });
+
+  it('地面默认是原点处的椭球面，扫描模型给出生点的地板', () => {
+    expect(splatNavigationFrame(placement).ground).toBeCloseTo(-41.98, 3);
+    expect(splatNavigationFrame(placement, -1.3).ground).toBe(-1.3);
   });
 });

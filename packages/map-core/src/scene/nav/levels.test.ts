@@ -14,8 +14,9 @@ import {
 } from './floor-map';
 import { buildNavGrid } from './heightfield';
 import { detectLevels, levelBounds, levelOf, nearestOnLevel, nodeOnLevel } from './levels';
+import { SCAN_NAV_OPTIONS } from './nav-data';
 import { NavGrid } from './nav-grid';
-import { twoLevelStation } from './nav-testing';
+import { floorQuad, triangles, twoLevelStation } from './nav-testing';
 import { labelRegions } from './regions';
 
 const grid = new NavGrid(labelRegions(buildNavGrid([twoLevelStation()])));
@@ -35,6 +36,13 @@ function pixel(level: (typeof levels)[number], east: number, north: number, bear
 }
 
 describe('detectLevels', () => {
+  it('一层要多大按平方米算：0.1 米的格子上 11 × 11 米的一片（1 万多格）不够一层（ADR 0156）', () => {
+    const parts = triangles(floorQuad(0, 0, 20, 20, 0), floorQuad(30, 0, 41, 11, 5));
+    const scan = new NavGrid(labelRegions(buildNavGrid([parts], SCAN_NAV_OPTIONS), SCAN_NAV_OPTIONS));
+    expect(scan.componentSize(scan.componentAt(35, 5, 5))).toBeGreaterThan(10000);
+    expect(detectLevels(scan).map(level => level.height)).toStrictEqual([0]);
+  });
+
   it('两片地面高差 5 米分成两层，楼梯不单独成层；地下从上往下 -1F、-2F，高度范围在中点相接', () => {
     expect(levels.map(({ name, height, elevation }) => [name, height, elevation])).toStrictEqual([
       ['-1F', -5, -5],

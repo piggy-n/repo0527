@@ -72,7 +72,9 @@ export const IndoorMapDialog = defineComponent({
     /** 路线漫游时的路线；步行时没有 */
     route: { type: Object as PropType<RouteTrack | null>, default: null },
     /** 能双击瞬移：步行时能，路线漫游时不能 */
-    teleport: { type: Boolean, default: true }
+    teleport: { type: Boolean, default: true },
+    /** 标题，按模型叫法（roamPlaceOf） */
+    title: { type: String, default: '站内地图' }
   },
   emits: {
     teleport: (_spot: NavPoint) => true,
@@ -316,10 +318,10 @@ export const IndoorMapDialog = defineComponent({
           }}
           onKeydown={onKeydown}
         >
-          <MxPanel title="站内地图" class={styles.panel} headerTone="muted" floating flush>
+          <MxPanel title={props.title} class={styles.panel} headerTone="muted" floating flush>
             {{
               actions: () => [
-                <ElButton link icon={Close} aria-label="关闭站内地图" onClick={() => emit('close')} />
+                <ElButton link icon={Close} aria-label={`关闭${props.title}`} onClick={() => emit('close')} />
               ],
               subheader: () => [
                 <div class={styles.tools}>
@@ -359,7 +361,7 @@ export const IndoorMapDialog = defineComponent({
                     class={styles.canvas}
                     width={Math.max(1, Math.round(width.value * dpr))}
                     height={Math.max(1, Math.round(height.value * dpr))}
-                    aria-label={props.teleport ? '站内地图，双击瞬移' : '站内地图'}
+                    aria-label={props.teleport ? `${props.title}，双击瞬移` : props.title}
                     onPointerdown={onPointerDown}
                     onPointermove={onPointerMove}
                     onPointerup={onPointerUp}

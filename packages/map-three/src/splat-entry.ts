@@ -192,9 +192,23 @@ export class SplatEntry implements Disposable {
     return true;
   }
 
-  /** 这一帧不画（抬高期间只画抬高的瓦片集）：拾取不到 */
-  skipFrame(): void {
+  /**
+   * 这一帧不画（抬高期间只画抬高的瓦片集）：拾取不到。release 时让库当作看不见更新一次：选择清空、淡出，
+   * 冷却（库的默认 2 秒）以后再更新时放掉数据。库只在 update 里改淡入淡出、放数据，不更新的话一直占着（ADR 0156 R.5）
+   */
+  skipFrame(release = false): void {
     this.#drawn = false;
+    if (release) {
+      const { group } = this.#scheduler;
+      group.visible = false;
+      this.#scheduler.update();
+      group.visible = true;
+    }
+  }
+
+  /** 还占着数据（有驻留的网格）：隔离一份泼溅时，别的放掉以后它才拿全部预算 */
+  get holding(): boolean {
+    return this.#scheduler.stats.residentMeshes > 0;
   }
 
   /** 按最近一帧的投影拾取（做法同瓦片集）；命中的是当前加载的细节 */

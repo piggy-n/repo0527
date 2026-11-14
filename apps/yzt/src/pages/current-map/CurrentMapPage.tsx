@@ -12,6 +12,7 @@ import { useResourceLayers } from '@/features/resource-map/composables/useResour
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
+import { roamPlaceOf } from '@/features/scene-models/catalog';
 import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
@@ -116,6 +117,12 @@ export const CurrentMapPage = defineComponent({
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
     // 视图控件和状态栏都隐藏，不能勾选模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
+    // 小地图、完整地图的叫法按漫游的模型：站点叫站内地图，高斯泼溅叫平面图（ADR 0156）
+    const roamPlace = computed(() => {
+      const modelId = models.roam.value?.modelId;
+      const model = models.models.value.find(item => item.id === modelId);
+      return model ? roamPlaceOf(model) : null;
+    });
 
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
@@ -423,7 +430,13 @@ export const CurrentMapPage = defineComponent({
             {/* 漫游时的小地图在右上角：那里的工具栏、功能面板都隐藏了（ADR 0087、0097） */}
             {scene && indoorMap && player && minimapShown && (
               <div key="minimap" class={styles.minimap}>
-                <IndoorMinimap map={indoorMap} player={player} route={route} onOpen={models.openMap} />
+                <IndoorMinimap
+                  map={indoorMap}
+                  player={player}
+                  route={route}
+                  title={roamPlace.value?.minimap}
+                  onOpen={models.openMap}
+                />
               </div>
             )}
             {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
@@ -466,6 +479,7 @@ export const CurrentMapPage = defineComponent({
               player={player}
               route={route}
               teleport={models.roam.value?.kind === 'walk'}
+              title={roamPlace.value?.map}
               onTeleport={models.teleportWalk}
               onClose={models.closeMap}
             />

@@ -18,6 +18,18 @@ const PATH: RoutePoint[] = [
 ];
 
 describe('RoutePath', () => {
+  it('点上写了眼高的（矮墓道）视点按它算、前后插值，没写的是一个眼高；位姿带着脚下的地板（ADR 0156）', () => {
+    const route = new RoutePath([
+      [LNG, LAT, -5.1],
+      [LNG + east(10), LAT, -5.1, 1.1],
+      [LNG + east(20), LAT, -5.1, 1.1]
+    ]);
+    expect(route.pose(0).height).toBeCloseTo(-5.1 + EYE_HEIGHT, 6);
+    expect(route.pose(5).height).toBeCloseTo(-5.1 + (EYE_HEIGHT + 1.1) / 2, 2);
+    expect(route.pose(15).height).toBeCloseTo(-5.1 + 1.1, 6);
+    expect(route.pose(15).floor).toBeCloseTo(-5.1, 6);
+  });
+
   it('总长按三维折线算，楼梯的高差也算', () => {
     const route = new RoutePath(PATH);
     expect(route.total).toBeCloseTo(10 + Math.hypot(6, 4) + 4, 1);

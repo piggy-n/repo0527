@@ -228,6 +228,12 @@ const UNDERGROUND = { tilesetId: 'room', surfaceOpacity: 0.25 } as const;
 const content = (roam?: SceneContent['roam'], underground: SceneContent['underground'] = UNDERGROUND): SceneContent =>
   roam ? { tilesets: [], underground, roam } : { tilesets: [], underground };
 
+// 漫游泼溅 tomb：会话隔离它（ADR 0156 R.5）
+const isolatedTomb = (roam?: SceneContent['roam']): SceneContent =>
+  roam
+    ? { tilesets: [], underground: null, isolatedSplat: 'tomb', roam }
+    : { tilesets: [], underground: null, isolatedSplat: 'tomb' };
+
 function setup(tilesetState: TilesetStatus['state'] = 'ready') {
   const map = new FakeMap();
   const renderer = new FakeRenderer();
@@ -306,7 +312,7 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
     advance(FADE_OUT);
 
     // 最低处 -6 米加眼高 1.6 米，要高出 0 米 2 米：抬高 ceil(6.4) = 7 米
-    expect(ctx.renderer.lifts).toStrictEqual([{ tilesetId: 'room', meters: 7, backdrop: '#1e2226' }]);
+    expect(ctx.renderer.lifts).toStrictEqual([{ modelId: 'room', meters: 7, backdrop: '#1e2226' }]);
     expect(ctx.takeovers).toStrictEqual([{ engaged: true, lifted: true }]);
     expect(ctx.roam.lift).toBe(7);
     expect([ctx.map.maxZoom, ctx.map.maxPitch, ctx.map.clamped]).toStrictEqual([24, 180, false]);
@@ -337,6 +343,33 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
     expect(end?.kind === 'route' ? end.distance : NaN).toBeCloseTo(8, 3);
   });
 
+  it('turns at most 60° a second and slows down while turning: a route that doubles back (ADR 0156 R.5)', () => {
+    using ctx = setup();
+    // 往东 8 米再折回来 8 米：掉头处"前方 4 米"的点一下子换到背后
+    const back = route({ path: [floorAt(-4, 0), floorAt(4, 0), floorAt(-4, 0)], speed: 4 });
+    ctx.roam.apply(content(back), true);
+    advance(FADE_OUT);
+    ctx.roam.apply(content({ ...back, playing: true }), true);
+    const bearings: number[] = [];
+    const times: number[] = [];
+    const started = performance.now();
+    while (performance.now() - started < 20_000 && !(ctx.status?.kind === 'route' && ctx.status.finished)) {
+      advance(16);
+      bearings.push(ctx.map.camera.bearing);
+      times.push(performance.now());
+    }
+    const turns = bearings.slice(1).map((bearing, index) => {
+      const difference = ((((bearing - (bearings[index] ?? 0)) % 360) + 540) % 360) - 180;
+      return Math.abs(difference);
+    });
+    // 每帧转过的角度不超过 60°/秒乘这一帧的时长（假的计时器一帧约 16 毫秒，不完全相等）；一共转过 180°
+    const rates = turns.map((turn, index) => (turn / ((times[index + 1] ?? 0) - (times[index] ?? 0))) * 1000);
+    expect(Math.max(...rates)).toBeLessThanOrEqual(60 * 1.02);
+    expect(turns.reduce((sum, turn) => sum + turn, 0)).toBeGreaterThan(170);
+    // 16 米按 4 米/秒是 4 秒；掉头的 3 秒里放慢，总共多于 5 秒
+    expect(performance.now() - started).toBeGreaterThan(5000);
+  });
+
   it('leaves under the blackout: restores the map, then flies back to the camera before the roam', () => {
     using ctx = setup();
     ctx.roam.apply(content(route()), true);
@@ -359,6 +392,21 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
     expect(ctx.map.gestures()).toStrictEqual([true, true, false, true, true]);
     expect(ctx.flights).toStrictEqual([[SAVED, 1200]]);
     expect(ctx.roam.sessionCamera(600)).toBeNull();
+  });
+
+  it('isolates a roamed splat without lifting it: the 2D layers hide, only the splat is drawn (ADR 0156 R.5)', () => {
+    using ctx = setup();
+    ctx.roam.apply(isolatedTomb(route()), true);
+    advance(FADE_OUT);
+
+    expect(ctx.renderer.lifts).toStrictEqual([{ modelId: 'tomb', meters: 0, backdrop: '#1e2226' }]);
+    expect(ctx.takeovers).toStrictEqual([{ engaged: true, lifted: true }]);
+    expect(ctx.roam.lift).toBe(0);
+
+    ctx.roam.apply(isolatedTomb(), true);
+    advance(FADE_OUT);
+    expect(ctx.renderer.lifts.at(-1)).toBeNull();
+    expect(ctx.takeovers.at(-1)).toStrictEqual({ engaged: false, lifted: false });
   });
 
   it('stops at once without flying back when another positioning takes over', () => {
