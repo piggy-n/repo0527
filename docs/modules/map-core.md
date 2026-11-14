@@ -20,6 +20,7 @@
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具、选择状态与三维内容，统一释放 |
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
+| `scene/route-play.ts` | 路线漫游每帧怎么推进（`routeAdvance`：转弯时放慢；`routeTurn`：平滑、转头限速），播放（`RouteRoamer`）和估算共用；`RouteTimeline`：按这个规则模拟一遍，给出全程和剩余的秒数（ADR 0156 第 5 节） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点（点上写了眼高的按它插值，矮墓道用，ADR 0156）、脚下的地板和朝向；`smoothAngle`（ADR 0083） |
 | `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引的根节点换到引用它的位置、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081、0148；导航网格也要用，从 map-cesium 移来，ADR 0085） |
 | `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`ply.ts` LCC2 碰撞网格的解析（ADR 0156）、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系（瓦片集的和泼溅的）、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |

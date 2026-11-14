@@ -152,6 +152,7 @@ export {
 } from './scene/nav/walker';
 export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';
 export { EYE_HEIGHT, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
+export { RouteTimeline } from './scene/route-play';
 export {
   mergeSceneStatus,
   SceneSplatSync,
