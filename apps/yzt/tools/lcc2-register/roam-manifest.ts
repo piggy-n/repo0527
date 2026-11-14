@@ -48,36 +48,53 @@ export function manifestSpawn(track: readonly TrackSample[], from: number, frame
   };
 }
 
-/** 一条路线：眼高到厘米，等于 EYE_HEIGHT 的不写；grid 是 trackOf 用的那份 */
+/** 写进清单的眼高：到厘米，取整以后等于 EYE_HEIGHT 的不写（undefined）；平面图上"眼高低于 1.6 的点"按同一个判断 */
+export function manifestEye(eye: number): number | undefined {
+  const rounded = round(eye, 2);
+  return rounded < EYE_HEIGHT ? rounded : undefined;
+}
+
+/** 路线的点（局部系）换成清单的写法：矮的地方多一个眼高（manifestEye） */
+export function manifestPath(points: readonly RoamPoint[], frame: RoamFrame): ManifestRoute['path'] {
+  return points.map(point => {
+    const [lng, lat, height] = lngLatHeight(frame, point);
+    const spot = [round(lng, 7), round(lat, 7), round(height, 2)];
+    const eye = manifestEye(point.eye);
+    return eye === undefined ? spot : [...spot, eye];
+  });
+}
+
+/** 一条路线；grid 是 trackOf 用的那份 */
 export function manifestRoute(
   track: readonly TrackSample[],
   span: RouteSpan,
   frame: RoamFrame,
   grid: FloorGrid
 ): ManifestRoute {
-  const path = routeOf(track, span.from, span.to, grid).map(point => {
-    const [lng, lat, height] = lngLatHeight(frame, point);
-    const eye = round(point.eye, 2);
-    return eye < EYE_HEIGHT
-      ? [round(lng, 7), round(lat, 7), round(height, 2), eye]
-      : [round(lng, 7), round(lat, 7), round(height, 2)];
-  });
-  return { id: span.id, name: span.name, path };
+  return { id: span.id, name: span.name, path: manifestPath(routeOf(track, span.from, span.to, grid), frame) };
+}
+
+/** 概要取的取样点：每 step 米第一个；平面图的米数标在同一批点上 */
+export function outlineSamples(track: readonly TrackSample[], step = 20): TrackSample[] {
+  const samples: TrackSample[] = [];
+  let next = 0;
+  for (const sample of track) {
+    if (sample.distance >= next) {
+      next += step;
+      samples.push(sample);
+    }
+  }
+  return samples;
+}
+
+/** 概要的一行：米数、局部坐标、地板、扫描仪离地、净空 */
+export function outlineLine({ point: [x, y, z], distance, floor, ceiling }: TrackSample): string {
+  const ground = floor === undefined ? '脚下没有网格' : `地板 ${floor.toFixed(2)}，扫描仪离地 ${(z - floor).toFixed(2)}`;
+  const room = floor === undefined || ceiling === undefined ? '' : `，净空 ${(ceiling - floor).toFixed(2)}`;
+  return `${distance.toFixed(0).padStart(6)} 米：局部 (${x.toFixed(1)}, ${y.toFixed(1)})，${ground}${room}`;
 }
 
 /** 轨迹的概要：每 step 米一行，挑路线段用 */
 export function outline(track: readonly TrackSample[], step = 20): string[] {
-  const lines: string[] = [];
-  let next = 0;
-  for (const { point, distance, floor, ceiling } of track) {
-    if (distance < next) {
-      continue;
-    }
-    next += step;
-    const [x, y, z] = point;
-    const ground = floor === undefined ? '脚下没有网格' : `地板 ${floor.toFixed(2)}，扫描仪离地 ${(z - floor).toFixed(2)}`;
-    const room = floor === undefined || ceiling === undefined ? '' : `，净空 ${(ceiling - floor).toFixed(2)}`;
-    lines.push(`${distance.toFixed(0).padStart(6)} 米：局部 (${x.toFixed(1)}, ${y.toFixed(1)})，${ground}${room}`);
-  }
-  return lines;
+  return outlineSamples(track, step).map(outlineLine);
 }

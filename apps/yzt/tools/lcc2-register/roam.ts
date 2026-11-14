@@ -5,10 +5,11 @@ import { type FloorGrid, floorsAt } from './floor-grid.ts';
 import { ToolError } from './errors.ts';
 import { samplePath, type Vec3 } from './lcc2-data.ts';
 
+// 这两个值要和 map-core 的相等：工具由 Node 直接运行，导入不了 @mx/map-core，各写一份，由 roam-constants.test.ts 保证相等
 /** 视点在脚下地板以上的米数，同 map-core 的 EYE_HEIGHT */
 export const EYE_HEIGHT = 1.6;
-// 矮的地方视点离顶板至少这么远，同 map-core 的 Walker
-const HEAD_CLEARANCE = 0.2;
+/** 矮的地方视点离顶板至少这么远，同 map-core 的 HEAD_CLEARANCE（Walker） */
+export const HEAD_CLEARANCE = 0.2;
 /** 路线取样的间隔（米） */
 export const ROUTE_SPACING = 0.25;
 // 地板、眼高按前后这么多个取样点一起取：地板取中位数（表面有几厘米的起伏，不滤的话视点跟着上下抖），
@@ -89,8 +90,8 @@ export function trackOf(trajectory: readonly Vec3[], grid: FloorGrid): TrackSamp
   });
 }
 
-// 视点在地板以上多高：净空够时是眼高，矮的地方离顶板留 HEAD_CLEARANCE
-const eyeAbove = (floor: number, ceiling: number | undefined) =>
+/** 视点在地板以上多高：净空够时是眼高，矮的地方离顶板留 HEAD_CLEARANCE */
+export const eyeAbove = (floor: number, ceiling: number | undefined) =>
   ceiling === undefined ? EYE_HEIGHT : Math.min(EYE_HEIGHT, ceiling - floor - HEAD_CLEARANCE);
 
 // 第 i 个和前后各 WINDOW_HALF 个
