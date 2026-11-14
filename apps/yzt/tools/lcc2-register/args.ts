@@ -17,6 +17,8 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
   --roam                 再给出步行的出生点（清单的 spawn），并每 20 米列一行轨迹的概要，用来挑路线段（ADR 0156 第 4 节）
   --spawn-at <米>        出生点从轨迹的这个米数往后找（扫描不是从入口开始时），带上它就是 --roam
   --route <ID:名称:起-止>  轨迹上起～止米这一段做成一条路线（清单的 routes），可以写多次，带上它就是 --roam
+  --plan <文件.svg>      再画一张平面图：地板、轨迹和每 20 米的米数（同概要）、出生点、路线，挑路线段和核对用；
+                         相对路径放在 local/ 下（如 lcc2-plan/xz-gshm.svg），带上它就是 --roam
   --help、-h             显示这段说明
 
 负数直接写，如 --shift -1.2,0.5,0；PowerShell 里逗号列表要加引号，或者用空格分隔再加引号
@@ -34,6 +36,8 @@ export interface Options {
   readonly roam: boolean;
   readonly spawnAt: number;
   readonly routes: readonly RouteSpan[];
+  /** 平面图写到哪个文件，原样保留，由调用方决定相对路径放在哪；不画时为 null */
+  readonly plan: string | null;
   readonly help: boolean;
 }
 
@@ -72,6 +76,14 @@ function routeSpan(name: string, text: string): RouteSpan {
   return { id, name: title, from: finite(name, from), to: finite(name, to) };
 }
 
+function planFile(name: string, text: string): string {
+  // 忘了写值时下一个参数会被当成文件名；只认 .svg，也免得写到别的文件上
+  if (!/\.svg$/i.test(text)) {
+    throw new ToolError(`参数 ${name} 要写一个 .svg 文件：${text}`);
+  }
+  return text;
+}
+
 export function parseOptions(argv: readonly string[]): Options {
   const options: { -readonly [K in keyof Options]: Options[K] } = {
     index: '',
@@ -82,6 +94,7 @@ export function parseOptions(argv: readonly string[]): Options {
     roam: false,
     spawnAt: 0,
     routes: [],
+    plan: null,
     help: false
   };
   const positional: string[] = [];
@@ -131,6 +144,10 @@ export function parseOptions(argv: readonly string[]): Options {
         break;
       case '--route':
         options.routes = [...options.routes, routeSpan(name, value())];
+        options.roam = true;
+        break;
+      case '--plan':
+        options.plan = planFile(name, value());
         options.roam = true;
         break;
       case '--no-fit':

@@ -90,8 +90,8 @@ export function trackOf(trajectory: readonly Vec3[], grid: FloorGrid): TrackSamp
   });
 }
 
-// 视点在地板以上多高：净空够时是眼高，矮的地方离顶板留 HEAD_CLEARANCE
-const eyeAbove = (floor: number, ceiling: number | undefined) =>
+/** 视点在地板以上多高：净空够时是眼高，矮的地方离顶板留 HEAD_CLEARANCE */
+export const eyeAbove = (floor: number, ceiling: number | undefined) =>
   ceiling === undefined ? EYE_HEIGHT : Math.min(EYE_HEIGHT, ceiling - floor - HEAD_CLEARANCE);
 
 // 第 i 个和前后各 WINDOW_HALF 个

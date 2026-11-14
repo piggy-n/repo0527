@@ -14,6 +14,7 @@
 | `local/probe/` | 后端探查结果：`resource-classes/` 是 `probe:resource-classes` 的默认输出，其他目录是用 `--out` 存下的某一轮 | [commands.md](../commands.md) |
 | `local/measure/` | 实测数据：`map-load/`、`city-dashboard/` 是脚本的默认输出，`builds/` 放对比用的构建，用完删掉 | [modules/perf.md](../modules/perf.md)、[modules/city-dashboard.md](../modules/city-dashboard.md) |
 | `local/measure-3d/` | 三维的性能实测，`measure:3d` 的默认输出，每次一个带时间的目录 | [modules/map-three.md](../modules/map-three.md)"性能验收" |
+| `local/lcc2-plan/` | LCC2 扫描轨迹的平面图，`lcc2:register --plan lcc2-plan/<模型ID>.svg` 写在这里，随时能重新生成 | [3dt-manifest.md](3dt-manifest.md)"出生点和路线" |
 | `local/scope-test-files/` | 自定义监测范围的验收文件，`scope-files:generate` 能重新生成 | [`tools/scope-test-files/说明.md`](../../apps/yzt/tools/scope-test-files/说明.md) |
 
 不放在这里的：

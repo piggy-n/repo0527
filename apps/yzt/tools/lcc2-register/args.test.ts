@@ -16,8 +16,19 @@ describe('parseOptions', () => {
       roam: false,
       spawnAt: 0,
       routes: [],
+      plan: null,
       help: false
     });
+  });
+
+  it('--plan：平面图写到一个 .svg 文件，带上它就是 --roam；忘了写值、不是 .svg 都报错', () => {
+    const options = parseOptions(['a.lcc2', ...DATUM, '--plan', 'lcc2-plan/a.svg']);
+    expect(options).toMatchObject({ plan: 'lcc2-plan/a.svg', roam: true });
+    expect(parseOptions(['a.lcc2', ...DATUM, '--plan=C:/x/A.SVG']).plan).toBe('C:/x/A.SVG');
+    // 忘了写值时下一个参数被当成文件名
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--plan', '--roam'])).toThrow('.svg 文件：--roam');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--plan', 'a.png'])).toThrow('.svg 文件');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--plan'])).toThrow('缺少值');
   });
 
   it('--datum 必填：漏写时报错、不按 0 算，没有量出差值的数据显式写 0', () => {
