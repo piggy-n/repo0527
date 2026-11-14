@@ -189,6 +189,11 @@ packages/icons/
 | `menu-list` | `list-details` | 数据下载页面内导航的数据列表（2026-11-02 加入，ADR 0127） |
 | `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
 | `vertex-edit` / `undo` / `trash` | `edit` / `arrow-back-up` / `trash` | 自定义范围弹窗的编辑节点、撤销、删除节点（2026-10-31 加入，ADR 0121） |
+| `layer-add` / `layer-remove` | 改绘自 `map-plus` / `map-minus`（2026-11-14）：地图缩到约 0.78 放在左上，加减号移到右下、放大到 8 × 8、描边单独加粗到 2，和地图之间留空。用户要求加减号更大、更突出，16px 下一眼看出是加还是减 | 资源图层面板的添加到当前地图、从当前地图移除（ADR 0157）：资源目录的标题和行尾、当前图层的行尾、右键菜单 |
+| `tree-expand-all` / `tree-collapse-all` | 自绘，仿 `selector`：箭头向外、向内 | 资源目录的全部展开、全部收起（ADR 0157），和上移、下移的三角区分开 |
+| `move-top` / `move-bottom` | 自制：和 `move-up` / `move-down` 同样的实心三角，加一条到头的横线 | 当前图层的置顶、置底（ADR 0157） |
+| `eye` / `eye-off` | `eye` / `eye-off` | 当前图层右键菜单的显示、隐藏 |
+| `model-3d` / `roam-walk` | `box` / `walk` | 当前图层里三维模型的图标、行内的漫游按钮（ADR 0157） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 
