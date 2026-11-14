@@ -5,6 +5,7 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, h, KeepAlive, nextTick, type Ref, ref } from 'vue';
 import { LayerPanelShell } from './LayerPanelShell';
+import { type PanelToolItem, PanelToolbar } from './PanelToolbar';
 
 // 真实的布局（ADR 0040）：面板的高度、分割线的位置都靠量尺寸，jsdom 里元素的尺寸都是 0，只能在浏览器里验证。
 // 2026-11-14 从旧资源图层面板的浏览器测试移来（ADR 0157），内容换成固定高度的行
@@ -89,6 +90,90 @@ function setup(height: number, catalog: number, current: number, shown?: Ref<boo
       wrapper.unmount();
       host.remove();
     }
+  };
+}
+
+// 现状底图两段标题右边的工具栏（ADR 0157）：目录 4 个按钮，当前图层 7 个按钮，都带分隔线
+const CATALOG_TOOLS: PanelToolItem[] = [
+  { key: 'add', icon: 'layer-add', label: '添加' },
+  { key: 'remove', icon: 'layer-remove', label: '移除' },
+  'divider',
+  { key: 'expand-all', icon: 'tree-expand-all', label: '全部展开' },
+  { key: 'collapse-all', icon: 'tree-collapse-all', label: '全部收起' }
+];
+const CURRENT_TOOLS: PanelToolItem[] = [
+  { key: 'move-up', icon: 'move-up', label: '上移' },
+  { key: 'move-down', icon: 'move-down', label: '下移' },
+  { key: 'move-top', icon: 'move-top', label: '置顶' },
+  { key: 'move-bottom', icon: 'move-bottom', label: '置底' },
+  'divider',
+  { key: 'opacity', icon: 'layer-opacity', label: '透明度' },
+  { key: 'legend', icon: 'map-legend', label: '图例' },
+  'divider',
+  { key: 'remove-layer', icon: 'layer-remove', label: '移除' }
+];
+
+/** 面板放在 width 宽的列里，标题行用真实的工具栏，目录标题后面是"全部 模型 资源" */
+function setupHeads(width: number) {
+  const host = document.body.appendChild(document.createElement('div'));
+  const Page = defineComponent({
+    name: 'HeadsPage',
+    setup() {
+      provideMap({ groups: [], camera: CAMERA });
+      return () => (
+        <div data-column style={{ display: 'flex', flexDirection: 'column', width: `${width}px`, height: '600px', ...TOKENS }}>
+          <LayerPanelShell
+            title="资源图层"
+            tabs={[{ id: 'core', label: '主节点' }]}
+            ratio={0.4}
+            views={[
+              { id: 'all', label: '全部' },
+              { id: 'models', label: '模型' },
+              { id: 'resources', label: '资源' }
+            ]}
+            view="all"
+          >
+            {{
+              catalogTools: () => [<PanelToolbar items={CATALOG_TOOLS} label="资源目录的操作" />],
+              catalogFilter: () => [h('div', { style: { height: '32px' } })],
+              catalog: () => rows(10),
+              currentTools: () => [<PanelToolbar items={CURRENT_TOOLS} label="当前图层的操作" />],
+              current: () => rows(5),
+              floating: () => []
+            }}
+          </LayerPanelShell>
+        </div>
+      );
+    }
+  });
+  const wrapper = mount(Page, { attachTo: host });
+  return {
+    wrapper,
+    [Symbol.dispose]() {
+      wrapper.unmount();
+      host.remove();
+    }
+  };
+}
+
+// 面板在 width 宽的列里：两段工具栏最右的按钮是否整个在面板里（面板裁掉外面的），目录的页签是否在自己的区域里滚动
+async function headsAt(width: number) {
+  using ctx = setupHeads(width);
+  await frames(2);
+  const inside = (section: string, label: string) => {
+    const panel = ctx.wrapper.get(`[data-panel-section="${section}"]`).element.getBoundingClientRect();
+    const last = ctx.wrapper
+      .get(`[role="toolbar"][aria-label="${label}"]`)
+      .findAll('button')
+      .at(-1)
+      ?.element.getBoundingClientRect();
+    return last !== undefined && last.right <= panel.right && last.left >= panel.left;
+  };
+  const views = ctx.wrapper.get('[role="tablist"][aria-label="资源目录显示的内容"]').element;
+  return {
+    catalogInside: inside('catalog', '资源目录的操作'),
+    currentInside: inside('current', '当前图层的操作'),
+    viewsScroll: views.scrollWidth > views.clientWidth
   };
 }
 
@@ -234,6 +319,11 @@ describe('LayerPanelShell（真实的布局）', () => {
       expect(ctx.ratio.value).toBe(stopped);
     }
   );
+
+  it('手机宽度（294 宽的面板）：两段标题行的工具栏都在面板里，最右的按钮完整可见；目录的页签收缩、横向滚动（2026-11-15 审查发现）', async () => {
+    expect(await headsAt(320)).toStrictEqual({ catalogInside: true, currentInside: true, viewsScroll: false });
+    expect(await headsAt(294)).toStrictEqual({ catalogInside: true, currentInside: true, viewsScroll: true });
+  });
 
   it('所在页面被缓存：停用期间量到的 0 不采用，再次激活的那一刻两段的高度和停用前一样（ADR 0063）', async () => {
     const shown = ref(true);

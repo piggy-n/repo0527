@@ -54,11 +54,12 @@ describe('LayerPanelShell', () => {
     expect(wrapper.get('[role="separator"]').attributes('aria-label')).toBe('调整资源目录和当前图层的高度');
   });
 
-  it('目录还没到时显示加载中，失败时显示失败和重试；这时没有搜索行和浮层，当前图层照常', async () => {
+  it('目录还没到时目录这一段显示加载中，失败时显示失败和重试；只换掉目录，搜索行、浮层和当前图层照常（2026-11-15 审查：三维模型不受资源目录影响）', async () => {
     const { wrapper, status, retries } = mountShell('loading');
     expect(wrapper.get('[data-panel-section="catalog"]').text()).toContain('正在加载资源目录…');
-    expect(wrapper.find('[data-slot="filter"]').exists()).toBe(false);
-    expect(wrapper.find('[data-slot="floating"]').exists()).toBe(false);
+    expect(wrapper.find('[data-slot="catalog"]').exists()).toBe(false);
+    expect(wrapper.find('[data-slot="filter"]').exists()).toBe(true);
+    expect(wrapper.find('[data-slot="floating"]').exists()).toBe(true);
     expect(wrapper.find('[data-slot="current"]').exists()).toBe(true);
 
     status.value = 'failed';

@@ -361,7 +361,7 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
-      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：三维引擎的能力 styleLayers 为 false（ADR 0153）
+      // 引擎的能力 styleLayers 为 false 时三维里不显示资源图层，图例只有说明（ADR 0080 第 5 节）；app 注入的是 true（ADR 0157），只有测试走得到
       const resourcesHidden = resources.hiddenInScene.value;
       const indoorMap = models.indoorMap.value;
       const player = models.roamPlayer.value;
@@ -474,7 +474,11 @@ export const CurrentMapPage = defineComponent({
                       <RequestStatusChip
                         status={requests}
                         selectable={key => key !== 'basemap'}
-                        onSelect={(key: string) => (revealed.value = { key })}
+                        onSelect={(key: string) => {
+                          // 面板收起、窄屏时被右侧挤掉都看不到反应：先展开左侧，面板在下一轮渲染后滚到这一行、闪两下
+                          changeLeftCollapsed(false);
+                          revealed.value = { key };
+                        }}
                         onRetry={(key: string) => {
                           const id = modelIdOfKey(key);
                           if (id !== null) {

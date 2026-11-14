@@ -39,7 +39,10 @@ export const LayerPanelShell = defineComponent({
     title: { type: String, required: true },
     /** 第一个是主页签，显示两段；其余显示"暂无数据" */
     tabs: { type: Array as PropType<readonly PanelTab[]>, required: true },
-    /** 资源目录还没到时显示加载中，加载失败时显示失败和重试 */
+    /**
+     * 资源目录这一段的状态：不是 ready 时目录换成加载中或失败和重试；搜索行、浮层照常（页面按目录当前显示的内容给，
+     * 只看三维模型时资源目录没到也是 ready，ADR 0157）
+     */
     status: { type: String as PropType<'ready' | 'loading' | 'failed'>, default: 'ready' },
     collapsed: { type: Boolean, default: false },
     /** 分割线的位置：当前图层占可用高度的比例 */
@@ -226,11 +229,9 @@ export const LayerPanelShell = defineComponent({
             )}
             {slots.catalogTools()}
           </div>
-          {props.status === 'ready' && (
-            <div ref={filter} class={styles.filter}>
-              {slots.catalogFilter()}
-            </div>
-          )}
+          <div ref={filter} class={styles.filter}>
+            {slots.catalogFilter()}
+          </div>
           <div class={styles.scroll}>
             <div ref={catalogInner} class={styles.catalog}>
               {props.status === 'ready' ? slots.catalog() : renderStatus()}
@@ -324,7 +325,7 @@ export const LayerPanelShell = defineComponent({
             </MxPanel>
           </div>
         )}
-        {!props.collapsed && core.value && props.status === 'ready' && slots.floating(floating)}
+        {!props.collapsed && core.value && slots.floating(floating)}
       </div>
     );
   }

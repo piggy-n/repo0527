@@ -106,9 +106,17 @@ export const RequestStatusChip = defineComponent({
           key={item.key}
           class={[styles.row, selectable && styles.selectable]}
           title={selectable ? '在当前图层中选中' : undefined}
+          role={selectable ? 'button' : undefined}
+          tabindex={selectable ? 0 : undefined}
           data-request-row={item.key}
           onClick={(event: MouseEvent) => {
             if (selectable && !(event.target instanceof Element && event.target.closest('button'))) {
+              emit('select', item.key);
+            }
+          }}
+          onKeydown={(event: KeyboardEvent) => {
+            if (selectable && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault();
               emit('select', item.key);
             }
           }}

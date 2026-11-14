@@ -74,8 +74,8 @@ export interface RenderedFeatureLike {
 }
 
 /**
- * 瓦片事件里的瓦片：用键区分是哪一张，用状态看引擎没发事件的结果（MapLibre 6.12：返回 404 时只把状态改成 `errored`，
- * 没有变化时只改成 `loaded`）。状态不在公开的类型里，升级时由适配器的测试和页面上的检查发现变化
+ * 瓦片事件里的瓦片：用键区分是哪一张，用状态看引擎没发事件的结果（MapLibre 6.12：栅格瓦片返回 404 时只把状态改成 `errored`，
+ * 矢量瓦片的 404 当作空瓦片照常发 `data`；304 时只改成 `loaded`）。状态不在公开的类型里，升级时由适配器的测试和页面上的检查发现变化
  */
 export interface TileLike {
   readonly tileID: { readonly key: string | number };

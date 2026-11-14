@@ -126,17 +126,30 @@ export function requestRowText(
   return { text: `${item.requested} 张`, progress: null, tone: 'normal', waited: null };
 }
 
-/** 几个数据源这一轮的请求合成一项：从最早开始，都结束时才结束 */
+/**
+ * 几个数据源这一轮的请求合成一项：从最早开始，都结束时才结束。只算最近的一轮：按开始的先后连起时间上重叠的，
+ * 和最后一段不重叠的（上一轮早已结束、结果还留着的数据源，如打开地名时的底图）不算，免得开始时间拉到几分钟前（ADR 0158）
+ */
 export function mergedActivity(activities: readonly SourceActivity[]): SourceActivity | null {
   if (activities.length === 0) {
     return null;
   }
-  const pending = activities.some(activity => activity.finishedAt === null);
+  // 最近一轮：从后往前看，开始得比前面那段的结束还晚的就断开
+  let latest: SourceActivity[] = [];
+  let end = -Infinity;
+  for (const activity of activities.toSorted((a, b) => a.startedAt - b.startedAt)) {
+    if (activity.startedAt > end) {
+      latest = [];
+    }
+    latest.push(activity);
+    end = Math.max(end, activity.finishedAt ?? Infinity);
+  }
+  const pending = latest.some(activity => activity.finishedAt === null);
   return {
-    requested: activities.reduce((sum, activity) => sum + activity.requested, 0),
-    loaded: activities.reduce((sum, activity) => sum + activity.loaded, 0),
-    failed: activities.reduce((sum, activity) => sum + activity.failed, 0),
-    startedAt: Math.min(...activities.map(activity => activity.startedAt)),
-    finishedAt: pending ? null : Math.max(...activities.map(activity => activity.finishedAt ?? 0))
+    requested: latest.reduce((sum, activity) => sum + activity.requested, 0),
+    loaded: latest.reduce((sum, activity) => sum + activity.loaded, 0),
+    failed: latest.reduce((sum, activity) => sum + activity.failed, 0),
+    startedAt: Math.min(...latest.map(activity => activity.startedAt)),
+    finishedAt: pending ? null : Math.max(...latest.map(activity => activity.finishedAt ?? 0))
   };
 }

@@ -317,7 +317,7 @@ store.clear();
 ### 数据源的瓦片请求（ADR 0158）
 
 - `SourceActivityTracker`（`view/source-activity.ts`）按数据源统计"这一轮"的瓦片：空闲以后请求第一张瓦片时开始，记请求、到了、失败的张数和开始、结束的时间（同 `performance.now`）。取消的不算请求，全部取消时这一轮不留下；不是这一轮在等的瓦片（重新加载）的结果不算；结束后保留到下一轮开始。读到的快照不可变，没有变化时是同一个对象
-- `MapLibreView` 把 `dataloading`（带 `tile` 的是新瓦片，已有瓦片的重新加载不发）、`sourcedata`、`dataabort` 和带 `tile` 的 `error` 交给它，瓦片按 `tile.tileID.key` 区分。MapLibre 6.12 对返回 404 的瓦片不发任何事件，只把瓦片的状态改成 `errored`，没有变化的瓦片也只改成 `loaded`：开始请求时记下瓦片，数据源每有一个事件、地图 `idle` 时看一眼还在等的瓦片（`sweep`），`loaded`、`errored` 算到了，`unloaded` 算取消。不用事件里的 `isSourceLoaded`：一张瓦片失败以后，MapLibre 在下一次开始请求以前一直报 true（`TileManager` 自己先收到 `error`），按它结束会把还在路上的瓦片算成到了
+- `MapLibreView` 把 `dataloading`（带 `tile` 的是新瓦片，已有瓦片的重新加载不发）、`sourcedata`、`dataabort` 和带 `tile` 的 `error` 交给它，瓦片按 `tile.tileID.key` 区分。MapLibre 6.12 对返回 404 的栅格瓦片不发任何事件，只把瓦片的状态改成 `errored`（矢量瓦片的 404 当作空瓦片，照常发 `data`），没有变化的瓦片（304）也不发、只改成 `loaded`：开始请求时记下瓦片，数据源每有一个事件、地图 `idle` 时看一眼还在等的瓦片（`sweep`），`loaded`、`errored` 算到了，`unloaded` 算取消。不用事件里的 `isSourceLoaded`：一张瓦片失败以后，MapLibre 在下一次开始请求以前一直报 true（`TileManager` 自己先收到 `error`），按它结束会把还在路上的瓦片算成到了
 - 数据源移除（包括换地址的先移除再添加）、样式整体重建时忘掉，和数据源错误一样
 - `MapView` 的 `sourceActivity`、`onSourceActivityChange` 是可选的；每张瓦片都可能通知一次，map-vue 的上下文一帧最多读一次
 

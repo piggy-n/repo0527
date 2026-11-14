@@ -1,5 +1,15 @@
 import { useEventListener, useResizeObserver } from '@vueuse/core';
-import { defineComponent, nextTick, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
+import { usePageActive } from '@mx/map-vue';
+import {
+  defineComponent,
+  nextTick,
+  onBeforeUnmount,
+  type PropType,
+  ref,
+  type SlotsType,
+  type VNode,
+  watch
+} from 'vue';
 import { layerPopoverPlacement, type PopoverPlacement } from './popover-placement';
 import styles from './LayerPopover.module.scss';
 
@@ -9,7 +19,8 @@ const SHEET_TOP = 40;
 
 /**
  * 当前图层的浮层（透明度、图例，ADR 0157）：在面板右边，箭头对着选中的行，换选中项、滚动列表、窗口变化时跟着走；
- * 手机宽度时盖在面板的下段上，没有箭头。开关由页面持有：再点入口、点关闭、按 Esc 关闭，不因为点外面关闭
+ * 手机宽度时盖在面板的下段上，没有箭头。开关由页面持有：再点入口、点关闭、按 Esc 关闭，不因为点外面关闭；
+ * 面板停用时（漫游时被缓存）不响应 Esc。关闭时焦点在浮层里的，还给箭头对着的元素
  */
 export const LayerPopover = defineComponent({
   name: 'LayerPopover',
@@ -17,7 +28,10 @@ export const LayerPopover = defineComponent({
     open: { type: Boolean, default: false },
     /** 资源图层面板：浮层贴在它右边 */
     panel: { type: Function as PropType<() => HTMLElement | null>, required: true },
-    /** 箭头对着的元素：选中的行，所在的组收起时是组的标题 */
+    /**
+     * 箭头对着的元素：选中的行，所在的组收起时是组的标题（由页面给出）；关闭时焦点也还给它。
+     * 在 DOM 更新以后取，它读到的响应式状态（选中、组的展开）变了就重新放
+     */
     anchor: { type: Function as PropType<() => HTMLElement | null>, required: true },
     /** 当前图层的滚动区 */
     list: { type: Function as PropType<() => HTMLElement | null>, required: true },
@@ -38,6 +52,29 @@ export const LayerPopover = defineComponent({
     const content = ref<HTMLElement>();
     const placement = ref<PopoverPlacement | null>(null);
     const sheetBox = ref<{ left: number; width: number; top: number; maxHeight: number } | null>(null);
+    const active = usePageActive();
+
+    // 焦点在浮层里时（点了里面的关闭、在里面按 Esc），关掉以后还给箭头对着的元素，不落到 body
+    const giveBackFocus = () => {
+      if (!element.value?.contains(document.activeElement)) {
+        return;
+      }
+      const target = props.anchor();
+      void nextTick(() => {
+        if (target?.isConnected) {
+          target.focus();
+        }
+      });
+    };
+    watch(
+      () => props.open,
+      open => {
+        if (!open) {
+          giveBackFocus();
+        }
+      }
+    );
+    onBeforeUnmount(giveBackFocus);
 
     const place = () => {
       const panel = props.panel();
@@ -81,7 +118,7 @@ export const LayerPopover = defineComponent({
     // 列表、目录滚动时箭头跟着行；在捕获阶段才收得到元素自己的滚动
     useEventListener(document, 'scroll', () => place(), { capture: true, passive: true });
     useEventListener(document, 'keydown', (event: KeyboardEvent) => {
-      if (props.open && event.key === 'Escape' && !event.defaultPrevented) {
+      if (props.open && active.value && event.key === 'Escape' && !event.defaultPrevented) {
         emit('close');
       }
     });

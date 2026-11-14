@@ -49,6 +49,17 @@
   line-height: var(--line-height-compact);
 }
 
+// 不显示标题时的标签和说明（只有这一组）：同标题的高度和字号，不能点
+.note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px 0 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
 .tag {
   padding: 0 6px;
   border-radius: var(--radius-sm);

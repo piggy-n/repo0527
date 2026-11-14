@@ -28,7 +28,8 @@ const CATALOG = catalogOf(DLTB, CJDCQ, HYDL);
 const HIDDEN_IN_SCENE: SceneCapabilities = { styleLayers: false, identify: false, splats: true };
 const MAPLIBRE_LIKE: SceneCapabilities = { styleLayers: true, identify: true, splats: true };
 
-// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制，三维引擎的能力默认同 app 注入的（三维里不画样式图层、不识别）
+// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制。三维引擎的能力默认是不画样式图层的引擎，
+// 测 hiddenInScene 的推导；app 注入的同 MAPLIBRE_LIKE（ADR 0157）
 function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = HIDDEN_IN_SCENE) {
   const scope = effectScope();
   const catalog = shallowRef<ResourceCatalog | undefined>(undefined);

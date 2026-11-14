@@ -76,8 +76,8 @@
   }
 }
 
-// 模型清单读不到：目录最后一行说明和重试
-.modelsFailed {
+// 目录里的一行说明和重试：模型清单读不到，"全部"里资源目录还没到或读不到
+.notice {
   display: flex;
   align-items: center;
   justify-content: center;

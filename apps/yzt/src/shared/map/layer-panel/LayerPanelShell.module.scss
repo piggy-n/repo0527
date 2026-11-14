@@ -59,12 +59,11 @@
   cursor: pointer;
 }
 
-// 资源目录标题后面的页签（用户 2026-11-15 选的方案一）：同上面的页签，间距收到 8，标题行才放得下工具栏
+// 资源目录标题后面的页签（用户 2026-11-15 选的方案一）：同上面的页签，间距收到 8，320 宽的面板里标题行刚好放得下工具栏；
+// 更窄时（手机宽度）同上面的页签一样收缩、在自己的区域里横向滚动，工具栏不被挤出去
 .views {
-  flex: none;
   gap: 8px;
   margin-left: 4px;
-  overflow: visible;
 }
 
 .currentTab {
@@ -118,6 +117,7 @@
 }
 
 // 两段的标题：左边竖条加名称，右边是工具栏
+// 标题行是尺寸查询的容器：面板窄于 320 时（手机宽度）里面的工具栏变紧凑，见 PanelToolbar.module.scss
 .sectionHead {
   display: flex;
   flex: none;
@@ -126,6 +126,7 @@
   box-sizing: border-box;
   height: 40px;
   padding: 0 12px 0 var(--space-lg);
+  container-type: inline-size;
 }
 
 .sectionTitle {

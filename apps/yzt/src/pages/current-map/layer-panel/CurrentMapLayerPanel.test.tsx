@@ -5,7 +5,7 @@ import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
-import { buildCatalog } from '@/features/resource-map/catalog';
+import { buildCatalog, type ResourceCatalog } from '@/features/resource-map/catalog';
 import { type ResourceLayers, useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
@@ -15,6 +15,7 @@ import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSel
 import { type SceneModels, useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { required } from '@/shared/testing/required';
+import { LayerPopover } from '@/shared/map/layer-panel/LayerPopover';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -65,14 +66,26 @@ const MODELS = buildModelCatalog(
   'https://maps.test/3dt/manifest.json'
 );
 
-// 页面创建地图和拥有者，渲染面板；没有画布，只看面板和拥有者的状态。模型的状态报告由用例给
-async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' | 'failed' } = {}) {
+// 页面创建地图和拥有者，渲染面板；没有画布，只看面板和拥有者的状态。模型的状态报告由用例给；
+// 资源目录可以先不到（status 是页面给的查询状态，catalog 由用例在之后给）
+async function mountPanel({
+  modelsStatus = 'ready',
+  status = 'ready',
+  catalogReady = true
+}: {
+  modelsStatus?: 'ready' | 'failed';
+  status?: 'ready' | 'loading' | 'failed';
+  catalogReady?: boolean;
+} = {}) {
   let owner: ResourceLayers | undefined;
   let models: SceneModels | undefined;
   let context: MapContext | undefined;
   const legendCodes: (string | null)[] = [];
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const onRetryModels = vi.fn<() => void>();
+  const onRetry = vi.fn<() => void>();
+  const catalog = shallowRef<ResourceCatalog | undefined>(catalogReady ? CATALOG : undefined);
+  const catalogStatus = shallowRef(status);
   // 请求状态只用到行内转圈的集合；页面在明细里点了一行时换一个新对象
   const loadingKeys = shallowRef<ReadonlySet<string>>(new Set());
   const requests: RequestStatus = {
@@ -84,7 +97,6 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
   const legendYield = shallowRef<string | null>(null);
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
-    const catalog = shallowRef(CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols, tileBase: 'http://localhost/tiles/' });
     const layout = useResourcePanelLayout();
@@ -99,6 +111,8 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
         layout={layout}
         models={sceneModels}
         modelsStatus={modelsStatus}
+        status={catalogStatus.value}
+        onRetry={onRetry}
         requests={requests}
         reveal={reveal.value}
         legendYield={legendYield.value}
@@ -120,6 +134,9 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
     sceneStatus,
     legendCodes,
     onRetryModels,
+    onRetry,
+    catalog,
+    catalogStatus,
     loadingKeys,
     reveal,
     legendYield
@@ -136,8 +153,9 @@ function selectedRow(wrapper: VueWrapper): string | null {
   return found.exists() ? (found.attributes('data-current-row')?.replace('resource:', '') ?? null) : null;
 }
 const popover = () => document.querySelector<HTMLElement>('[data-layer-popover]');
-// 右键菜单里的定位
+// 右键菜单里的定位；焦点在不在右键菜单里
 const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
+const menuHasFocus = () => Boolean(document.activeElement?.closest('[data-panel-menu]'));
 // 目录显示的内容（用户 2026-11-15）：显示着的节点、标题后面选中的页签、点某个页签
 const catalogKeys = (wrapper: VueWrapper) =>
   wrapper.findAll('[data-catalog-node]').map(item => item.attributes('data-catalog-node'));
@@ -357,6 +375,80 @@ describe('CurrentMapLayerPanel', () => {
     expect(selectedRow(wrapper)).toBe('model:white');
   });
 
+  it('资源目录读不到时三维模型照常：三维里"模型"能搜索、筛选、加入；"全部"在资源的位置说明失败、能重试；"资源"整段说明（2026-11-15 审查发现）', async () => {
+    const { wrapper, map, models, onRetry, catalog, catalogStatus } = await mountPanel({
+      status: 'failed',
+      catalogReady: false
+    });
+    map.setDimension('3d');
+    await nextTick();
+    expect(wrapper.text()).not.toContain('资源目录加载失败');
+    expect(wrapper.find('input[placeholder="搜索模型或城市"]').exists()).toBe(true);
+    expect(wrapper.findComponent(ModelKindSelect).exists()).toBe(true);
+    await wrapper.get('[data-catalog-node="model:white"]').trigger('click');
+    await tool(wrapper, 'add').trigger('click');
+    expect(models.added.value).toStrictEqual(['white']);
+    expect(wrapper.find('[data-current-row="model:white"]').exists()).toBe(true);
+
+    // "全部"：模型照常列出，资源目录的失败在模型后面一行，可以重试
+    await showView(wrapper, 'all');
+    expect(catalogKeys(wrapper)[0]).toBe('model-root');
+    expect(wrapper.find('[data-resources-status]').exists()).toBe(true);
+    const notice = wrapper.get('[data-resources-status]');
+    expect(notice.text()).toContain('资源目录加载失败');
+    await notice.get('button').trigger('click');
+    expect(onRetry).toHaveBeenCalledOnce();
+
+    // "资源"：整段是失败和重试，搜索框还在
+    await showView(wrapper, 'resources');
+    expect(wrapper.get('[data-panel-section="catalog"]').text()).toContain('资源目录加载失败');
+    expect(wrapper.find('input[placeholder="搜索资源"]').exists()).toBe(true);
+
+    // 目录到了：照常列出资源，没有说明
+    catalogStatus.value = 'ready';
+    catalog.value = CATALOG;
+    await nextTick();
+    expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+    await showView(wrapper, 'all');
+    expect(wrapper.find('[data-resources-status]').exists()).toBe(false);
+  });
+
+  it('二维里资源目录还没到时，"全部"先说明正在加载，后面照常列出三维模型', async () => {
+    const { wrapper } = await mountPanel({ status: 'loading', catalogReady: false });
+    expect(wrapper.find('[data-resources-status]').exists()).toBe(true);
+    expect(wrapper.get('[data-resources-status]').text()).toBe('正在加载资源目录…');
+    expect(catalogKeys(wrapper)).toStrictEqual(['model-root']);
+    const section = wrapper.get('[data-panel-section="catalog"]').element;
+    const status = wrapper.get('[data-resources-status]').element;
+    const root = wrapper.get('[data-catalog-node="model-root"]').element;
+    expect(section.contains(status) && status.compareDocumentPosition(root) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('展开不被整份换掉：资源目录晚于模型清单到时各市仍展开；在一种显示内容里全部展开、全部收起不动别的（2026-11-15 审查发现）', async () => {
+    const { wrapper, map, catalog, catalogStatus } = await mountPanel({ status: 'loading', catalogReady: false });
+    map.setDimension('3d');
+    await nextTick();
+    expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500', 'model:station', 'model:white']);
+    catalogStatus.value = 'ready';
+    catalog.value = CATALOG;
+    await nextTick();
+    expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500', 'model:station', 'model:white']);
+
+    // 资源里地类图斑所在的分类默认展开；在"模型"里全部收起，回到"资源"它还展开着
+    await showView(wrapper, 'resources');
+    expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+    await showView(wrapper, 'models');
+    await tool(wrapper, 'collapse-all').trigger('click');
+    expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500']);
+    await showView(wrapper, 'resources');
+    expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+
+    // 在"资源"里全部展开，"模型"里收起的市不跟着展开
+    await tool(wrapper, 'expand-all').trigger('click');
+    await showView(wrapper, 'models');
+    expect(catalogKeys(wrapper)).toStrictEqual(['model-city:320500']);
+  });
+
   it('三维里模型组照常：选中模型时定位能用，交给拥有者飞过去（还没加载完的等加载完）', async () => {
     const { wrapper, models, map } = await mountPanel();
     models.add(['station']);
@@ -490,6 +582,79 @@ describe('CurrentMapLayerPanel', () => {
     expect(currentOrder(wrapper)).toEqual(expect.arrayContaining(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']));
     expect(land().attributes('aria-selected')).toBeUndefined();
     expect(owner.state.value.displays.get('bgdc_cjdcq')?.added).toBe(true);
+  });
+
+  it('二维里只有三维模型时不显示组标题，"仅三维"和说明单独一行；三维里没有这一行（2026-11-15 审查发现）', async () => {
+    const { wrapper, owner, models, map } = await mountPanel();
+    owner.remove(['bgdc_dltb']);
+    models.add(['white']);
+    await nextTick();
+    expect(wrapper.find('[data-current-group="models"] > button[aria-expanded]').exists()).toBe(false);
+    expect(wrapper.find('[data-current-group="models"] [data-group-note]').exists()).toBe(true);
+    const note = wrapper.get('[data-current-group="models"] [data-group-note]');
+    expect(note.text()).toBe('仅三维切换到三维后可以定位、漫游');
+
+    map.setDimension('3d');
+    await nextTick();
+    expect(wrapper.find('[data-group-note]').exists()).toBe(false);
+  });
+
+  it('右键菜单里不能用的定位写出原因：二维里的模型"切换到三维后可用"，到了可见级别的二维图层"已在可见级别"（2026-11-15 审查发现）', async () => {
+    const { wrapper, models } = await mountPanel();
+    models.add(['white']);
+    await nextTick();
+    await wrapper.get('[data-current-row="model:white"]').trigger('contextmenu');
+    expect(required(locateItem(), '定位').disabled).toBe(true);
+    expect(locateItem()?.textContent).toContain('切换到三维后可用');
+    expect(locateItem()?.textContent).not.toContain('双击');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('contextmenu');
+    expect(locateItem()?.textContent).toContain('已在可见级别');
+  });
+
+  it('键盘打开的右键菜单关闭、执行以后焦点回到行上；移除了这一行时到新选中的行（2026-11-15 审查发现）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['bgdc_cjdcq']);
+    await nextTick();
+    const element = (code: string) => row(wrapper, code).element;
+    const openMenu = async (code: string) => {
+      await row(wrapper, code).trigger('click');
+      wrapper.get<HTMLElement>(`[data-current-row="resource:${code}"]`).element.focus();
+      await row(wrapper, code).trigger('keydown', { key: 'F10', shiftKey: true });
+      await nextTick();
+      await nextTick();
+    };
+
+    await openMenu('bgdc_cjdcq');
+    expect(menuHasFocus()).toBe(true);
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    await nextTick();
+    expect(document.activeElement).toBe(element('bgdc_cjdcq'));
+
+    await openMenu('bgdc_cjdcq');
+    const remove = required(document.querySelector<HTMLButtonElement>('[data-menu-item="remove"]'), '移除');
+    remove.focus();
+    remove.click();
+    await nextTick();
+    await nextTick();
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+    expect(document.activeElement).toBe(element('bgdc_dltb'));
+  });
+
+  it('选中的行所在的组收起时，浮层的箭头对着组的标题（2026-11-15 审查发现）', async () => {
+    const { wrapper, models } = await mountPanel();
+    models.add(['white']);
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    const anchor = () => wrapper.getComponent(LayerPopover).props('anchor')();
+    expect(anchor()).toBe(row(wrapper, 'bgdc_dltb').element);
+
+    await wrapper.get('[data-current-group="layers"] > button[aria-expanded]').trigger('click');
+    expect(anchor()).toBe(wrapper.get('[data-current-group="layers"] > button[aria-expanded]').element);
   });
 
   describe('三维里先体现三维模型（用户 2026-11-15 选的方案乙，标题后面的"全部、模型、资源"是方案一）', () => {

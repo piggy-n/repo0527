@@ -85,11 +85,11 @@ interface PanelMenuState {
   readonly point: MenuPoint;
 }
 
-/** 定位能不能用：工具栏的提示、菜单的名称 */
+/** 定位能不能用：菜单的名称，不能用时的原因（菜单里代替快捷键显示） */
 interface LocateInfo {
   readonly enabled: boolean;
-  readonly tip: string;
   readonly label: string;
+  readonly reason?: string;
 }
 
 type LoadStatus = 'ready' | 'loading' | 'failed';
@@ -108,7 +108,7 @@ export const CurrentMapLayerPanel = defineComponent({
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     layout: { type: Object as PropType<ResourcePanelLayout>, required: true },
     models: { type: Object as PropType<SceneModels>, required: true },
-    /** 资源目录的查询：还没到、加载失败 */
+    /** 资源目录的查询：还没到、加载失败；只挡住二维资源，三维模型照常（ADR 0157） */
     status: { type: String as PropType<LoadStatus>, default: 'ready' },
     /** 三维模型清单的查询：失败时目录最后提示、可以重试 */
     modelsStatus: { type: String as PropType<LoadStatus>, default: 'ready' },
@@ -187,12 +187,12 @@ export const CurrentMapLayerPanel = defineComponent({
       { immediate: true }
     );
     const selection = ref<CatalogSelection>(EMPTY_CATALOG_SELECTION);
-    // 目录第一次到达时展开含有已加入资源的分类；之后目录刷新不改用户的展开
+    // 目录第一次到达时展开含有已加入资源的分类，并进已有的展开（模型清单可能先到，各市已经展开）；之后目录刷新不改用户的展开
     watch(
       () => state.value.catalog,
       (catalog, previous) => {
         if (catalog && !previous) {
-          expanded.value = expandedByDefault(resourceCatalogNodes(state.value));
+          expanded.value = new Set([...expanded.value, ...expandedByDefault(resourceCatalogNodes(state.value))]);
         }
       },
       { immediate: true }
@@ -278,6 +278,22 @@ export const CurrentMapLayerPanel = defineComponent({
 
     const rowElement = (key: string) =>
       floating?.list()?.querySelector<HTMLElement>(`[data-current-row="${CSS.escape(key)}"]`) ?? null;
+    // 行所在组的标题：组收起时浮层的箭头对着它
+    const groupHeadOf = (key: string) =>
+      floating
+        ?.list()
+        ?.querySelector<HTMLElement>(`[data-current-group="${modelIdOfKey(key) === null ? 'layers' : 'models'}"] > button`) ??
+      null;
+    // 浮层的箭头对着的：选中的行，所在的组收起时是组的标题。读组的展开：组收起、展开只更新面板里面的一层，浮层的属性不变，
+    // 靠这里读到的状态让浮层重新放（2026-11-15 审查发现）
+    const popoverAnchor = (): HTMLElement | null => {
+      const key = selected.value;
+      if (key === null) {
+        return null;
+      }
+      const open = modelIdOfKey(key) === null ? layersOpen.value || single.value : modelsOpen.value || single.value;
+      return open ? rowElement(key) : groupHeadOf(key);
+    };
     const scrollToRow = async (key: string, block: 'nearest' | 'center' = 'nearest') => {
       await nextTick();
       const row = rowElement(key);
@@ -375,17 +391,17 @@ export const CurrentMapLayerPanel = defineComponent({
       const id = key === null ? null : modelIdOfKey(key);
       if (id !== null) {
         if (!scene.value) {
-          return { enabled: false, tip: '定位（切换到三维后可用）', label: '定位' };
+          return { enabled: false, label: '定位', reason: '切换到三维后可用' };
         }
         return props.models.hidden.value.has(id)
-          ? { enabled: false, tip: '定位（显示后可用）', label: '定位' }
-          : { enabled: true, tip: '定位', label: '定位' };
+          ? { enabled: false, label: '定位', reason: '显示后可用' }
+          : { enabled: true, label: '定位' };
       }
       const zoom = locateTarget(key);
       if (zoom !== null) {
-        return { enabled: true, tip: `放大到第 ${zoom} 级`, label: `放大到第 ${zoom} 级` };
+        return { enabled: true, label: `放大到第 ${zoom} 级` };
       }
-      return { enabled: false, tip: key === null ? '定位' : '定位（图层已在可见级别）', label: '定位' };
+      return { enabled: false, label: '定位', reason: key === null ? undefined : '已在可见级别' };
     };
     const locate = (key: string) => {
       if (!locateInfo(key).enabled) {
@@ -476,9 +492,10 @@ export const CurrentMapLayerPanel = defineComponent({
       } else if (action === 'remove') {
         removeKeys(cover.value.remove);
       } else if (action === 'expand-all') {
-        expanded.value = new Set(branchKeys(nodes.value));
+        expanded.value = new Set([...expanded.value, ...branchKeys(nodes.value)]);
       } else if (action === 'collapse-all') {
-        expanded.value = new Set();
+        const shown = new Set(branchKeys(nodes.value));
+        expanded.value = new Set([...expanded.value].filter(key => !shown.has(key)));
       }
     };
 
@@ -586,7 +603,14 @@ export const CurrentMapLayerPanel = defineComponent({
               'divider'
             ] satisfies PanelMenuEntry[])
           : []),
-        { key: 'locate', label: info.label, icon: 'focus', disabled: !info.enabled, shortcut: '双击' },
+        {
+          key: 'locate',
+          label: info.label,
+          icon: 'focus',
+          disabled: !info.enabled,
+          shortcut: '双击',
+          hint: info.reason
+        },
         ...(id !== null && model && canRoamModel(model)
           ? [{ key: 'roam', label: '漫游', icon: 'roam-walk', disabled: !roamable(id) } satisfies PanelMenuEntry]
           : []),
@@ -602,6 +626,14 @@ export const CurrentMapLayerPanel = defineComponent({
         { key: 'remove', label: '移除', icon: 'layer-remove', danger: true, shortcut: 'Delete' }
       ];
     });
+
+    // 菜单关闭以后接过焦点的元素：当前图层是选中的行（打开菜单时选中了它，移除了是新选中的那行），目录是右键的那一项
+    const menuReturn = (current: PanelMenuState) => (): HTMLElement | null => {
+      if (current.source === 'current') {
+        return selected.value === null ? null : rowElement(selected.value);
+      }
+      return floating?.panel()?.querySelector<HTMLElement>(`[data-catalog-node="${CSS.escape(current.key)}"]`) ?? null;
+    };
 
     const onMenuSelect = (action: string) => {
       const current = menu.value;
@@ -733,6 +765,7 @@ export const CurrentMapLayerPanel = defineComponent({
             group="models"
             title="三维模型"
             tag={scene.value ? undefined : '仅三维'}
+            tagNote="切换到三维后可以定位、漫游"
             dimmed={!scene.value}
             open={modelsOpen.value || single.value}
             headless={single.value}
@@ -759,24 +792,52 @@ export const CurrentMapLayerPanel = defineComponent({
       return [<div class={styles.empty}>{props.modelsStatus === 'loading' ? '三维模型清单加载中' : '没有找到模型'}</div>];
     };
 
-    const renderCatalog = (): VNode[] =>
-      nodes.value.length === 0
-        ? renderCatalogEmpty()
-        : [
-            <CatalogTree
-              nodes={nodes.value}
-              expanded={expanded.value}
-              selection={selection.value}
-              searching={searching.value}
-              label="资源目录"
-              onUpdate:selection={(next: CatalogSelection) => (selection.value = next)}
-              onUpdate:expanded={(next: ReadonlySet<string>) => (expanded.value = next)}
-              onAdd={addKeys}
-              onRemove={removeKeys}
-              onLocate={locateInList}
-              onMenu={(key: string, point: MenuPoint) => (menu.value = { source: 'catalog', key, point })}
-            />
-          ];
+    // 资源目录还没到或读不到："全部"里在资源的位置说明、可以重试，模型照常列出；"资源"由外壳整段说明
+    const renderResourcesStatus = (): VNode[] => {
+      if (view.value !== 'all' || props.status === 'ready') {
+        return [];
+      }
+      return [
+        <div class={styles.notice} data-resources-status>
+          {props.status === 'failed'
+            ? [
+                <span>资源目录加载失败</span>,
+                <ElButton class="button-inline" link type="primary" size="small" onClick={() => emit('retry')}>
+                  重试
+                </ElButton>
+              ]
+            : [<span>正在加载资源目录…</span>]}
+        </div>
+      ];
+    };
+
+    const renderTree = (): VNode[] => [
+      <CatalogTree
+        nodes={nodes.value}
+        expanded={expanded.value}
+        selection={selection.value}
+        searching={searching.value}
+        label="资源目录"
+        onUpdate:selection={(next: CatalogSelection) => (selection.value = next)}
+        onUpdate:expanded={(next: ReadonlySet<string>) => (expanded.value = next)}
+        onAdd={addKeys}
+        onRemove={removeKeys}
+        onLocate={locateInList}
+        onMenu={(key: string, point: MenuPoint) => (menu.value = { source: 'catalog', key, point })}
+      />
+    ];
+
+    // 资源在"全部"里的位置：三维里在模型后面，二维里在前面；目录是空的、又有这一行说明时不再写"没有找到"
+    const renderCatalog = (): VNode[] => {
+      const resourcesStatus = renderResourcesStatus();
+      let body: VNode[] = [];
+      if (nodes.value.length > 0) {
+        body = renderTree();
+      } else if (resourcesStatus.length === 0) {
+        body = renderCatalogEmpty();
+      }
+      return scene.value ? [...body, ...resourcesStatus] : [...resourcesStatus, ...body];
+    };
 
     const renderOtherMatches = (): VNode[] =>
       otherMatches.value > 0
@@ -796,7 +857,7 @@ export const CurrentMapLayerPanel = defineComponent({
     const renderModelsFailed = (): VNode[] =>
       props.modelsStatus === 'failed' && view.value !== 'resources'
         ? [
-            <div class={styles.modelsFailed} data-models-failed>
+            <div class={styles.notice} data-models-failed>
               <span>三维模型清单加载失败</span>
               <ElButton class="button-inline" link type="primary" size="small" onClick={() => emit('retryModels')}>
                 重试
@@ -821,7 +882,7 @@ export const CurrentMapLayerPanel = defineComponent({
           open
           panel={context.panel}
           list={context.list}
-          anchor={() => (selected.value === null ? null : rowElement(selected.value))}
+          anchor={popoverAnchor}
           sheet={props.sheet}
           width={legend ? 300 : 280}
           label={`${resource.name}的${legend ? '图例' : '透明度'}`}
@@ -887,7 +948,7 @@ export const CurrentMapLayerPanel = defineComponent({
       <LayerPanelShell
         title="资源图层"
         tabs={TABS}
-        status={props.status}
+        status={view.value === 'resources' ? props.status : 'ready'}
         collapsed={props.collapsed}
         ratio={props.layout.checkedRatio.value}
         onRetry={() => emit('retry')}
@@ -936,6 +997,7 @@ export const CurrentMapLayerPanel = defineComponent({
                   point={menu.value.point}
                   items={menuItems.value}
                   label={menu.value.source === 'catalog' ? '资源目录的菜单' : '当前图层的菜单'}
+                  returnFocus={menuReturn(menu.value)}
                   onSelect={onMenuSelect}
                   onClose={() => (menu.value = null)}
                 />

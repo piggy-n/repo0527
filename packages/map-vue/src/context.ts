@@ -519,7 +519,6 @@ export class MapContextState implements Disposable {
     this.#becomeCurrent(next);
   }
 
-  // 只跟踪当前就绪视图的指针；按键不改变位置
   // 一帧里多次变化只读一次；读的时候是哪个视图就用哪个的，切换视图时 #syncView 已经立即换过
   #scheduleActivity(): void {
     this.#cancelActivityFrame ??= this.#requestFrame(() => {
@@ -528,6 +527,7 @@ export class MapContextState implements Disposable {
     });
   }
 
+  // 只跟踪当前就绪视图的指针；按键不改变位置
   #onInput(event: MapInputEvent, kind: ViewKind): void {
     if (event.type === 'key' || this.#readyView()?.view.kind !== kind) {
       return;

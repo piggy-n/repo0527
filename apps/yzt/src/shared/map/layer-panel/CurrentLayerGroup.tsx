@@ -29,9 +29,11 @@ export const CurrentLayerGroup = defineComponent({
     title: { type: String, required: true },
     /** 标题旁的标签，如二维里模型组的"仅三维" */
     tag: { type: String, default: undefined },
+    /** 标签的说明：悬停标签时显示；不显示标题时和标签一起单独一行 */
+    tagNote: { type: String, default: undefined },
     /** 整组变淡：二维里的模型 */
     dimmed: { type: Boolean, default: false },
-    /** 不显示标题（当前图层里只有这一组时，用户 2026-11-15）：没有收起、展开，行一直显示 */
+    /** 不显示标题（当前图层里只有这一组时，用户 2026-11-15）：没有收起、展开，行一直显示；有标签时标签和说明单独一行 */
     headless: { type: Boolean, default: false },
     open: { type: Boolean, default: true },
     keys: { type: Array as PropType<readonly string[]>, required: true },
@@ -200,8 +202,18 @@ export const CurrentLayerGroup = defineComponent({
             </ElIcon>
             <span>{props.title}</span>
             <span class={styles.badge}>{props.keys.length}</span>
-            {props.tag && <span class={styles.tag}>{props.tag}</span>}
+            {props.tag && (
+              <span class={styles.tag} title={props.tagNote}>
+                {props.tag}
+              </span>
+            )}
           </button>
+        )}
+        {props.headless && props.tag && (
+          <div class={styles.note} data-group-note>
+            <span class={styles.tag}>{props.tag}</span>
+            {props.tagNote && <span>{props.tagNote}</span>}
+          </div>
         )}
         {(props.open || props.headless) && (
           <ul ref={list} class={styles.rows} role="listbox" aria-label={props.title}>

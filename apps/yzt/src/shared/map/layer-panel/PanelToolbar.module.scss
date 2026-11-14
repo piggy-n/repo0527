@@ -50,3 +50,14 @@
   margin: 0 3px;
   background-color: var(--color-divider);
 }
+
+// 面板窄于 320 时（手机宽度，294 宽的面板里标题行只有 266）：按钮 24 宽、竖线两边 2，当前图层的 7 个按钮放得下（2026-11-15 审查发现）
+@container (max-width: 280px) {
+  .tool {
+    width: 24px;
+  }
+
+  .divider {
+    margin: 0 2px;
+  }
+}

@@ -1,4 +1,4 @@
-import { defineComponent, nextTick, type PropType, ref, watch } from 'vue';
+import { defineComponent, nextTick, onBeforeUnmount, type PropType, ref, watch } from 'vue';
 import { type IconName, SvgIcon } from '../../icons/SvgIcon';
 import { useLightDismiss } from '../popover/useLightDismiss';
 import type { MenuPoint } from './CatalogTree';
@@ -14,6 +14,8 @@ export interface PanelMenuItem {
   readonly danger?: boolean;
   /** 右边灰色的快捷键说明 */
   readonly shortcut?: string;
+  /** 不能用时的原因：代替快捷键显示在右边，如"切换到三维后可用" */
+  readonly hint?: string;
 }
 
 export type PanelMenuEntry = PanelMenuItem | 'divider';
@@ -23,7 +25,8 @@ const MARGIN = 8;
 
 /**
  * 资源图层面板的右键菜单（ADR 0157）：补充入口，不是唯一入口。在指针处打开，放不下时往回挪；
- * 打开时焦点在第一个能用的项上，上下方向键移动，回车执行，Esc 和点外面关闭
+ * 打开时焦点在第一个能用的项上，上下方向键移动，回车执行，Esc 和点外面关闭。关闭、执行以后焦点还在菜单里时，
+ * 交给 returnFocus 给出的元素（打开菜单的行；行被移除了是新选中的行），点外面关闭时焦点已经在别处，不动
  */
 export const PanelMenu = defineComponent({
   name: 'PanelMenu',
@@ -31,7 +34,9 @@ export const PanelMenu = defineComponent({
     open: { type: Boolean, default: false },
     point: { type: Object as PropType<MenuPoint>, required: true },
     items: { type: Array as PropType<readonly PanelMenuEntry[]>, required: true },
-    label: { type: String, required: true }
+    label: { type: String, required: true },
+    /** 关闭以后接过焦点的元素，在菜单卸载后的下一轮取，取到的是执行以后的状态 */
+    returnFocus: { type: Function as PropType<() => HTMLElement | null>, default: undefined }
   },
   emits: {
     select: (key: string) => typeof key === 'string',
@@ -40,6 +45,24 @@ export const PanelMenu = defineComponent({
   setup(props, { emit }) {
     const element = ref<HTMLElement>();
     const position = ref<MenuPoint | null>(null);
+
+    // 菜单还在、焦点在里面时才还：键盘打开、Esc 或回车关闭的情况；DOM 更新以后再取目标
+    const giveBackFocus = () => {
+      if (!element.value?.contains(document.activeElement)) {
+        return;
+      }
+      const target = props.returnFocus;
+      void nextTick(() => target?.()?.focus());
+    };
+    watch(
+      () => props.open,
+      open => {
+        if (!open) {
+          giveBackFocus();
+        }
+      }
+    );
+    onBeforeUnmount(giveBackFocus);
 
     const enabledButtons = () => [
       ...(element.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
@@ -111,12 +134,17 @@ export const PanelMenu = defineComponent({
                 class={[styles.item, item.danger && styles.danger]}
                 role="menuitem"
                 disabled={item.disabled}
+                title={item.disabled ? item.hint : undefined}
                 data-menu-item={item.key}
                 onClick={() => emit('select', item.key)}
               >
                 <span class={styles.icon}>{item.icon && <SvgIcon name={item.icon} size={16} />}</span>
                 <span class={styles.label}>{item.label}</span>
-                {item.shortcut && <span class={styles.shortcut}>{item.shortcut}</span>}
+                {item.disabled && item.hint ? (
+                  <span class={styles.shortcut}>{item.hint}</span>
+                ) : (
+                  item.shortcut && <span class={styles.shortcut}>{item.shortcut}</span>
+                )}
               </button>
             )
           )}

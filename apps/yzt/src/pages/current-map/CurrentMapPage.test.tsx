@@ -347,17 +347,27 @@ async function freshModules(): Promise<PageModules> {
 
 /**
  * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
- * 三维是同一个视图，三维模块换成渲染器的替身，能力同 app 注入的（三维里不显示资源图层、不识别）。
+ * 三维是同一个视图，三维模块换成渲染器的替身，能力默认同 app 注入的（三项都是 true，ADR 0157），要测别的能力时传 capabilities。
  * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
  */
-function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAlive = false } = {}) {
+function mountPage({
+  failFirstCreation = false,
+  modules = STATIC_MODULES,
+  keepAlive = false,
+  capabilities = MAPLIBRE_ENGINE.capabilities
+}: {
+  failFirstCreation?: boolean;
+  modules?: PageModules;
+  keepAlive?: boolean;
+  capabilities?: SceneEngine['capabilities'];
+} = {}) {
   const canvasKey = ref(0);
   // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
   const pageShown = ref(true);
   const maps: FakeMap[] = [];
   const renderers: ReturnType<typeof fakeRenderer>[] = [];
   const engine: SceneEngine = {
-    capabilities: { ...MAPLIBRE_ENGINE.capabilities, styleLayers: false, identify: false },
+    capabilities,
     loadRenderer: () =>
       Promise.resolve(() => {
         const created = fakeRenderer();
@@ -1526,6 +1536,22 @@ describe('CurrentMapPage', () => {
     expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(false);
   });
 
+  it('请求明细里点一行时左侧面板收起着：先展开面板，再在当前图层里选中（2026-11-15 审查发现）', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    await button(wrapper, '收起资源图层').trigger('click');
+    expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(true);
+    map.fire('dataloading', parcelTile('1'));
+    await vi.waitFor(() => expect(wrapper.find('[data-request-chip]').exists()).toBe(true), { timeout: 3000 });
+
+    await wrapper.get('[data-request-chip]').trigger('click');
+    await wrapper.get('[data-request-row="resource:bgdc_dltb"]').trigger('click');
+    await settle();
+    expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(false);
+    expect(layerRow(wrapper, 'bgdc_dltb').attributes('aria-selected')).toBe('true');
+    map.fire('sourcedata', parcelTile('1'));
+  });
+
   it('平移和同一级内缩放不更新当前图层的列表，跨过最小级别才更新提示', async () => {
     const { wrapper, map, updates } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
@@ -2101,6 +2127,19 @@ describe('CurrentMapPage', () => {
 
     release?.();
     await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
+  });
+
+  it('资源目录读不到时三维里照样能加入模型：模型清单是单独读的（2026-11-15 审查发现，main 上三维的模型面板只看模型清单）', async () => {
+    server.use(mock.get(TREE_URL, () => HttpResponse.json({ code: 500, msg: '系统异常', success: false, data: null })));
+    mockManifest();
+    const page = await readyPage();
+    const { wrapper } = page;
+    await vi.waitFor(() => expect(wrapper.text()).toContain('资源目录加载失败'));
+
+    await switchTo(wrapper, '三维');
+    await addModel(wrapper, 'sz-station');
+    expect(wrapper.find('[data-current-row="model:sz-station"]').exists()).toBe(true);
+    expect(sceneOf(page).session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
   });
 
   it('画布尺寸变化后（相机不变、投影变了），测量标签和图钉立即重新投影', async () => {

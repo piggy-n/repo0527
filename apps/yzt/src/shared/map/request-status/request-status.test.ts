@@ -111,4 +111,25 @@ describe('mergedActivity', () => {
     });
     expect(mergedActivity([done, { ...done, finishedAt: 500 }])?.finishedAt).toBe(500);
   });
+
+  it('只算最近的一轮：上一轮早已结束、结果还留着的数据源不拉早开始时间，张数也不算进来（2026-11-15 审查发现）', () => {
+    // 底图 2 秒时就加载完了，10 分钟后打开地名，只有地名开始新的一轮
+    const basemap = { requested: 20, loaded: 20, failed: 0, startedAt: 0, finishedAt: 2000 };
+    const labels = { requested: 6, loaded: 1, failed: 0, startedAt: 600_000, finishedAt: null };
+    expect(mergedActivity([basemap, labels])).toStrictEqual(labels);
+
+    // 地名几十毫秒就画完：合成项从地名开始，没超过显示门槛
+    const quick = { ...labels, loaded: 6, finishedAt: 600_050 };
+    expect(mergedActivity([basemap, quick])).toStrictEqual(quick);
+
+    // 同一轮里先结束的照样算
+    const early = { requested: 4, loaded: 4, failed: 0, startedAt: 600_010, finishedAt: 600_020 };
+    expect(mergedActivity([basemap, labels, early])).toStrictEqual({
+      requested: 10,
+      loaded: 5,
+      failed: 0,
+      startedAt: 600_000,
+      finishedAt: null
+    });
+  });
 });

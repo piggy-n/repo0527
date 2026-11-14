@@ -89,6 +89,20 @@ describe('RequestStatusChip', () => {
     expect(wrapper.find('[data-request-popover]').exists()).toBe(false);
   });
 
+  it('明细里能选的行用键盘也能选：能用 Tab 到达，回车、空格选中；底图那行不能（2026-11-15 审查发现）', async () => {
+    const { wrapper } = mountChip([item('resource:a'), item('basemap', { name: '底图' })]);
+    await wrapper.get('[data-request-chip]').trigger('click');
+    const row = wrapper.get('[data-request-row="resource:a"]');
+    expect(row.attributes('tabindex')).toBe('0');
+    expect(row.attributes('role')).toBe('button');
+    expect(wrapper.get('[data-request-row="basemap"]').attributes('tabindex')).toBeUndefined();
+
+    await row.trigger('keydown', { key: 'Enter' });
+    await row.trigger('keydown', { key: ' ' });
+    await wrapper.get('[data-request-row="basemap"]').trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('select')).toStrictEqual([['resource:a'], ['resource:a']]);
+  });
+
   it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {
     const { wrapper, items, clock } = mountChip([item('a')]);
     await wrapper.get('[data-request-chip]').trigger('click');

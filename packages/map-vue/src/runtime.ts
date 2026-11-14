@@ -3,7 +3,7 @@ import type { InjectionKey } from 'vue';
 
 /**
  * 三维引擎能做什么（ADR 0147 第 3 节、ADR 0020 第 4 节）：页面和拥有者按它和当前维度决定显示什么。
- * app 注入时收窄：现在三维里不显示资源图层、不识别，等页面重新设计（ADR 0153）
+ * app 原样注入，三项都是 true（ADR 0157）；为 false 时的推导留给别的引擎
  */
 export interface SceneCapabilities {
   /** 三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记） */
@@ -15,7 +15,7 @@ export interface SceneCapabilities {
 }
 
 /**
- * 三维引擎的描述（ADR 0147 第 1 节，单引擎见 ADR 0153），由 app 收窄能力后 provide：
+ * 三维引擎的描述（ADR 0147 第 1 节，单引擎见 ADR 0153），由 app 注入的引擎 provide（能力原样，ADR 0157）：
  * MapCanvas 的同一个视图承担三维，第一次切到三维时用 loadRenderer 加载 @mx/map-three
  */
 export interface SceneEngine {

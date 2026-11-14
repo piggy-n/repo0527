@@ -76,7 +76,7 @@ export interface ResourceLayers {
    */
   readonly setYearForAll: (year: number) => void;
   /**
-   * 三维且三维引擎不画样式图层（能力 `styleLayers` 为 false，app 注入的收窄能力，ADR 0153）：分组为空，图例只有说明；
+   * 三维且三维引擎不画样式图层（能力 `styleLayers` 为 false；app 注入的是 true，现在走不到，ADR 0157）：分组为空，图例只有说明；
    * 引用资源数据源的推导（框选的批量高亮）这时也不能有图层
    */
   readonly hiddenInScene: ComputedRef<boolean>;
