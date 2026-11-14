@@ -98,6 +98,11 @@ export const sceneManifestSchema = manifestShape.superRefine(({ models }, contex
   if (repeated !== undefined) {
     context.addIssue({ code: 'custom', message: `ID 重复：${repeated}` });
   }
+  // 泼溅的路线漫游也建导航网格（小地图），只留出生点附近的区域；没有出生点时会留下全图最大的一片，可能是屋顶（ADR 0156）
+  const noSpawn = models.find(model => model.kind === 'splat' && (model.routes ?? []).length > 0 && !model.spawn);
+  if (noSpawn) {
+    context.addIssue({ code: 'custom', message: `高斯泼溅 ${noSpawn.id} 有路线、没有出生点` });
+  }
 });
 
 export type SceneManifest = z.infer<typeof sceneManifestSchema>;

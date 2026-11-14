@@ -101,6 +101,8 @@ describe('sceneManifestSchema', () => {
       withSplat({ placement: { lng: 117.06, lat: 94.27, height: 59.7, heading: 0 } }),
       withSplat({ tileset: 'a/tileset.json' }),
       withSplat({ maximumScreenSpaceError: 8 }),
+      // 有路线、没有出生点的泼溅：导航网格按出生点留区域，没有时会留下屋顶这类最大的一片（ADR 0156）
+      withSplat({ spawn: undefined, routes: [{ id: 'r', name: 'R', path: [[117.06, 34.27, 58], [117.0601, 34.27, 58]] }] }),
       'not a manifest'
     ];
 
