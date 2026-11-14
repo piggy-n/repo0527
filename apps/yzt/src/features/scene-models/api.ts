@@ -1,3 +1,4 @@
+import { EYE_HEIGHT } from '@mx/map-core';
 import { z } from 'zod';
 import { http } from '@/shared/http/client';
 import { findRegion } from '@/shared/map/region/region-catalog';
@@ -18,8 +19,15 @@ const spawnSchema = z.strictObject({
 const routeSchema = z.strictObject({
   id: nonEmpty,
   name: nonEmpty,
-  /** 途经点 [经度, 纬度, 椭球高] */
-  path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2)
+  /** 途经点 [经度, 纬度, 椭球高]；矮的地方多一个眼高（视点在地板以上的米数，ADR 0156 第 3 节） */
+  path: z
+    .array(
+      z.union([
+        z.tuple([z.number(), z.number(), z.number()]),
+        z.tuple([z.number(), z.number(), z.number(), z.number().positive().max(EYE_HEIGHT)])
+      ])
+    )
+    .min(2)
 });
 
 const effectSchema = z.strictObject({ id: nonEmpty, label: nonEmpty, tileset: nonEmpty });
@@ -56,11 +64,18 @@ const common = {
 };
 
 // 白膜用 effects（第一种是默认），倾斜摄影、室内用 tileset，高斯泼溅（ADR 0149）用 lcc2 和 placement；
-// 严格对象，写错位置时整份清单不合法。泼溅第一版只显示和拾取，不写出生点、路线和屏幕误差
+// 严格对象，写错位置时整份清单不合法。泼溅不写屏幕误差；出生点、路线由配准工具从扫描轨迹生成（ADR 0156 第 4 节）
 const modelSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...common, kind: z.literal('white'), effects: z.array(effectSchema).nonempty() }),
   z.strictObject({ ...common, kind: z.enum(['oblique', 'indoor']), tileset: nonEmpty }),
-  z.strictObject({ ...base, kind: z.literal('splat'), lcc2: nonEmpty, placement: placementSchema })
+  z.strictObject({
+    ...base,
+    kind: z.literal('splat'),
+    lcc2: nonEmpty,
+    placement: placementSchema,
+    spawn: spawnSchema.optional(),
+    routes: z.array(routeSchema).optional()
+  })
 ]);
 
 function duplicate(ids: readonly string[]): string | undefined {
@@ -72,7 +87,7 @@ function repeatedId(models: readonly z.infer<typeof modelSchema>[]): string | un
   return [
     duplicate(models.map(({ id }) => id)),
     ...models.map(model => (model.kind === 'white' ? duplicate(model.effects.map(({ id }) => id)) : undefined)),
-    ...models.map(model => (model.kind === 'splat' ? undefined : duplicate((model.routes ?? []).map(({ id }) => id))))
+    ...models.map(model => duplicate((model.routes ?? []).map(({ id }) => id)))
   ].find(id => id !== undefined);
 }
 

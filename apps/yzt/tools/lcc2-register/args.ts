@@ -13,6 +13,9 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
   --yaw <度>             人工的偏航（度），绕局部系原点逆时针转；拟合在转过的轨迹上求平移，轨迹核对算上它
   --datum <米>           高程基准的差（米）：整体抬高，泼溅、网格、轨迹一起动，轨迹核对不算它
   --no-fit               不拟合轨迹和网格之间的平移，只用人工修正（轨迹不可信时）
+  --roam                 再给出步行的出生点（清单的 spawn），并每 20 米列一行轨迹的概要，用来挑路线段（ADR 0156 第 4 节）
+  --spawn-at <米>        出生点从轨迹的这个米数往后找（扫描不是从入口开始时），带上它就是 --roam
+  --route <ID:名称:起-止>  轨迹上起～止米这一段做成一条路线（清单的 routes），可以写多次，带上它就是 --roam
   --help、-h             显示这段说明
 
 负数直接写，如 --shift -1.2,0.5,0；PowerShell 里逗号列表要加引号，或者用空格分隔再加引号
@@ -25,7 +28,19 @@ export interface Options {
   readonly yaw: number;
   readonly datum: number;
   readonly fit: boolean;
+  /** 给出出生点、轨迹概要和路线 */
+  readonly roam: boolean;
+  readonly spawnAt: number;
+  readonly routes: readonly RouteSpan[];
   readonly help: boolean;
+}
+
+/** 轨迹上做成路线的一段：清单里的 ID、名称，轨迹上的起止米数 */
+export interface RouteSpan {
+  readonly id: string;
+  readonly name: string;
+  readonly from: number;
+  readonly to: number;
 }
 
 function finite(name: string, text: string): number {
@@ -46,6 +61,15 @@ function vector(name: string, text: string): Vec3 {
   return [east, north, up];
 }
 
+function routeSpan(name: string, text: string): RouteSpan {
+  const match = /^([\w-]+):([^:]+):([\d.]+)-([\d.]+)$/u.exec(text.trim());
+  if (!match) {
+    throw new ToolError(`参数 ${name} 要写成 ID:名称:起-止（米），如 tomb:进墓室:120-380：${text}`);
+  }
+  const [, id, title, from, to] = match;
+  return { id, name: title, from: finite(name, from), to: finite(name, to) };
+}
+
 export function parseOptions(argv: readonly string[]): Options {
   const options: { -readonly [K in keyof Options]: Options[K] } = {
     index: '',
@@ -53,6 +77,9 @@ export function parseOptions(argv: readonly string[]): Options {
     yaw: 0,
     datum: 0,
     fit: true,
+    roam: false,
+    spawnAt: 0,
+    routes: [],
     help: false
   };
   const positional: string[] = [];
@@ -89,6 +116,18 @@ export function parseOptions(argv: readonly string[]): Options {
         break;
       case '--datum':
         options.datum = finite(name, value());
+        break;
+      case '--roam':
+        noValue();
+        options.roam = true;
+        break;
+      case '--spawn-at':
+        options.spawnAt = finite(name, value());
+        options.roam = true;
+        break;
+      case '--route':
+        options.routes = [...options.routes, routeSpan(name, value())];
+        options.roam = true;
         break;
       case '--no-fit':
         noValue();

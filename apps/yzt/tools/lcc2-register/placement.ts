@@ -70,3 +70,24 @@ export function trajectoryToMesh(point: Vec3, correction: Correction): Vec3 {
 export function correctionFromFit(fitShift: Vec3, yaw = 0): Vec3 {
   return turn([-fitShift[0], -fitShift[1], -fitShift[2]], yaw);
 }
+
+/**
+ * 网格局部系里的点换成经纬度、椭球高（ADR 0156 第 4 节，出生点和路线用）：和 placementFor 同一个摆法——
+ * 局部系转 yaw 后原点放在 offset + shift（网格坐标），高度再加 datum
+ */
+export function meshToLngLatHeight(
+  projection: GridProjection,
+  offset: Vec3,
+  correction: Correction,
+  datum: number,
+  point: Vec3
+): Vec3 {
+  const [x, y] = turn(point, correction.yaw);
+  const [lng, lat] = projection.toLngLat(offset[0] + correction.shift[0] + x, offset[1] + correction.shift[1] + y);
+  return [lng, lat, offset[2] + correction.shift[2] + datum + point[2]];
+}
+
+/** 局部系里的偏航（从 x 轴逆时针的弧度）换成清单的朝向（度，正北为 0、顺时针）；placementHeading 是摆放的 heading */
+export function yawToManifestHeading(yaw: number, placementHeading: number): number {
+  return (((90 - placementHeading - yaw / DEGREE) % 360) + 360) % 360;
+}

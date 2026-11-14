@@ -20,7 +20,7 @@
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具、选择状态与三维内容，统一释放 |
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
-| `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点和朝向；`smoothAngle`（ADR 0083） |
+| `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点（点上写了眼高的按它插值，矮墓道用，ADR 0156）、脚下的地板和朝向；`smoothAngle`（ADR 0083） |
 | `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引的根节点换到引用它的位置、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081、0148；导航网格也要用，从 map-cesium 移来，ADR 0085） |
 | `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`ply.ts` LCC2 碰撞网格的解析（ADR 0156）、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系（瓦片集的和泼溅的）、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
@@ -349,7 +349,7 @@ store.clear();
 
 - 存储：每格最多 4 层地板，Int16 存高度（2 厘米）和"头顶有遮盖"，Uint8 存净空；按 32 × 32 格分块，空块不占内存。苏州站 3175 × 1075 格，地板格约 116 万
 - 区域（`labelRegions`）：身体半径 0.3 米的圆盘覆盖到的格子都有台阶（0.45 米）内的室内地板才能站人，相邻格落差在台阶内就连通；`NavGrid` 的行走碰撞、寻路、出生点都查同一份区域。区域、楼层大小的阈值都按面积（`componentArea`，平方米）比，和格子大小无关
-- 扫描模型（LCC2 的碰撞网格，ADR 0156）用 `SCAN_NAV_OPTIONS`：0.1 米的格子、半径 0.15 米、身高 1.2 米、不要求头顶有遮盖（`requireCover: false`，露天的地板也能站，出生点也找露天的）。这样屋顶、展柜顶也成了能站的大块地面，所以建好以后只留出生点所在的区域（`keepMainRegion`，清单没写出生点时留最大的），其余的站不住、不上平面图。墓道的地板只有 0.6～0.8 米宽、墙根是圆角，站点的参数下墓道断成一格一格的；两个调试模型的实测和比较见 ADR 0156 的背景
+- 扫描模型（LCC2 的碰撞网格，ADR 0156）用 `SCAN_NAV_OPTIONS`：0.1 米的格子、半径 0.15 米、身高 1.2 米、不要求头顶有遮盖（`requireCover: false`，露天的地板也能站，出生点也找露天的）。这样屋顶、展柜顶也成了能站的大块地面，所以建好以后只留一个区域（`keepMainRegion`）：出生点附近 5 米、上下 1 米以内最大的那个；没有出生点、附近只有不到 100 平方米的小块时（扫描的开头常有几块小的，土山墓的出生点就落在一块上）留全图最大的；其余的站不住、不上平面图。墓道的地板只有 0.6～0.8 米宽、墙根是圆角，站点的参数下墓道断成一格一格的；两个调试模型的实测和比较见 ADR 0156 的背景
 - 坐标系（`navigationFrame`）：瓦片集根节点的局部系，只支持旋转加平移；给出经纬度与局部坐标的互换、局部 y 轴的方位角（平面图按它旋转、保证正北朝上）和地面在局部系里的高度（楼层名用）。泼溅用 `splatNavigationFrame(placement, ground)`：LCC2 的局部系按清单的 `placement` 放（东北天转 `heading`，同渲染器），地面取出生点的地板
 - 构建（`buildNavigation`）：主线程按整理后的索引找叶节点（根节点自己的 transform 不算），最多同时下载 4 个、报告进度，ArrayBuffer 转移给 Worker；Worker 解析、构建、算区域，类型化数组转移回来。每次构建一个 `WorkerHost`，结束后释放。中止时下载和 Worker 都停下；一个瓦片下载失败就停下其余的
 - 扫描模型的构建（`buildScanNavigation`）：拥有者给出碰撞网格的地址、三角形数、包围盒（读 `.lcc2` 索引）和局部系；总数不超过 `SCAN_MAX_TRIANGLES`（200 万）全读，超过的按包围盒离出生点由近到远读到上限（`partial`，网格只覆盖这一片）。下载、中止、Worker 同上，Worker 里读 PLY（`buildScan`）；两个调试模型（约 80 万个三角形、ply 约 20 MB）Node 单线程解析约 0.5 秒、构建加区域约 0.8 秒，开发页的 Worker 里从读索引到着色 1.2～2.3 秒。把两个模型并排摆几份估算更大的：每百万个三角形构建约 0.85 秒、峰值内存约 75 MB（665 万个 6.3 秒、509 MB），上限 200 万约 2 秒、150 MB

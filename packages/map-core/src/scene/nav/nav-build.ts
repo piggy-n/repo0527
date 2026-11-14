@@ -135,18 +135,40 @@ export function selectScanMeshes(
   return { meshes: picked, partial: true };
 }
 
-// 出生点附近找主区域的范围（米）：清单的出生点是脚下的地板，贴墙时最近的能站的格子也在这以内
+// 出生点附近找主区域的范围（米）、上下的范围（米）
 const SPAWN_SEARCH = 5;
+const SPAWN_RISE = 1;
+// 主区域至少这么大（平方米）：扫描开头常有几块小的，出生点落在小块上时留全图最大的；同 Walker、findSpawn 的小区域
+const MAIN_MIN_AREA = 100;
+
+// 出生点附近（水平 SPAWN_SEARCH、上下 SPAWN_RISE 以内）面积最大的区域，没有时为 0
+function largestNear(grid: NavGrid, [x, y, z]: Point3): number {
+  const cell = grid.cellOf(x, y);
+  if (!cell) {
+    return 0;
+  }
+  const { cellSize } = grid.meta;
+  const rings = Math.ceil(SPAWN_SEARCH / cellSize);
+  let best = 0;
+  for (let dy = -rings; dy <= rings; dy++) {
+    for (let dx = -rings; dx <= rings; dx++) {
+      const id = grid.componentOf(grid.nodeNear(cell[0] + dx, cell[1] + dy, z, SPAWN_RISE));
+      if (id && Math.hypot(dx, dy) * cellSize <= SPAWN_SEARCH && grid.componentSize(id) > grid.componentSize(best)) {
+        best = id;
+      }
+    }
+  }
+  return best;
+}
 
 /**
  * 只留一个区域能站（ADR 0156 第 1 节）：不要求遮盖时屋顶、展柜顶也成了能站的大块地面，点过去会闪切上去，平面图上也盖住屋里。
- * 留出生点所在的区域，没有出生点（或附近没有能站的）时留最大的；其余的标成站不住
+ * 留出生点附近最大的区域；没有出生点、附近只有小块（不到 100 平方米）时留全图最大的；其余的标成站不住
  */
 export function keepMainRegion(data: NavGridData, near: Point3 | null): NavGridData {
   const grid = new NavGrid(data);
-  const found = near && grid.nearestWalkable(near[0], near[1], near[2], { maxRadius: SPAWN_SEARCH, tolerance: 1 });
-  let main = found ? grid.componentOf(found.index) : 0;
-  if (!main) {
+  let main = near ? largestNear(grid, near) : 0;
+  if (grid.componentArea(main) < MAIN_MIN_AREA) {
     data.sizes.forEach((size, id) => {
       if (id > 0 && size > data.sizes[main]) {
         main = id;

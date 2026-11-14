@@ -3,7 +3,13 @@ import { abortReason, serveWorker } from '@mx/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedTileset } from '../prepare-tileset';
 import { buildNavGrid } from './heightfield';
-import { buildNavigation, buildScanNavigation, keepMainRegion, type NavBuildProgress, type ScanMesh } from './nav-build';
+import {
+  buildNavigation,
+  buildScanNavigation,
+  keepMainRegion,
+  type NavBuildProgress,
+  type ScanMesh
+} from './nav-build';
 import { SCAN_NAV_OPTIONS } from './nav-data';
 import { type Point3, splatNavigationFrame, toEcef, translation } from './nav-frame';
 import { b3dmOf, floorQuad, plyOf, triangles } from './nav-testing';
@@ -210,27 +216,36 @@ describe('buildScanNavigation', () => {
   });
 });
 
+// (x, y) 处离 z 最近的地板所在的区域
+const at = (grid: NavGrid, x: number, y: number, z: number) => grid.componentAt(x, y, z);
+
 describe('keepMainRegion', () => {
-  // 12 × 12 米的地面，旁边一块 8 × 8 米、高 5 米的屋顶：不要求遮盖时两块都能站
+  // 16 × 16 米的地面；旁边一块 12 × 12 米、高 5 米的屋顶；地面一角 2 × 2 米、高 0.8 米的小台子：不要求遮盖时都能站
   const data = labelRegions(
-    buildNavGrid([triangles(floorQuad(0, 0, 12, 12, 0), floorQuad(20, 0, 28, 8, 5))], SCAN_NAV_OPTIONS),
+    buildNavGrid(
+      [triangles(floorQuad(0, 0, 16, 16, 0), floorQuad(20, 0, 32, 12, 5), floorQuad(22, 20, 24, 22, 0.8))],
+      SCAN_NAV_OPTIONS
+    ),
     SCAN_NAV_OPTIONS
   );
 
-  it('只留出生点所在的区域，其余的站不住；出生点贴墙也找得到', () => {
-    expect(new NavGrid(data).componentAt(24, 4, 5)).toBeGreaterThan(0);
-    const grid = new NavGrid(keepMainRegion(data, [27.95, 4, 5]));
-    expect(grid.componentAt(24, 4, 5)).toBeGreaterThan(0);
-    expect(grid.componentAt(6, 6, 0)).toBe(0);
-    expect(grid.componentArea(grid.componentAt(24, 4, 5))).toBeGreaterThan(50);
+  it('留出生点附近最大的区域，其余的站不住；出生点贴着边也找得到', () => {
+    const all = new NavGrid(data);
+    expect([at(all, 6, 6, 0), at(all, 26, 6, 5), at(all, 23, 21, 0.8)].every(id => id > 0)).toBe(true);
+    const grid = new NavGrid(keepMainRegion(data, [31.98, 6, 5]));
+    expect(at(grid, 26, 6, 5)).toBeGreaterThan(0);
+    expect(at(grid, 6, 6, 0)).toBe(0);
+    expect(at(grid, 23, 21, 0.8)).toBe(0);
   });
 
-  it('没有出生点、出生点附近没有能站的地方时留最大的', () => {
+  it('出生点落在小块（不到 100 平方米）上、附近没有能站的、没有出生点时，留全图最大的', () => {
+    const small: Point3 = [23, 21, 0.8];
     const nowhere: Point3 = [100, 100, 0];
-    for (const near of [null, nowhere]) {
+    for (const near of [small, nowhere, null]) {
       const grid = new NavGrid(keepMainRegion(data, near));
-      expect(grid.componentAt(6, 6, 0)).toBeGreaterThan(0);
-      expect(grid.componentAt(24, 4, 5)).toBe(0);
+      expect(at(grid, 6, 6, 0)).toBeGreaterThan(0);
+      expect(at(grid, 26, 6, 5)).toBe(0);
+      expect(at(grid, 23, 21, 0.8)).toBe(0);
     }
   });
 });

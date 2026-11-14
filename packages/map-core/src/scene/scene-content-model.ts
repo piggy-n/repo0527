@@ -4,6 +4,7 @@ import { ModelEvents } from '../model-events';
 import type { Navigation } from './nav/nav-build';
 import type { NavPoint } from './nav/nav-grid';
 import { WALK_VIEWS, type WalkView } from './nav/walker';
+import { EYE_HEIGHT } from './route-path';
 
 /** 瓦片集的光照：地面上的按太阳，地下、室内用以相机为光源的头灯（ADR 0081 第 3 节） */
 export type TilesetLighting = 'sun' | 'headlight';
@@ -59,8 +60,13 @@ export interface UndergroundView {
   readonly surfaceOpacity: number;
 }
 
-/** 路线上的一点：脚下地板的 [经度, 纬度, 椭球高]，视点在它上面一个眼高 */
-export type RoutePoint = readonly [lng: number, lat: number, floor: number];
+/**
+ * 路线上的一点：脚下地板的 [经度, 纬度, 椭球高]，视点在它上面一个眼高；矮的地方（泼溅的矮墓道，ADR 0156 第 3 节）
+ * 第 4 个值是视点在地板以上的米数，比眼高低
+ */
+export type RoutePoint =
+  | readonly [lng: number, lat: number, floor: number]
+  | readonly [lng: number, lat: number, floor: number, eye: number];
 
 /** 路线漫游（ADR 0083 第 2 节）：拥有者持有意图，视图逐帧推进并报告进度 */
 export interface RouteRoam {
@@ -217,8 +223,11 @@ function validateRoam(roam: SceneRoam): void {
   if (path.length < 2) {
     throw new Error(`漫游 ${id} 的路线少于两个点`);
   }
-  if (!path.every(point => point.length === 3 && point.every(Number.isFinite))) {
+  if (!path.every(point => (point.length === 3 || point.length === 4) && point.every(Number.isFinite))) {
     throw new Error(`漫游 ${id} 的路线有不是数的坐标`);
+  }
+  if (!path.every(([, , , eye = EYE_HEIGHT]) => eye > 0 && eye <= EYE_HEIGHT)) {
+    throw new Error(`漫游 ${id} 的路线有眼高不在 0～${EYE_HEIGHT} 米之间的点`);
   }
   if (!(speed > 0 && Number.isFinite(speed))) {
     throw new Error(`漫游 ${id} 的速度不是正数：${speed}`);

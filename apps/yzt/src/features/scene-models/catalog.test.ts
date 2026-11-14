@@ -66,6 +66,15 @@ describe('sceneManifestSchema', () => {
     expect(parse({ models: [] }).success).toBe(true);
   });
 
+  it('高斯泼溅也可以写出生点和路线，路线的点可以多一个眼高（ADR 0156）', () => {
+    const spawn = { lng: 117.06, lat: 34.27, height: 58.1, heading: 20 };
+    const path = [
+      [117.06, 34.27, 58.1],
+      [117.0601, 34.27, 58.1, 1.2]
+    ];
+    expect(parse(withSplat({ spawn, routes: [{ id: 'tomb', name: '进墓室', path }] })).success).toBe(true);
+  });
+
   it('任何一处不合法都整份不通过', () => {
     const invalid: unknown[] = [
       // 白膜写了 tileset、没有效果；其他模型写了 effects
@@ -77,18 +86,20 @@ describe('sceneManifestSchema', () => {
       withModel({ cityCode: '110100' }),
       withModel({ cityCode: '320102' }),
       withModel({ color: 'red' }),
-      // 路线少于两个点、点不是三个数
+      // 路线少于两个点、点不是三个或四个数、眼高不在 0～1.6 米之间
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0]] }] }),
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31], [121, 31]] }] }),
+      withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 1, 1], [121, 31, 0]] }] }),
+      withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 1.7], [121, 31, 0]] }] }),
+      withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31, 0, 0], [121, 31, 0]] }] }),
       // ID 重复
       { models: [MANIFEST.models[2], MANIFEST.models[2]] },
-      // 高斯泼溅（ADR 0149）：没有索引、没有摆放、摆放缺一项或超出范围、写了瓦片集的字段（第一版不漫游）
+      // 高斯泼溅（ADR 0149）：没有索引、没有摆放、摆放缺一项或超出范围、写了瓦片集的字段
       withSplat({ lcc2: undefined }),
       withSplat({ placement: undefined }),
       withSplat({ placement: { lng: 117.06, lat: 34.27, height: 59.7 } }),
       withSplat({ placement: { lng: 117.06, lat: 94.27, height: 59.7, heading: 0 } }),
       withSplat({ tileset: 'a/tileset.json' }),
-      withSplat({ routes: [] }),
       withSplat({ maximumScreenSpaceError: 8 }),
       'not a manifest'
     ];
@@ -127,7 +138,8 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       `https://maps.test/yzt/3dt/xuzhou/lcc2/${chuwangshan}/lcc2-sog-result/${chuwangshan}.lcc2`
     );
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
-    expect(lengths).toStrictEqual([125, 133, 58]);
+    // 星海广场站三条，驮篮山1号两条、土山墓三条（泼溅的路线取自扫描轨迹，ADR 0156 第 4 节）
+    expect(lengths).toStrictEqual([125, 133, 58, 225, 157, 49, 194, 159]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
   });

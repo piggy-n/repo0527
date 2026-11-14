@@ -4,8 +4,6 @@ import type { ManifestModel, SceneManifest } from './api';
 
 export type ModelKind = ManifestModel['kind'];
 
-// 瓦片集模型的清单项：出生点、路线只在它们上面
-type TilesetManifestModel = Exclude<ManifestModel, { kind: 'splat' }>;
 
 export const MODEL_KIND_LABELS: Readonly<Record<ModelKind, string>> = {
   oblique: '倾斜摄影',
@@ -25,7 +23,7 @@ export interface ModelEffect {
 export interface ModelRoute {
   readonly id: string;
   readonly name: string;
-  readonly path: NonNullable<TilesetManifestModel['routes']>[number]['path'];
+  readonly path: NonNullable<ManifestModel['routes']>[number]['path'];
   readonly length: number;
 }
 
@@ -43,7 +41,7 @@ export interface SceneModel {
   readonly effects: readonly ModelEffect[];
   /** 默认的效果：白膜的第一种 */
   readonly defaultEffect: string;
-  readonly spawn: TilesetManifestModel['spawn'];
+  readonly spawn: ManifestModel['spawn'];
   readonly routes: readonly ModelRoute[];
   /** 高斯泼溅（ADR 0149）的索引地址和摆放；其他模型为 null */
   readonly splat: SplatSource | null;
@@ -65,6 +63,10 @@ function cityNameOf(code: string): string {
   return region.name;
 }
 
+// 路线带上长度（三维，楼梯的高差也算）
+const routesOf = ({ routes = [] }: ManifestModel): ModelRoute[] =>
+  routes.map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total }));
+
 /** 清单换成目录：地址按清单的地址解析成绝对地址（ADR 0081 第 1 节） */
 export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string): readonly SceneModel[] {
   const resolve = (path: string) => new URL(path, manifestUrl).href;
@@ -79,7 +81,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
     };
     if (model.kind === 'splat') {
       const splat = { url: resolve(model.lcc2), placement: model.placement };
-      return { ...shared, effects: [], defaultEffect: '', spawn: undefined, routes: [], splat };
+      return { ...shared, effects: [], defaultEffect: '', spawn: model.spawn, routes: routesOf(model), splat };
     }
     return {
       ...shared,
@@ -90,7 +92,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
           : [{ id: '', label: '', url: resolve(model.tileset) }],
       defaultEffect: model.kind === 'white' ? model.effects[0].id : '',
       spawn: model.spawn,
-      routes: (model.routes ?? []).map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total })),
+      routes: routesOf(model),
       splat: null
     };
   });

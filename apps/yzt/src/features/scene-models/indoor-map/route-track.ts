@@ -1,5 +1,4 @@
 import {
-  EYE_HEIGHT,
   headingToYaw,
   levelOf,
   type NavFrame,
@@ -51,7 +50,7 @@ export function trackPoints(frame: NavFrame, path: readonly RoutePoint[]): Track
 /** 路线漫游时地图上的人：走过 distance 米处的视点，朝向沿路线看前方；没有点击移动的落点 */
 export function routePlayer(frame: NavFrame, path: RoutePath, distance: number): WalkPlayer {
   const pose = path.pose(distance);
-  const [x, y, floor] = frame.toLocal(pose.lng, pose.lat, pose.height - EYE_HEIGHT);
+  const [x, y, floor] = frame.toLocal(pose.lng, pose.lat, pose.floor);
   return { x, y, floor, yaw: headingToYaw(pose.heading, frame.north), hfov: ROUTE_HFOV, target: null };
 }
 
