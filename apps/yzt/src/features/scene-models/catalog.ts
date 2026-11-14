@@ -12,6 +12,39 @@ export const MODEL_KIND_LABELS: Readonly<Record<ModelKind, string>> = {
   splat: '高斯泼溅'
 };
 
+/** 漫游时界面上对模型里空间的叫法 */
+export interface RoamPlace {
+  /** 建导航网格时分析的是什么："正在分析{space}" */
+  readonly space: string;
+  readonly entering: string;
+  readonly noSpawn: string;
+  /** 完整地图的标题 */
+  readonly map: string;
+  readonly minimap: string;
+}
+
+const STATION_PLACE: RoamPlace = {
+  space: '站内空间',
+  entering: '正在进入站内…',
+  noSpawn: '附近没有找到可以站立的室内位置',
+  map: '站内地图',
+  minimap: '站内小地图'
+};
+
+// 高斯泼溅多是墓、保护厅、露天的入口，不叫"站内"（ADR 0156）
+const SCAN_PLACE: RoamPlace = {
+  space: '可行走的空间',
+  entering: '正在进入…',
+  noSpawn: '附近没有找到可以站立的位置',
+  map: '平面图',
+  minimap: '小地图'
+};
+
+/** 漫游时的叫法：瓦片集按站点（ADR 0086、0087 确认的说法），高斯泼溅用不限于室内的说法 */
+export function roamPlaceOf(model: Pick<SceneModel, 'kind'>): RoamPlace {
+  return model.kind === 'splat' ? SCAN_PLACE : STATION_PLACE;
+}
+
 export interface ModelEffect {
   readonly id: string;
   readonly label: string;

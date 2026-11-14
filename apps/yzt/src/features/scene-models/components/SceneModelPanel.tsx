@@ -141,8 +141,8 @@ export const SceneModelPanel = defineComponent({
               ))}
             </ElSelect>
           )}
-          {/* 有出生点或路线的才能漫游，在第二行最右边（ADR 0097 第 1 节）；高斯泼溅的漫游在 ADR 0156 的 R.4 接上 */}
-          {model.splat === null && (model.spawn || model.routes.length > 0) && (
+          {/* 有出生点或路线的才能漫游，在第二行最右边（ADR 0097 第 1 节）；高斯泼溅也一样（ADR 0156） */}
+          {(model.spawn || model.routes.length > 0) && (
             <ElButton class={styles.roam} size="small" type="primary" link onClick={() => models.startRoam(model.id)}>
               漫游
             </ElButton>

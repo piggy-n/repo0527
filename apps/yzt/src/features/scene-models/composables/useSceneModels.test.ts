@@ -6,6 +6,7 @@ import {
   type Navigation,
   navigationFrame,
   type RoamStatus,
+  type ScanNavigation,
   type SceneStatus,
   type WalkView
 } from '@mx/map-core';
@@ -15,6 +16,7 @@ import { effectScope, nextTick, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
 import { buildModelCatalog } from '../catalog';
+import type { LoadSplatNavigation } from '../navigation';
 import { type SceneModelsContext, useSceneModels } from './useSceneModels';
 
 const CATALOG = buildModelCatalog(
@@ -52,7 +54,9 @@ const CATALOG = buildModelCatalog(
         kind: 'splat',
         underground: false,
         lcc2: 'L/lcc2-sog-result/L.lcc2',
-        placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 }
+        placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 },
+        spawn: { lng: 117.06, lat: 34.27, height: 59.2, heading: 20 },
+        routes: [{ id: 'tomb', name: '进墓室', path: [[117.06, 34.27, 59.2], [117.06, 34.2702, 56, 0.9]] }]
       }
     ]
   }),
@@ -88,9 +92,10 @@ const NAVIGATION: Navigation = {
   frame: navigationFrame([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2_700_000, 4_700_000, 3_300_000, 1])
 };
 
-// 建导航网格换成用例控制的：记下每次请求，由用例决定建好、失败
+// 建导航网格换成用例控制的：记下每次请求，由用例决定建好、失败；高斯泼溅的 url 是索引的地址，带上清单的出生点
 interface PendingBuild {
   readonly url: string;
+  readonly spawn?: unknown;
   readonly signal: AbortSignal;
   readonly onProgress: (progress: NavBuildProgress) => void;
   readonly resolve: (navigation: Navigation) => void;
@@ -101,6 +106,17 @@ function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
   const builds: PendingBuild[] = [];
   const loadNavigation = (url: string, { signal, onProgress }: Pick<PendingBuild, 'signal' | 'onProgress'>) =>
     new Promise<Navigation>((resolve, reject) => builds.push({ url, signal, onProgress, resolve, reject }));
+  const loadSplatNavigation: LoadSplatNavigation = (splat, spawn, { signal, onProgress }) =>
+    new Promise<ScanNavigation>((resolve, reject) =>
+      builds.push({
+        url: splat.url,
+        spawn,
+        signal,
+        onProgress,
+        resolve: navigation => resolve({ ...navigation, partial: false }),
+        reject
+      })
+    );
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const roamStatus = shallowRef<RoamStatus | null>(null);
   const flyTo = vi.fn<CameraControl['flyTo']>();
@@ -127,6 +143,7 @@ function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
   const owner = scope.run(() =>
     useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation, sceneCapabilities }, catalog, {
       loadNavigation,
+      loadSplatNavigation,
       avatarUrl: AVATAR_URL
     })
   );
@@ -807,5 +824,57 @@ describe('useSceneModels 步行时的地图（ADR 0087）', () => {
     ctx.owner.exitRoam();
     expect(ctx.owner.indoorMap.value).toBeNull();
     expect(ctx.owner.mapOpen.value).toBe(false);
+  });
+});
+
+describe('useSceneModels 高斯泼溅的漫游（ADR 0156）', () => {
+  const INDEX_URL = 'https://maps.test/3dt/L/lcc2-sog-result/L.lcc2';
+
+  it('步行：用碰撞网格建导航网格（索引的地址、清单的出生点），不读瓦片集；建好后交给会话、有地图，泼溅照常显示', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('scan', true);
+    ctx.ready('scan');
+    ctx.owner.startRoam('scan');
+    expect(ctx.owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'scan' });
+    expect(ctx.builds).toHaveLength(1);
+    const build = required(ctx.builds[0], '没有建导航网格');
+    expect(build.url).toBe(INDEX_URL);
+    expect(build.spawn).toStrictEqual({ lng: 117.06, lat: 34.27, height: 59.2, heading: 20 });
+    build.onProgress({ stage: 'download', done: 1, total: 4 });
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'preparing', progress: 0.2 });
+
+    build.resolve(NAVIGATION);
+    await flushBuild();
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'entering' });
+    const content = ctx.owner.deriveContent();
+    expect(content.roam).toMatchObject({
+      kind: 'walk',
+      navigation: { grid: NAVIGATION.grid, frame: NAVIGATION.frame },
+      spawn: { lng: 117.06, lat: 34.27, height: 59.2, heading: 20 }
+    });
+    expect(content).toMatchObject({ underground: null, splats: [{ id: 'scan', show: true }] });
+    expect(ctx.owner.indoorMap.value?.grid).toBe(NAVIGATION.grid);
+  });
+
+  it('路线：开始时也建导航网格，路线不等它；路线点的眼高原样交给会话，建好后有地图、人和路线', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('scan', true);
+    ctx.ready('scan');
+    ctx.owner.startRoute('scan', 'tomb');
+    expect(ctx.builds.map(({ url }) => url)).toStrictEqual([INDEX_URL]);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({
+      kind: 'route',
+      path: [
+        [117.06, 34.27, 59.2],
+        [117.06, 34.2702, 56, 0.9]
+      ]
+    });
+    expect(ctx.owner.routeTrack.value).toBeNull();
+
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    expect(ctx.owner.indoorMap.value?.grid).toBe(NAVIGATION.grid);
+    expect(ctx.owner.routeTrack.value?.points).toHaveLength(2);
+    expect(ctx.owner.roamPlayer.value).toMatchObject({ target: null });
   });
 });

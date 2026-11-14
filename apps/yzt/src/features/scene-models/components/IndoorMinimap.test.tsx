@@ -25,6 +25,14 @@ describe('IndoorMinimap', () => {
     expect(wrapper.text()).toContain('-2F · 北↑');
   });
 
+  it('读屏的名称默认是站内小地图，按模型的叫法换（高斯泼溅叫小地图，ADR 0156）', async () => {
+    const wrapper = mount(IndoorMinimap, { props: { map, player } });
+    expect(wrapper.get('canvas').attributes('aria-label')).toBe('站内小地图，点击查看完整地图');
+
+    await wrapper.setProps({ title: '小地图' });
+    expect(wrapper.get('canvas').attributes('aria-label')).toBe('小地图，点击查看完整地图');
+  });
+
   it('+/− 在 20～160 米之间逐档缩放，到头时按钮不能点', async () => {
     const wrapper = mount(IndoorMinimap, { props: { map, player } });
     const zoomIn = wrapper.get('button[aria-label="放大"]');

@@ -1,4 +1,5 @@
 import {
+  type NavBuildProgress,
   type Navigation,
   type NavPoint,
   type RoamStatus,
@@ -27,7 +28,13 @@ import {
 import type { SceneModel } from '../catalog';
 import { type IndoorMap, indoorMapOf } from '../indoor-map/indoor-map';
 import { type RouteTrack, routePlayer, trackPoints } from '../indoor-map/route-track';
-import { buildFraction, type LoadNavigation, loadNavigation as defaultLoadNavigation } from '../navigation';
+import {
+  buildFraction,
+  type LoadNavigation,
+  loadNavigation as defaultLoadNavigation,
+  type LoadSplatNavigation,
+  loadSplatNavigation as defaultLoadSplatNavigation
+} from '../navigation';
 import {
   currentEffect,
   currentTilesetId,
@@ -75,6 +82,8 @@ export interface WalkNoticeState {
 export interface SceneModelsOptions {
   /** 建导航网格；默认读索引、下载瓦片、在 Worker 里构建，测试时换掉 */
   readonly loadNavigation?: LoadNavigation;
+  /** 建高斯泼溅的导航网格（ADR 0156）；默认读 LCC2 索引、下载碰撞网格、在 Worker 里构建，测试时换掉 */
+  readonly loadSplatNavigation?: LoadSplatNavigation;
   /** 第三人称的人物模型的绝对地址；默认随应用部署的 Cesium Man */
   readonly avatarUrl?: string;
 }
@@ -113,7 +122,7 @@ export interface SceneModels {
   readonly routePhase: ComputedRef<RoutePhase | null>;
   /**
    * 开始一条路线：一次新的相机操作，停在起点；之后有别的定位就退出。只有加载完成的模型能开始；
-   * 室内的模型同时建导航网格，建好后有小地图（ADR 0097 第 6 节），路线不等它
+   * 室内和高斯泼溅的模型同时建导航网格，建好后有小地图（ADR 0097 第 6 节、0156），路线不等它
    */
   readonly startRoute: (id: string, routeId: string) => void;
   /** 开始、继续；到了终点从头再走一遍 */
@@ -165,7 +174,11 @@ type NavigationBuild =
 export function useSceneModels(
   map: SceneModelsContext,
   catalog: MaybeRefOrGetter<readonly SceneModel[] | undefined>,
-  { loadNavigation = defaultLoadNavigation, avatarUrl = walkAvatarUrl() }: SceneModelsOptions = {}
+  {
+    loadNavigation = defaultLoadNavigation,
+    loadSplatNavigation = defaultLoadSplatNavigation,
+    avatarUrl = walkAvatarUrl()
+  }: SceneModelsOptions = {}
 ): SceneModels {
   const models = computed(() =>
     (toValue(catalog) ?? []).filter(model => model.kind !== 'splat' || map.sceneCapabilities.splats)
@@ -400,15 +413,19 @@ export function useSceneModels(
     building = { modelId: model.id, controller };
     const { signal } = controller;
     navigationBuild.value = { modelId: model.id, state: 'building', progress: 0 };
-    try {
-      const navigation = await loadNavigation(currentEffectUrl(model), {
-        signal,
-        onProgress: progress => {
-          if (!signal.aborted) {
-            navigationBuild.value = { modelId: model.id, state: 'building', progress: buildFraction(progress) };
-          }
+    const options = {
+      signal,
+      onProgress: (progress: NavBuildProgress) => {
+        if (!signal.aborted) {
+          navigationBuild.value = { modelId: model.id, state: 'building', progress: buildFraction(progress) };
         }
-      });
+      }
+    };
+    try {
+      // 高斯泼溅用碰撞网格建，按清单的摆放和出生点（ADR 0156）；瓦片集用最精细一级的瓦片
+      const navigation = model.splat
+        ? await loadSplatNavigation(model.splat, model.spawn, options)
+        : await loadNavigation(currentEffectUrl(model), options);
       if (signal.aborted) {
         return;
       }
@@ -450,8 +467,8 @@ export function useSceneModels(
       speed: roamSpeed,
       run: 0
     });
-    // 室内的模型才有小地图
-    if (model.kind === 'indoor') {
+    // 室内和高斯泼溅的模型才有小地图
+    if (model.kind === 'indoor' || model.splat) {
       ensureNavigation(model);
     }
   };

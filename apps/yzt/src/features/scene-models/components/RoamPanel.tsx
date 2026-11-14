@@ -6,7 +6,7 @@ import { ElButton, ElIcon, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } 
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
-import { MODEL_KIND_LABELS, type SceneModel } from '../catalog';
+import { MODEL_KIND_LABELS, type RoamPlace, roamPlaceOf, type SceneModel } from '../catalog';
 import type { RoamMode, RoutePhase, SceneModels, WalkStage } from '../composables/useSceneModels';
 import { DEFAULT_ROAM_SPEED, ROAM_SPEEDS, type RouteChoice, type WalkChoice } from '../scene-content';
 import styles from './RoamPanel.module.scss';
@@ -59,10 +59,9 @@ const ROUTE_HINTS: Hints = [
   ['Esc', '退出漫游']
 ];
 
-const FAILED_TEXT: Readonly<Record<Extract<WalkStage, { kind: 'failed' }>['reason'], string>> = {
-  build: '站内空间分析失败，请重试',
-  spawn: '附近没有找到可以站立的室内位置'
-};
+// 步行失败的说明：叫法按模型（roamPlaceOf）
+const failedText = (reason: Extract<WalkStage, { kind: 'failed' }>['reason'], place: RoamPlace) =>
+  reason === 'build' ? `${place.space}分析失败，请重试` : place.noSpawn;
 
 // 提示显示这么久后消失（毫秒）
 const NOTICE_DURATION = 3500;
@@ -202,14 +201,15 @@ export const RoamPanel = defineComponent({
       </ElRadioGroup>
     );
 
-    const renderWalk = (walk: WalkChoice, stage: WalkStage) => {
+    const renderWalk = (current: SceneModel, walk: WalkChoice, stage: WalkStage) => {
       const { models } = props;
+      const place = roamPlaceOf(current);
       if (stage.kind === 'preparing' || stage.kind === 'entering') {
         const progress = stage.kind === 'preparing' ? Math.round(stage.progress * 100) : 100;
         return (
           <div class={styles.section} role="status">
             <span class={styles.muted}>
-              {stage.kind === 'preparing' ? `正在分析站内空间 ${progress}%` : '正在进入站内…'}
+              {stage.kind === 'preparing' ? `正在分析${place.space} ${progress}%` : place.entering}
             </span>
             <ElProgress percentage={progress} showText={false} />
           </div>
@@ -219,7 +219,7 @@ export const RoamPanel = defineComponent({
         return (
           <div class={styles.row}>
             <span class={styles.error} role="alert">
-              {FAILED_TEXT[stage.reason]}
+              {failedText(stage.reason, place)}
             </span>
             {stage.reason === 'build' && (
               <ElButton link type="primary" size="small" onClick={models.retryWalk}>
@@ -354,7 +354,7 @@ export const RoamPanel = defineComponent({
               </ElRadioButton>
             ))}
           </ElRadioGroup>
-          {roam.kind === 'walk' && stage && renderWalk(roam, stage)}
+          {roam.kind === 'walk' && stage && renderWalk(current, roam, stage)}
           {roam.kind === 'route' && phase && renderRoute(current, roam, phase)}
         </div>
       );

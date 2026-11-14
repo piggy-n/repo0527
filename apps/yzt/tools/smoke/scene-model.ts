@@ -150,15 +150,53 @@ function splatPly(): Buffer {
   return Buffer.concat([header, body]);
 }
 
+// 碰撞网格（ADR 0156）：和正方形一样大的一块平地，两个三角形；格式同 LCC2 导出的网格（二进制 PLY，面是 uchar + int 的列表）
+function meshPly(): Buffer {
+  const half = SPLAT_SIZE / 2;
+  const corners = [
+    [-half, -half],
+    [half, -half],
+    [half, half],
+    [-half, half]
+  ];
+  const triangles = [0, 1, 2, 0, 2, 3];
+  const header = Buffer.from(
+    ['ply', 'format binary_little_endian 1.0', `element vertex ${triangles.length}`]
+      .concat(['property float x', 'property float y', 'property float z'])
+      .concat([`element face ${triangles.length / 3}`, 'property list uchar int vertex_indices', 'end_header', ''])
+      .join('\n')
+  );
+  const vertices = Buffer.alloc(triangles.length * 12);
+  triangles.forEach((corner, i) => {
+    vertices.writeFloatLE(corners[corner][0], i * 12);
+    vertices.writeFloatLE(corners[corner][1], i * 12 + 4);
+    vertices.writeFloatLE(0, i * 12 + 8);
+  });
+  const faces = Buffer.alloc((triangles.length / 3) * 13);
+  for (let face = 0; face < triangles.length / 3; face++) {
+    faces.writeUInt8(3, face * 13);
+    for (let k = 0; k < 3; k++) {
+      faces.writeInt32LE(face * 3 + k, face * 13 + 1 + k * 4);
+    }
+  }
+  return Buffer.concat([header, vertices, faces]);
+}
+
 function splatIndex(): Buffer {
   const half = SPLAT_SIZE / 2;
   const boundingBox = { min: [-half, -half, -0.2], max: [half, half, 0.2] };
-  const data = { '3dgs': { name: 0, start: 0, count: SPLAT_COUNT * SPLAT_COUNT } };
+  const data = { '3dgs': { name: 0, start: 0, count: SPLAT_COUNT * SPLAT_COUNT }, mesh: { name: 0, face: 2 } };
   const index = {
     version: '0.0.3',
     totalLevels: 1,
     offset: [0, 0, 0],
-    root: { id: '0', boundingBox, splatFiles: ['data/3dgs/0.ply'], child: { '0': { id: '0_0', boundingBox, data } } }
+    root: {
+      id: '0',
+      boundingBox,
+      splatFiles: ['data/3dgs/0.ply'],
+      meshFiles: ['data/mesh/0.ply'],
+      child: { '0': { id: '0_0', boundingBox, data } }
+    }
   };
   // 真实数据的索引开头有 BOM
   return Buffer.from(`\uFEFF${JSON.stringify(index)}`);
@@ -168,12 +206,13 @@ function splatIndex(): Buffer {
 export function splatFiles(): ReadonlyMap<string, Buffer> {
   return new Map([
     [`${SPLAT_DIRECTORY}/lcc2-sog-result/${SPLAT_DIRECTORY}.lcc2`, splatIndex()],
-    [`${SPLAT_DIRECTORY}/lcc2-sog-result/data/3dgs/0.ply`, splatPly()]
+    [`${SPLAT_DIRECTORY}/lcc2-sog-result/data/3dgs/0.ply`, splatPly()],
+    [`${SPLAT_DIRECTORY}/lcc2-sog-result/data/mesh/0.ply`, meshPly()]
   ]);
 }
 
 /**
- * 冒烟的清单：地下的室内模型（出生点在地板中央、朝东），和一份高斯泼溅（ADR 0149，只有 maplibre 引擎列出）
+ * 冒烟的清单：地下的室内模型（出生点在地板中央、朝东），和一份高斯泼溅（ADR 0149，只有 maplibre 引擎列出；带碰撞网格和出生点，ADR 0156）
  */
 export function roomManifest(): object {
   return {
@@ -194,7 +233,9 @@ export function roomManifest(): object {
         kind: 'splat',
         underground: false,
         lcc2: `${SPLAT_DIRECTORY}/lcc2-sog-result/${SPLAT_DIRECTORY}.lcc2`,
-        placement: { lng: SPLAT_AT[0], lat: SPLAT_AT[1], height: 0, heading: 0 }
+        placement: { lng: SPLAT_AT[0], lat: SPLAT_AT[1], height: 0, heading: 0 },
+        // 步行（ADR 0156）：出生点在正方形中央、朝北
+        spawn: { lng: SPLAT_AT[0], lat: SPLAT_AT[1], height: 0, heading: 0 }
       }
     ]
   };

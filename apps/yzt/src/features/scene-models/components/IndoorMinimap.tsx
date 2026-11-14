@@ -42,7 +42,9 @@ export const IndoorMinimap = defineComponent({
     map: { type: Object as PropType<IndoorMap>, required: true },
     player: { type: Object as PropType<MapPlayer>, required: true },
     /** 路线漫游时的路线；步行时没有 */
-    route: { type: Object as PropType<RouteTrack | null>, default: null }
+    route: { type: Object as PropType<RouteTrack | null>, default: null },
+    /** 读屏的名称，按模型叫法（roamPlaceOf） */
+    title: { type: String, default: '站内小地图' }
   },
   emits: {
     open: () => true
@@ -141,7 +143,7 @@ export const IndoorMinimap = defineComponent({
             height={SIZE * dpr}
             role="button"
             tabindex={0}
-            aria-label="站内小地图，点击查看完整地图"
+            aria-label={`${props.title}，点击查看完整地图`}
             title="点击查看完整地图"
             onClick={() => emit('open')}
             onKeydown={onKeydown}

@@ -4,6 +4,7 @@ import {
   type Navigation,
   navigationFrame,
   type RoamStatus,
+  type ScanNavigation,
   type SceneStatus,
   type WalkNotice
 } from '@mx/map-core';
@@ -73,9 +74,13 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
   const failed = ref(false);
   const onRetry = vi.fn<() => void>();
   const collapsed = ref(false);
-  // 建导航网格换成用例控制的
+  // 建导航网格换成用例控制的；高斯泼溅的也放进同一个列表
   const builds: { resolve: (navigation: Navigation) => void; reject: (error: Error) => void }[] = [];
   const loadNavigation = () => new Promise<Navigation>((resolve, reject) => builds.push({ resolve, reject }));
+  const loadSplatNavigation = () =>
+    new Promise<ScanNavigation>((resolve, reject) =>
+      builds.push({ resolve: navigation => resolve({ ...navigation, partial: false }), reject })
+    );
   let owner: SceneModels | undefined;
   const Page = defineComponent(() => {
     provideMap({ groups: [], camera: CAMERA });
@@ -88,7 +93,7 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
         beginCameraOperation: () => ({ signal: new AbortController().signal, run: action => action(control) })
       },
       source,
-      { loadNavigation }
+      { loadNavigation, loadSplatNavigation }
     );
     const models = owner;
     return () => (
@@ -481,5 +486,50 @@ describe('漫游面板里的步行（ADR 0086、0097）', () => {
 
     await textButton(wrapper, '退出漫游')?.trigger('click');
     expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
+  });
+});
+
+describe('高斯泼溅的漫游（ADR 0156）', () => {
+  const SPLATS = buildModelCatalog(
+    sceneManifestSchema.parse({
+      models: [
+        {
+          id: 'tomb',
+          name: '土山墓',
+          cityCode: '320300',
+          kind: 'splat',
+          underground: false,
+          lcc2: 'T/lcc2-sog-result/T.lcc2',
+          placement: { lng: 117.18, lat: 34.25, height: 42, heading: 0 },
+          spawn: { lng: 117.18, lat: 34.25, height: 41.3, heading: 20 },
+          routes: [{ id: 'hall', name: '入口进保护厅', path: [[117.18, 34.25, 41.3], [117.18, 34.2502, 42.6]] }]
+        }
+      ]
+    }),
+    'https://maps.test/3dt/manifest.json'
+  );
+
+  it('有出生点的泼溅也有"漫游"，从步行开始；叫法不是站内：分析中、失败、进入、找不到能站的地方', async () => {
+    const { wrapper, owner, report, builds, walk } = mountPanel(SPLATS);
+    await check(wrapper, 'tomb', true);
+    await report({ tomb: 'ready' });
+    const entry = wrapper.get('[data-loaded="tomb"]').findAll('button').find(item => item.text() === '漫游');
+    await entry?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'tomb' });
+    const panel = () => wrapper.get('[data-roam-panel]');
+    expect(panel().get('header').text()).toContain('漫游土山墓 · 高斯泼溅');
+    expect(panel().text()).toContain('正在分析可行走的空间 0%');
+
+    builds[0]?.reject(new Error('网格下载失败（404）'));
+    await flushBuild();
+    expect(panel().text()).toContain('可行走的空间分析失败，请重试');
+    await textButton(wrapper, '重试')?.trigger('click');
+    builds[1]?.resolve(NAVIGATION);
+    await flushBuild();
+    expect(panel().text()).toContain('正在进入…');
+    await walk('failed');
+    expect(panel().text()).toContain('附近没有找到可以站立的位置');
+    expect(panel().text()).not.toContain('站内');
+    expect(panel().text()).not.toContain('室内');
   });
 });
