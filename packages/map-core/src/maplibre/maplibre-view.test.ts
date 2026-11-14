@@ -19,8 +19,10 @@ import type {
   MapMouseEventLike,
   MapMouseEventType,
   MapMoveEventLike,
+  MapErrorEventLike,
   MapSubscription,
-  RenderedFeatureLike
+  RenderedFeatureLike,
+  SourceDataEventLike
 } from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
 import type { SceneRenderer, SceneRendererEvents } from './scene-renderer';
@@ -38,6 +40,9 @@ function settled<T>(promise: Promise<T>): Promise<T | 'pending'> {
 interface FakeEvent {
   readonly error?: Error;
   readonly sourceId?: string;
+  readonly dataType?: 'source' | 'style';
+  readonly isSourceLoaded?: boolean;
+  readonly tile?: { readonly tileID: { readonly key: string } };
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -186,7 +191,8 @@ class FakeMap implements MapLike {
   }
 
   on(type: 'style.load', listener: () => void): MapSubscription;
-  on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
+  on(type: 'error', listener: (event: MapErrorEventLike) => void): MapSubscription;
+  on(type: 'dataloading' | 'sourcedata' | 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
@@ -557,6 +563,14 @@ function tileGroup(id: string, year: number): StyleGroup {
   };
 }
 
+// 数据源 sourceId 的一张瓦片的事件（ADR 0158）
+const tileEvent = (sourceId: string, key: string, isSourceLoaded = false): FakeEvent => ({
+  dataType: 'source',
+  sourceId,
+  isSourceLoaded,
+  tile: { tileID: { key } }
+});
+
 // 就绪后加上 tdt、dltb 两个数据源，返回之后数据源错误的每次变化
 async function addTwoSources(ctx: ReturnType<typeof setup>): Promise<SourceErrors[]> {
   ctx.map.fire('style.load');
@@ -828,6 +842,55 @@ describe('MapLibreView', () => {
 
       ctx.view[Symbol.dispose]();
       expect(ctx.view.sourceErrors).toBe(NO_SOURCE_ERRORS);
+    });
+  });
+
+  describe('瓦片请求的统计（ADR 0158）', () => {
+    it('按数据源统计：开始、到了、失败、取消；数据源加载完时还在等的（404 的空瓦片）算到了；样式的加载不算', async () => {
+      using ctx = setup();
+      await addTwoSources(ctx);
+      const changed = vi.fn<() => void>();
+      ctx.view.onSourceActivityChange(changed);
+
+      ctx.map.fire('dataloading', { dataType: 'style' });
+      ctx.map.fire('dataloading', tileEvent('dltb', '1'));
+      ctx.map.fire('dataloading', tileEvent('dltb', '2'));
+      ctx.map.fire('dataloading', tileEvent('dltb', '3'));
+      ctx.map.fire('dataloading', tileEvent('tdt', '1'));
+      ctx.map.fire('sourcedata', tileEvent('dltb', '1'));
+      ctx.map.fire('dataabort', tileEvent('dltb', '2'));
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 1, failed: 0, finishedAt: null });
+
+      ctx.map.fire('error', { ...tileEvent('tdt', '1', true), error: new Error('tile failed') });
+      expect(ctx.view.sourceActivity.get('tdt')).toMatchObject({ requested: 1, failed: 1 });
+      expect(ctx.view.sourceActivity.get('tdt')?.finishedAt).not.toBeNull();
+      // 数据源的错误照常记下
+      expect(ctx.view.sourceErrors.has('tdt')).toBe(true);
+
+      // 3 号是 404：MapLibre 不发事件，数据源别的事件带着 isSourceLoaded
+      ctx.map.fire('sourcedata', { dataType: 'source', sourceId: 'dltb', isSourceLoaded: true });
+      expect(ctx.view.sourceActivity.get('dltb')).toMatchObject({ requested: 2, loaded: 2 });
+      expect(ctx.view.sourceActivity.get('dltb')?.finishedAt).not.toBeNull();
+      expect(changed).toHaveBeenCalledTimes(8);
+    });
+
+    it('地图空闲时都结束；移除数据源、整体重建、释放时忘掉', async () => {
+      using ctx = setup();
+      await addTwoSources(ctx);
+      ctx.map.fire('dataloading', tileEvent('dltb', '1'));
+      ctx.map.fire('dataloading', tileEvent('tdt', '1'));
+      ctx.map.fire('idle');
+      expect([...ctx.view.sourceActivity.values()].every(({ finishedAt }) => finishedAt !== null)).toBe(true);
+
+      ctx.session.style.setGroup('business', lineGroup('lcsh'));
+      await nextMicrotask();
+      expect([...ctx.view.sourceActivity.keys()]).toStrictEqual(['tdt']);
+
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      expect(names(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+      expect(ctx.view.sourceActivity.size).toBe(0);
     });
   });
 

@@ -40,6 +40,7 @@ import { type PanelMenuEntry, PanelMenu } from '@/shared/map/layer-panel/PanelMe
 import { type PanelToolItem, PanelToolbar } from '@/shared/map/layer-panel/PanelToolbar';
 import { revealInScroll } from '@/shared/map/layer-panel/scroll';
 import { OpacitySlider } from '@/shared/map/OpacitySlider';
+import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { type MoveAction, moveIndex, selectionAfterRemoval, steppedKey } from './current-list';
 import styles from './CurrentMapLayerPanel.module.scss';
 
@@ -92,7 +93,11 @@ export const CurrentMapLayerPanel = defineComponent({
     modelsStatus: { type: String as PropType<LoadStatus>, default: 'ready' },
     collapsed: { type: Boolean, default: false },
     /** 手机宽度：浮层盖在面板下段上 */
-    sheet: { type: Boolean, default: false }
+    sheet: { type: Boolean, default: false },
+    /** 地图数据的请求状态（ADR 0158）：二维图层加载超过 0.4 秒时行内转圈 */
+    requests: { type: Object as PropType<RequestStatus>, default: undefined },
+    /** 在当前图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
+    reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null }
   },
   emits: {
     retry: () => true,
@@ -272,6 +277,15 @@ export const CurrentMapLayerPanel = defineComponent({
       void flash(key);
       void scrollToRow(key, 'center');
     };
+
+    watch(
+      () => props.reveal,
+      request => {
+        if (request) {
+          locateInList(request.key);
+        }
+      }
+    );
 
     // 二维图层没有范围数据（后端给不出），只在没到最小显示级别时放大到那一级
     const locateTarget = (key: string | null): number | null => {
@@ -570,6 +584,7 @@ export const CurrentMapLayerPanel = defineComponent({
               symbols={props.symbols}
               code={code}
               level={level.value}
+              loading={props.requests?.loadingKeys.value.has(key) ?? false}
               onLegend={() => {
                 const open = popover.value?.kind === 'legend' && selected.value === key;
                 choose(key);

@@ -47,7 +47,7 @@ export const ModelLayerRow = defineComponent({
       const state = props.models.stateOf(props.id);
       if (state === 'loading') {
         return (
-          <ElIcon class={['is-loading', styles.spinner]} aria-label="加载中">
+          <ElIcon class={['is-loading', rowStyles.spinner]} aria-label="加载中">
             <Loading />
           </ElIcon>
         );

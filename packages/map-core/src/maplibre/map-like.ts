@@ -73,12 +73,45 @@ export interface RenderedFeatureLike {
   readonly geometry: Geometry;
 }
 
+/** 瓦片事件里的瓦片：只用它的键区分是哪一张 */
+export interface TileLike {
+  readonly tileID: { readonly key: string | number };
+}
+
+/**
+ * 数据源的加载事件（ADR 0158）：dataType 为 source 时带 sourceId 和当时数据源是否没有在请求（isSourceLoaded），
+ * 和瓦片有关时带 tile；样式的加载事件 dataType 为 style
+ */
+export interface SourceDataEventLike {
+  readonly dataType: 'source' | 'style';
+  readonly sourceId?: string;
+  readonly isSourceLoaded?: boolean;
+  readonly tile?: TileLike;
+}
+
+/** 地图的错误事件：数据源上的错误由 MapLibre 转发时带上 sourceId 和 isSourceLoaded，瓦片的错误还带 tile */
+export interface MapErrorEventLike {
+  readonly error: Error;
+  readonly sourceId?: unknown;
+  readonly tile?: TileLike;
+  readonly isSourceLoaded?: boolean;
+}
+
 /** 适配器用到的地图能力；MapLibre 的 Map 满足这个接口（见测试中的类型检查），测试时换成假地图 */
 export interface MapLike extends StyleTarget {
   setStyle(style: StyleSpecification, options: { diff: boolean }): void;
   on(type: 'style.load', listener: () => void): MapSubscription;
-  /** 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId；瓦片返回 404 时不报错 */
-  on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
+  /** 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId，瓦片的错误还带 tile；瓦片返回 404 时不报错 */
+  on(type: 'error', listener: (event: MapErrorEventLike) => void): MapSubscription;
+  /**
+   * 开始加载：带 tile 的是数据源开始请求一张新瓦片，之后跟着 sourcedata、dataabort 或 error；已有瓦片的重新加载不发。
+   * 瓦片返回 404、没有变化时只有 isSourceLoaded 变成 true，不单独发事件
+   */
+  on(type: 'dataloading', listener: (event: SourceDataEventLike) => void): MapSubscription;
+  /** 数据源的数据到了或变了：带 tile 的是一张瓦片到了 */
+  on(type: 'sourcedata', listener: (event: SourceDataEventLike) => void): MapSubscription;
+  /** 一张瓦片的请求取消了（移出视野） */
+  on(type: 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   /** 一次移动开始：用户的手势带原始的 DOM 事件（松手后的惯性在松手时算一次）；之后的每一帧只有 move */
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;

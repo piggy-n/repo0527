@@ -2,7 +2,7 @@ import { useEventListener } from '@vueuse/core';
 import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
 import { MapCanvas, provideMap, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
-import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
+import { computed, defineComponent, KeepAlive, ref, shallowRef, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
@@ -10,12 +10,14 @@ import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePi
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { resourceRequests } from '@/features/resource-map/layer-panel';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { roamPlaceOf } from '@/features/scene-models/catalog';
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
 import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
+import { modelIdOfKey, modelRequests } from '@/features/scene-models/layer-panel';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
@@ -34,6 +36,9 @@ import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
+import { mergedActivity, type RequestSource } from '@/shared/map/request-status/request-status';
+import { RequestStatusChip } from '@/shared/map/request-status/RequestStatusChip';
+import { useRequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
@@ -115,6 +120,23 @@ export const CurrentMapPage = defineComponent({
     // 三维模型（ADR 0081）：资源目录里列出模型，二维里也能加入（ADR 0157），所以进页面就读清单
     const sceneModelsQuery = useSceneModelsQuery(true);
     const models = useSceneModels(map, sceneModelsQuery.data);
+    // 地图数据的请求状态（ADR 0158）：资源图层、三维里的模型、底图（几个数据源合成一项）；状态栏右边的条目和当前图层的
+    // 行内转圈用同一份。接口请求不算，它们各自有加载状态
+    const requests = useRequestStatus(() => {
+      const activities = map.sourceActivity.value;
+      const basemapActivity = mergedActivity(
+        [...activities].flatMap(([sourceId, activity]) => (sourceId.startsWith('basemap') ? [activity] : []))
+      );
+      const sources: RequestSource[] = [
+        ...resourceRequests(resources.state.value, activities),
+        ...(map.dimension.value === '3d' ? modelRequests(models) : [])
+      ];
+      return basemapActivity
+        ? [...sources, { kind: 'tiles', key: 'basemap', name: '底图', icon: 'nav-current-map', activity: basemapActivity }]
+        : sources;
+    });
+    // 请求状态的明细里点了一行：在当前图层里选中它
+    const revealed = shallowRef<{ readonly key: string } | null>(null);
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
     // 视图控件和状态栏都隐藏，不能加入模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
@@ -316,6 +338,8 @@ export const CurrentMapPage = defineComponent({
           symbols={symbols}
           layout={panelLayout}
           models={models}
+          requests={requests}
+          reveal={revealed.value}
           status={status}
           modelsStatus={modelsStatus}
           collapsed={!sides.left.value}
@@ -440,7 +464,23 @@ export const CurrentMapPage = defineComponent({
             {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
             {!underground && (
               <div key="bottom" class={styles.bottom}>
-                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
+                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format}>
+                  {{
+                    after: () => [
+                      <RequestStatusChip
+                        status={requests}
+                        selectable={key => key !== 'basemap'}
+                        onSelect={(key: string) => (revealed.value = { key })}
+                        onRetry={(key: string) => {
+                          const id = modelIdOfKey(key);
+                          if (id !== null) {
+                            models.retry(id);
+                          }
+                        }}
+                      />
+                    ]
+                  }}
+                </MapStatusBar>
               </div>
             )}
             <div key="tools" class={styles.tools}>

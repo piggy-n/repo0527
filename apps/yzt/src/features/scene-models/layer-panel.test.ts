@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { computed, shallowRef } from 'vue';
 import type { CatalogNode } from '@/shared/map/layer-panel/catalog-tree';
 import { sceneManifestSchema } from './api';
 import { buildModelCatalog } from './catalog';
-import { canRoamModel, modelCatalogNodes, modelIdOfKey, modelKey } from './layer-panel';
+import { canRoamModel, modelCatalogNodes, modelIdOfKey, modelKey, modelRequests } from './layer-panel';
 
 const CATALOG = buildModelCatalog(
   sceneManifestSchema.parse({
@@ -72,5 +73,22 @@ describe('三维模型在资源图层面板上', () => {
     expect(station && canRoamModel(station)).toBe(true);
     expect(white && canRoamModel(white)).toBe(false);
     expect(white && canRoamModel({ ...white, spawn: { lng: 120, lat: 31, height: 0, heading: 0 } })).toBe(true);
+  });
+});
+
+describe('modelRequests', () => {
+  it('加入、显示着的模型按当前图层的先后，带加载状态；隐藏的、目录里没有的不算（ADR 0158）', () => {
+    const states: Record<string, 'loading' | 'ready' | 'failed'> = { white: 'ready', station: 'failed', city: 'loading' };
+    const models = {
+      models: computed(() => CATALOG),
+      added: shallowRef(['city', 'white', 'gone', 'station']),
+      hidden: shallowRef<ReadonlySet<string>>(new Set(['white'])),
+      stateOf: (id: string) => states[id] ?? 'loading'
+    };
+
+    expect(modelRequests(models)).toStrictEqual([
+      { kind: 'model', key: 'model:city', name: '新街口倾斜摄影', icon: 'model-3d', state: 'loading' },
+      { kind: 'model', key: 'model:station', name: '苏州站地下空间', icon: 'model-3d', state: 'failed' }
+    ]);
   });
 });

@@ -16,6 +16,7 @@ import {
   type MapSession,
   type MapSessionOptions,
   type MapSubscription,
+  type SourceDataEventLike,
   type RenderedFeatureLike,
   type SceneRenderer,
   tilesetCamera,
@@ -58,6 +59,9 @@ vi.mock('@mx/map-core', async importOriginal => {
 interface FakeEvent {
   readonly error?: Error;
   readonly sourceId?: string;
+  readonly dataType?: 'source' | 'style';
+  readonly isSourceLoaded?: boolean;
+  readonly tile?: { readonly tileID: { readonly key: string } };
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -117,6 +121,7 @@ class FakeMap implements MapLike {
 
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  on(type: 'dataloading' | 'sourcedata' | 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
@@ -628,6 +633,14 @@ const GROUPS = [
 function groupOf(id: string): string | undefined {
   return GROUPS.filter(group => id.startsWith(`${group}-`)).toSorted((a, b) => b.length - a.length)[0];
 }
+
+// 地类图斑的数据源的一张瓦片的事件（ADR 0158）
+const parcelTile = (key: string, isSourceLoaded = false): FakeEvent => ({
+  dataType: 'source',
+  sourceId: 'resources-bgdc_dltb',
+  isSourceLoaded,
+  tile: { tileID: { key } }
+});
 
 // 某个分组新加入的图层：资源目录加载后地类图斑也会加入，与要检查的分组无关
 function addedLayersOf(map: FakeMap, group: string): [string, string | undefined][] {
@@ -1490,6 +1503,29 @@ describe('CurrentMapPage', () => {
     await resourceRow(wrapper, 'csxhjctb_hydl').get('[data-node-action="add"]').trigger('click');
     await settle();
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
+  });
+
+  it('请求状态（ADR 0158）：瓦片加载超过 0.4 秒时状态栏右边出现条目、行内转圈；点开明细、点一行在当前图层里选中；都到了以后已加载完成', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    map.fire('dataloading', parcelTile('1'));
+    map.fire('dataloading', parcelTile('2'));
+    map.fire('sourcedata', parcelTile('1'));
+    await settle();
+    expect(wrapper.find('[data-request-chip]').exists()).toBe(false);
+
+    await vi.waitFor(() => expect(wrapper.find('[data-request-chip]').exists()).toBe(true), { timeout: 3000 });
+    expect(wrapper.get('[data-request-chip]').text()).toBe('正在加载 1 项 · 50%');
+    expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(true);
+
+    await wrapper.get('[data-request-chip]').trigger('click');
+    await wrapper.get('[data-request-row="resource:bgdc_dltb"]').trigger('click');
+    await nextTick();
+    expect(layerRow(wrapper, 'bgdc_dltb').attributes('aria-selected')).toBe('true');
+
+    map.fire('sourcedata', parcelTile('2', true));
+    await vi.waitFor(() => expect(wrapper.get('[data-request-chip]').text()).toBe('已加载完成'));
+    expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(false);
   });
 
   it('平移和同一级内缩放不更新当前图层的列表，跨过最小级别才更新提示', async () => {

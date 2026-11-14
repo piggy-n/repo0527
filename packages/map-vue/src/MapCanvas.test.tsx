@@ -12,6 +12,7 @@ import type {
   PickResult,
   MapSubscription,
   RenderedFeatureLike,
+  SourceDataEventLike,
   StyleGroup
 } from '@mx/map-core';
 import { MapLibreView } from '@mx/map-core';
@@ -84,6 +85,7 @@ class FakeMap implements MapLike {
 
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  on(type: 'dataloading' | 'sourcedata' | 'dataabort', listener: (event: SourceDataEventLike) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;

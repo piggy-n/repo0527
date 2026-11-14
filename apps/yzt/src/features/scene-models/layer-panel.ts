@@ -1,5 +1,7 @@
 import type { CatalogNode } from '@/shared/map/layer-panel/catalog-tree';
+import type { RequestSource } from '@/shared/map/request-status/request-status';
 import { groupByCity, MODEL_KIND_LABELS, type SceneModel } from './catalog';
+import type { SceneModels } from './composables/useSceneModels';
 
 // 三维模型在资源图层面板上的数据（ADR 0157）：目录最后一个分类"三维模型"，下面按市分组；当前图层里的模型组
 
@@ -58,4 +60,18 @@ export function modelCatalogNodes(
       }))
     }
   ];
+}
+
+/**
+ * 请求状态里的模型（ADR 0158）：三维里加入、显示着的，按当前图层的先后；只有加载中、就绪、失败，"细节还剩几块"往后放。
+ * 键同当前图层的行
+ */
+export function modelRequests(models: Pick<SceneModels, 'models' | 'added' | 'hidden' | 'stateOf'>): RequestSource[] {
+  return models.added.value.flatMap(id => {
+    const model = models.models.value.find(item => item.id === id);
+    if (!model || models.hidden.value.has(id)) {
+      return [];
+    }
+    return [{ kind: 'model', key: modelKey(id), name: model.name, icon: 'model-3d', state: models.stateOf(id) }];
+  });
 }

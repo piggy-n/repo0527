@@ -101,3 +101,9 @@ button.symbol {
     outline: 2px solid var(--color-primary-border-hover);
   }
 }
+
+// 状态里加载中的转圈：二维图层按请求状态（ADR 0158），模型按加载状态
+.spinner {
+  color: var(--color-primary);
+  font-size: 14px;
+}

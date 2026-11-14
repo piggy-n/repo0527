@@ -1,0 +1,206 @@
+// 状态栏右边的请求状态（ADR 0158）：和状态栏同高、同底色；明细浮层开在条目上方
+
+.root {
+  position: relative;
+  flex: none;
+  pointer-events: auto;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-regular);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+.spinner {
+  color: var(--color-primary);
+}
+
+.done {
+  color: var(--color-success-text);
+}
+
+.failed {
+  color: var(--color-warning-text);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-danger);
+}
+
+// 底边 2 像素的进度
+.progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background-color: var(--color-primary-alpha-12);
+
+  i {
+    display: block;
+    height: 100%;
+    background-color: var(--color-primary);
+    transition: width 0.2s linear;
+  }
+}
+
+.popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-container);
+  box-shadow: var(--shadow-lg);
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 44px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-text-title);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.group {
+  padding: 8px 8px 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.selectable {
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+}
+
+.icon {
+  color: var(--color-text-secondary);
+}
+
+.name {
+  overflow: hidden;
+  color: var(--color-text-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.slow {
+  color: var(--color-warning-text);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.bar {
+  grid-column: 2 / 4;
+  height: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background-color: var(--color-primary-alpha-12);
+
+  i {
+    display: block;
+    height: 100%;
+    background-color: var(--color-primary);
+  }
+}
+
+.waited {
+  grid-column: 2 / 4;
+  margin-top: 2px;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-xs);
+}
+
+.empty {
+  padding: var(--space-md) var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}

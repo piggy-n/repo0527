@@ -18,6 +18,8 @@ import {
   type SceneStatus,
   type ScreenPoint,
   type SelectedFeature,
+  NO_SOURCE_ACTIVITY,
+  type SourceActivities,
   type SourceErrors,
   type ViewBounds,
   type ViewKind,
@@ -108,6 +110,8 @@ export interface MapContext {
   readonly failure: Readonly<ShallowRef<MapViewFailure | null>>;
   /** 当前视图的数据源错误（ADR 0041 第 5 节）；没有视图时为空，替换视图后从新视图的记录开始 */
   readonly sourceErrors: Readonly<ShallowRef<SourceErrors>>;
+  /** 当前视图每个数据源这一轮的瓦片请求（ADR 0158），一帧最多更新一次；没有视图、视图不统计时为空 */
+  readonly sourceActivity: Readonly<ShallowRef<SourceActivities>>;
   /** 当前视图报告的三维内容状态（ADR 0081 第 2 节）；二维、没有视图时为空 */
   readonly sceneStatus: Readonly<ShallowRef<SceneStatus>>;
   /** 当前视图报告的漫游进度（ADR 0083 第 2 节）；没有在漫游、二维、没有视图时为 null */
@@ -226,6 +230,9 @@ export class MapContextState implements Disposable {
   readonly #viewState = ref<MapViewState>('idle');
   readonly #failure = shallowRef<MapViewFailure | null>(null);
   readonly #sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
+  readonly #sourceActivity = shallowRef<SourceActivities>(NO_SOURCE_ACTIVITY);
+  // 瓦片请求每张瓦片都会变：下一帧再读当前视图的统计
+  #cancelActivityFrame: (() => void) | null = null;
   readonly #sceneStatus = shallowRef<SceneStatus>(NO_SCENE_STATUS);
   readonly #roamStatus = shallowRef<RoamStatus | null>(null);
   readonly #retryRequests = ref(0);
@@ -284,6 +291,7 @@ export class MapContextState implements Disposable {
       viewState: shallowReadonly(this.#viewState),
       failure: shallowReadonly(this.#failure),
       sourceErrors: shallowReadonly(this.#sourceErrors),
+      sourceActivity: shallowReadonly(this.#sourceActivity),
       sceneStatus: shallowReadonly(this.#sceneStatus),
       roamStatus: shallowReadonly(this.#roamStatus),
       sceneCapabilities,
@@ -369,6 +377,11 @@ export class MapContextState implements Disposable {
         this.#sourceErrors.value = errors;
       }
     });
+    const unsubscribeSourceActivity = view.onSourceActivityChange?.(() => {
+      if (this.#current === attached) {
+        this.#scheduleActivity();
+      }
+    });
     // 只有三维视图有这项能力
     const unsubscribeSceneStatus = view.onSceneStatusChange?.(status => {
       if (this.#current === attached) {
@@ -384,6 +397,7 @@ export class MapContextState implements Disposable {
       unsubscribeState();
       unsubscribeResize();
       unsubscribeSourceErrors();
+      unsubscribeSourceActivity?.();
       unsubscribeSceneStatus?.();
       unsubscribeRoamStatus?.();
     };
@@ -432,6 +446,8 @@ export class MapContextState implements Disposable {
     this.#unsubscribeCamera();
     this.#unsubscribeInput();
     this.#clearPointer();
+    this.#cancelActivityFrame?.();
+    this.#cancelActivityFrame = null;
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
   }
 
@@ -445,6 +461,7 @@ export class MapContextState implements Disposable {
     this.#viewState.value = current?.view.state ?? 'idle';
     this.#failure.value = current?.view.failure ?? null;
     this.#sourceErrors.value = current?.view.sourceErrors ?? NO_SOURCE_ERRORS;
+    this.#sourceActivity.value = current?.view.sourceActivity ?? NO_SOURCE_ACTIVITY;
     this.#sceneStatus.value = current?.view.sceneStatus ?? NO_SCENE_STATUS;
     this.#roamStatus.value = current?.view.roamStatus ?? null;
     this.#viewport.value = current?.view.state === 'ready' ? current.viewport : null;
@@ -503,6 +520,14 @@ export class MapContextState implements Disposable {
   }
 
   // 只跟踪当前就绪视图的指针；按键不改变位置
+  // 一帧里多次变化只读一次；读的时候是哪个视图就用哪个的，切换视图时 #syncView 已经立即换过
+  #scheduleActivity(): void {
+    this.#cancelActivityFrame ??= this.#requestFrame(() => {
+      this.#cancelActivityFrame = null;
+      this.#sourceActivity.value = this.#current?.view.sourceActivity ?? NO_SOURCE_ACTIVITY;
+    });
+  }
+
   #onInput(event: MapInputEvent, kind: ViewKind): void {
     if (event.type === 'key' || this.#readyView()?.view.kind !== kind) {
       return;

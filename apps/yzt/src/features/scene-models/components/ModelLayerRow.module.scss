@@ -1,9 +1,4 @@
-// 当前图层里模型行自己的部分（ADR 0157）：加载中、失败的状态，行尾的"漫游"
-
-.spinner {
-  color: var(--color-primary);
-  font-size: 14px;
-}
+// 当前图层里模型行自己的部分（ADR 0157）：失败的状态，行尾的"漫游"
 
 .error {
   display: inline-flex;

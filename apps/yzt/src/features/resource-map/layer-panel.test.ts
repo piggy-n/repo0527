@@ -1,13 +1,15 @@
 // @vitest-environment node
+import type { SourceActivity } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { type CatalogNode, expandedByDefault, leavesOf } from '@/shared/map/layer-panel/catalog-tree';
 import type { ResourceTreeCategory } from './api';
 import { buildCatalog } from './catalog';
-import { currentLayers, resourceCatalogNodes, resourceCodeOfKey, resourceKey } from './layer-panel';
+import { currentLayers, resourceCatalogNodes, resourceCodeOfKey, resourceKey, resourceRequests } from './layer-panel';
 import {
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
   type ResourceLayersState,
+  resourceSourceId,
   withAdded,
   withMoved
 } from './resource-layers';
@@ -136,5 +138,23 @@ describe('currentLayers', () => {
 
   it('目录还没加载：空', () => {
     expect(currentLayers(EMPTY_RESOURCE_LAYERS)).toStrictEqual([]);
+  });
+});
+
+describe('resourceRequests', () => {
+  it('当前地图里这一轮请求过瓦片的资源，按叠放顺序，键同当前图层的行；别的数据源、没加入的不算（ADR 0158）', () => {
+    const state = withAdded(INITIAL, ['poi']);
+    const activity: SourceActivity = { requested: 3, loaded: 1, failed: 0, startedAt: 0, finishedAt: null };
+    const activities = new Map<string, SourceActivity>([
+      [resourceSourceId('bgdc_dltb'), activity],
+      [resourceSourceId('szy_kt'), activity],
+      ['basemap-vector', activity],
+      [resourceSourceId('poi'), { ...activity, finishedAt: 5 }]
+    ]);
+
+    expect(resourceRequests(state, activities)).toStrictEqual([
+      { kind: 'tiles', key: 'resource:poi', name: 'POI 点层', icon: 'geometry-point', activity: { ...activity, finishedAt: 5 } },
+      { kind: 'tiles', key: 'resource:bgdc_dltb', name: '地类图斑', icon: 'geometry-polygon', activity }
+    ]);
   });
 });

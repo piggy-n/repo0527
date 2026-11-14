@@ -1,7 +1,9 @@
+import type { SourceActivities } from '@mx/map-core';
 import type { IconName } from '@/shared/icons/SvgIcon';
 import type { CatalogNode } from '@/shared/map/layer-panel/catalog-tree';
+import type { RequestSource } from '@/shared/map/request-status/request-status';
 import type { CatalogCategory, ResourceGeometry } from './catalog';
-import { addedCodes, type ResourceLayersState } from './resource-layers';
+import { addedCodes, type ResourceLayersState, resourceSourceId } from './resource-layers';
 
 // 资源图层在面板上显示的数据（ADR 0157），都由显示状态推导；面板只显示和调用拥有者的操作
 
@@ -90,5 +92,13 @@ export function currentLayers(state: ResourceLayersState): CurrentLayer[] {
     const { name, geometry, years } = resource;
     const { opacity, year, checked } = display;
     return [{ code, name, geometry, opacity, year, years: years.toReversed(), visible: checked }];
+  });
+}
+
+/** 请求状态里的资源（ADR 0158）：当前地图里画着、这一轮请求过瓦片的，按叠放顺序；键同当前图层的行，点了在那里选中 */
+export function resourceRequests(state: ResourceLayersState, activities: SourceActivities): RequestSource[] {
+  return currentLayers(state).flatMap(({ code, name, geometry }) => {
+    const activity = activities.get(resourceSourceId(code));
+    return activity ? [{ kind: 'tiles', key: resourceKey(code), name, icon: GEOMETRY_ICONS[geometry], activity }] : [];
   });
 }

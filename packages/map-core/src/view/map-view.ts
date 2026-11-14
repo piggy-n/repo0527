@@ -2,6 +2,7 @@ import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { RoamStatus, SceneStatus } from '../scene/scene-content-model';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from './rendered-features';
+import type { SourceActivities } from './source-activity';
 import type { LngLat, PickOptions, PickResult, ScreenPoint } from './view-input';
 
 /** 视图的生命周期（ADR 0022 第 5 条、ADR 0026）；还没创建时没有视图对象，即文档里的 idle；样式加载失败的 failed 在样式出现新版本时自动恢复 */
@@ -64,6 +65,10 @@ export interface MapView extends Disposable {
   retry?(): void;
   /** 每次变化换一个新的 Map；不影响视图的状态 */
   readonly sourceErrors: SourceErrors;
+  /** 每个数据源这一轮的瓦片请求（ADR 0158）；只有统计瓦片的视图有这项能力 */
+  readonly sourceActivity?: SourceActivities;
+  /** 瓦片请求有变化：每张瓦片都可能通知一次，使用方自己决定多久读一次 sourceActivity */
+  onSourceActivityChange?(callback: () => void): Unsubscribe;
   /**
    * 当前这一轮整体加载的结果（创建地图、整体重建、重新加载各算一轮）：加载完成后结束（视图进入 ready，暂停时为 paused），
    * 失败时以原因结束，释放时以 AbortError 结束；上一轮已有结果时，新一轮换成新的 Promise

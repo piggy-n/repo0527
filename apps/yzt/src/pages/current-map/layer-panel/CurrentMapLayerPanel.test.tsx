@@ -2,7 +2,7 @@ import type { CameraState, SceneStatus } from '@mx/map-core';
 import { type MapContext, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick, shallowRef } from 'vue';
+import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
 import { buildCatalog } from '@/features/resource-map/catalog';
 import { type ResourceLayers, useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
@@ -11,6 +11,7 @@ import { useResourceSymbols } from '@/features/resource-map/composables/useResou
 import { sceneManifestSchema } from '@/features/scene-models/api';
 import { buildModelCatalog } from '@/features/scene-models/catalog';
 import { type SceneModels, useSceneModels } from '@/features/scene-models/composables/useSceneModels';
+import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -69,6 +70,14 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
   const legendCodes: (string | null)[] = [];
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const onRetryModels = vi.fn<() => void>();
+  // 请求状态只用到行内转圈的集合；页面在明细里点了一行时换一个新对象
+  const loadingKeys = shallowRef<ReadonlySet<string>>(new Set());
+  const requests: RequestStatus = {
+    items: computed(() => []),
+    now: shallowRef(0),
+    loadingKeys: computed(() => loadingKeys.value)
+  };
+  const reveal = shallowRef<{ readonly key: string } | null>(null);
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const catalog = shallowRef(CATALOG);
@@ -86,6 +95,8 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
         layout={layout}
         models={sceneModels}
         modelsStatus={modelsStatus}
+        requests={requests}
+        reveal={reveal.value}
         onLegendCode={(code: string | null) => legendCodes.push(code)}
         onRetryModels={onRetryModels}
       />
@@ -96,7 +107,7 @@ async function mountPanel({ modelsStatus = 'ready' }: { modelsStatus?: 'ready' |
   if (!owner || !models || !context) {
     throw new Error('页面没有创建拥有者');
   }
-  return { wrapper, owner, models, map: context, sceneStatus, legendCodes, onRetryModels };
+  return { wrapper, owner, models, map: context, sceneStatus, legendCodes, onRetryModels, loadingKeys, reveal };
 }
 
 const node = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-catalog-node="resource:${code}"]`);
@@ -337,5 +348,24 @@ describe('CurrentMapLayerPanel', () => {
     expect(failed.text()).toContain('三维模型清单加载失败');
     await failed.get('button').trigger('click');
     expect(onRetryModels).toHaveBeenCalledOnce();
+  });
+
+  it('请求状态（ADR 0158）：加载超过 0.4 秒的二维图层行内转圈；明细里点了一行，在当前图层里选中它', async () => {
+    const { wrapper, models, loadingKeys, reveal } = await mountPanel();
+    models.add(['white']);
+    await nextTick();
+    expect(row(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(false);
+
+    loadingKeys.value = new Set(['resource:bgdc_dltb']);
+    await nextTick();
+    expect(row(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(true);
+
+    reveal.value = { key: 'model:white' };
+    await nextTick();
+    expect(selectedRow(wrapper)).toBe('model:white');
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    reveal.value = { key: 'model:white' };
+    await nextTick();
+    expect(selectedRow(wrapper)).toBe('model:white');
   });
 });

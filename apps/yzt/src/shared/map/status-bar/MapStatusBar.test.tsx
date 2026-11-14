@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils';
 import type { LngLat, WalkView } from '@mx/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { computed, nextTick, shallowRef } from 'vue';
+import { computed, h, nextTick, shallowRef } from 'vue';
+import { required } from '../../testing/required';
 import type { CoordinateFormat } from '../location/coordinate-format';
 import { MapStatusBar } from './MapStatusBar';
 import type { ScaleBar, ViewAngles } from './status-bar';
@@ -146,6 +147,23 @@ describe('MapStatusBar 放不下时', () => {
 
     await resize(wrapper, 188, [443, 322, 133]);
     expect(shown(wrapper)).toBe('10 km');
+  });
+
+  it('插槽 after 紧跟在状态栏右边，取舍前先让出它的宽度和 8 像素的间距（ADR 0158）', async () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    const fake = fakeReadout();
+    fake.angles.value = { bearing: 15, pitch: 30 };
+    const wrapper = mount(MapStatusBar, {
+      props: { readout: fake.readout, format: 'decimal' },
+      slots: { after: () => [h('button', { type: 'button' }, '请求')] }
+    });
+    await nextTick();
+    const after = rootOf(wrapper).children[1];
+    expect(after?.textContent).toBe('请求');
+
+    observed.get(required(after, '插槽'))?.(120);
+    await resize(wrapper, 500, [443, 322, 133]);
+    expect(shown(wrapper)).toBe('10 km118.789800, 32.061400');
   });
 });
 

@@ -1,4 +1,5 @@
-import { ElOption, ElSelect, ElTooltip } from 'element-plus';
+import { Loading } from '@element-plus/icons-vue';
+import { ElIcon, ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import rowStyles from '@/shared/map/layer-panel/layer-row.module.scss';
@@ -12,7 +13,8 @@ import { ResourceStatusIcon } from './ResourceStatusIcon';
 
 /**
  * 当前图层里一个资源的行内容（ADR 0157），放在通用分组的手柄、复选框后面：符号（点了选中并打开图例）、名称、
- * 紧跟名称的状态图标（ADR 0059）、年份（多年份是不带箭头的小下拉）、移除。拥有者里没有这个资源时不显示
+ * 紧跟名称的状态（瓦片加载超过 0.4 秒时转圈，ADR 0158；状态图标，ADR 0059）、年份（多年份是不带箭头的小下拉）、移除。
+ * 拥有者里没有这个资源时不显示
  */
 export const ResourceLayerRow = defineComponent({
   name: 'ResourceLayerRow',
@@ -21,7 +23,9 @@ export const ResourceLayerRow = defineComponent({
     symbols: { type: Object as PropType<Pick<ResourceSymbols, 'overrideOf'>>, required: true },
     code: { type: String, required: true },
     /** 当前的缩放级别（整数），判断是否到了最小显示级别 */
-    level: { type: Number, required: true }
+    level: { type: Number, required: true },
+    /** 瓦片在加载、已经超过 0.4 秒：和状态栏的请求状态用同一份（ADR 0158） */
+    loading: { type: Boolean, default: false }
   },
   emits: {
     legend: () => true,
@@ -62,6 +66,11 @@ export const ResourceLayerRow = defineComponent({
           {name}
         </span>,
         <span class={rowStyles.status}>
+          {props.loading && (
+            <ElIcon class={['is-loading', rowStyles.spinner]} aria-label="加载中">
+              <Loading />
+            </ElIcon>
+          )}
           <ResourceStatusIcon statuses={statuses} />
         </span>,
         <span class={rowStyles.fill} />,
