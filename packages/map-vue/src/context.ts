@@ -652,10 +652,15 @@ export class MapContextState implements Disposable {
   async #whenReady(signal?: AbortSignal): Promise<void> {
     const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
     const attached = this.#current ?? (await this.#nextView(signals));
-    // 等的是这一个视图：它被卸下、不再是当前视图时立即结束，不等它自己的 whenReady
-    await abortable(attached.view.whenReady(), [...signals, attached.detached.signal, this.#lease.signal]);
-    // 上面的等待结束时监听已经移除，到这里继续执行之前，就绪的同一轮里排在后面的回调可能中止了 signal 或卸下了视图：返回前再确认
-    const aborted = signals.find(item => item.aborted);
+    // 等的是这一个视图的这一种种类：它被卸下、不再是当前视图、切换了种类（换租约）时立即结束，不等它自己的 whenReady
+    const bound = [...signals, attached.detached.signal, this.#lease.signal];
+    await abortable(attached.view.whenReady(), bound);
+    this.#confirmBound(attached, bound);
+  }
+
+  // abortable 结束时监听已经移除，继续执行之前同一轮里排在后面的回调可能中止了 signal、卸下了视图或切换了种类：返回前再确认
+  #confirmBound(attached: AttachedView, bound: readonly AbortSignal[]): void {
+    const aborted = bound.find(item => item.aborted);
     if (aborted) {
       throw abortReason(aborted);
     }
@@ -679,6 +684,7 @@ export class MapContextState implements Disposable {
     const unsubscribe = attached.view.on('settle', () => resolveSettled?.());
     try {
       await abortable(settled, bound);
+      this.#confirmBound(attached, bound);
     } finally {
       unsubscribe();
     }

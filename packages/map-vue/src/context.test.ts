@@ -147,8 +147,7 @@ class FakeView implements MapView {
 }
 
 // 由测试决定何时就绪的视图
-function pendingView(): { view: FakeView; markReady: () => void } {
-  const view = new FakeView();
+function pendingView(view = new FakeView()): { view: FakeView; markReady: () => void } {
   let resolveReady: (() => void) | undefined;
   view.ready = new Promise<void>(resolve => (resolveReady = resolve));
   return { view, markReady: () => resolveReady?.() };
@@ -1243,6 +1242,33 @@ describe('MapContextState 的同一个视图担任二三维（ADR 0147 第 2 节
 
     expect(seen).toStrictEqual(['3d']);
     expect(result).toBe('ready');
+  });
+
+  it('就绪的同一轮里排在后面的回调切换种类：绑定在旧种类上的 whenReady 以 AbortError 结束', async () => {
+    using env = setup();
+    const { view, markReady } = pendingView(new DualFakeView());
+    env.state.attachView(view, CANVAS);
+    const waiting = env.state.context.whenReady();
+    // 视图就绪时，这个回调排在 whenReady 的等待之后、它继续执行之前；同一个视图，身份不变
+    void view.ready.then(() => env.state.context.setDimension('3d'));
+
+    markReady();
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('画面稳定的同一轮里排在后面的回调切换种类：绑定在旧种类上的 whenSettled 以 AbortError 结束', async () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const waiting = env.state.context.whenSettled();
+    // 登记在 whenSettled 的订阅之后：稳定时先通知等待，切换种类排在等待继续执行之前
+    view.on('settle', () => void Promise.resolve().then(() => env.state.context.setDimension('3d')));
+
+    view.settleDown();
+
+    expect(await settled(waiting)).toBe('AbortError');
   });
 
   it('当前种类的模块加载失败时，retry 让视图自己重新加载，不请画布重建', () => {
