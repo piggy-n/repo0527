@@ -2,6 +2,7 @@
 import { probe } from './probe.ts';
 import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
 import type { BenchCamera, BenchStats, ModelState } from '../bench-api.ts';
+import { modelsSettled } from '../models-settled.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
 import { LookControl, showReadout } from './look.ts';
 import { decodeShot } from './shots.ts';
@@ -43,7 +44,7 @@ export interface BenchApi {
   /** 开始加载模型的时刻（performance.now） */
   readonly loadStartedAt: number;
   readonly errors: string[];
-  /** 模型的瓦片都到了，引擎也不再调整 */
+  /** 地址上的每份模型都准备完了（就绪或失败），已有的瓦片都到了，引擎也不再调整 */
   isStable(): boolean;
   basemapIdle(): boolean;
   /** 等待期间让引擎继续更新 */
@@ -147,6 +148,8 @@ const splats = (show: boolean): SplatLayer[] =>
   }));
 
 const sceneContent = (show: boolean) => ({ tilesets: tilesets(show), splats: splats(show), underground: null });
+// 判稳前要准备完的模型：渲染器只看得到已经加进去的，另一份还在整理索引时它也会判稳
+const expectedModels = [...tilesets(true).map(layer => layer.id), ...splatParams.map(({ id }) => id)];
 
 let continuous = false;
 const keepDrawing = () => {
@@ -203,7 +206,7 @@ window.bench = {
   config: handle.config,
   loadStartedAt,
   errors,
-  isStable: () => handle.isStable(),
+  isStable: () => modelsSettled(models, expectedModels) && handle.isStable(),
   basemapIdle: () => params.get('basemap') === 'none' || settled,
   tick: () => handle.requestFrame(),
   setContinuous(on) {
