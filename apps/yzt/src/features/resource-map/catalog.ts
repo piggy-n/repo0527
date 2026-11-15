@@ -68,7 +68,8 @@ export function buildCatalog(
     const geometry = GEOMETRY[layer.geoType];
     const existing = resources.get(layer.code);
     if (!existing) {
-      const minzoom = minZooms[layer.code];
+      // 只认配置自己的条目：编码可能和 constructor 这类继承属性同名
+      const minzoom = Object.hasOwn(minZooms, layer.code) ? minZooms[layer.code] : undefined;
       resources.set(layer.code, {
         code: layer.code,
         name: layer.name,
