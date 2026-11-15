@@ -35,7 +35,14 @@ describe('资源的最小显示级别', () => {
   // 2026-11-14 审查发现：按下标读配置会读到原型链上的函数，样式校验因此报 minzoom 不是数字
   it('编码和对象内置属性同名时，只认配置里自己写的条目', () => {
     const builtIns: ResourceTreeCategory[] = [
-      { code: null, name: '测试', children: [layer('constructor', 'Polygon', [2025]), layer('toString', 'Line', [2025])] }
+      {
+        code: null,
+        name: '测试',
+        children: [
+          layer('constructor', 'Polygon', [2025]),
+          layer('toString', 'Line', [2025])
+        ]
+      }
     ];
 
     const { resources } = buildCatalog(builtIns, {});
