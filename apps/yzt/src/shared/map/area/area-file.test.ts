@@ -3,7 +3,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { Position } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { type AreaFile, type AreaFileRead, type AreaFileResult, readAreaFiles, readGeoJson } from './area-file';
-import { AREA_LIMITS } from './area-geometry';
+import { ANALYSIS_VERTICES, AREA_LIMITS } from './area-geometry';
 
 // ---------- 测试数据 ----------
 
@@ -96,6 +96,8 @@ const withCrs = (name: string) =>
     features: [{ type: 'Feature', geometry: polygon(NANJING) }]
   });
 
+const crs = (name: string) => ({ crs: { properties: { name } } });
+
 function read(result: AreaFileResult): AreaFileRead {
   if (!result.ok) {
     throw new Error(`应当可以读出：${result.problem.message}`);
@@ -138,6 +140,50 @@ describe('readGeoJson', () => {
       code: 'crs',
       message: '文件声明的坐标系是 EPSG:4528，请转换为 CGCS2000（EPSG:4490）或 WGS84（EPSG:4326）经纬度后上传'
     });
+  });
+
+  it.each([
+    ['单独的几何', 'EPSG:4528', { ...polygon(NANJING), ...crs('EPSG:4528') }],
+    ['单独的几何', 'EPSG:4610', { ...polygon(NANJING), ...crs('EPSG:4610') }],
+    ['几何集合', 'EPSG:4610', { type: 'GeometryCollection', geometries: [polygon(NANJING)], ...crs('EPSG:4610') }],
+    ['要素', 'EPSG:4528', { type: 'Feature', geometry: polygon(NANJING), ...crs('EPSG:4528') }],
+    ['要素', 'EPSG:4610', { type: 'Feature', geometry: polygon(NANJING), ...crs('EPSG:4610') }],
+    ['要素集合', 'EPSG:4610', JSON.parse(withCrs('EPSG:4610')) as object]
+  ])('%s的 crs 声明了 %s 时说明要转换', (_, name, json) => {
+    expect(failure(readText(JSON.stringify(json)))).toEqual({
+      code: 'crs',
+      message: `文件声明的坐标系是 ${name}，请转换为 CGCS2000（EPSG:4490）或 WGS84（EPSG:4326）经纬度后上传`
+    });
+  });
+
+  it('单独的几何声明了经纬度坐标系时照常读出并显示', () => {
+    const text = JSON.stringify({ ...polygon(NANJING), ...crs('EPSG:4490') });
+    expect(read(readText(text)).crs).toBe('EPSG:4490 经纬度');
+  });
+
+  it('节点很多的面带一个节点都在一条直线上的碎片时，去掉碎片照常读出', () => {
+    const count = 6000;
+    const ring: Position[] = Array.from({ length: count }, (_, index) => {
+      const angle = (-index / count) * Math.PI * 2;
+      return [118.8 + Math.cos(angle) * 0.05, 32 + Math.sin(angle) * 0.05];
+    });
+    const sliver: Position[] = [[118.9, 32.1], [118.901, 32.1], [118.902, 32.1], [118.9, 32.1]];
+    const text = collection(polygon([[...ring, ring[0] ?? [0, 0]]]), polygon([sliver]));
+    expect(() => readText(text)).not.toThrow();
+    const { area, features } = read(readText(text));
+    expect(features).toBe(2);
+    expect(area.geometry.coordinates.map(rings => rings.length)).toEqual([1]);
+    expect(area.vertices).toBeLessThanOrEqual(ANALYSIS_VERTICES);
+  });
+
+  it.each([
+    ['单独的几何', { ...polygon(NANJING), crs: null }],
+    ['要素', { type: 'Feature', geometry: polygon(NANJING), crs: null }],
+    ['要素集合', { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: polygon(NANJING) }], crs: null }],
+    ['单独的几何', { ...polygon(NANJING), crs: { type: 'link', properties: { href: 'a.prj', type: 'proj4' } } }],
+    ['要素', { type: 'Feature', geometry: polygon(NANJING), crs: { type: 'link', properties: { href: 'a.prj' } } }]
+  ])('%s的 crs 为 null 或 link 时按没有声明读', (_, json) => {
+    expect(read(readText(JSON.stringify(json))).crs).toBe('WGS84 / CGCS2000 经纬度');
   });
 
   it('格式错误时说明大致的行号，不是 GeoJSON 时说明', () => {
