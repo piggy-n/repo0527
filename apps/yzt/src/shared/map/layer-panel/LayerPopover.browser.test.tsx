@@ -199,7 +199,9 @@ describe('LayerPopover（真实的布局）', () => {
     order.value = ['a', 'b', 'c'];
     await frames(4);
     const after = ctx.sheetBox();
+    // 下段的上边和最大高度都变了：浮层的高度确实跟着变，loop 的断言才看得到问题
     expect(after.top).toBeLessThan(before.top - 10);
+    expect(after.maxHeight).toBeGreaterThan(before.maxHeight + 10);
     expect(ctx.popover().getBoundingClientRect().top).toBeCloseTo(after.top, 0);
     expect(Number.parseFloat(ctx.popover().style.maxHeight)).toBeCloseTo(after.maxHeight, 0);
     expect(ctx.loopErrors).toStrictEqual([]);
