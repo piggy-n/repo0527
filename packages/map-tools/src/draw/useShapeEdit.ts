@@ -1,3 +1,4 @@
+import { useEventListener } from '@vueuse/core';
 import type { LngLat, MapInputEvent, MapTool, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
 import type { MapContext } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
@@ -84,8 +85,14 @@ export function useShapeEdit(
     return geometry && view.kind === '2d' ? handleAt(handlesOf(geometry), point, lngLat => view.project(lngLat)) : null;
   };
 
-  const reset = () => {
+  const cancelDrag = () => {
     drag.value = null;
+  };
+  // 在画布外松手收不到 up：离开画布、窗口失焦时取消这次拖动，同框选
+  useEventListener('blur', cancelDrag);
+
+  const reset = () => {
+    cancelDrag();
     hovered.value = null;
     selected.value = null;
   };
@@ -100,6 +107,8 @@ export function useShapeEdit(
     if (!next) {
       return 'minimum';
     }
+    // 删除是新的操作：先取消进行中的拖动，免得松手时用按下时的范围把删掉的节点放回来
+    cancelDrag();
     selected.value = null;
     options.onChange(next);
     return 'removed';
@@ -150,7 +159,7 @@ export function useShapeEdit(
     }
     // Esc 先取消拖动、再取消选中，都没有时由工具模型退出编辑
     if (drag.value) {
-      drag.value = null;
+      cancelDrag();
       return true;
     }
     if (selected.value) {
@@ -182,6 +191,7 @@ export function useShapeEdit(
         }
         return false;
       case 'leave':
+        cancelDrag();
         hovered.value = null;
         return false;
       case 'key':
