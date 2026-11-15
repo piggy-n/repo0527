@@ -61,10 +61,12 @@ class FakeMap implements RoamMap {
   readonly doubleClickZoom = new FakeGesture();
   readonly touchZoomRotate = new FakeGesture();
   readonly touchPitch = new FakeGesture();
+  // 画布的显示高度：用例改它模拟窗口变高
+  height = 600;
 
   constructor() {
     Object.defineProperty(this.canvas, 'clientWidth', { value: 800 });
-    Object.defineProperty(this.canvas, 'clientHeight', { value: 600 });
+    Object.defineProperty(this.canvas, 'clientHeight', { get: () => this.height });
     // 漫游开始前的工具关掉了框选放大
     this.boxZoom.enabled = false;
   }
@@ -167,18 +169,18 @@ class FakeRenderer implements SceneRenderer {
   [Symbol.dispose](): void {}
 }
 
-// 12 米见方的屋子：地板在地面以下 6 米，顶板在地面以下 2.5 米；局部系是 MODEL_AT 的东北天
-function room(): Navigation {
+// 12 米见方的屋子：默认地板在地面以下 6 米，顶板在地面以下 2.5 米；局部系是 MODEL_AT 的东北天
+function room(floor = -6, ceiling = -2.5): Navigation {
   const grid = new NavGrid(
     labelRegions(
       buildNavGrid([
         triangles(
-          floorQuad(-6, -6, 6, 6, -6),
-          floorQuad(-6, -6, 6, 6, -2.5),
-          wallQuad(-6, -6, 6, -6, -6, -2.5),
-          wallQuad(6, -6, 6, 6, -6, -2.5),
-          wallQuad(6, 6, -6, 6, -6, -2.5),
-          wallQuad(-6, 6, -6, -6, -6, -2.5)
+          floorQuad(-6, -6, 6, 6, floor),
+          floorQuad(-6, -6, 6, 6, ceiling),
+          wallQuad(-6, -6, 6, -6, floor, ceiling),
+          wallQuad(6, -6, 6, 6, floor, ceiling),
+          wallQuad(6, 6, -6, 6, floor, ceiling),
+          wallQuad(-6, 6, -6, -6, floor, ceiling)
         )
       ])
     )
@@ -282,6 +284,12 @@ const walkStatus = (status: RoamStatus | null): WalkRoamStatus => {
   }
   return status;
 };
+
+// 人的位置和朝向，不含视场角
+const placeOf = (player: WalkRoamStatus['player']) => [player?.x, player?.y, player?.floor, player?.yaw];
+
+// 黑幕的不透明度；还没盖过黑幕时为 undefined
+const overlay = (ctx: ReturnType<typeof setup>) => ctx.roam.container.querySelector('div')?.style.opacity;
 
 // 推进 ms 毫秒：黑幕的定时器和逐帧推进都在里面
 const advance = (ms: number) => vi.advanceTimersByTime(ms);
@@ -533,5 +541,148 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
     advance(100);
     expect(ctx.map.camera.zoom).toBeGreaterThan(20);
     expect(walkStatus(ctx.status).player?.y).toBe(before);
+  });
+
+  describe('the canvas changes height while standing still: MapLibre keeps the zoom and moves the camera', () => {
+    // 相机到画布中心的距离和画布高度成正比：高度 600 变 900，同一个视点的缩放大 log2(1.5)
+    const TALLER = Math.log2(900 / 600);
+
+    it('puts a standing walk back at its eye; the player stays, the horizontal field of view follows the width', () => {
+      using ctx = setup();
+      ctx.roam.apply(content(walk()), true);
+      advance(FADE_OUT + 500);
+      const { zoom, center } = ctx.map.camera;
+      const before = walkStatus(ctx.status).player;
+
+      ctx.map.height = 900;
+      ctx.roam.onResize();
+      advance(100);
+
+      expect(ctx.map.camera.zoom).toBeCloseTo(zoom + TALLER, 9);
+      expect(ctx.map.camera.center[0]).toBeCloseTo(center[0], 9);
+      const after = walkStatus(ctx.status).player;
+      expect(placeOf(after)).toStrictEqual(placeOf(before));
+      // 画布变高、宽度不变：水平视场角变小
+      expect(after?.hfov).toBeLessThan(before?.hfov ?? 0);
+      expect(walkStatus(ctx.status).phase).toBe('walking');
+    });
+
+    it('puts a paused route back at its eye', () => {
+      using ctx = setup();
+      ctx.roam.apply(content(route()), true);
+      advance(FADE_OUT + 500);
+      const { zoom } = ctx.map.camera;
+      const status = ctx.status;
+
+      ctx.map.height = 900;
+      ctx.roam.onResize();
+
+      expect(ctx.map.camera.zoom).toBeCloseTo(zoom + TALLER, 9);
+      expect(ctx.status).toBe(status);
+    });
+
+    it('leaves the camera alone while paused (the page is inactive) and before taking over', () => {
+      using ctx = setup();
+      ctx.roam.apply(content(walk()), true);
+      advance(FADE_OUT + 500);
+      ctx.roam.pause();
+      ctx.map.height = 0;
+      ctx.map.calls.length = 0;
+      ctx.roam.onResize();
+      expect(ctx.map.calls).toStrictEqual([]);
+
+      using entering = setup();
+      entering.roam.apply(content(route()), true);
+      advance(FADE_OUT / 4);
+      entering.map.height = 900;
+      entering.roam.onResize();
+      expect(entering.map.calls).toStrictEqual([]);
+    });
+  });
+
+  describe('a roam that goes straight on to another model lifts or isolates that model', () => {
+    const OTHER_ROUTE = route({ id: 'route-2' });
+
+    it('isolates the new splat instead of the old one', () => {
+      using ctx = setup();
+      ctx.roam.apply(isolatedTomb(route()), true);
+      advance(FADE_OUT);
+
+      ctx.roam.apply({ tilesets: [], underground: null, isolatedSplat: 'hall', roam: OTHER_ROUTE }, true);
+      advance(FADE_OUT);
+
+      expect(ctx.renderer.lifts.at(-1)).toStrictEqual({ modelId: 'hall', meters: 0, backdrop: '#1e2226' });
+      expect(ctx.takeovers.at(-1)).toStrictEqual({ engaged: true, lifted: true });
+      expect(ctx.roam.engaged).toBe(true);
+      expect(ctx.status).toMatchObject({ kind: 'route', id: 'route-2' });
+    });
+
+    it('lifts another underground model by its own depth', () => {
+      using ctx = setup();
+      ctx.roam.apply(content(route()), true);
+      advance(FADE_OUT);
+      expect(ctx.roam.lift).toBe(7);
+
+      // 最低处 -30 米加眼高 1.6 米，要高出 0 米 2 米：抬高 ceil(30.4) = 31 米
+      ctx.renderer.lowest = -30;
+      ctx.roam.apply(content(OTHER_ROUTE, { tilesetId: 'deep', surfaceOpacity: 0.25 }), true);
+      advance(FADE_OUT);
+
+      expect(ctx.roam.lift).toBe(31);
+      expect(ctx.renderer.lifts.at(-1)).toStrictEqual({ modelId: 'deep', meters: 31, backdrop: '#1e2226' });
+    });
+
+    it('drops the lift for a model above the ground', () => {
+      using ctx = setup();
+      ctx.roam.apply(content(route()), true);
+      advance(FADE_OUT);
+
+      ctx.roam.apply(content(OTHER_ROUTE, null), true);
+      advance(FADE_OUT);
+
+      expect(ctx.roam.engaged).toBe(true);
+      expect(ctx.roam.lift).toBe(0);
+      expect(ctx.renderer.lifts.at(-1)).toBeNull();
+      expect(ctx.takeovers.at(-1)).toStrictEqual({ engaged: true, lifted: false });
+    });
+  });
+
+  describe('a new roam cancels the entry still under way before preparing', () => {
+    it('a walk that finds no spawn: the route still darkening does not take over afterwards', () => {
+      // 地板在地面以上 50 米：要遮盖的网格只往地面以下找，又没有清单的出生点
+      const nowhere = walk({ id: 'walk-2', navigation: room(50, 53.5), spawn: null });
+      using ctx = setup();
+      ctx.roam.apply(content(route()), true);
+      advance(FADE_OUT / 4);
+      ctx.roam.apply(content(nowhere), true);
+      expect(walkStatus(ctx.status).phase).toBe('failed');
+      advance(FADE_OUT * 2);
+
+      expect(ctx.roam.engaged).toBe(false);
+      expect(ctx.renderer.lifts).toStrictEqual([]);
+      expect(ctx.takeovers).toStrictEqual([]);
+      expect(ctx.map.gestures()).toStrictEqual([true, true, false, true, true]);
+      expect(overlay(ctx)).toBe('0');
+    });
+
+    it('a route that waits for its tileset: the route still darkening does not take over meanwhile', () => {
+      using ctx = setup();
+      ctx.roam.apply(content(route()), true);
+      advance(FADE_OUT / 4);
+      ctx.renderer.lowest = null;
+      ctx.state.tileset = 'loading';
+      ctx.roam.apply(content(route({ id: 'route-2' }), { tilesetId: 'deep', surfaceOpacity: 0.25 }), true);
+      advance(FADE_OUT * 2);
+
+      expect(ctx.roam.engaged).toBe(false);
+      expect(ctx.renderer.lifts).toStrictEqual([]);
+      expect(overlay(ctx)).toBe('0');
+
+      ctx.renderer.lowest = -30;
+      ctx.state.tileset = 'ready';
+      ctx.roam.onSceneStatus();
+      advance(FADE_OUT);
+      expect(ctx.renderer.lifts).toStrictEqual([{ modelId: 'deep', meters: 31, backdrop: '#1e2226' }]);
+    });
   });
 });

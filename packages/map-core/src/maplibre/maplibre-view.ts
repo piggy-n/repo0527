@@ -328,7 +328,13 @@ export class MapLibreView<const G extends string> implements MapView {
       map.on('movestart', event => this.#guard(() => this.#onMoveStart(event))),
       // 动画到达终点、被打断都算结束：暂停时不再需要直接到终点
       map.on('moveend', () => (this.#finishAnimation = null)),
-      map.on('resize', () => this.#guard(() => this.#emitter.emit('resize'))),
+      // 漫游先按真实的视点放回相机，监听方投影时用的已经是纠正后的相机
+      map.on('resize', () =>
+        this.#guard(() => {
+          this.#roam?.onResize();
+          this.#emitter.emit('resize');
+        })
+      ),
       map.on('idle', () => this.#guard(() => this.#onIdle()))
     ]) {
       stack.defer(() => subscription.unsubscribe());

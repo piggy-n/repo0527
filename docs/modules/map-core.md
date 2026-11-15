@@ -252,7 +252,7 @@ store.clear();
 
 - 构造即创建地图（`initializing`）；创建时抛错（如不支持 WebGL2 的 `GPUInitializationError`）不往外抛，进入 `failed`，由 `whenReady` 和 `statechange` 表达
 - `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新的提交时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
-- 画布尺寸变化时（MapLibre 的 `resize`，容器尺寸变化后由它自己的 `ResizeObserver` 触发）发出 `resize`：相机不变，屏幕上的投影变了，map-vue 据此更新 `projectionRevision`（5B 验收后加入）
+- 画布尺寸变化时（MapLibre 的 `resize`，容器尺寸变化后由它自己的 `ResizeObserver` 触发）发出 `resize`：相机不变，屏幕上的投影变了，map-vue 据此更新 `projectionRevision`（5B 验收后加入）。漫游时例外：MapLibre 保持缩放会让第一人称的视点退后或前移，发出 `resize` 之前先让漫游按真实的视点重新放相机（[map-three.md](map-three.md)"漫游"的"画布尺寸变了"）
 - MapLibre 发出 `idle`（没有动画，请求的瓦片都已加载并画出）且视图处于 `ready` 时发出 `settle`；加载中、暂停时的 `idle` 不算。用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）
 - 引擎是否失败不另存标志，由失败原因推出（`failure.kind === 'engine'`）：同一个事实只存一份（5C.0e 去掉了原来的 `#fatal`）
 - 失败的原因是数据（ADR 0030）：`view.failure` 只在 `failed` 时有值，引擎失败为 `{ kind: 'engine', cause, error }`（`GPUInitializationError` 时 `cause` 是 `webgl-unavailable`，其余是 `unknown`），样式失败为 `{ kind: 'style', error }`；离开 `failed` 和释放时清空。状态或原因任一变化都发出 `statechange`，监听者收到 `failed` 时已经能读到原因
