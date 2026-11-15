@@ -343,11 +343,11 @@ const readout = useMapReadout(map);
 
 | 文件 | 内容 |
 |---|---|
-| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`；`views`、`view` 是资源目录标题后面的文字页签（样式同顶上的页签，现状底图用来切换目录显示全部、模型或资源）；`showCore` 是回到主页签的一次性命令（计数，每加一从"统计报表"这类页签切回两段，页面在当前图层里选中一行之前用）；登记为贴左边的悬浮元素 |
+| `LayerPanelShell.tsx` | 外壳：标题和页签、收起后的竖条、上下两段和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`，`floating` 收到面板、当前图层滚动区和两段分到的高度（`layout`）；`views`、`view` 是资源目录标题后面的文字页签（样式同顶上的页签，现状底图用来切换目录显示全部、模型或资源）；`showCore` 是回到主页签的一次性命令（计数，每加一从"统计报表"这类页签切回两段，页面在当前图层里选中一行之前用）；登记为贴左边的悬浮元素 |
 | `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：只有项能选中，Ctrl、Shift 多选，分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时是添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
 | `CurrentLayerGroup.tsx` | 当前图层的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签 `tag` 和它的说明 `tagNote`（二维里的模型组，悬停标签看说明）；`headless` 时不显示标题（只有这一组时），有标签时标签和说明单独一行 |
-| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示；标题行窄时变紧凑）、右键菜单（项的 `hint` 是不能用的原因，代替快捷键显示；`returnFocus` 给出关闭以后接焦点的元素，焦点在菜单里时才还）、开在面板右边的浮层（箭头对着页面给的 `anchor`：选中的行，组收起时是组的标题；手机宽度时盖在下段上；面板停用时不响应 Esc；关闭时焦点在里面的还给 `anchor`） |
+| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示；标题行窄时变紧凑）、右键菜单（先隐藏着量尺寸，放好、显示以后焦点才进第一个能用的项，浏览器不让隐藏的元素得到焦点；项的 `hint` 是不能用的原因，代替快捷键显示；`returnFocus` 给出关闭以后接焦点的元素，焦点在菜单里时才还）、开在面板右边的浮层（箭头对着页面给的 `anchor`：选中的行，组收起时是组的标题；`anchor` 读到的状态（选中、组的展开、行的顺序）或外壳的 `layout`（拖动分隔条、目录变高变矮）变了就重新放，手机宽度时 `layout` 引起的重新放等到下一帧（盖在下段上时最大高度跟着变，内容比外壳量的那层浅）；不监听面板和滚动区的尺寸，免得报 ResizeObserver loop；手机宽度时盖在下段上；面板停用时不响应 Esc；关闭时焦点在里面的还给 `anchor`） |
 | `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度、在滚动区里露出一行（纯函数和小工具） |
 | `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 

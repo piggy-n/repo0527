@@ -285,13 +285,14 @@ export const CurrentMapLayerPanel = defineComponent({
         ?.list()
         ?.querySelector<HTMLElement>(`[data-current-group="${modelIdOfKey(key) === null ? 'layers' : 'models'}"] > button`) ??
       null;
-    // 浮层的箭头对着的：选中的行，所在的组收起时是组的标题。读组的展开：组收起、展开只更新面板里面的一层，浮层的属性不变，
-    // 靠这里读到的状态让浮层重新放（2026-11-15 审查发现）
+    // 浮层的箭头对着的：选中的行，所在的组收起时是组的标题。读组的展开和显示的行的顺序：组收起、展开，上移下移、别的行
+    // 加入移出只更新面板里面的一层，浮层的属性不变、行还是那个元素，靠这里读到的状态让浮层重新放（2026-11-15、2026-11-14 审查发现）
     const popoverAnchor = (): HTMLElement | null => {
       const key = selected.value;
       if (key === null) {
         return null;
       }
+      void shownKeys.value;
       const open = modelIdOfKey(key) === null ? layersOpen.value || single.value : modelsOpen.value || single.value;
       return open ? rowElement(key) : groupHeadOf(key);
     };
@@ -894,6 +895,7 @@ export const CurrentMapLayerPanel = defineComponent({
           open
           panel={context.panel}
           list={context.list}
+          layout={context.layout}
           anchor={popoverAnchor}
           sheet={props.sheet}
           width={legend ? 300 : 280}

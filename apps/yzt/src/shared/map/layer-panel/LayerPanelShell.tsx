@@ -4,7 +4,7 @@ import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
-import { ratioForCheckedHeight, splitLists } from './panel-split';
+import { type ListSplit, ratioForCheckedHeight, splitLists } from './panel-split';
 import styles from './LayerPanelShell.module.scss';
 
 /** 标题后面的一个页签 */
@@ -17,6 +17,8 @@ export interface PanelTab {
 export interface PanelFloatingContext {
   readonly panel: () => HTMLElement | null;
   readonly list: () => HTMLElement | null;
+  /** 两段分到的高度（量到之前为 null）：拖动分割线、目录变高变矮时变，行跟着挪了位置，浮层读它重新放 */
+  readonly layout: () => ListSplit | null;
 }
 
 // 分割线的高度：线在中间，上下留出一样的间距
@@ -278,7 +280,11 @@ export const LayerPanelShell = defineComponent({
       </div>
     );
 
-    const floating: PanelFloatingContext = { panel: () => panel.value ?? null, list: () => list.value ?? null };
+    const floating: PanelFloatingContext = {
+      panel: () => panel.value ?? null,
+      list: () => list.value ?? null,
+      layout: () => split.value
+    };
 
     return () => (
       <div ref={element} class={styles.root} data-layer-panel>

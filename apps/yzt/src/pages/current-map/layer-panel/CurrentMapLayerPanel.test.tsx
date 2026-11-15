@@ -3,7 +3,7 @@ import { type MapContext, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, nextTick, shallowRef } from 'vue';
+import { computed, defineComponent, effectScope, nextTick, shallowRef, watchEffect } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
 import { buildCatalog, type ResourceCatalog } from '@/features/resource-map/catalog';
 import { type ResourceLayers, useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
@@ -153,6 +153,16 @@ function selectedRow(wrapper: VueWrapper): string | null {
   return found.exists() ? (found.attributes('data-current-row')?.replace('resource:', '') ?? null) : null;
 }
 const popover = () => document.querySelector<HTMLElement>('[data-layer-popover]');
+// 图例浮层：标题上的样式设置，显示的是浏览、单项编辑还是整层的配置（整层的才有配色方式）
+const layerPopover = () => required(popover(), '图例浮层');
+const settingsButton = () =>
+  required(layerPopover().querySelector<HTMLButtonElement>('button[aria-label="样式设置"]'), '样式设置');
+const legendShown = () => ({
+  pressed: settingsButton().getAttribute('aria-pressed'),
+  browsing: layerPopover().querySelector('[data-layer-legend]') !== null,
+  settings: layerPopover().querySelector('[data-legend-settings]') !== null,
+  wholeLayer: layerPopover().querySelector('[aria-label="图层配色方式"]') !== null
+});
 // 右键菜单里的定位；焦点在不在右键菜单里
 const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
 const menuHasFocus = () => Boolean(document.activeElement?.closest('[data-panel-menu]'));
@@ -748,6 +758,47 @@ describe('CurrentMapLayerPanel', () => {
 
     await wrapper.get('[data-current-group="layers"] > button[aria-expanded]').trigger('click');
     expect(anchor()).toBe(wrapper.get('[data-current-group="layers"] > button[aria-expanded]').element);
+  });
+
+  it('图例浮层里正在编辑一类时点标题上的样式设置：换成整层的配置，再点一次回到浏览（2026-11-14 审查发现）', async () => {
+    const { wrapper } = await mountPanel();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+
+    required(layerPopover().querySelector<HTMLButtonElement>('[data-landuse] button'), '地类的条目').click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: false, settings: true, wholeLayer: false });
+
+    settingsButton().click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual({ pressed: 'true', browsing: false, settings: true, wholeLayer: true });
+
+    settingsButton().click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
+  });
+
+  it('选中的行上移、下移以后浮层重新放：箭头对着的元素读当前图层的顺序，元素不变也重新量（2026-11-14 审查发现）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['bgdc_cjdcq']);
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    // 浮层按 anchor() 读到的响应式状态重新放，这里看同样的依赖
+    const anchor = wrapper.getComponent(LayerPopover).props('anchor');
+    const scope = effectScope();
+    let reads = 0;
+    scope.run(() => watchEffect(() => {
+      anchor();
+      reads++;
+    }));
+    reads = 0;
+
+    await tool(wrapper, 'move-up').trigger('click');
+    expect(currentOrder(wrapper)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq']);
+    expect(reads).toBeGreaterThan(0);
+    expect(anchor()).toBe(row(wrapper, 'bgdc_dltb').element);
+    scope.stop();
   });
 
   describe('三维里先体现三维模型（用户 2026-11-15 选的方案乙，标题后面的"全部、模型、资源"是方案一）', () => {

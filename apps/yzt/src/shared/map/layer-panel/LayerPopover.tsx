@@ -4,6 +4,7 @@ import {
   defineComponent,
   nextTick,
   onBeforeUnmount,
+  onScopeDispose,
   type PropType,
   ref,
   type SlotsType,
@@ -18,7 +19,7 @@ const SHEET_INSET = 8;
 const SHEET_TOP = 40;
 
 /**
- * 当前图层的浮层（透明度、图例，ADR 0157）：在面板右边，箭头对着选中的行，换选中项、滚动列表、窗口变化时跟着走；
+ * 当前图层的浮层（透明度、图例，ADR 0157）：在面板右边，箭头对着选中的行，换选中项、行换了位置、滚动列表、面板的布局和窗口变化时跟着走；
  * 手机宽度时盖在面板的下段上，没有箭头。开关由页面持有：再点入口、点关闭、按 Esc 关闭，不因为点外面关闭；
  * 面板停用时（漫游时被缓存）不响应 Esc。关闭时焦点在浮层里的，还给箭头对着的元素
  */
@@ -30,11 +31,16 @@ export const LayerPopover = defineComponent({
     panel: { type: Function as PropType<() => HTMLElement | null>, required: true },
     /**
      * 箭头对着的元素：选中的行，所在的组收起时是组的标题（由页面给出）；关闭时焦点也还给它。
-     * 在 DOM 更新以后取，它读到的响应式状态（选中、组的展开）变了就重新放
+     * 在 DOM 更新以后取，它读到的响应式状态（选中、组的展开、行的顺序）变了就重新放
      */
     anchor: { type: Function as PropType<() => HTMLElement | null>, required: true },
     /** 当前图层的滚动区 */
     list: { type: Function as PropType<() => HTMLElement | null>, required: true },
+    /**
+     * 面板的布局（外壳给的两段高度）：拖动分割线、目录变高变矮时行挪了位置、元素不变，读到的值变了就重新放，
+     * 手机宽度时等到下一帧。不监听面板和滚动区的尺寸：它们比外壳量的内容浅，会报 ResizeObserver loop（2026-11-14 审查发现）
+     */
+    layout: { type: Function as PropType<() => unknown>, default: () => null },
     /** 手机宽度：盖在面板下段上 */
     sheet: { type: Boolean, default: false },
     width: { type: Number, default: 300 },
@@ -113,6 +119,23 @@ export const LayerPopover = defineComponent({
       },
       { immediate: true, flush: 'post' }
     );
+    // 外壳的布局多半是在它自己的尺寸监听回调里变的。盖在下段上时浮层的最大高度跟着变、内容跟着变高变矮，
+    // 内容比外壳量的那层浅，同一轮送不到会报 ResizeObserver loop，所以等到下一帧再放；面板右边时最大高度只看视口，直接放
+    let frame = 0;
+    watch(
+      () => props.layout(),
+      async () => {
+        await nextTick();
+        cancelAnimationFrame(frame);
+        if (props.sheet) {
+          frame = requestAnimationFrame(place);
+        } else {
+          place();
+        }
+      },
+      { flush: 'post' }
+    );
+    onScopeDispose(() => cancelAnimationFrame(frame));
     useResizeObserver(content, () => place());
     useEventListener(window, 'resize', () => place());
     // 列表、目录滚动时箭头跟着行；在捕获阶段才收得到元素自己的滚动

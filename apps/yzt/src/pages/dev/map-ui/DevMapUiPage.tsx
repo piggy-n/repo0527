@@ -48,6 +48,9 @@ const MapUiSamples = defineComponent({
     const panels = usePanelGroup(['legend', 'boundaries'] as const);
     const collapsed = ref(false);
     const editing = ref(false);
+    // 左右两边的图例编辑同一个资源时互斥，后打开的为准，接法同 CurrentMapPage（ADR 0157）
+    const legendCode = ref<string | null>(null);
+    const legendEditingCode = ref<string | null>(null);
     const basemapOpen = ref(false);
     // 切换样例只改加入当前地图的资源，年份与样式继续由真实拥有者维护
     const codes = [...SAMPLE_CATALOG.resources.keys()];
@@ -88,7 +91,9 @@ const MapUiSamples = defineComponent({
                   layout={layout}
                   models={models}
                   collapsed={layout.collapsed.value}
+                  legendYield={legendEditingCode.value}
                   onUpdate:collapsed={layout.setCollapsed}
+                  onLegendCode={(code: string | null) => (legendCode.value = code)}
                 />
               </div>
             </div>
@@ -112,7 +117,9 @@ const MapUiSamples = defineComponent({
                           layers={layers}
                           symbols={symbols}
                           active={active}
+                          yieldCode={legendCode.value}
                           onEditingChange={value => (editing.value = value)}
+                          onEditingCode={code => (legendEditingCode.value = code)}
                         />
                       ],
                       'legend-footer': () => !editing.value && symbols.overrides.value.size > 0
