@@ -4,11 +4,12 @@ import { provideMap } from '@mx/map-vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, h, type Ref, ref } from 'vue';
+import { required } from '../../testing/required';
 import { LayerPanelShell, type PanelFloatingContext } from './LayerPanelShell';
 import { LayerPopover } from './LayerPopover';
 
 // 真实的布局：浮层是 fixed 的，箭头对着选中的行；行跟着分割线、目录的高度、顺序挪了位置，浮层要跟着重新放
-// （2026-11-14 审查发现，F10）。jsdom 里元素的尺寸都是 0，只能在浏览器里验证
+// （2026-11-14 审查发现）。jsdom 里元素的尺寸都是 0，只能在浏览器里验证
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -26,13 +27,30 @@ const TOKENS = {
   '--line-height-base': '22px'
 };
 
-const rows = (n: number) => Array.from({ length: n }, (_, index) => h('div', { key: index, style: { height: '32px' } }));
+const rows = (n: number) =>
+  Array.from({ length: n }, (_, index) => h('div', { key: index, style: { height: '32px' } }));
+
+const popover = () => required(document.querySelector<HTMLElement>('[data-layer-popover]'), '浮层');
+const row = () => required(document.querySelector<HTMLElement>('[data-row="a"]'), '选中的行');
+
+interface PopoverSetup {
+  /** 面板所在的列的高度 */
+  readonly height: number;
+  /** 目录的行数 */
+  readonly catalog: Ref<number>;
+  /** 当前图层的行，选中的是 a */
+  readonly order: Ref<readonly string[]>;
+  /** 手机宽度：盖在面板下段上 */
+  readonly sheet?: boolean;
+  /** 浮层内容的高度 */
+  readonly content?: number;
+}
 
 /**
  * 面板在 height 高的列里：目录 catalog 行，当前图层按 order 的顺序排，每行 32 高；选中 order 里的 a，浮层的箭头对着它。
  * 箭头对着的元素和页面一样读当前图层的顺序（CurrentMapLayerPanel 的 popoverAnchor）
  */
-function setup(height: number, catalog: Ref<number>, order: Ref<readonly string[]>) {
+function setup({ height, catalog, order, sheet = false, content = 80 }: PopoverSetup) {
   const host = document.body.appendChild(document.createElement('div'));
   const loopErrors: string[] = [];
   const onError = (event: ErrorEvent) => {
@@ -76,9 +94,13 @@ function setup(height: number, catalog: Ref<number>, order: Ref<readonly string[
                     list={context.list}
                     layout={context.layout}
                     anchor={anchor}
+                    sheet={sheet}
                     label="图例"
                   >
-                    {{ header: () => [h('span', '图例')], default: () => [h('div', { style: { height: '80px' } })] }}
+                    {{
+                      header: () => [h('span', '图例')],
+                      default: () => [h('div', { style: { height: `${content}px` } })]
+                    }}
                   </LayerPopover>
                 ];
               }
@@ -92,19 +114,21 @@ function setup(height: number, catalog: Ref<number>, order: Ref<readonly string[
   return {
     wrapper,
     loopErrors,
+    popover,
     separator: () => wrapper.get('[role="separator"]').element,
     // 箭头的中心和选中行的中线差多少
     offset: () => {
-      const popover = document.querySelector<HTMLElement>('[data-layer-popover]');
-      const row = document.querySelector<HTMLElement>('[data-row="a"]');
-      if (!popover || !row) {
-        throw new Error('没有找到浮层或选中的行');
-      }
-      const arrowTop = Number.parseFloat(popover.style.getPropertyValue('--arrow-top'));
-      const box = row.getBoundingClientRect();
-      return popover.getBoundingClientRect().top + arrowTop - (box.top + box.height / 2);
+      const arrowTop = Number.parseFloat(popover().style.getPropertyValue('--arrow-top'));
+      const box = row().getBoundingClientRect();
+      return popover().getBoundingClientRect().top + arrowTop - (box.top + box.height / 2);
     },
-    rowTop: () => document.querySelector('[data-row="a"]')?.getBoundingClientRect().top,
+    rowTop: () => row().getBoundingClientRect().top,
+    // 盖在下段上时浮层的上边和最大高度应该是多少（同 LayerPopover 的 place）
+    sheetBox: () => {
+      const list = wrapper.get('[data-current-list]').element.getBoundingClientRect();
+      const panel = wrapper.get('[data-layer-panel] > div').element.getBoundingClientRect();
+      return { top: list.top - 40 + 8, maxHeight: panel.bottom - list.top + 40 - 16 };
+    },
     [Symbol.dispose]() {
       window.removeEventListener('error', onError);
       wrapper.unmount();
@@ -124,10 +148,11 @@ function frames(count: number): Promise<void> {
 
 describe('LayerPopover（真实的布局）', () => {
   it('放不下时在分割线上按方向键：当前图层整段上移，箭头仍对着选中的行', async () => {
-    using ctx = setup(600, ref(30), ref(Array.from({ length: 20 }, (_, index) => (index === 0 ? 'a' : `r${index}`))));
+    const order = ref(Array.from({ length: 20 }, (_, index) => (index === 0 ? 'a' : `r${index}`)));
+    using ctx = setup({ height: 600, catalog: ref(30), order });
     await frames(4);
     expect(Math.abs(ctx.offset())).toBeLessThanOrEqual(1);
-    const before = ctx.rowTop() ?? 0;
+    const before = ctx.rowTop();
 
     ctx.separator().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     await frames(3);
@@ -138,10 +163,10 @@ describe('LayerPopover（真实的布局）', () => {
 
   it('都放得下时目录变矮（搜索、收起分类）：当前图层跟着上移，箭头仍对着选中的行', async () => {
     const catalog = ref(4);
-    using ctx = setup(700, catalog, ref(['a', 'b']));
+    using ctx = setup({ height: 700, catalog, order: ref(['a', 'b']) });
     await frames(4);
     expect(Math.abs(ctx.offset())).toBeLessThanOrEqual(1);
-    const before = ctx.rowTop() ?? 0;
+    const before = ctx.rowTop();
 
     catalog.value = 1;
     await frames(3);
@@ -152,13 +177,31 @@ describe('LayerPopover（真实的布局）', () => {
 
   it('只换顺序、尺寸不变（上移、下移）：箭头对着的元素读顺序，跟着选中的行走', async () => {
     const order = ref<readonly string[]>(['a', 'b', 'c']);
-    using ctx = setup(700, ref(3), order);
+    using ctx = setup({ height: 700, catalog: ref(3), order });
     await frames(4);
-    const before = ctx.rowTop() ?? 0;
+    const before = ctx.rowTop();
 
     order.value = ['b', 'c', 'a'];
     await frames(3);
     expect(ctx.rowTop()).toBeGreaterThan(before + 10);
     expect(Math.abs(ctx.offset())).toBeLessThanOrEqual(1);
+  });
+
+  it('手机宽度、内容比下段高：目录变矮、当前图层多一行时跟着盖住新的下段，不报 ResizeObserver loop', async () => {
+    const catalog = ref(4);
+    const order = ref<readonly string[]>(['a', 'b']);
+    using ctx = setup({ height: 700, catalog, order, sheet: true, content: 2000 });
+    await frames(4);
+    const before = ctx.sheetBox();
+    expect(ctx.popover().getBoundingClientRect().top).toBeCloseTo(before.top, 0);
+
+    catalog.value = 1;
+    order.value = ['a', 'b', 'c'];
+    await frames(4);
+    const after = ctx.sheetBox();
+    expect(after.top).toBeLessThan(before.top - 10);
+    expect(ctx.popover().getBoundingClientRect().top).toBeCloseTo(after.top, 0);
+    expect(Number.parseFloat(ctx.popover().style.maxHeight)).toBeCloseTo(after.maxHeight, 0);
+    expect(ctx.loopErrors).toStrictEqual([]);
   });
 });
