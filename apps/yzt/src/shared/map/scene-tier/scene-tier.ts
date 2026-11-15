@@ -176,6 +176,9 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
     const crashed = await findCrashed(store, channel, pageId, configured, answerTimeoutMs);
     if (crashed.length > 0) {
       this.#crashed(crashed, configured);
+    } else {
+      // 同时检查的页面可能先认定了同一次崩溃、删了键，降档记在它刚写的记录里
+      this.#record = readRecord(store, configured);
     }
   }
 

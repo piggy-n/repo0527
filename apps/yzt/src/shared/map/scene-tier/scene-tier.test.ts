@@ -347,6 +347,25 @@ describe('SceneTierSource 的崩溃标记', () => {
     expect(record()).toStrictEqual({ configured: 'high', cap: 'standard', restorable: true, restoredBefore: false });
   });
 
+  it('留下标记的页面在等回答时正常离开（删了键、Worker 没答上）：不算崩溃，不降档、不提示', async () => {
+    const { storage, hub, leaveMarker, record } = setup();
+    // 恢复过画质的页面：误判成崩溃时还会取消恢复入口
+    leaveMarker('b', 'high', true, 'high');
+    // 页面 b 收到问话时正在关闭：pagehide 删掉自己的键，Worker 随页面一起没了，不回答
+    const leaving = hub.channel();
+    leaving.addEventListener('message', event => {
+      if ((event.data as PingMessage).kind === 'ping') {
+        storage.removeItem(`yzt.device.${MARKER('b')}`);
+      }
+    });
+
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'high' });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.high);
+    expect(source.notice.value).toBeNull();
+    expect(record()).toBeNull();
+    expect(hub.sent).not.toContainEqual({ kind: 'removed', id: 'b' });
+  });
+
   it('按崩溃页面的档位降，不在现在的基础上再降：两个页面同时发现同一次崩溃，不会从高直接降到低', async () => {
     const { storage, hub, leaveMarker } = setup();
     leaveMarker('b', 'high', false, 'high');
