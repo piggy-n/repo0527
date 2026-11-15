@@ -2,7 +2,7 @@ import type { MapInputEvent, MapPointerEvent, ScreenPoint, ToolView, ViewKind } 
 import type { MapViewport } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
 import { describe, expect, it, vi } from 'vitest';
-import { effectScope, ref, shallowRef } from 'vue';
+import { effectScope, nextTick, ref, shallowRef } from 'vue';
 import { required } from '../testing/required';
 import { EDIT_TOOL_ID, useShapeEdit } from './useShapeEdit';
 
@@ -71,7 +71,7 @@ function setup(initial: MultiPolygon | null = SQUARE) {
   const tool = edit.tools[EDIT_TOOL_ID];
   const send = (event: MapInputEvent, kind: ViewKind = '2d') => tool.handleInput?.(event, toolView(kind));
   const ring = () => geometry.value?.coordinates[0]?.[0];
-  return { edit, tool, send, geometry, ring, onChange, activeTool, mapPointer, scope };
+  return { edit, tool, send, geometry, ring, onChange, activeTool, mapPointer, view, scope };
 }
 
 describe('useShapeEdit', () => {
@@ -172,7 +172,7 @@ describe('useShapeEdit', () => {
     send(pointer('down', 100, 100));
     send(pointer('move', 150, 80));
     expect(send(key('Escape'))).toBe(true);
-    expect(edit.deriveGroup().sources).not.toHaveProperty('preview');
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
     expect(send(pointer('up', 150, 80))).toBe(false);
     expect(edit.selected.value).toBeNull();
 
@@ -180,6 +180,96 @@ describe('useShapeEdit', () => {
     send(pointer('up', 100, 100));
     expect(send(key('Escape'))).toBe(true);
     expect(send(key('Escape'))).toBe(false);
+  });
+
+  it('拖出画布时取消这次拖动：在画布外松手后回来，移动不再预览，空白处的单击不交出范围', () => {
+    const { edit, send, ring, onChange, mapPointer } = setup();
+    edit.toggle();
+    expect(send(pointer('down', 100, 100))).toBe(true);
+    send(pointer('move', 150, 80));
+    send(pointer('leave', 150, 80));
+
+    expect(send(pointer('move', 200, 200))).toBe(false);
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+    mapPointer.value = { x: 200, y: 200 };
+    expect(edit.hint.value?.lines[0]).not.toBe('松开鼠标完成调整');
+    expect(send(pointer('down', 200, 200))).toBe(false);
+    expect(send(pointer('up', 200, 200))).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(ring()?.[0]).toEqual([118.1, 32.9]);
+  });
+
+  it('窗口失焦时取消这次拖动', () => {
+    const { edit, send, onChange } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('move', 150, 80));
+    window.dispatchEvent(new Event('blur'));
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+    expect(send(pointer('up', 150, 80))).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('视图不再就绪时取消这次拖动：恢复后空白处的单击不交出范围', async () => {
+    const { edit, send, onChange, view } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('move', 150, 80));
+    const ready = view.value;
+    view.value = null;
+    await nextTick();
+    view.value = ready;
+    await nextTick();
+    expect(send(pointer('move', 200, 200))).toBe(false);
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+    send(pointer('down', 200, 200));
+    send(pointer('up', 200, 200));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('丢了 up 的拖动在下一次按下时作废：按在空白处再松开不交出范围', () => {
+    const { edit, send, ring, onChange } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('move', 150, 80));
+    expect(send(pointer('down', 200, 200))).toBe(false);
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+    expect(send(pointer('up', 200, 200))).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(ring()?.[0]).toEqual([118.1, 32.9]);
+  });
+
+  it.each(['Delete', 'Backspace'])('拖动中按 %s：删掉选中的节点并取消这次拖动，松手不恢复删掉的节点', name => {
+    const { edit, send, ring, onChange } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('up', 100, 100));
+    send(pointer('down', 300, 100));
+    send(pointer('move', 320, 120));
+    expect(send(key(name))).toBe(true);
+    expect(onChange).toHaveBeenCalledOnce();
+    const removed = ring();
+    expect(removed).toHaveLength(4);
+    expect(removed).not.toContainEqual([118.1, 32.9]);
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+
+    expect(send(pointer('up', 320, 120))).toBe(false);
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(ring()).toEqual(removed);
+  });
+
+  it('拖动中点面板上的删除按钮（removeSelected）同样取消这次拖动', () => {
+    const { edit, send, ring, onChange } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('up', 100, 100));
+    send(pointer('down', 300, 100));
+    send(pointer('move', 320, 120));
+    expect(edit.removeSelected()).toBe('removed');
+    const removed = ring();
+    expect(send(pointer('up', 320, 120))).toBe(false);
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(ring()).toEqual(removed);
   });
 
   it('提示随悬停、拖动、选中变化；不在编辑时没有提示、没有手柄', () => {
