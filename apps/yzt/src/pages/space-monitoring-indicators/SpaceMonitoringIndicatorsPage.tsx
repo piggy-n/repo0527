@@ -44,7 +44,7 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
       root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
-    // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认省、市、县界都显示（同旧页面）
+    // 底图的标注和其他地图页共用偏好，底图选择按开关记住（ADR 0146）；行政区边界不记偏好，默认省、市、县界都显示（同旧页面）
     const basemap = useBasemap({ preferences: usePreferenceScope() });
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
