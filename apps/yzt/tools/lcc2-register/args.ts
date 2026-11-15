@@ -16,7 +16,7 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
   --no-fit               不拟合轨迹和网格之间的平移，只用人工修正（轨迹不可信时）
   --roam                 再给出步行的出生点（清单的 spawn），并每 20 米列一行轨迹的概要，用来挑路线段（ADR 0156 第 4 节）
   --spawn-at <米>        出生点从轨迹的这个米数往后找（扫描不是从入口开始时），带上它就是 --roam
-  --route <ID:名称:起-止>  轨迹上起～止米这一段做成一条路线（清单的 routes），可以写多次，带上它就是 --roam
+  --route <ID:名称:起-止>  轨迹上起～止米这一段做成一条路线（清单的 routes），可以写多次、ID 不能重复，带上它就是 --roam
   --plan <文件.svg>      再画一张平面图：地板、轨迹和每 20 米的米数（同概要）、出生点、路线，挑路线段和核对用；
                          相对路径放在 local/ 下（如 lcc2-plan/xz-gshm.svg），带上它就是 --roam
   --help、-h             显示这段说明
@@ -142,10 +142,15 @@ export function parseOptions(argv: readonly string[]): Options {
         options.spawnAt = finite(name, value());
         options.roam = true;
         break;
-      case '--route':
-        options.routes = [...options.routes, routeSpan(name, value())];
+      case '--route': {
+        const route = routeSpan(name, value());
+        if (options.routes.some(({ id }) => id === route.id)) {
+          throw new ToolError(`参数 ${name} 的 ID 重复：${route.id}（同一模型的路线 ID 不能重复）`);
+        }
+        options.routes = [...options.routes, route];
         options.roam = true;
         break;
+      }
       case '--plan':
         options.plan = planFile(name, value());
         options.roam = true;
