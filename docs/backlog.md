@@ -78,6 +78,7 @@
 - `prepareTileset` 对只有一个叶节点（根节点就是内容）的瓦片集，把整个瓦片集的误差整理成 0，当时的 Cesium 因此不加载它，3d-tiles-renderer 下没查过；真实数据没有这种瓦片集，测试夹具都多一层根节点（2026-11-05 发现）
 - `prepareTileset` 的误差和外部根节点规则（ADR 0148）按当时 Cesium 的瓦片选择定，3d-tiles-renderer 下逐条核对（Cesium 已移除，ADR 0153）
 - 没有页面测试的接线：页面把路线交给小地图、完整地图打开时空格不让路线走，只在真实页面上手动验证过
+- 三维状态回调不隔离监听方的异常：`SceneTilesetSync`、`SceneSplatSync`、`MapLibreScene` 的 `onStatus`，以及视图发出的 `scenestatuschange`、`roamstatuschange`；现在唯一的监听方是 map-vue 上下文的 `shallowRef` 赋值，没有触发路径。要处理时在视图的事件发射处统一隔离，不只包 `SceneSplatSync`（2026-11-14 审查）
 - 请求状态的底图合成项：正在加载时较早一段的失败也算进 loaded + failed，进度会超过 100%（影像源上一轮失败 3 张，之后只打开地名 6 张：明细一开始是"3/6 张"，到 5 张时"8/6 张"，状态栏可能 133%）。位置在 `shared/map/request-status/request-status.ts` 的 `mergedActivity`（failed 对全部数据源求和）、`requestRowText`、`requestSummary`；修法：加载中的进度只用最近一段的失败数，较早的失败只用来标"有失败"和结束后的张数（ADR 0158）
 
 ## 临时处理（联调或重构时清理）

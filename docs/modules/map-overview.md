@@ -20,7 +20,7 @@ packages/map-core      地图会话（样式、相机、当前工具）、视图
 packages/utils         LatestController、safeReporter、Worker 通信层
 ```
 
-三维是 MapLibre + Three.js（ADR 0147、0153）：`@mx/map-three`（见 [map-three.md](map-three.md)）放在 map-core 之上，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`；依赖方向由 lint 检查（ADR 0006）。二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在 app 注入的能力里关着（等页面重新设计），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three。
+三维是 MapLibre + Three.js（ADR 0147、0153）：`@mx/map-three`（见 [map-three.md](map-three.md)）放在 map-core 之上，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`；依赖方向由 lint 检查（ADR 0006）。二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层在三维里正常显示，支持点选、框选，app 原样注入地图能力、不再收窄（ADR 0157），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three。
 
 3D.1 起的 Cesium 引擎（`packages/map-cesium`）在 ADR 0147 以后保留为可选，ADR 0153 把它从 main 移除，代码在标签 `cesium-engine-2026-11`（[map-cesium.md](map-cesium.md)）。
 

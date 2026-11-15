@@ -196,7 +196,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "proj4": "^2.22.0",
     "sass-embedded": "^1.105.0",
     "sirv": "^3.0.2",
-    "typescript": "7.0.2",
+    "typescript": "catalog:",
     "vite": "^8.3.5",
     "vite-plugin-static-copy": "^4.1.1",
     "vitest": "^5.0.5"
@@ -279,7 +279,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
 | `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |
 | `@types/node` | 只给 `vite.config.ts` 提供 Node 类型 | — |
-| `typescript` | 提供 `tsc` 命令，和根目录保持同一精确版本 | — |
+| `typescript` | 提供 `tsc` 命令，和根目录一样引用 catalog 的精确版本 | — |
 
 `@types/node` 要跟随 Node 运行时的大版本（当前是 24），不要随 latest 升到 26。`pnpm deps:check` 会一直把它列为可升级，这是预期行为。
 
@@ -310,5 +310,5 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 - 升级 element-plus 后：检查它依赖的 `@vueuse/core` 版本，`apps/yzt` 的版本范围跟着调整
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
-- 升级 `typescript`：根目录和 `apps/yzt` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
+- 升级 `typescript`：只改 `pnpm-workspace.yaml` 的 catalog 一处，各包保留 `"typescript": "catalog:"`；安装后核对整个 workspace 解析到同一版本（`pnpm why typescript -r`）；同时评估 `oxlint-tsgolint` 是否要跟着升
 - 安装时出现 `ERR_PNPM_IGNORED_BUILDS`：在 `pnpm-workspace.yaml` 的 `allowBuilds` 里逐个决定，见 [pnpm-workspace.md](pnpm-workspace.md)
