@@ -93,6 +93,13 @@ describe('parseOptions', () => {
       { id: 'loop', name: '墓外环路', from: 300.5, to: 460 }
     ]);
     expect(() => parseOptions(['a.lcc2', '--route', '进墓室:15-250', ...DATUM])).toThrow('ID:名称:起-止');
+    // 同一模型的路线 ID 重复时清单校验不过，在读模型之前就拒绝
+    expect(() =>
+      parseOptions(['a.lcc2', ...DATUM, '--route', 'tomb:进墓室:100-280', '--route=tomb:出墓室:300-400'])
+    ).toThrow('ID 重复：tomb');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--route', 'tomb:进墓室:1-2', '--route', 'tomb:进墓室:1-2'])).toThrow(
+      'ID 重复：tomb'
+    );
     expect(() => parseOptions(['a.lcc2', '--roam=1', ...DATUM])).toThrow('不带值');
   });
 

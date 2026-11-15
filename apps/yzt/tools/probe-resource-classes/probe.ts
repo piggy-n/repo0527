@@ -481,7 +481,7 @@ async function enumerateField(tileset: string, field: string, seed: readonly str
   return { tileset, field, values, discovered, remaining, error } satisfies EnumeratedField;
 }
 
-/** 枚举字段的全部取值：抽样只能发现常见的，要确认图例列全了时用；已有探查缓存的从抽样见过的取值开始 */
+/** 枚举字段的全部取值：抽样只能发现常见的，要确认图例列全了时用；已有探查缓存的从抽样见过的取值开始，--refresh 时不用缓存 */
 export async function runEnumerate(
   targets: readonly EnumerateTarget[],
   options: ProbeOptions,
@@ -498,7 +498,7 @@ export async function runEnumerate(
   });
   const results: EnumeratedField[] = [];
   await eachLimit(jobs, options.concurrency, async ({ tileset, field }) => {
-    const cached = io.load(tileset);
+    const cached = options.refresh ? null : io.load(tileset);
     const samples = cached ? [cached.attributes.stats, ...cached.tiles.map(tile => tile.stats)] : [];
     const seed = Object.keys(mergeSamples(samples).fields[field]?.values ?? {});
     const result = await enumerateField(tileset, field, seed, options, io);

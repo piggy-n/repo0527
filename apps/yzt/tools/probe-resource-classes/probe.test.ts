@@ -677,6 +677,31 @@ describe('枚举字段的全部取值', () => {
     expect(result?.discovered).toStrictEqual(['', '111', "12'7"]);
   });
 
+  it('--refresh 不用缓存里的取值：后端已经没有的旧值不进结果', async () => {
+    const backend = enumerating();
+    const cached = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) }, fakeBackend().io, exactFieldsOf);
+    const probe = cached.probes[0];
+    if (!probe) {
+      throw new Error('没有探查结果');
+    }
+    const stats = sampleOf(repeat({ lin_zhong: 'gone' }, 3));
+    const saved = { ...probe, tileset: 'szy_kt_2024', attributes: { ...probe.attributes, stats }, tiles: [] };
+    let loads = 0;
+    const io: ProbeIO = {
+      ...backend.io,
+      load: () => {
+        loads += 1;
+        return saved;
+      }
+    };
+
+    const [result] = await runEnumerate(target, { ...OPTIONS, refresh: true }, io);
+
+    expect(loads).toBe(0);
+    expect(new URL(backend.requests[1] ?? '', 'http://x').searchParams.get('conditions')).toBe('"lin_zhong" IS NOT NULL');
+    expect(result).toMatchObject({ remaining: 0, values: ['', '111', "12'7", '233'] });
+  });
+
   it('接口报错、取不到新取值时写明没列全，不当作列全了', async () => {
     const failing = fakeBackend(url =>
       url.pathname === '/api/query/attr/page' ? Response.json({ success: false, code: 500, msg: '系统异常' }) : undefined
