@@ -276,7 +276,8 @@ export class MapLibreRoam implements RoamHost, Disposable {
    * 步行再按新的宽高比报告水平视场角。暂停时不放（容器可能是 0 尺寸），恢复时会放
    */
   onResize(): void {
-    if (this.#paused || !this.#takeover || !this.#eye) {
+    // 有视点就已经接管着：视点只在接管时设，还原时一起清掉
+    if (this.#paused || !this.#eye) {
       return;
     }
     this.setEye(this.#eye, this.#fovy);

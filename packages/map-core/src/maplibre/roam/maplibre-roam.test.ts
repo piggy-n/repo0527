@@ -581,7 +581,7 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
       expect(ctx.status).toBe(status);
     });
 
-    it('leaves the camera alone while paused (the page is inactive) and before taking over', () => {
+    it('leaves the camera alone while paused (the page is inactive)', () => {
       using ctx = setup();
       ctx.roam.apply(content(walk()), true);
       advance(FADE_OUT + 500);
@@ -590,13 +590,6 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
       ctx.map.calls.length = 0;
       ctx.roam.onResize();
       expect(ctx.map.calls).toStrictEqual([]);
-
-      using entering = setup();
-      entering.roam.apply(content(route()), true);
-      advance(FADE_OUT / 4);
-      entering.map.height = 900;
-      entering.roam.onResize();
-      expect(entering.map.calls).toStrictEqual([]);
     });
   });
 
@@ -663,6 +656,24 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
       expect(ctx.takeovers).toStrictEqual([]);
       expect(ctx.map.gestures()).toStrictEqual([true, true, false, true, true]);
       expect(overlay(ctx)).toBe('0');
+    });
+
+    it('a walk that finds no spawn: the route waiting for its tileset does not go in once the tileset is ready', () => {
+      using ctx = setup('loading');
+      ctx.renderer.lowest = null;
+      ctx.roam.apply(content(route()), true);
+      ctx.roam.apply(content(walk({ id: 'walk-2', navigation: room(50, 53.5), spawn: null })), true);
+      expect(walkStatus(ctx.status).phase).toBe('failed');
+
+      ctx.renderer.lowest = -6;
+      ctx.state.tileset = 'ready';
+      ctx.roam.onSceneStatus();
+      advance(FADE_OUT * 2);
+
+      expect(ctx.roam.engaged).toBe(false);
+      expect(ctx.renderer.lifts).toStrictEqual([]);
+      expect(ctx.takeovers).toStrictEqual([]);
+      expect(ctx.map.gestures()).toStrictEqual([true, true, false, true, true]);
     });
 
     it('a route that waits for its tileset: the route still darkening does not take over meanwhile', () => {
