@@ -102,7 +102,7 @@ interface Lift {
   readonly meters: number;
 }
 
-// 接管地图时改掉的设置，结束时还原；saved 是开始前的相机
+// 接管地图时改掉的设置，结束时还原；saved 是开始前的相机；lift 是按 liftTarget 这个模型算的
 interface Takeover {
   readonly saved: CameraState;
   readonly maxZoom: number;
@@ -111,6 +111,7 @@ interface Takeover {
   readonly clamped: boolean;
   readonly gestures: readonly RoamGesture[];
   lift: Lift | null;
+  liftTarget: string | null;
 }
 
 const sameLift = (a: Lift | null, b: Lift | null) => a?.modelId === b?.modelId && a?.meters === b?.meters;
@@ -270,6 +271,19 @@ export class MapLibreRoam implements RoamHost, Disposable {
     this.requestFrame();
   }
 
+  /**
+   * 画布尺寸变了：MapLibre 保持缩放、按新的高度挪了相机，静止时没有下一帧来纠正，这里按真实的视点放回去，
+   * 步行再按新的宽高比报告水平视场角。暂停时不放（容器可能是 0 尺寸），恢复时会放
+   */
+  onResize(): void {
+    // 有视点就已经接管着：视点只在接管时设，还原时一起清掉
+    if (this.#paused || !this.#eye) {
+      return;
+    }
+    this.setEye(this.#eye, this.#fovy);
+    this.requestFrame();
+  }
+
   setEye(eye: RoamEye, fovy: number): void {
     const takeover = this.#takeover;
     if (!takeover) {
@@ -336,6 +350,8 @@ export class MapLibreRoam implements RoamHost, Disposable {
   }
 
   #start(wanted: SceneRoam): void {
+    // 先作废上一次的进出、换手：步行的 prepare 找不到出生点时，旧的回调不能再接管地图
+    this.#cancelTransition();
     const renderer = this.#options.renderer();
     if (wanted.kind === 'route') {
       const path = new RoutePath(wanted.path);
@@ -398,7 +414,8 @@ export class MapLibreRoam implements RoamHost, Disposable {
    * 要抬高的瓦片集还在加载时等它就绪
    */
   #enter(place: () => void, target: () => RoamEye | null): void {
-    const lift = this.#wantedLift();
+    const liftTarget = this.#liftTarget();
+    const lift = this.#wantedLift(liftTarget);
     if (lift === 'wait') {
       this.#waiting = () => this.#enter(place, target);
       return;
@@ -423,21 +440,27 @@ export class MapLibreRoam implements RoamHost, Disposable {
         return;
       }
       this.#transition = null;
-      this.#takeOver(lift);
+      this.#takeOver(lift, liftTarget);
       place();
       this.#blackout.lighten();
     });
   }
 
+  // 作废还没完成的进出、换手和等瓦片集：取消黑幕的回调，黑幕淡出
+  #cancelTransition(): void {
+    this.#waiting = null;
+    this.#transition = null;
+    this.#blackout.lighten();
+  }
+
   // 结束：黑幕下去掉抬高、还原地图，相机换到地表以上；back 时亮起来以后飞回开始前的相机
   #exit(back: boolean): void {
-    this.#waiting = null;
     if (!this.#takeover) {
       // 还没进去（正在变黑、等瓦片集）：不再进去
-      this.#transition = null;
-      this.#blackout.lighten();
+      this.#cancelTransition();
       return;
     }
+    this.#waiting = null;
     const transition = {};
     this.#transition = transition;
     this.#blackout.darken(() => {
@@ -453,11 +476,16 @@ export class MapLibreRoam implements RoamHost, Disposable {
     });
   }
 
-  // 抬高量：漫游地下的模型（会话有 underground）时按它的包围盒算，同一次漫游期间不变；还在加载时等它。
+  // 要隔离或抬高的模型：漫游泼溅时是它，漫游地下的模型时是那个瓦片集，都没有时为 null
+  #liftTarget(): string | null {
+    return this.#isolatedSplat ?? this.#underground?.tilesetId ?? null;
+  }
+
+  // 抬高量：漫游地下的模型（会话有 underground）时按它的包围盒算，同一个模型的换手不变、换了模型重新算；还在加载时等它。
   // 漫游泼溅（会话有 isolatedSplat）时隔离它、不抬高
-  #wantedLift(): Lift | null | 'wait' {
+  #wantedLift(liftTarget: string | null): Lift | null | 'wait' {
     const takeover = this.#takeover;
-    if (takeover) {
+    if (takeover && takeover.liftTarget === liftTarget) {
       return takeover.lift;
     }
     if (this.#isolatedSplat !== null) {
@@ -476,7 +504,7 @@ export class MapLibreRoam implements RoamHost, Disposable {
   }
 
   // 接管地图：记下开始前的相机和设置，关掉手势，放宽缩放、俯仰上限，中心高度不夹到地面；抬高交给渲染器
-  #takeOver(lift: Lift | null): void {
+  #takeOver(lift: Lift | null, liftTarget: string | null): void {
     const map = this.#map;
     if (!this.#takeover) {
       const gestures = ROAM_GESTURES.filter(name => map[name].isEnabled());
@@ -487,7 +515,8 @@ export class MapLibreRoam implements RoamHost, Disposable {
         fov: map.getVerticalFieldOfView(),
         clamped: map.getCenterClampedToGround(),
         gestures,
-        lift: null
+        lift: null,
+        liftTarget: null
       };
       for (const name of gestures) {
         map[name].disable();
@@ -497,6 +526,7 @@ export class MapLibreRoam implements RoamHost, Disposable {
       map.setMaxPitch(ROAM_MAX_PITCH);
     }
     this.#takeover.lift = lift;
+    this.#takeover.liftTarget = liftTarget;
     this.#options.renderer()?.setLift(lift ? { ...lift, backdrop: BACKDROP } : null);
     this.#options.onTakeover({ engaged: true, lifted: lift !== null });
   }

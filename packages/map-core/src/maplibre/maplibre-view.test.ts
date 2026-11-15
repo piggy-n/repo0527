@@ -3152,6 +3152,30 @@ describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
     }
   });
 
+  it('the canvas grows taller during a paused route: the camera goes back to the eye before listeners hear of the resize', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      let height = 600;
+      Object.defineProperty(ctx.map.canvas, 'clientHeight', { configurable: true, get: () => height });
+      await vi.advanceTimersByTimeAsync(200);
+      const { zoom } = ctx.map.camera;
+      const heard: number[] = [];
+      ctx.view.on('resize', () => heard.push(ctx.map.camera.zoom));
+
+      // MapLibre 的尺寸监听：保持缩放、按新的高度挪相机，事件不带原始的 DOM 事件
+      height = 900;
+      ctx.map.resize();
+
+      // 相机到画布中心的距离和画布高度成正比：同一个视点的缩放大 log2(1.5)
+      expect(ctx.map.camera.zoom).toBeCloseTo(zoom + Math.log2(1.5), 9);
+      expect(heard).toStrictEqual([ctx.map.camera.zoom]);
+      expect(ctx.view.roamStatus).toMatchObject({ kind: 'route', id: 'route-1' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('the page paused and resumed in the middle of a roam: the limits stay with the roam, so the eye can still look level', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
     try {
