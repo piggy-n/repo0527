@@ -115,8 +115,9 @@ function silentPages(channel: PingChannel, ids: ReadonlySet<string>, timeoutMs: 
 }
 
 /**
- * 找出崩溃了的页面：别的页面留下的标记，问一次还在不在，超时没回答的算崩溃，马上删掉它的键并广播一次
- * （它其实还在、只是没答上时收到后补写）。没有别的页面的键时不问、不等。配置里的档位不同的旧标记直接删掉，不算；
+ * 找出崩溃了的页面：别的页面留下的标记，问一次还在不在，超时没回答、键还在的算崩溃，马上删掉它的键并广播一次
+ * （它其实还在、只是没答上时收到后补写）；等的时候键没了的不算。没有别的页面的键时不问、不等。
+ * 配置里的档位不同的旧标记直接删掉，不算；
  * 没读到配置的页面写的标记（configured 是 null）照样算
  */
 export async function findCrashed(
@@ -126,7 +127,7 @@ export async function findCrashed(
   configured: SceneTierSetting,
   timeoutMs: number
 ): Promise<CrashMarker[]> {
-  const others = new Map<string, CrashMarker>();
+  const others = new Set<string>();
   for (const key of store.keys(MARKER_PREFIX)) {
     const id = key.slice(MARKER_PREFIX.length);
     const marker = id === selfId ? undefined : store.get(key, markerSchema);
@@ -134,7 +135,7 @@ export async function findCrashed(
       continue;
     }
     if (marker.configured === null || marker.configured === configured) {
-      others.set(id, marker);
+      others.add(id);
     } else {
       store.remove(key);
     }
@@ -142,14 +143,17 @@ export async function findCrashed(
   if (others.size === 0) {
     return [];
   }
-  const silent = await silentPages(channel, new Set(others.keys()), timeoutMs);
+  const silent = await silentPages(channel, others, timeoutMs);
   const crashed: CrashMarker[] = [];
-  for (const [id, marker] of others) {
-    if (silent.has(id)) {
-      store.remove(MARKER_PREFIX + id);
-      post(channel, { kind: 'removed', id });
-      crashed.push(marker);
+  for (const id of silent) {
+    // 等回答期间键可能没了：那个页面正常离开时删了，或同时检查的页面已经认定并删了；都不算这次发现的崩溃
+    const marker = store.get(MARKER_PREFIX + id, markerSchema);
+    if (marker === undefined) {
+      continue;
     }
+    store.remove(MARKER_PREFIX + id);
+    post(channel, { kind: 'removed', id });
+    crashed.push(marker);
   }
   return crashed;
 }
