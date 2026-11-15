@@ -2,7 +2,7 @@ import { useEventListener } from '@vueuse/core';
 import type { LngLat, MapInputEvent, MapTool, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
 import type { MapContext } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
-import { computed, type ComputedRef, getCurrentScope, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
+import { computed, type ComputedRef, getCurrentScope, type ShallowRef, shallowReadonly, shallowRef, watch } from 'vue';
 import type { PointerHintContent } from '../pointer-hint/pointer-hint';
 import {
   editGroup,
@@ -88,8 +88,16 @@ export function useShapeEdit(
   const cancelDrag = () => {
     drag.value = null;
   };
-  // 在画布外松手收不到 up：离开画布、窗口失焦时取消这次拖动，同框选
+  // 在画布外松手、视图暂停时收不到 up：离开画布、窗口失焦、视图不再就绪时取消这次拖动，同框选
   useEventListener('blur', cancelDrag);
+  watch(
+    () => map.view.value === null,
+    gone => {
+      if (gone) {
+        cancelDrag();
+      }
+    }
+  );
 
   const reset = () => {
     cancelDrag();
@@ -172,6 +180,8 @@ export function useShapeEdit(
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
     switch (event.type) {
       case 'down': {
+        // 按下是新的操作：先作废丢了 up 的旧拖动，免得这次松手把它提交
+        cancelDrag();
         const handle = event.button === 0 ? hit(event.point, view) : null;
         const geometry = options.geometry();
         if (!handle || !geometry) {

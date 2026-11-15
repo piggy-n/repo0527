@@ -2,7 +2,7 @@ import type { MapInputEvent, MapPointerEvent, ScreenPoint, ToolView, ViewKind } 
 import type { MapViewport } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
 import { describe, expect, it, vi } from 'vitest';
-import { effectScope, ref, shallowRef } from 'vue';
+import { effectScope, nextTick, ref, shallowRef } from 'vue';
 import { required } from '../testing/required';
 import { EDIT_TOOL_ID, useShapeEdit } from './useShapeEdit';
 
@@ -71,7 +71,7 @@ function setup(initial: MultiPolygon | null = SQUARE) {
   const tool = edit.tools[EDIT_TOOL_ID];
   const send = (event: MapInputEvent, kind: ViewKind = '2d') => tool.handleInput?.(event, toolView(kind));
   const ring = () => geometry.value?.coordinates[0]?.[0];
-  return { edit, tool, send, geometry, ring, onChange, activeTool, mapPointer, scope };
+  return { edit, tool, send, geometry, ring, onChange, activeTool, mapPointer, view, scope };
 }
 
 describe('useShapeEdit', () => {
@@ -208,6 +208,35 @@ describe('useShapeEdit', () => {
     expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
     expect(send(pointer('up', 150, 80))).toBe(false);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('视图不再就绪时取消这次拖动：恢复后空白处的单击不交出范围', async () => {
+    const { edit, send, onChange, view } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('move', 150, 80));
+    const ready = view.value;
+    view.value = null;
+    await nextTick();
+    view.value = ready;
+    await nextTick();
+    expect(send(pointer('move', 200, 200))).toBe(false);
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+    send(pointer('down', 200, 200));
+    send(pointer('up', 200, 200));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('丢了 up 的拖动在下一次按下时作废：按在空白处再松开不交出范围', () => {
+    const { edit, send, ring, onChange } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('move', 150, 80));
+    expect(send(pointer('down', 200, 200))).toBe(false);
+    expect(JSON.stringify(edit.deriveGroup().sources)).not.toContain('"kind":"preview"');
+    expect(send(pointer('up', 200, 200))).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(ring()?.[0]).toEqual([118.1, 32.9]);
   });
 
   it.each(['Delete', 'Backspace'])('拖动中按 %s：删掉选中的节点并取消这次拖动，松手不恢复删掉的节点', name => {
