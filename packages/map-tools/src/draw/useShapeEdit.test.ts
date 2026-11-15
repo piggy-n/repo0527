@@ -239,6 +239,17 @@ describe('useShapeEdit', () => {
     expect(ring()?.[0]).toEqual([118.1, 32.9]);
   });
 
+  it('左键拖动中按下右键不打断拖动，左键松开照常交出范围', () => {
+    const { edit, send, ring, onChange } = setup();
+    edit.toggle();
+    send(pointer('down', 100, 100));
+    send(pointer('move', 150, 80));
+    expect(send({ ...pointer('down', 150, 80), button: 2 })).toBe(false);
+    expect(send(pointer('up', 150, 80))).toBe(true);
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(ring()?.[0]).toEqual([118.15, 32.92]);
+  });
+
   it.each(['Delete', 'Backspace'])('拖动中按 %s：删掉选中的节点并取消这次拖动，松手不恢复删掉的节点', name => {
     const { edit, send, ring, onChange } = setup();
     edit.toggle();

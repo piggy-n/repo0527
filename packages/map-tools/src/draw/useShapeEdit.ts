@@ -180,8 +180,10 @@ export function useShapeEdit(
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
     switch (event.type) {
       case 'down': {
-        // 按下是新的操作：先作废丢了 up 的旧拖动，免得这次松手把它提交
-        cancelDrag();
+        // 左键还按着时不会再来左键 down：再来一次说明上次的 up 丢了，先作废旧拖动；别的键不打断拖动
+        if (event.button === 0) {
+          cancelDrag();
+        }
         const handle = event.button === 0 ? hit(event.point, view) : null;
         const geometry = options.geometry();
         if (!handle || !geometry) {
