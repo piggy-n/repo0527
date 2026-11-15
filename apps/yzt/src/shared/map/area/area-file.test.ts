@@ -170,7 +170,20 @@ describe('readGeoJson', () => {
     const sliver: Position[] = [[118.9, 32.1], [118.901, 32.1], [118.902, 32.1], [118.9, 32.1]];
     const text = collection(polygon([[...ring, ring[0] ?? [0, 0]]]), polygon([sliver]));
     expect(() => readText(text)).not.toThrow();
-    expect(read(readText(text)).area.vertices).toBeLessThanOrEqual(ANALYSIS_VERTICES);
+    const { area, features } = read(readText(text));
+    expect(features).toBe(2);
+    expect(area.geometry.coordinates.map(rings => rings.length)).toEqual([1]);
+    expect(area.vertices).toBeLessThanOrEqual(ANALYSIS_VERTICES);
+  });
+
+  it.each([
+    ['单独的几何', { ...polygon(NANJING), crs: null }],
+    ['要素', { type: 'Feature', geometry: polygon(NANJING), crs: null }],
+    ['要素集合', { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: polygon(NANJING) }], crs: null }],
+    ['单独的几何', { ...polygon(NANJING), crs: { type: 'link', properties: { href: 'a.prj', type: 'proj4' } } }],
+    ['要素', { type: 'Feature', geometry: polygon(NANJING), crs: { type: 'link', properties: { href: 'a.prj' } } }]
+  ])('%s的 crs 为 null 或 link 时按没有声明读', (_, json) => {
+    expect(read(readText(JSON.stringify(json))).crs).toBe('WGS84 / CGCS2000 经纬度');
   });
 
   it('格式错误时说明大致的行号，不是 GeoJSON 时说明', () => {

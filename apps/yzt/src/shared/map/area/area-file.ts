@@ -74,7 +74,8 @@ const geometrySchema: z.ZodType<RawGeometry> = z.lazy(() =>
   })
 );
 const featureSchema = z.object({ type: z.literal('Feature'), geometry: geometrySchema.nullable() });
-const crsSchema = z.object({ properties: z.object({ name: z.string() }) }).optional();
+// null 表示不声明；link 等没有 name 的写法看不出坐标系，也按没有声明读，坐标仍按经纬度范围检查
+const crsSchema = z.object({ properties: z.object({ name: z.string().optional() }).optional() }).nullish();
 const geojsonSchema = z.union([
   z.object({ type: z.literal('FeatureCollection'), features: z.array(featureSchema), crs: crsSchema }),
   featureSchema.extend({ crs: crsSchema }),
@@ -158,7 +159,7 @@ export function readGeoJson(text: string, fileName: string): AreaFileResult {
     return problem('file-corrupt', `${fileName} 不是有效的 GeoJSON：缺少 type，或要素、几何的结构不正确`);
   }
   const value = parsed.data;
-  const crsName = value.crs?.properties.name;
+  const crsName = value.crs?.properties?.name;
   if (crsName !== undefined && !GEOGRAPHIC_CRS.test(crsName)) {
     return problem('crs', `文件声明的坐标系是 ${crsName}，请转换为 CGCS2000（EPSG:4490）或 WGS84（EPSG:4326）经纬度后上传`);
   }

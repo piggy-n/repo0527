@@ -27,11 +27,11 @@ function prepared(polygons: Position[][][]) {
   return result.area;
 }
 
-// 节点数为 count 的圆
-function circle(count: number): Position[] {
+// 节点数为 count、圆心经度为 lng 的圆
+function circle(count: number, lng = 118.8): Position[] {
   const ring: Position[] = Array.from({ length: count }, (_, index) => {
     const angle = (index / count) * Math.PI * 2;
-    return [118.8 + Math.cos(angle) * 0.05, 32 + Math.sin(angle) * 0.05];
+    return [lng + Math.cos(angle) * 0.05, 32 + Math.sin(angle) * 0.05];
   });
   return [...ring, ring[0] ?? [0, 0]];
 }
@@ -114,8 +114,17 @@ describe('prepareArea', () => {
   ])('%s时去掉它，照常使用', (_, polygons: Position[][][]) => {
     expect(() => prepareArea(polygons)).not.toThrow();
     const area = prepared(polygons);
-    expect(area.geometry.coordinates).toHaveLength(1);
+    expect(area.geometry.coordinates.map(rings => rings.length)).toEqual([1]);
     expect(area.vertices).toBeLessThanOrEqual(ANALYSIS_VERTICES);
+  });
+
+  it('带碎片、先整理再简化时，重叠的提示照常给出，简化的面积变化不含合并重叠', () => {
+    const overlapping = [[circle(4000)], [circle(4000, 118.85)]];
+    const overlap = '范围里有交叉的边或互相重叠的面，已合并为有效的面';
+    expect(prepared(overlapping).notices).toContain(overlap);
+    const { notices } = prepared([...overlapping, [collinear]]);
+    expect(notices).toContain(overlap);
+    expect(Number(/面积变化 ?(?:不到 )?([\d.]+)%/.exec(notices.join())?.[1])).toBeLessThan(1);
   });
 
   it('节点很多、全部在一条直线上时不能使用，不抛错', () => {

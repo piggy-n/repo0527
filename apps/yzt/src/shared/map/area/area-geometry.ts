@@ -194,6 +194,9 @@ function normalize(geometry: AreaGeometry): AreaGeometry | null {
     : normalized.geometry;
 }
 
+// 整理前后的面积（平方千米）差得多于 0.1% 时，算作合并了重叠或拆开了交叉
+const merged = (from: number, to: number): boolean => Math.abs(from - to) > Math.max(0.001, to * 0.001);
+
 // 1 度纬度约 111 千米，容差换成米给用户看
 const toleranceMeters = (degrees: number): number => Math.round(degrees * 111_000);
 
@@ -229,16 +232,19 @@ export function prepareArea(polygons: PolygonCoordinates, notices: readonly stri
   }
   const input: MultiPolygon = { type: 'MultiPolygon', coordinates: kept };
   // 先简化再整理：整理（求交）的耗时也和节点数成正比；简化可能带来的交叉由整理修正
+  // 简化前的几何：平时是 input，简化抛错时是先整理过的
+  let source: AreaGeometry = input;
   let simplified: AreaGeometry;
   let tolerance: number;
   try {
     [simplified, tolerance] = simplifyTo(input, ANALYSIS_VERTICES, MAX_TOLERANCE);
   } catch {
-    // turf 的 simplify 遇到节点都在一条直线上的环会抛错：先整理去掉这种环，和节点不多时的结果一致
+    // turf 的 simplify 遇到节点都在一条直线上的环会抛错：先整理去掉这种环（节点不多时求交同样去掉它），再简化
     const cleaned = normalize(input);
     if (!cleaned) {
       return problem('geometry-invalid', '范围没有面积：节点重合或在一条直线上');
     }
+    source = cleaned;
     [simplified, tolerance] = simplifyTo(cleaned, ANALYSIS_VERTICES, MAX_TOLERANCE);
   }
   const geometry = normalize(simplified);
@@ -251,7 +257,8 @@ export function prepareArea(polygons: PolygonCoordinates, notices: readonly stri
     next.push(`去掉了 ${dropped} 个不足 3 个节点的环`);
   }
   // 面积都按各个面相加（重叠的部分算两次）：简化前后比是简化的影响，整理前后比是合并了重叠、拆开了交叉
-  const before = geometryMeasure(input).area;
+  const inputArea = geometryMeasure(input).area;
+  const before = source === input ? inputArea : geometryMeasure(source).area;
   const reduced = tolerance > 0 ? geometryMeasure(simplified).area : before;
   if (tolerance > 0) {
     const change = (Math.abs(before - reduced) / before) * 100;
@@ -260,7 +267,8 @@ export function prepareArea(polygons: PolygonCoordinates, notices: readonly stri
         `${vertexCount(geometry).toLocaleString('zh-CN')} 个，面积变化${change < 0.01 ? '不到 0.01' : ` ${change.toFixed(2)}`}%`
     );
   }
-  if (Math.abs(reduced - area) > Math.max(0.001, area * 0.001)) {
+  // 退回时简化前先整理过一次，那次的合并也要算上
+  if (merged(inputArea, before) || merged(reduced, area)) {
     next.push('范围里有交叉的边或互相重叠的面，已合并为有效的面');
   }
   if (area < AREA_LIMITS.minArea) {
