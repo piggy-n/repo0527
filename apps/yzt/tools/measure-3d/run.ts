@@ -18,6 +18,7 @@ import type {
 import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBrowser, type MemorySample, sampleMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
+import { stringifyRedacted } from './redact.ts';
 import type { ProxyStats } from './server.ts';
 import type { QualityResult, RunResult, SettleResult, ZoomResult, ZoomStep } from './results.ts';
 import { runNotes } from './run-notes.ts';
@@ -438,7 +439,7 @@ async function runProfile(run: Run, ctx: RunContext, session: Session, result: R
   const stop = async (suffix: string) => {
     const endedAt = await call<number>(page, 'window.benchProbe.now()');
     const { profile } = (await cdp.send('Profiler.stop')) as unknown as { profile: CpuProfile };
-    writeFileSync(join(ctx.outDir, `profiles/${name}-${suffix}.cpuprofile`), ctx.redact(JSON.stringify(profile)));
+    writeFileSync(join(ctx.outDir, `profiles/${name}-${suffix}.cpuprofile`), stringifyRedacted(profile, ctx.redact));
     // longtask 的回调要到下一个任务才来
     await sleep(150);
     return summarizeProfile(profile, await call<LongTaskWindow[]>(page, 'window.benchProbe.longTaskWindows()'), endedAt);

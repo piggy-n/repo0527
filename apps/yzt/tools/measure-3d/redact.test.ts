@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { homedir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { createRedactor } from './redact.ts';
+import { createRedactor, stringifyRedacted } from './redact.ts';
 
 describe('createRedactor', () => {
   const redact = createRedactor('C:/repo', { username: 'alice', machine: 'desk-01' });
@@ -37,5 +37,33 @@ describe('createRedactor', () => {
 
   it('不给名字时用这台机器的', () => {
     expect(createRedactor('C:/repo')('C:/repo/x')).toBe('<仓库>/x');
+  });
+});
+
+describe('stringifyRedacted', () => {
+  const sample = { finished: false, stable: true, gpu: null, fps: [60, null] };
+
+  it.each(['true', 'false', 'null', 'TRUE', 'False', 'NULL'])('主机名是 %s 时 JSON 照样合法，只替换字符串里的', machine => {
+    const redact = createRedactor('C:/repo', { username: 'alice', machine });
+    const text = stringifyRedacted({ ...sample, note: `在 ${machine} 上跑` }, redact);
+    expect(JSON.parse(text)).toEqual({ ...sample, note: '在 <主机> 上跑' });
+  });
+
+  it('主机名和键名相同时键名不变', () => {
+    const redact = createRedactor('C:/repo', { username: 'alice', machine: 'stable' });
+    expect(JSON.parse(stringifyRedacted({ stable: true, note: 'stable' }, redact))).toEqual({
+      stable: true,
+      note: '<主机>'
+    });
+  });
+
+  it('字符串里的 Windows 路径、key 和主机名照样去掉，数字原样保留', () => {
+    const redact = createRedactor('C:\\repo', { username: '2333', machine: 'desk-01' });
+    const value = { url: 'C:\\repo\\local\\a.glb?tk=secret', t: 2333.2, nested: [{ who: 'desk-01' }] };
+    expect(JSON.parse(stringifyRedacted(value, redact, 1))).toEqual({
+      url: '<仓库>\\local\\a.glb?tk=***',
+      t: 2333.2,
+      nested: [{ who: '<主机>' }]
+    });
   });
 });
