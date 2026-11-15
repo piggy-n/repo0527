@@ -138,9 +138,8 @@ function serveFile(path: string, req: IncomingMessage, res: ServerResponse): voi
     res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
   }
   res.setHeader('Content-Length', range ? range.end - range.start + 1 : size);
-  createReadStream(path, range ?? {})
-    .on('error', () => res.destroy())
-    .pipe(res);
+  // pipeline：浏览器中途取消时关掉文件（pipe 只解开不关，句柄一直留着），读出错时断开响应
+  pipeline(createReadStream(path, range ?? {}), res).catch(() => undefined);
 }
 
 function handle({ files, modelsProxy, upstreamIdleMs = UPSTREAM_IDLE_MS }: Mounts, stats: { timeouts: number; failures: number }, req: IncomingMessage, res: ServerResponse): void {

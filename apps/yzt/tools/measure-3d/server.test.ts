@@ -1,12 +1,27 @@
 // @vitest-environment node
 import { EventEmitter, once } from 'node:events';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { type ReadStream, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, get, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byteRange, startServer, type StaticServer } from './server.ts';
+import { required } from '../../src/shared/testing/required.ts';
+
+// 记下静态服务打开的文件流，看取消以后有没有关掉
+const { readStreams } = vi.hoisted(() => ({ readStreams: [] as ReadStream[] }));
+vi.mock('node:fs', async (importOriginal: () => Promise<typeof import('node:fs')>) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    createReadStream: (...args: Parameters<typeof actual.createReadStream>) => {
+      const stream = actual.createReadStream(...args);
+      readStreams.push(stream);
+      return stream;
+    }
+  };
+});
 
 // 上游没有反应时最多等这么久：要等的事正常都在几毫秒内发生，等不到是断言失败，不是用例超时
 const WAIT_MS = 1500;
@@ -249,6 +264,7 @@ describe('byteRange', () => {
 
 describe('Range（泼溅库按段读 .sog，ADR 0149 第 3 节）', () => {
   const content = Buffer.from(Array.from({ length: 10000 }, (_, index) => index % 251));
+  const BIG = 32 * 1024 * 1024;
   let directory = '';
 
   afterEach(() => {
@@ -282,6 +298,29 @@ describe('Range（泼溅库按段读 .sog，ADR 0149 第 3 节）', () => {
     const response = await fetch(`${await serve()}/3dt/chunk.sog`, { headers: { range: 'bytes=20000-' } });
     expect(response.status).toBe(416);
     expect(response.headers.get('content-range')).toBe('bytes */10000');
+  });
+
+  it.each([
+    ['整个文件', undefined],
+    ['Range 要整个文件', `bytes=0-${BIG - 1}`]
+  ])('浏览器中途取消（%s）：文件流关掉，不留着句柄', async (_label, range) => {
+    directory = mkdtempSync(join(tmpdir(), 'measure-3d-range-'));
+    // 比套接字的缓冲大得多：取消时文件一定还没读完
+    writeFileSync(join(directory, 'big.sog'), Buffer.alloc(BIG));
+    const server = await startServer(await freePort(), { files: { '/3dt/': directory }, modelsProxy: null });
+    proxies.push(server);
+    const before = readStreams.length;
+    await new Promise<void>(resolve => {
+      const request = get(`${server.url}/3dt/big.sog`, { headers: range ? { range } : {} }, response => {
+        response.once('data', () => {
+          request.destroy();
+          resolve();
+        });
+      });
+      request.on('error', () => undefined);
+    });
+    const stream = required(readStreams[before], '静态服务打开的文件流');
+    expect(await until(() => stream.destroyed)).toBe(true);
   });
 
   it('经代理时 Range 转给上游，206 和 Content-Range 原样转回', async () => {
