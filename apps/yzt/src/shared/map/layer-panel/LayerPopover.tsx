@@ -4,7 +4,6 @@ import {
   defineComponent,
   nextTick,
   onBeforeUnmount,
-  onScopeDispose,
   type PropType,
   ref,
   type SlotsType,
@@ -121,12 +120,20 @@ export const LayerPopover = defineComponent({
     );
     // 外壳的布局多半是在它自己的尺寸监听回调里变的。盖在下段上时浮层的最大高度跟着变、内容跟着变高变矮，
     // 内容比外壳量的那层浅，同一轮送不到会报 ResizeObserver loop，所以等到下一帧再放；面板右边时最大高度只看视口，直接放
-    let frame = 0;
     watch(
       () => props.layout(),
-      async () => {
+      async (_, __, onCleanup) => {
+        // 布局又变了、卸载时这一轮作废，排下的那一帧也不再放
+        let stale = false;
+        let frame = 0;
+        onCleanup(() => {
+          stale = true;
+          cancelAnimationFrame(frame);
+        });
         await nextTick();
-        cancelAnimationFrame(frame);
+        if (stale) {
+          return;
+        }
         if (props.sheet) {
           frame = requestAnimationFrame(place);
         } else {
@@ -135,7 +142,6 @@ export const LayerPopover = defineComponent({
       },
       { flush: 'post' }
     );
-    onScopeDispose(() => cancelAnimationFrame(frame));
     useResizeObserver(content, () => place());
     useEventListener(window, 'resize', () => place());
     // 列表、目录滚动时箭头跟着行；在捕获阶段才收得到元素自己的滚动
