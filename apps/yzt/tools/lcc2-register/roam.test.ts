@@ -65,6 +65,18 @@ function along(route: readonly RoamPoint[]): { x: number; y: number }[] {
   return points;
 }
 
+// 路线上 x 处的地板和眼高（按前后两点插值，同 RoutePath）
+function routeAt(route: readonly RoamPoint[], x: number): { floor: number; eye: number } {
+  const next = route.findIndex(point => point.x >= x);
+  const a = route[next - 1];
+  const b = route[next];
+  if (!a || !b) {
+    throw new Error(`路线在 x ${x} 两边没有点`);
+  }
+  const t = (x - a.x) / (b.x - a.x);
+  return { floor: a.floor + (b.floor - a.floor) * t, eye: a.eye + (b.eye - a.eye) * t };
+}
+
 describe('routeOf', () => {
   it('贴地板、门槛按中位数滤掉；矮墓道里眼高 = 净空 - 0.2；直线抽稀成几个点', () => {
     const route = routeOf(trackOf(TRAJECTORY, GRID), 2, 18, GRID);
@@ -234,6 +246,70 @@ describe('routeOf', () => {
     }
     expect(eyeAt(6)).toBe(EYE_HEIGHT);
     expect(eyeAt(15)).toBe(EYE_HEIGHT);
+  });
+
+  it('扫描仪从台面上方掠过（连续几个点，中位数滤不掉）、高度没变：路线贴着旁边的地面', () => {
+    // x 6～7 一张 0.7 米高的台面，下面有地面；或者是 0.7 米高的实心台子，下面没有地面。扫描的人从旁边走过，扫描仪离地面 1.25 米不变
+    const table = buildFloorGrid([rectangle(0, 0, 12, 4, 0), rectangle(6, 0, 7, 4, 0.7)]);
+    const block = buildFloorGrid([rectangle(0, 0, 6, 4, 0), rectangle(6, 0, 7, 4, 0.7), rectangle(7, 0, 12, 4, 0)]);
+    for (const grid of [table, block]) {
+      const track = trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid);
+      // 轨迹照旧取脚下最高的一层
+      expect(track.find(({ point }) => point[0] >= 6.5)?.floor).toBeCloseTo(0.7, 6);
+      const route = routeOf(track, 1, 11, grid);
+      expect(route.map(({ floor }) => floor)).toStrictEqual(route.map(() => 0));
+      expect(route.map(({ eye }) => eye)).toStrictEqual(route.map(() => EYE_HEIGHT));
+    }
+  });
+
+  it('真台阶：形状和上面的实心台子一样，扫描的人走上去、扫描仪跟着升高，台阶照旧', () => {
+    const grid = buildFloorGrid([rectangle(0, 0, 6, 4, 0), rectangle(6, 0, 7, 4, 0.7), rectangle(7, 0, 12, 4, 0)]);
+    const track = trackOf(walk([{ from: [0, 2], to: [12, 2] }], x => (x >= 6 && x < 7 ? 0.7 : 0)), grid);
+    const route = routeOf(track, 1, 11, grid);
+    expect(routeAt(route, 6.5).floor).toBeCloseTo(0.7, 6);
+    expect(routeAt(route, 3).floor).toBe(0);
+    expect(routeAt(route, 9).floor).toBe(0);
+  });
+
+  it('蹲着扫的矮门：扫描仪贴着顶过去，门里的地板照旧，视点降到门楣下', () => {
+    // x 6～7 是一道矮门：门洞里是 0.4 米高的门槛石（下面没有地面），顶在 1.2 米；扫描的人弯腰过去，扫描仪离地面 1.0 米、离顶 0.2 米
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 6, 4, 0),
+      rectangle(6, 0, 7, 4, 0.4),
+      rectangle(7, 0, 12, 4, 0),
+      rectangle(6, 0, 7, 4, 1.2)
+    ]);
+    const track = trackOf(walk([{ from: [0, 2], to: [12, 2] }], x => (x >= 6 && x < 7 ? -0.25 : 0)), grid);
+    const route = routeOf(track, 1, 11, grid);
+    const door = routeAt(route, 6.5);
+    expect(door.floor).toBeCloseTo(0.4, 6);
+    expect(door.eye).toBeCloseTo(0.6, 6);
+    expect(routeAt(route, 3)).toStrictEqual({ floor: 0, eye: EYE_HEIGHT });
+  });
+
+  it('通道顶不高、扫描仪离顶 0.45 米照常拿着走，不算蹲着扫：实心台子上方照样贴回地面', () => {
+    // 通道顶 1.7 米；x 8～10 一块 0.7 米高的实心台子（下面没有地面），扫描仪离地 1.25 米从它上方过
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 8, 4, 0),
+      rectangle(8, 0, 10, 4, 0.7),
+      rectangle(10, 0, 18, 4, 0),
+      rectangle(0, 0, 18, 4, 1.7)
+    ]);
+    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [18, 2] }], () => 0), grid), 1, 17, grid);
+    expect(route.map(({ floor }) => floor)).toStrictEqual(route.map(() => 0));
+    expect(route.every(({ eye }) => Math.abs(eye - 1.5) < 1e-6)).toBe(true);
+  });
+
+  it('台面下面是比旁边高 0.15 米的台基：取离趋势最近的台基，不当成缺表面', () => {
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 6, 4, 0),
+      rectangle(6, 0, 7, 4, 0.15),
+      rectangle(6, 0, 7, 4, 0.7),
+      rectangle(7, 0, 12, 4, 0)
+    ]);
+    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid), 1, 11, grid);
+    expect(routeAt(route, 6.5).floor).toBeCloseTo(0.15, 6);
+    expect(routeAt(route, 3).floor).toBe(0);
   });
 
   it('中间脚下没有网格的按前后插值；段不在轨迹里、整段没有网格时报错', () => {

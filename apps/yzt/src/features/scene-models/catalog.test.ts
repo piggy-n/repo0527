@@ -142,7 +142,7 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     // 星海广场站三条，彭城广场（泼溅）三条、驮篮山1号两条、土山墓三条、龟山汉墓两条、东洞山楚王墓一条
     // （泼溅的路线取自扫描轨迹、拉直过，ADR 0156 第 4 节）
-    expect(lengths).toStrictEqual([125, 133, 58, 96, 196, 97, 211, 156, 47, 190, 155, 161, 163, 165]);
+    expect(lengths).toStrictEqual([125, 133, 58, 95, 193, 97, 207, 156, 47, 189, 153, 160, 161, 165]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
   });

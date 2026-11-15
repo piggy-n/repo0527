@@ -31,6 +31,12 @@ const STEP_OVER = 0.5;
 // 出生点：朝向取之后这么远（沿轨迹）那一点的方向，开头的小弯不算，净空至少这么高（矮通道里不出生）
 const SPAWN_LOOK = 8;
 const SPAWN_HEADROOM = 1.8;
+// steadyFloors 选路线地板用的距离和阈值（米），规则见 docs/commands.md 的 --roam
+const HOLD_REACH = 4;
+const HOLD_STEADY = 0.2;
+const TREND_REACH = 6;
+const TREND_GAP = 0.3;
+const CROUCH_HEADROOM = 0.25;
 
 /** 轨迹上的一个取样点：扫描仪的位置、从轨迹开头走过的米数、脚下的表面和头顶的表面（没有时 undefined） */
 export interface TrackSample {
@@ -48,8 +54,12 @@ export interface RoamPoint {
   readonly eye: number;
 }
 
+// 扫描仪下方能当脚下表面的各层（下方 FIT_WINDOW 米以内），从低到高
+const layersBelow = (grid: FloorGrid, [x, y, z]: Vec3) =>
+  floorsAt(grid, x, y).filter((height) => height <= z - FIT_WINDOW.min && height >= z - FIT_WINDOW.max);
+
 /**
- * 轨迹（网格的局部系）每 0.25 米取一个点，算累计的米数（三维）和脚下、头顶的表面。头顶是扫描仪上方的第一层表面，
+ * 轨迹（网格的局部系）每 0.25 米取一个点，算累计的米数（三维）和脚下、头顶的表面。脚下取最高的一层，头顶是扫描仪上方的第一层表面，
  * 原始轨迹（几厘米一个点）的每个点都看，归到最近的取样点：取样点之间的细横杆、门楣也算进去
  */
 export function trackOf(trajectory: readonly Vec3[], grid: FloorGrid): TrackSample[] {
@@ -69,13 +79,7 @@ export function trackOf(trajectory: readonly Vec3[], grid: FloorGrid): TrackSamp
       distance += Math.hypot(point[0] - previous[0], point[1] - previous[1], point[2] - previous[2]);
     }
     previous = point;
-    const [x, y, z] = point;
-    let floor: number | undefined;
-    for (const height of floorsAt(grid, x, y)) {
-      if (height <= z - FIT_WINDOW.min && height >= z - FIT_WINDOW.max) {
-        floor = height;
-      }
-    }
+    const floor = layersBelow(grid, point).at(-1);
     // 前后两个取样点之间各一半的原始点
     const from = i === 0 ? 0 : Math.ceil((indices[i - 1] + indices[i]) / 2);
     const to = i === samples.length - 1 ? trajectory.length - 1 : Math.floor((indices[i] + indices[i + 1]) / 2);
@@ -98,10 +102,74 @@ export const eyeAbove = (floor: number, ceiling: number | undefined) =>
 const windowAround = (values: readonly number[], i: number) =>
   values.slice(Math.max(0, i - WINDOW_HALF), i + WINDOW_HALF + 1);
 
+// 中位数（偶数个时取靠上的那个）
+const median = (values: readonly number[]) =>
+  values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)] ?? Number.NaN;
+
 // 窗口里的中位数
-function medianAround(values: readonly number[], i: number): number {
-  const sorted = windowAround(values, i).toSorted((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? Number.NaN;
+const medianAround = (values: readonly number[], i: number) => median(windowAround(values, i));
+
+/** 路线用的地板：扫描仪离地不平稳的点（从栏板、台面上方掠过）改取离前后地板趋势最近的一层，规则见 docs/commands.md 的 --roam */
+export function steadyFloors(track: readonly TrackSample[], grid: FloorGrid): (number | undefined)[] {
+  const holds = track.map(({ point, floor }) => (floor === undefined ? undefined : point[2] - floor));
+  const steady = track.map(({ distance }, i) => {
+    const hold = holds[i];
+    if (hold === undefined) {
+      return false;
+    }
+    const nearby: number[] = [];
+    for (let j = i; j >= 0 && distance - track[j].distance <= HOLD_REACH; j--) {
+      const value = holds[j];
+      if (value !== undefined) {
+        nearby.push(value);
+      }
+    }
+    for (let j = i + 1; j < track.length && track[j].distance - distance <= HOLD_REACH; j++) {
+      const value = holds[j];
+      if (value !== undefined) {
+        nearby.push(value);
+      }
+    }
+    return Math.abs(hold - median(nearby)) < HOLD_STEADY;
+  });
+  // 前后最近的平稳点，TREND_REACH 米以外的不算
+  const nearest = (i: number, step: 1 | -1) => {
+    for (let j = i + step; j >= 0 && j < track.length; j += step) {
+      if (Math.abs(track[j].distance - track[i].distance) > TREND_REACH) {
+        return undefined;
+      }
+      if (steady[j]) {
+        return track[j];
+      }
+    }
+    return undefined;
+  };
+  return track.map((sample, i) => {
+    if (steady[i]) {
+      return sample.floor;
+    }
+    const before = nearest(i, -1);
+    const after = nearest(i, 1);
+    let expected: number | undefined;
+    if (before?.floor !== undefined && after?.floor !== undefined) {
+      const t = (sample.distance - before.distance) / (after.distance - before.distance);
+      expected = before.floor + (after.floor - before.floor) * t;
+    } else {
+      expected = before?.floor ?? after?.floor;
+    }
+    if (expected === undefined) {
+      return sample.floor;
+    }
+    let layer: number | undefined;
+    for (const height of layersBelow(grid, sample.point)) {
+      if (layer === undefined || Math.abs(height - expected) < Math.abs(layer - expected)) {
+        layer = height;
+      }
+    }
+    const gap = layer === undefined ? Infinity : Math.abs(layer - expected);
+    const crouched = sample.ceiling !== undefined && sample.ceiling - sample.point[2] < CROUCH_HEADROOM;
+    return gap > TREND_GAP && !crouched ? undefined : layer;
+  });
 }
 
 // 点在线段 a→b 上的投影位置（0～1）和水平距离
@@ -310,15 +378,18 @@ function straighten(points: readonly RoamPoint[], grid: FloorGrid): RoamPoint[] 
 }
 
 /**
- * 轨迹上 from～to 米这一段做成路线：去掉两头脚下没有表面的点，中间的按前后插值；地板取中位数去抖，眼高按这个地板算、取前后的最小值，
- * 再拉直、抽稀（grid 是 trackOf 用的那份）。段不在轨迹范围里、有效的点不到两个时报错
+ * 轨迹上 from～to 米这一段做成路线：地板按扫描仪离地是否平稳选（steadyFloors），去掉两头脚下没有表面的点，中间的按前后插值；
+ * 地板取中位数去抖，眼高按这个地板算、取前后的最小值，再拉直、抽稀（grid 是 trackOf 用的那份）。段不在轨迹范围里、有效的点不到两个时报错
  */
 export function routeOf(track: readonly TrackSample[], from: number, to: number, grid: FloorGrid): RoamPoint[] {
   const total = track.at(-1)?.distance ?? 0;
   if (!(from >= 0 && to > from && to <= total + ROUTE_SPACING)) {
     throw new ToolError(`路线段 ${from}～${to} 米不在轨迹里（轨迹共 ${total.toFixed(1)} 米）`);
   }
-  const part = track.filter((sample) => sample.distance >= from && sample.distance <= to);
+  const chosen = steadyFloors(track, grid);
+  const part = track
+    .map((sample, i) => ({ ...sample, floor: chosen[i] }))
+    .filter((sample) => sample.distance >= from && sample.distance <= to);
   const first = part.findIndex((sample) => sample.floor !== undefined);
   const last = part.findLastIndex((sample) => sample.floor !== undefined);
   if (first === -1 || last <= first) {
