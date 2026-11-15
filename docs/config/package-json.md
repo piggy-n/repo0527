@@ -134,24 +134,34 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
+    "basemap:generate": "node tools/static-basemap/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "measure:3d": "node tools/measure-3d/cli.ts",
     "lcc2:register": "node tools/lcc2-register/cli.ts",
+    "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
+    "scope-files:generate": "node tools/scope-test-files/cli.ts",
+    "symbols:import": "node tools/symbol-defaults/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
-    "@element-plus/icons-vue": "^2.3.2",
-    "@maplibre/maplibre-gl-style-spec": "^26.4.4",
+    "@element-plus/icons-vue": "catalog:",
+    "@maplibre/maplibre-gl-style-spec": "catalog:",
     "@tanstack/vue-query": "^5.104.1",
     "@turf/bbox": "^7.4.0",
     "@turf/bbox-clip": "^7.4.0",
     "@turf/boolean-intersects": "^7.4.0",
-    "@turf/boolean-point-in-polygon": "^7.4.0",
+    "@turf/boolean-point-in-polygon": "catalog:",
     "@turf/intersect": "^7.4.0",
-    "@turf/simplify": "^7.4.0",
+    "@turf/simplify": "catalog:",
     "@vue/devtools-api": "^8.2.1",
-    "@vueuse/core": "^15.0.0",
+    "@vueuse/core": "catalog:",
     "@mx/icons": "workspace:*",
+    "@mx/map-core": "workspace:*",
+    "@mx/map-tools": "workspace:*",
+    "@mx/map-vue": "workspace:*",
+    "@mx/theme": "workspace:*",
+    "@mx/ui": "workspace:*",
+    "@mx/utils": "workspace:*",
     "axios": "^1.20.0",
     "core-js": "^3.50.0",
     "d3-force": "3.0.0",
@@ -160,46 +170,47 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "docx-preview": "0.4.1",
     "dompurify": "^3.4.17",
     "echarts": "^6.1.0",
-    "element-plus": "^2.14.6",
+    "element-plus": "catalog:",
     "fflate": "^0.8.3",
-    "geographiclib-geodesic": "^2.2.0",
+    "geographiclib-geodesic": "catalog:",
     "gsap": "3.13.0",
     "idb-keyval": "^6.3.0",
     "jwt-decode": "^4.0.0",
-    "maplibre-gl": "^6.12.0",
+    "maplibre-gl": "catalog:",
     "marked": "^18.1.1",
-    "nanoevents": "^10.0.0",
+    "nanoevents": "catalog:",
     "pinia": "^4.0.3",
     "shpjs": "^6.2.0",
     "sm-crypto-v2": "^1.15.1",
     "sortablejs": "^1.15.7",
     "three": "catalog:",
-    "vue": "^3.5.43",
+    "vue": "catalog:",
     "vue-router": "^5.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@mx/map-three": "workspace:*",
     "@types/d3-force": "3.0.10",
     "@types/d3-geo": "3.1.1",
     "@types/d3-polygon": "3.0.2",
-    "@types/geojson": "^7946.0.16",
-    "@types/node": "^24.19.0",
+    "@types/geojson": "catalog:",
+    "@types/node": "catalog:",
     "@types/sortablejs": "^1.15.9",
     "@types/three": "catalog:",
-    "@vitejs/plugin-vue-jsx": "^5.1.6",
-    "@vitest/browser-playwright": "^5.0.5",
-    "@vue/test-utils": "^2.5.1",
-    "jsdom": "^30.1.1",
+    "@vitejs/plugin-vue-jsx": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "jsdom": "catalog:",
     "msw": "^2.15.0",
     "opentype.js": "^2.0.0",
-    "playwright": "^1.64.0",
+    "playwright": "catalog:",
     "proj4": "^2.22.0",
-    "sass-embedded": "^1.105.0",
+    "sass-embedded": "catalog:",
     "sirv": "^3.0.2",
-    "typescript": "7.0.2",
-    "vite": "^8.3.5",
+    "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-static-copy": "^4.1.1",
-    "vitest": "^5.0.5"
+    "vitest": "catalog:"
   }
 }
 ```
@@ -279,7 +290,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
 | `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |
 | `@types/node` | 只给 `vite.config.ts` 提供 Node 类型 | — |
-| `typescript` | 提供 `tsc` 命令，和根目录保持同一精确版本 | — |
+| `typescript` | 提供 `tsc` 命令，和根目录一样引用 catalog 的精确版本 | — |
 
 `@types/node` 要跟随 Node 运行时的大版本（当前是 24），不要随 latest 升到 26。`pnpm deps:check` 会一直把它列为可升级，这是预期行为。
 
@@ -307,8 +318,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 ## 修改时的检查清单
 
 - 新增依赖前，先确认现有依赖里没有同类库（AGENTS.md）；再查 `pnpm-lock.yaml` 里是否已经有其他包间接依赖它，有的话优先选同一版本，避免打包两份
-- 升级 element-plus 后：检查它依赖的 `@vueuse/core` 版本，`apps/yzt` 的版本范围跟着调整
+- 升级 element-plus 后：检查它依赖的 `@vueuse/core` 版本，调整 `pnpm-workspace.yaml` catalog 里 `@vueuse/core` 的范围，各包保留 `catalog:`；安装后用 `pnpm why @vueuse/core -r` 确认只有一份
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
-- 升级 `typescript`：根目录和 `apps/yzt` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
+- 升级 `typescript`：只改 `pnpm-workspace.yaml` 的 catalog 一处，各包保留 `"typescript": "catalog:"`；安装后核对整个 workspace 解析到同一版本（`pnpm why typescript -r`）；同时评估 `oxlint-tsgolint` 是否要跟着升
 - 安装时出现 `ERR_PNPM_IGNORED_BUILDS`：在 `pnpm-workspace.yaml` 的 `allowBuilds` 里逐个决定，见 [pnpm-workspace.md](pnpm-workspace.md)
