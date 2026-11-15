@@ -78,7 +78,8 @@ const crsSchema = z.object({ properties: z.object({ name: z.string() }) }).optio
 const geojsonSchema = z.union([
   z.object({ type: z.literal('FeatureCollection'), features: z.array(featureSchema), crs: crsSchema }),
   featureSchema.extend({ crs: crsSchema }),
-  geometrySchema
+  // geometrySchema 是 lazy 的，不能 extend；只在根级加 crs，嵌套的几何不需要
+  geometrySchema.and(z.object({ crs: crsSchema }))
 ]);
 
 /** 收集到的面和忽略的要素 */
@@ -138,7 +139,7 @@ function jsonErrorLine(text: string, error: unknown): string {
   return at === undefined ? '' : `，第 ${at} 行附近有格式错误`;
 }
 
-// GeoJSON 规定用 WGS84 经纬度；旧版的 crs 成员写了别的坐标系时不读
+// GeoJSON 规定用 WGS84 经纬度；旧版的 crs 成员（要素集合、要素、单独的几何都可能带）写了别的坐标系时不读
 const GEOGRAPHIC_CRS = /CRS84|EPSG:{1,2}(4326|4490)$/i;
 
 /** 读 GeoJSON 的文字 */
@@ -157,7 +158,7 @@ export function readGeoJson(text: string, fileName: string): AreaFileResult {
     return problem('file-corrupt', `${fileName} 不是有效的 GeoJSON：缺少 type，或要素、几何的结构不正确`);
   }
   const value = parsed.data;
-  const crsName = 'crs' in value ? value.crs?.properties.name : undefined;
+  const crsName = value.crs?.properties.name;
   if (crsName !== undefined && !GEOGRAPHIC_CRS.test(crsName)) {
     return problem('crs', `文件声明的坐标系是 ${crsName}，请转换为 CGCS2000（EPSG:4490）或 WGS84（EPSG:4326）经纬度后上传`);
   }

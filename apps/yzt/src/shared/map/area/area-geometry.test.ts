@@ -27,6 +27,15 @@ function prepared(polygons: Position[][][]) {
   return result.area;
 }
 
+// 节点数为 count 的圆
+function circle(count: number): Position[] {
+  const ring: Position[] = Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+    return [118.8 + Math.cos(angle) * 0.05, 32 + Math.sin(angle) * 0.05];
+  });
+  return [...ring, ring[0] ?? [0, 0]];
+}
+
 describe('prepareArea', () => {
   it('整理成 MultiPolygon，算出面积和节点数', () => {
     const area = prepared([[square(118.8, 32)]]);
@@ -92,6 +101,28 @@ describe('prepareArea', () => {
     expect(area.vertices).toBeLessThanOrEqual(ANALYSIS_VERTICES);
     expect(area.notices).toHaveLength(1);
     expect(area.notices[0]).toMatch(/^范围有 20,000 个节点，分析时按约 \d+ 米的精度简化为 [\d,]+ 个，面积变化(不到 0\.01| 0\.\d\d)%$/);
+  });
+
+  // turf 的 simplify 遇到节点都在一条直线上的环会抛错；节点不多时这种环由求交去掉，两种情况结果要一致
+  const collinear: Position[] = [[118.9, 32.1], [118.901, 32.1], [118.902, 32.1], [118.9, 32.1]];
+  const collinearHole: Position[] = [[118.8, 32], [118.801, 32], [118.802, 32], [118.8, 32]];
+
+  it.each([
+    ['节点很多的面带节点都在一条直线上的碎片面', [[circle(6000)], [collinear]]],
+    ['节点很多的面带节点都在一条直线上的洞', [[circle(6000), collinearHole]]],
+    ['节点不多的面带同样的碎片面', [[circle(4000)], [collinear]]]
+  ])('%s时去掉它，照常使用', (_, polygons: Position[][][]) => {
+    expect(() => prepareArea(polygons)).not.toThrow();
+    const area = prepared(polygons);
+    expect(area.geometry.coordinates).toHaveLength(1);
+    expect(area.vertices).toBeLessThanOrEqual(ANALYSIS_VERTICES);
+  });
+
+  it('节点很多、全部在一条直线上时不能使用，不抛错', () => {
+    const line: Position[] = Array.from({ length: ANALYSIS_VERTICES + 1 }, (_, index) => [118.8 + index * 1e-6, 32]);
+    const polygons = [[[...line, [118.8, 32]]]];
+    expect(() => prepareArea(polygons)).not.toThrow();
+    expect(prepareArea(polygons)).toMatchObject({ ok: false, problem: { code: 'geometry-invalid' } });
   });
 
   it('缩略图的轮廓不超过 400 个节点', () => {

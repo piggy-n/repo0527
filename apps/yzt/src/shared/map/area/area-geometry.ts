@@ -182,6 +182,18 @@ function simplifyTo(geometry: AreaGeometry, limit: number, maxTolerance: number)
   return [result, used];
 }
 
+// 自己和自己求交得到有效的面；没有面积时返回 null
+function normalize(geometry: AreaGeometry): AreaGeometry | null {
+  const feature = { type: 'Feature' as const, properties: {}, geometry };
+  const normalized = intersect({ type: 'FeatureCollection', features: [feature, feature] });
+  if (!normalized) {
+    return null;
+  }
+  return normalized.geometry.type === 'Polygon'
+    ? { type: 'MultiPolygon', coordinates: [normalized.geometry.coordinates] }
+    : normalized.geometry;
+}
+
 // 1 度纬度约 111 千米，容差换成米给用户看
 const toleranceMeters = (degrees: number): number => Math.round(degrees * 111_000);
 
@@ -217,16 +229,22 @@ export function prepareArea(polygons: PolygonCoordinates, notices: readonly stri
   }
   const input: MultiPolygon = { type: 'MultiPolygon', coordinates: kept };
   // 先简化再整理：整理（求交）的耗时也和节点数成正比；简化可能带来的交叉由整理修正
-  const [simplified, tolerance] = simplifyTo(input, ANALYSIS_VERTICES, MAX_TOLERANCE);
-  const feature = { type: 'Feature' as const, properties: {}, geometry: simplified };
-  const normalized = intersect({ type: 'FeatureCollection', features: [feature, feature] });
-  if (!normalized) {
+  let simplified: AreaGeometry;
+  let tolerance: number;
+  try {
+    [simplified, tolerance] = simplifyTo(input, ANALYSIS_VERTICES, MAX_TOLERANCE);
+  } catch {
+    // turf 的 simplify 遇到节点都在一条直线上的环会抛错：先整理去掉这种环，和节点不多时的结果一致
+    const cleaned = normalize(input);
+    if (!cleaned) {
+      return problem('geometry-invalid', '范围没有面积：节点重合或在一条直线上');
+    }
+    [simplified, tolerance] = simplifyTo(cleaned, ANALYSIS_VERTICES, MAX_TOLERANCE);
+  }
+  const geometry = normalize(simplified);
+  if (!geometry) {
     return problem('geometry-invalid', '范围没有面积：节点重合或在一条直线上');
   }
-  const geometry: AreaGeometry =
-    normalized.geometry.type === 'Polygon'
-      ? { type: 'MultiPolygon', coordinates: [normalized.geometry.coordinates] }
-      : normalized.geometry;
   const { area } = geometryMeasure(geometry);
   const next = [...notices];
   if (dropped > 0) {
