@@ -31,14 +31,12 @@ const STEP_OVER = 0.5;
 // 出生点：朝向取之后这么远（沿轨迹）那一点的方向，开头的小弯不算，净空至少这么高（矮通道里不出生）
 const SPAWN_LOOK = 8;
 const SPAWN_HEADROOM = 1.8;
-// 路线的地板按扫描仪离地是否平稳选（steadyFloors）：前后这么多米的离地取中位数，相差不到 HOLD_STEADY 米的点算平稳；
-// 不平稳的点按前后 TREND_REACH 米内平稳的点插值出该在的地板，最近的一层差 TREND_GAP 米以上的当成脚下没有表面，
-// 扫描仪上方 CROUCH_HEADROOM 米内有顶的（蹲着扫矮门）除外
+// steadyFloors 选路线地板用的距离和阈值（米），规则见 docs/commands.md 的 --roam
 const HOLD_REACH = 4;
 const HOLD_STEADY = 0.2;
 const TREND_REACH = 6;
 const TREND_GAP = 0.3;
-const CROUCH_HEADROOM = 0.5;
+const CROUCH_HEADROOM = 0.25;
 
 /** 轨迹上的一个取样点：扫描仪的位置、从轨迹开头走过的米数、脚下的表面和头顶的表面（没有时 undefined） */
 export interface TrackSample {
@@ -105,18 +103,13 @@ const windowAround = (values: readonly number[], i: number) =>
   values.slice(Math.max(0, i - WINDOW_HALF), i + WINDOW_HALF + 1);
 
 // 中位数（偶数个时取靠上的那个）
-const median = (values: readonly number[]) => values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)] ?? Number.NaN;
+const median = (values: readonly number[]) =>
+  values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)] ?? Number.NaN;
 
 // 窗口里的中位数
 const medianAround = (values: readonly number[], i: number) => median(windowAround(values, i));
 
-/**
- * 路线用的地板（ADR 0156 第 4 节）：trackOf 取脚下最高的一层，扫描仪从栏板、台面、展柜上方掠过时那是它们的顶，人站在旁边的地上，
- * 扫描仪不跟着升高，离地突然变小（连续几个点的，routeOf 的中位数滤不掉）。离地和前后 HOLD_REACH 米离地的中位数相差不到
- * HOLD_STEADY 的点平稳，地板不动：真台阶、楼梯上扫描仪跟着升降。别的点按前后 TREND_REACH 米内最近的平稳点沿米数插值出该在的地板，
- * 取脚下离它最近的一层；最近的一层也差 TREND_GAP 以上，而且扫描仪上方 CROUCH_HEADROOM 米内没有顶的（蹲着扫矮门时扫描仪贴着顶），
- * 当成脚下没有表面，由 routeOf 按前后插值。附近都没有平稳点的照旧
- */
+/** 路线用的地板：扫描仪离地不平稳的点（从栏板、台面上方掠过）改取离前后地板趋势最近的一层，规则见 docs/commands.md 的 --roam */
 export function steadyFloors(track: readonly TrackSample[], grid: FloorGrid): (number | undefined)[] {
   const holds = track.map(({ point, floor }) => (floor === undefined ? undefined : point[2] - floor));
   const steady = track.map(({ distance }, i) => {
@@ -159,8 +152,8 @@ export function steadyFloors(track: readonly TrackSample[], grid: FloorGrid): (n
     const after = nearest(i, 1);
     let expected: number | undefined;
     if (before?.floor !== undefined && after?.floor !== undefined) {
-      expected =
-        before.floor + ((after.floor - before.floor) * (sample.distance - before.distance)) / (after.distance - before.distance);
+      const t = (sample.distance - before.distance) / (after.distance - before.distance);
+      expected = before.floor + (after.floor - before.floor) * t;
     } else {
       expected = before?.floor ?? after?.floor;
     }

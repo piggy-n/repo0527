@@ -287,6 +287,31 @@ describe('routeOf', () => {
     expect(routeAt(route, 3)).toStrictEqual({ floor: 0, eye: EYE_HEIGHT });
   });
 
+  it('通道顶不高、扫描仪离顶 0.45 米照常拿着走，不算蹲着扫：实心台子上方照样贴回地面', () => {
+    // 通道顶 1.7 米；x 8～10 一块 0.7 米高的实心台子（下面没有地面），扫描仪离地 1.25 米从它上方过
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 8, 4, 0),
+      rectangle(8, 0, 10, 4, 0.7),
+      rectangle(10, 0, 18, 4, 0),
+      rectangle(0, 0, 18, 4, 1.7)
+    ]);
+    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [18, 2] }], () => 0), grid), 1, 17, grid);
+    expect(route.map(({ floor }) => floor)).toStrictEqual(route.map(() => 0));
+    expect(route.every(({ eye }) => Math.abs(eye - 1.5) < 1e-6)).toBe(true);
+  });
+
+  it('台面下面是比旁边高 0.15 米的台基：取离趋势最近的台基，不当成缺表面', () => {
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 6, 4, 0),
+      rectangle(6, 0, 7, 4, 0.15),
+      rectangle(6, 0, 7, 4, 0.7),
+      rectangle(7, 0, 12, 4, 0)
+    ]);
+    const route = routeOf(trackOf(walk([{ from: [0, 2], to: [12, 2] }], () => 0), grid), 1, 11, grid);
+    expect(routeAt(route, 6.5).floor).toBeCloseTo(0.15, 6);
+    expect(routeAt(route, 3).floor).toBe(0);
+  });
+
   it('中间脚下没有网格的按前后插值；段不在轨迹里、整段没有网格时报错', () => {
     // 地面在 x 8～9 断开，在 x 12 以后高 0.4 米
     const grid = buildFloorGrid([
