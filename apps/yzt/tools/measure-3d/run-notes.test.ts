@@ -25,12 +25,23 @@ describe('runNotes', () => {
   });
 });
 
+const LONG_TASKS = {
+  count: 0,
+  maxMs: 0,
+  totalMs: 0,
+  over100: 0,
+  over200: 0,
+  over500: 0,
+  contextMs: 0,
+  maxWithoutContextMs: 0
+};
+
 // 说明只看稳定没有，读数用不上
 const step = (stable: boolean): ZoomStep => ({
   settle: {
     stable,
     ms: 4200,
-    longTasks: { count: 0, maxMs: 0, totalMs: 0, over100: 0, over200: 0, over500: 0, contextMs: 0, maxWithoutContextMs: 0 },
+    longTasks: LONG_TASKS,
     trace: []
   },
   at: {} as BenchStats,

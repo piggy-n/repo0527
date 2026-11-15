@@ -46,6 +46,9 @@ describe('stringifyRedacted', () => {
   it.each(['true', 'false', 'null', 'TRUE', 'False', 'NULL'])('主机名是 %s 时 JSON 照样合法，只替换字符串里的', machine => {
     const redact = createRedactor('C:/repo', { username: 'alice', machine });
     const text = stringifyRedacted({ ...sample, note: `在 ${machine} 上跑` }, redact);
+    expect(() => {
+      JSON.parse(text);
+    }).not.toThrow();
     expect(JSON.parse(text)).toEqual({ ...sample, note: '在 <主机> 上跑' });
   });
 

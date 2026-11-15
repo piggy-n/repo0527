@@ -139,7 +139,12 @@ const zoomRun = (
   zoomedRaised = { raisedFull: 0, raisedPredicted: 7 },
   unsettled?: 'zoomed' | 'nudged'
 ): RunResult => {
-  const settleOf = (step: 'zoomed' | 'nudged') => ({ stable: unsettled !== step, ms: 4200, longTasks: LONG_TASKS, trace: [] });
+  const settleOf = (step: 'zoomed' | 'nudged') => ({
+    stable: unsettled !== step,
+    ms: 4200,
+    longTasks: LONG_TASKS,
+    trace: []
+  });
   const raised = (raisedPredicted: number) => ({ ...stats(null).budget, raisedPredicted });
   return {
     id: `oblique-z19/${TIER}/zoom`,
@@ -500,7 +505,8 @@ describe('有瓦片集场景的报告', () => {
     expect(nudged).toContain('| 放大后按估计放宽锁粗了吗 | 算不出（移开再移回以后没等到稳定） |');
     expect(nudged).toContain('| 移开再移回补齐（秒） | 没稳定（等了 4.2） |');
     expect(nudged).toContain('| 移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增） | 16.0，没锁，0 / 0 |');
-    const zoomed = verdictOf(zoomRun(12, 8, undefined, 'zoomed'));
+    // 放大以后没稳定：不做移开再移回（run.ts 的 runZoom），移回没有读数
+    const zoomed = verdictOf(zoomRun(12, null, undefined, 'zoomed'));
     expect(zoomed).toContain('| 放大后按估计放宽锁粗了吗 | 算不出（放大以后没等到稳定） |');
     expect(zoomed).toContain('| 放大后补齐（秒） | 没稳定（等了 4.2） |');
     expect(verdictOf(zoomRun(12, 8))).toContain('| 移开再移回补齐（秒） | 4.2 |');
