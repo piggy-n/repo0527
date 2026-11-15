@@ -1,7 +1,7 @@
 import type { BenchStats, BudgetReadings, DetailReadings, LoadPeak, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, QualityResult, RunResult, RunStatus, ShotPair, ZoomResult, ZoomStep } from './results.ts';
-import { modelName } from './run-notes.ts';
+import { modelName, zoomUnsettled } from './run-notes.ts';
 import { DEFAULT_VARIANT } from './scenes.ts';
 import type { SharpnessComparison } from './sharpness.ts';
 import { allPassed, type CheckRow, fillSampleAt, MACHINE_DRIFT_RATIO, machineDrift, median, sceneChecks } from './verdict.ts';
@@ -436,13 +436,17 @@ export const ZOOM_COARSER_RATIO = 1.05;
 /**
  * 放大后有没有按估计锁粗：estimate 是同一个相机放大后的屏幕误差比移回来的高 5% 以上，而且放大这一步新增了估计放宽；
  * coarser 是粗了，但这一步没有估计放宽（装满的放宽、停在 97% 到上限之间不收紧、相机怎么过来的，都会让稳定值不同）；
- * same 是差不到 5%。放大、移回没有读数时为 null
+ * same 是差不到 5%；unsettled 是有一步等到超时也没稳定，读数不能比。放大、移回没有读数时为 null
  */
-export type ZoomVerdict = 'estimate' | 'coarser' | 'same';
+export type ZoomVerdict = 'estimate' | 'coarser' | 'same' | 'unsettled';
 
 export function zoomVerdict(zoom: ZoomResult | undefined): ZoomVerdict | null {
   const zoomed = zoom?.zoomed;
   const nudged = zoom?.nudged;
+  // 放大以后没稳定时不做移开再移回（run.ts 的 runZoom），移回没有读数：先看稳定没有
+  if (zoomUnsettled(zoom)) {
+    return 'unsettled';
+  }
   if (!zoom || !zoomed || !nudged) {
     return null;
   }
@@ -452,7 +456,7 @@ export function zoomVerdict(zoom: ZoomResult | undefined): ZoomVerdict | null {
   return zoomed.at.budget.raisedPredicted > zoom.before.budget.raisedPredicted ? 'estimate' : 'coarser';
 }
 
-const ZOOM_VERDICT: Readonly<Record<ZoomVerdict, string>> = {
+const ZOOM_VERDICT: Readonly<Record<Exclude<ZoomVerdict, 'unsettled'>, string>> = {
   estimate: '**是：放大这一步按估计放宽了，比移开再移回的粗**',
   coarser: '比移开再移回的粗，但放大这一步没有按估计放宽：不是估计的问题，看"放宽的帧 装满"和需求',
   same: '否'
@@ -460,7 +464,22 @@ const ZOOM_VERDICT: Readonly<Record<ZoomVerdict, string>> = {
 
 const verdictCell = (run: RunResult) => {
   const verdict = zoomVerdict(run.zoom);
-  return verdict === null ? '算不出（放大或移回没有读数）' : ZOOM_VERDICT[verdict];
+  if (verdict === null) {
+    return '算不出（放大或移回没有读数）';
+  }
+  if (verdict === 'unsettled') {
+    return `算不出（${run.zoom?.zoomed?.settle.stable === false ? '放大以后' : '移开再移回以后'}没等到稳定）`;
+  }
+  return ZOOM_VERDICT[verdict];
+};
+
+// 这一步从相机停下到稳定的秒数；等到超时也没稳定时写出等了多久
+const settleCell = (step: ZoomStep | null | undefined) => {
+  if (!step) {
+    return '—';
+  }
+  const seconds = number(step.settle.ms / 1000);
+  return step.settle.stable ? seconds : `没稳定（等了 ${seconds}）`;
 };
 
 const zoomRunOf = (results: MeasureResults, scene: string, variant: string) =>
@@ -481,10 +500,11 @@ const budgetReading = (at: BenchStats | undefined) =>
 const ZOOM_METRICS: readonly (readonly [string, (run: RunResult) => string])[] = [
   ['状态', run => STATUS[run.status]],
   ['首屏：屏幕误差，锁定，放宽的帧 装满 / 估计（加载到稳定）', run => zoomReading(run.zoom?.before, undefined)],
-  ['放大后补齐（秒）', run => number((run.zoom?.zoomed?.settle.ms ?? Number.NaN) / 1000)],
+  ['放大后补齐（秒）', run => settleCell(run.zoom?.zoomed)],
   ['放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增）', run => zoomReading(run.zoom?.zoomed?.at, run.zoom?.before)],
   ['放大后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.zoomed?.at.detail)],
   ['放大后：需求 / 缓存上限 / 缓存（MB）', run => budgetReading(run.zoom?.zoomed?.at)],
+  ['移开再移回补齐（秒）', run => settleCell(run.zoom?.nudged)],
   ['移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增）', run => zoomReading(run.zoom?.nudged?.at, run.zoom?.zoomed?.at)],
   ['移开再移回：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.nudged?.at.detail)],
   ['放大后按估计放宽锁粗了吗', verdictCell]
@@ -825,8 +845,9 @@ ${pairImages(pair, 'h4', '产品默认值', '产品默认值', '这一档')}`;
   return `<h3>和产品默认值比（同一相机）</h3>\n${body}`;
 }
 
-// 定位后放大一级的截图说明：屏幕误差和锁定
-const zoomCaption = (title: string, step: ZoomStep) => `${title}：屏幕误差 ${number(step.at.errorTarget)}${step.at.locked ? '，锁定' : ''}`;
+// 定位后放大一级的截图说明：屏幕误差和锁定，没稳定的写出来
+const zoomCaption = (title: string, step: ZoomStep) =>
+  `${title}：屏幕误差 ${number(step.at.errorTarget)}${step.at.locked ? '，锁定' : ''}${step.settle.stable ? '' : '，没等到稳定'}`;
 
 /** quality.html：每个场景每个跑了画质的方案一节，飞行前后的截图，缓存上限的各档再和产品默认值比 */
 export function renderQualityPage(results: MeasureResults): string {
@@ -876,7 +897,9 @@ ${versusDefaultPart(own.shots, own.status, fallback, compared?.versusDefault ?? 
   const zoomPart =
     zoomSections.length > 0
       ? `<h1>定位后放大一级</h1>
-<p>同一个相机：左边是放大一级后稳定的，右边是移开又移回后稳定的。左边更糊时看 report.md 的"放大后按估计放宽锁粗了吗"：放大这一步有"估计"的放宽才是按估计锁粗了；只有"装满"的放宽或者没有放宽的，不是估计的问题。</p>
+<p>同一个相机：左边是放大一级后稳定的，右边是移开又移回后稳定的；
+说明里写着"没等到稳定"的那张不是稳定后的，不比较。
+左边更糊时看 report.md 的"放大后按估计放宽锁粗了吗"：放大这一步有"估计"的放宽才是按估计锁粗了；只有"装满"的放宽或者没有放宽的，不是估计的问题。</p>
 ${zoomSections.join('\n')}`
       : '';
   return `<!doctype html>

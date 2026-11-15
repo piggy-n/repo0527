@@ -1,4 +1,4 @@
-import type { RunResult } from './results.ts';
+import type { RunResult, ZoomResult } from './results.ts';
 
 // 一遍的说明：模型的状态、上下文丢失、代理出错，这些决定画面和帧时间能不能信，写进"失败、超时和无效"
 
@@ -23,4 +23,26 @@ export function runNotes({ models, context, proxy }: Pick<RunResult, 'models' | 
     notes.push(`经代理的请求超时 ${proxy.timeouts} 次、失败 ${proxy.failures} 次`);
   }
   return notes;
+}
+
+/** 定位后放大一级（--zoom-in）有一步等到超时也没稳定：这一步的读数和截图不是稳定后的，不能拿来比 */
+export const zoomUnsettled = (zoom: ZoomResult | undefined): boolean =>
+  zoom?.zoomed?.settle.stable === false || zoom?.nudged?.settle.stable === false;
+
+/** 定位后放大一级哪一步没做完、没稳定写成说明；都正常或没跑 --zoom-in 时为空 */
+export function zoomNotes(zoom: ZoomResult | undefined): string[] {
+  if (!zoom) {
+    return [];
+  }
+  const { zoomed, nudged } = zoom;
+  if (!zoomed) {
+    return ['放大一级那一步没做完（页面崩溃、超时或截图出错），没有放大后的读数'];
+  }
+  if (!zoomed.settle.stable) {
+    return ['放大一级以后没等到稳定，没有移开再移回'];
+  }
+  if (nudged && !nudged.settle.stable) {
+    return ['移开再移回以后没等到稳定，不判断放大后锁粗了没有'];
+  }
+  return [];
 }

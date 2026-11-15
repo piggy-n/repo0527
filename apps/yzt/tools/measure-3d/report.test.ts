@@ -132,13 +132,19 @@ const TIER_SCENE = { ...TILESET_SCENE, variants: ['maplibre', TIER] };
 const level = (depth: number, loads: number, averageMB: number) => ({ model: 'wuxi/3dtiles/经开区/tileset.json', depth, loads, averageMB });
 
 // 定位后放大一级（这一档）：首屏估计放宽 3 帧，放大以后累计到 zoomedRaised（默认又估计放宽了 4 帧），移开再移回没有再放宽；
-// nudgedError 为 null 时没有移回来
+// nudgedError 为 null 时没有移回来；unsettled 那一步等到超时也没稳定
 const zoomRun = (
   zoomedError: number,
   nudgedError: number | null,
-  zoomedRaised = { raisedFull: 0, raisedPredicted: 7 }
+  zoomedRaised = { raisedFull: 0, raisedPredicted: 7 },
+  unsettled?: 'zoomed' | 'nudged'
 ): RunResult => {
-  const settle = { stable: true, ms: 4200, longTasks: LONG_TASKS, trace: [] };
+  const settleOf = (step: 'zoomed' | 'nudged') => ({
+    stable: unsettled !== step,
+    ms: 4200,
+    longTasks: LONG_TASKS,
+    trace: []
+  });
   const raised = (raisedPredicted: number) => ({ ...stats(null).budget, raisedPredicted });
   return {
     id: `oblique-z19/${TIER}/zoom`,
@@ -152,7 +158,7 @@ const zoomRun = (
       before: { ...stats(null), errorTarget: 9.4, locked: true, budget: raised(3) },
       camera: { center: [120.41, 31.51], zoom: 20, pitch: 55, bearing: 20 },
       zoomed: {
-        settle,
+        settle: settleOf('zoomed'),
         at: { ...stats(null), errorTarget: zoomedError, locked: true, cacheMB: 2500, budget: { ...stats(null).budget, ...zoomedRaised, demandMB: 3000, limitMB: 4096 } },
         shot: 'shots/oblique-z19__maplibre-cache6g__zoom-zoomed.png'
       },
@@ -160,7 +166,7 @@ const zoomRun = (
         nudgedError === null
           ? null
           : {
-              settle,
+              settle: settleOf('nudged'),
               at: { ...stats(null), errorTarget: nudgedError, budget: { ...stats(null).budget, ...zoomedRaised } },
               shot: 'shots/oblique-z19__maplibre-cache6g__zoom-nudged.png'
             }
@@ -261,6 +267,9 @@ function results(runs: RunResult[], scenes: MeasureResults['scenes'] = [SPLAT_SC
     quality
   };
 }
+
+// 只有默认值的一遍和这一遍放大的报告
+const verdictOf = (zoom: RunResult) => renderReport(results([tilesetRun('maplibre'), zoom], [TIER_SCENE]));
 
 describe('高斯泼溅的预算（ADR 0149 L.3）', () => {
   const filled = run('maplibre-splat3m', SPLATS);
@@ -474,7 +483,6 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 放大后：需求 / 缓存上限 / 缓存（MB） | 3,000 / 4,096 / 2,500 |');
     expect(report).toContain('| 移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增） | 8.0，没锁，0 / 0 |');
     expect(report).toContain('| 放大后按估计放宽锁粗了吗 | **是：放大这一步按估计放宽了，比移开再移回的粗** |');
-    const verdictOf = (zoom: RunResult) => renderReport(results([tilesetRun('maplibre'), zoom], [TIER_SCENE]));
     expect(verdictOf(zoomRun(8.2, 8))).toContain('| 放大后按估计放宽锁粗了吗 | 否 |');
     // 粗了，但放大这一步只有装满的放宽：不说成估计的问题
     const full = verdictOf(zoomRun(12, 8, { raisedFull: 5, raisedPredicted: 3 }));
@@ -489,6 +497,19 @@ describe('有瓦片集场景的报告', () => {
     expect(failedReport).toContain('| 放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增） | — |');
     // 没跑 --zoom-in 时没有这一节
     expect(renderReport(results([tilesetRun('maplibre')], [TIER_SCENE]))).not.toContain('定位后放大一级');
+  });
+
+  it('定位后放大一级：有一步等到超时也没稳定时不判断，写明是哪一步，读数照样写', () => {
+    // 移回那一步没稳定：屏幕误差 16 比放大后的 12 高，比了就会写"否"
+    const nudged = verdictOf(zoomRun(12, 16, undefined, 'nudged'));
+    expect(nudged).toContain('| 放大后按估计放宽锁粗了吗 | 算不出（移开再移回以后没等到稳定） |');
+    expect(nudged).toContain('| 移开再移回补齐（秒） | 没稳定（等了 4.2） |');
+    expect(nudged).toContain('| 移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增） | 16.0，没锁，0 / 0 |');
+    // 放大以后没稳定：不做移开再移回（run.ts 的 runZoom），移回没有读数
+    const zoomed = verdictOf(zoomRun(12, null, undefined, 'zoomed'));
+    expect(zoomed).toContain('| 放大后按估计放宽锁粗了吗 | 算不出（放大以后没等到稳定） |');
+    expect(zoomed).toContain('| 放大后补齐（秒） | 没稳定（等了 4.2） |');
+    expect(verdictOf(zoomRun(12, 8))).toContain('| 移开再移回补齐（秒） | 4.2 |');
   });
 
   it('每一级瓦片的实际大小：取完成次数最多的那份读数，模型写目录名', () => {
@@ -566,6 +587,11 @@ describe('quality.html', () => {
     expect(zoom).toContain('<figcaption>放大后：屏幕误差 12.0，锁定</figcaption>');
     expect(zoom).toContain('<figcaption>移开再移回：屏幕误差 8.0</figcaption>');
     expect(zoom).toContain('src="shots/oblique-z19__maplibre-cache6g__zoom-nudged.png"');
+    expect(zoom).not.toContain('，没等到稳定</figcaption>');
+    // 没稳定的那一张写出来，不当成稳定后的
+    const unsettled = renderQualityPage(results([qualityRun(), zoomRun(12, 16, undefined, 'nudged')], [TIER_SCENE]));
+    expect(unsettled).toContain('<figcaption>移开再移回：屏幕误差 16.0，没等到稳定</figcaption>');
+    expect(unsettled).toContain('<figcaption>放大后：屏幕误差 12.0，锁定</figcaption>');
     expect(renderQualityPage(results([qualityRun()], [TIER_SCENE]))).not.toContain('定位后放大一级');
   });
 

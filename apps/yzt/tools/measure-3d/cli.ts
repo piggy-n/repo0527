@@ -9,7 +9,7 @@ import type { BenchStats } from './bench-api.ts';
 import { launchBrowser, listAdapters, probeRenderer } from './browser.ts';
 import { runLook } from './look.ts';
 import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
-import { createRedactor } from './redact.ts';
+import { createRedactor, stringifyRedacted } from './redact.ts';
 import { isIntegratedRenderer, SOFTWARE_RENDERER } from '../../src/shared/map/scene-tier/renderer-class.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
 import type { Environment, MeasureResults, SceneQuality, ShotPair } from './results.ts';
@@ -420,15 +420,15 @@ async function main(): Promise<void> {
   };
   const writeAtomic = (name: string, text: string) => {
     const path = join(outDir, name);
-    writeFileSync(`${path}.tmp`, redact(text));
+    writeFileSync(`${path}.tmp`, text);
     renameSync(`${path}.tmp`, path);
   };
   const save = () => {
     results.meta.updatedAt = new Date().toISOString();
-    writeAtomic('raw.json', JSON.stringify(results, null, 1));
-    writeAtomic('report.md', renderReport(results));
-    writeAtomic('manual.md', renderManual(results));
-    writeAtomic('quality.html', renderQualityPage(results));
+    writeAtomic('raw.json', stringifyRedacted(results, redact, 1));
+    writeAtomic('report.md', redact(renderReport(results)));
+    writeAtomic('manual.md', redact(renderManual(results)));
+    writeAtomic('quality.html', redact(renderQualityPage(results)));
   };
   save();
 

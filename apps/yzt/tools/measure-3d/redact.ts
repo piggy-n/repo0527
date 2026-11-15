@@ -12,7 +12,7 @@ function pathPattern(path: string): RegExp {
   return new RegExp(leading + parts.join(separator), 'gi');
 }
 
-// 全是数字的名字不当成名字：结果里到处是数字，替换了 raw.json 就不是合法的 JSON 了。它们在路径里时由用户目录那条规则去掉
+// 全是数字的名字不当成名字：报告里到处是数字，替换了就看不懂了。它们在路径里时由用户目录那条规则去掉
 const replaceable = (name: string) => name.length > 2 && !/^\d+$/.test(name);
 
 export function createRedactor(
@@ -37,4 +37,10 @@ export function createRedactor(
     }
     return out;
   };
+}
+
+/** 序列化成 JSON，只对字符串值脱敏：整段文本替换会把和主机名同名的 true、false、null 或键名换掉 */
+export function stringifyRedacted(value: unknown, redact: (text: string) => string, space?: number): string {
+  // 键名是固定的字段名和模型 ID，不带用户信息，保持原样
+  return JSON.stringify(value, (_key, item: unknown) => (typeof item === 'string' ? redact(item) : item), space);
 }

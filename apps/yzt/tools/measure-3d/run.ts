@@ -18,9 +18,10 @@ import type {
 import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBrowser, type MemorySample, sampleMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
+import { stringifyRedacted } from './redact.ts';
 import type { ProxyStats } from './server.ts';
 import type { QualityResult, RunResult, SettleResult, ZoomResult, ZoomStep } from './results.ts';
-import { runNotes } from './run-notes.ts';
+import { runNotes, zoomNotes, zoomUnsettled } from './run-notes.ts';
 import { aerialFlight, nudge, type Run, zoomedIn } from './scenes.ts';
 import type { SplatModel } from './splat-models.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
@@ -123,17 +124,12 @@ function classify(result: RunResult): void {
   if ((result.flightCold?.fenceTimeouts ?? 0) > 0) {
     result.notes.push('有等 GPU 超过 15 秒的帧，帧时间可能失真');
   }
-  const zoomed = result.zoom?.zoomed;
-  if (result.zoom && !zoomed) {
-    result.notes.push('放大一级那一步没做完（页面崩溃、超时或截图出错），没有放大后的读数');
-  } else if (zoomed && !zoomed.settle.stable) {
-    result.notes.push('放大一级以后没等到稳定，没有移开再移回');
-  }
+  result.notes.push(...zoomNotes(result.zoom));
   result.notes.push(...invalid);
   if (result.status !== 'failed') {
     if (invalid.length > 0) {
       result.status = 'invalid';
-    } else if (result.load && !result.load.stable) {
+    } else if ((result.load && !result.load.stable) || zoomUnsettled(result.zoom)) {
       result.status = 'timeout';
     }
   }
@@ -438,7 +434,7 @@ async function runProfile(run: Run, ctx: RunContext, session: Session, result: R
   const stop = async (suffix: string) => {
     const endedAt = await call<number>(page, 'window.benchProbe.now()');
     const { profile } = (await cdp.send('Profiler.stop')) as unknown as { profile: CpuProfile };
-    writeFileSync(join(ctx.outDir, `profiles/${name}-${suffix}.cpuprofile`), ctx.redact(JSON.stringify(profile)));
+    writeFileSync(join(ctx.outDir, `profiles/${name}-${suffix}.cpuprofile`), stringifyRedacted(profile, ctx.redact));
     // longtask 的回调要到下一个任务才来
     await sleep(150);
     return summarizeProfile(profile, await call<LongTaskWindow[]>(page, 'window.benchProbe.longTaskWindows()'), endedAt);
