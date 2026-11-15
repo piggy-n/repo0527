@@ -41,4 +41,13 @@ describe('资源目录图标', () => {
   it('三区三线改名后仍按旧图标文件名对应', () => {
     expect(resourceDirectoryIcon({ id: 'c', name: '新名称', icon: '三区三线@1x.png' })).toBe('resource-three-zones');
   });
+
+  // 2026-11-14 审查发现：按下标读映射会读到原型链上的函数，抢在旧图标文件名之前返回
+  it('名称、代码或文件名和对象内置属性同名时，仍按旧图标文件名对应，没有时用默认图标', () => {
+    const icon = '土地资源@1x.png';
+    expect(resourceDirectoryIcon({ id: 'a', name: 'constructor', icon })).toBe('resource-land');
+    expect(resourceDirectoryIcon({ id: 'a', name: '新名称', code: 'constructor', icon })).toBe('resource-land');
+    expect(resourceDirectoryIcon({ id: 'a', name: 'toString' })).toBe('resource-default');
+    expect(resourceDirectoryIcon({ id: 'a', name: '新名称', icon: 'hasOwnProperty@1x.png' })).toBe('resource-default');
+  });
 });

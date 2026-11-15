@@ -85,6 +85,26 @@ describe('useDataExtraction', () => {
     expect(owner.step.value).toBe('graph');
   });
 
+  // 2026-11-14 审查发现：清空原来只靠选中节点的变化，没选节点时手填的两项会带进下一轮
+  it('没选节点时手填的数据名称和需求，上一步也清空，其余条件保留', () => {
+    const { owner } = host();
+    owner.start();
+    owner.search('耕地');
+    owner.form.dataName = '手填';
+    owner.form.requirement = '手填图层';
+    owner.form.purpose = '台账';
+    owner.form.formats = ['SHP'];
+
+    owner.back();
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
+    expect(owner.form.purpose).toBe('台账');
+    expect(owner.form.formats).toEqual(['SHP']);
+
+    owner.search('耕地');
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
+    expect(owner.form.purpose).toBe('台账');
+  });
+
   it('提交只在前端记下条件快照：区划取最后一级、用途去掉空白，然后进入完成页', () => {
     const { owner } = host();
     owner.start();

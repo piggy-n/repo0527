@@ -24,7 +24,7 @@ const RESULT_MAX_ZOOM = 14;
 
 /**
  * AI 对话：左侧对话面板，右侧上方是地图、下方是查询结果；最小迁移的范围与待办见 docs/modules/ai-chat.md。
- * 地图有底图（可以切换，不读写偏好）、行政区边界（默认省界，入口在控制栏，ADR 0128）和回答里的 GeoJSON
+ * 地图有底图（可以切换，标注和其他地图页共用偏好，ADR 0146）、行政区边界（默认省界，入口在控制栏，ADR 0128）和回答里的 GeoJSON
  */
 export const AiChatPage = defineComponent({
   name: 'AiChatPage',

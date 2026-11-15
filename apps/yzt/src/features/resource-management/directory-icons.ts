@@ -39,17 +39,22 @@ const directoryIcons: Record<string, IconName> = {
 // 真实目录里湿地和国家公园共用一个旧图标文件名，按目录代码区分（代码不随改名变化）
 const categoryIcons: Record<string, IconName> = { sdzy: 'resource-wetland', gjgyzy: 'resource-park' };
 
+// 只读映射自己的条目：名称、代码可能和 constructor 这类继承属性同名
+const ownIcon = (icons: Readonly<Record<string, IconName>>, key: string): IconName | undefined =>
+  Object.hasOwn(icons, key) ? icons[key] : undefined;
+
 /** 目录的图标：不加载后端给的图标地址，已知的旧图标对应到本地图标，其他目录用默认图标 */
 export function resourceDirectoryIcon(node: ResourceDirectory): IconName {
-  const assignedIcon = (node.code && categoryIcons[node.code]) || namedIcons[node.name];
+  const assignedIcon = (node.code ? ownIcon(categoryIcons, node.code) : undefined) ?? ownIcon(namedIcons, node.name);
   if (assignedIcon) {
     return assignedIcon;
   }
   for (const filename of [node.icon, node.iconSelected]) {
     const key = filename?.replace(/(?:1)?@1x\.png$/, '');
-    if (key && directoryIcons[key]) {
-      return directoryIcons[key];
+    const icon = key ? ownIcon(directoryIcons, key) : undefined;
+    if (icon) {
+      return icon;
     }
   }
-  return directoryIcons[node.name] ?? 'resource-default';
+  return ownIcon(directoryIcons, node.name) ?? 'resource-default';
 }

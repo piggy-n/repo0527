@@ -92,10 +92,12 @@ export function useDataExtraction() {
     step.value = 'graph';
   }
 
-  /** 回到第一步：清掉选中的节点和跟着它的数据名称、数据需求，其余条件保留 */
+  /** 回到第一步：清掉选中的节点、数据名称和数据需求（没选节点时手填的也清），其余条件保留 */
   function back() {
     legacy.clearSelection();
     relation.clearSelection();
+    // 没选过节点时 target 不变，watcher 不会清空，这里显式清
+    Object.assign(form, { dataName: '', requirement: '' });
     step.value = 'search';
   }
 
