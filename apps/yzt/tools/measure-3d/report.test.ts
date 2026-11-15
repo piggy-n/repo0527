@@ -263,6 +263,9 @@ function results(runs: RunResult[], scenes: MeasureResults['scenes'] = [SPLAT_SC
   };
 }
 
+// 只有默认值的一遍和这一遍放大的报告
+const verdictOf = (zoom: RunResult) => renderReport(results([tilesetRun('maplibre'), zoom], [TIER_SCENE]));
+
 describe('高斯泼溅的预算（ADR 0149 L.3）', () => {
   const filled = run('maplibre-splat3m', SPLATS);
   const short = run('maplibre-splat10m', { ...SPLATS, budget: 10_000_000, visible: 6_000_000 });
@@ -475,7 +478,6 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 放大后：需求 / 缓存上限 / 缓存（MB） | 3,000 / 4,096 / 2,500 |');
     expect(report).toContain('| 移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增） | 8.0，没锁，0 / 0 |');
     expect(report).toContain('| 放大后按估计放宽锁粗了吗 | **是：放大这一步按估计放宽了，比移开再移回的粗** |');
-    const verdictOf = (zoom: RunResult) => renderReport(results([tilesetRun('maplibre'), zoom], [TIER_SCENE]));
     expect(verdictOf(zoomRun(8.2, 8))).toContain('| 放大后按估计放宽锁粗了吗 | 否 |');
     // 粗了，但放大这一步只有装满的放宽：不说成估计的问题
     const full = verdictOf(zoomRun(12, 8, { raisedFull: 5, raisedPredicted: 3 }));
@@ -493,7 +495,6 @@ describe('有瓦片集场景的报告', () => {
   });
 
   it('定位后放大一级：有一步等到超时也没稳定时不判断，写明是哪一步，读数照样写', () => {
-    const verdictOf = (zoom: RunResult) => renderReport(results([tilesetRun('maplibre'), zoom], [TIER_SCENE]));
     // 移回那一步没稳定：屏幕误差 16 比放大后的 12 高，比了就会写"否"
     const nudged = verdictOf(zoomRun(12, 16, undefined, 'nudged'));
     expect(nudged).toContain('| 放大后按估计放宽锁粗了吗 | 算不出（移开再移回以后没等到稳定） |');
