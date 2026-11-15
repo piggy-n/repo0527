@@ -14,7 +14,8 @@ export function hasLegendItems(entry: LegendEntry): boolean {
 
 /**
  * 当前图层浮层里一个资源的可编辑图例（ADR 0157）：复用右侧"图例"页的浏览和编辑——地类、按取值的条目列表，
- * 点条目编辑这一类，configuring 时配置整个图层（浮层标题上的样式设置按钮）；统一符号、统一配色的直接是样式设置。
+ * 点条目编辑这一类，configuring 时配置整个图层（浮层标题上的样式设置按钮，按下时离开正在编辑的一类）；
+ * 统一符号、统一配色的直接是样式设置。
  * 浏览状态（搜索）按资源保管，换一个资源再换回来时照旧；正在编辑的类别换资源时回到浏览
  */
 export const LayerLegend = defineComponent({
@@ -37,6 +38,15 @@ export const LayerLegend = defineComponent({
       () => props.code,
       () => {
         editing.value = null;
+      }
+    );
+    // 编辑一类时按下标题上的样式设置：换成整层的配置，再关掉回到浏览，不回到原来那一类（2026-11-14 审查发现）
+    watch(
+      () => props.configuring,
+      configuring => {
+        if (configuring) {
+          editing.value = null;
+        }
       }
     );
 

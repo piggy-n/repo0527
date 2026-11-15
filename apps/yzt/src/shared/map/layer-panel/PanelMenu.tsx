@@ -68,16 +68,22 @@ export const PanelMenu = defineComponent({
       ...(element.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
     ];
 
+    // 先隐藏着量尺寸，放好位置、显示出来以后再聚焦：浏览器不让隐藏的元素得到焦点（2026-11-14 审查发现）
     watch(
       () => [props.open, props.point] as const,
-      async ([open]) => {
+      async ([open], _, onCleanup) => {
+        // 关闭、换位置、卸载时这一轮作废
+        let stale = false;
+        onCleanup(() => {
+          stale = true;
+        });
         position.value = null;
         if (!open) {
           return;
         }
         await nextTick();
         const menu = element.value;
-        if (!menu) {
+        if (stale || !menu) {
           return;
         }
         const { width, height } = menu.getBoundingClientRect();
@@ -85,6 +91,10 @@ export const PanelMenu = defineComponent({
           x: Math.max(MARGIN, Math.min(props.point.x, window.innerWidth - width - MARGIN)),
           y: Math.max(MARGIN, Math.min(props.point.y, window.innerHeight - height - MARGIN))
         };
+        await nextTick();
+        if (stale || !props.open || element.value !== menu) {
+          return;
+        }
         enabledButtons()[0]?.focus({ preventScroll: true });
       },
       { immediate: true }
