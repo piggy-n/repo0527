@@ -233,7 +233,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 |---|---|---|---|
 | `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、`--radius-md` 圆角；占位符和图标用 `primary` | 登录页 |
 | `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、`--radius-md` 圆角；颜色沿用按钮的 `type` | 登录页 |
-| `button-inline` | `<ElButton class="button-inline" link size="small">` | 使用项目字体，与同一行状态文字按基线对齐；其他外观由 `type` 和 `size` 决定 | 文件管理下载状态行，由文件管理分支维护 |
+| `button-inline` | `<ElButton class="button-inline" link size="small">`；开关式的加 `aria-pressed` | 使用项目字体，与同一行状态文字按基线对齐；`aria-pressed="true"` 时半粗；其他外观由 `type` 和 `size` 决定 | 文件管理下载状态行，由文件管理分支维护；图例编辑里档位后面的"自定义"（按下表示在自定义，用户 2026-11-15） |
 | `tag-mini` | `<ElTag class="tag-mini">` | 18px 高、左右 4、12px 字；颜色沿用 `type` | 消息卡片标题后的类型（2026-10-28 用户要求缩小，ADR 0102） |
 | `badge-mini` | `<ElBadge class="badge-mini">` | 16px 高、左右 4、10px 字（改的是 Element 的 `--el-badge-*` 变量） | 顶栏消息按钮的未读数，少挡住铃铛（2026-10-28 用户要求，ADR 0102） |
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页当前图层行尾的年份、白膜的效果（2026-10-16 用户要求） |

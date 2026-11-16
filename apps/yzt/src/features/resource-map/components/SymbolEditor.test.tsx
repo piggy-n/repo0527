@@ -1,6 +1,6 @@
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker, ElSelect } from 'element-plus';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { SymbolTarget } from '../resource-symbols';
 import type { ResourceTreeLayer } from '../api';
@@ -79,6 +79,21 @@ async function choose(wrapper: VueWrapper, text: string) {
   await label.get('input').setValue(true);
 }
 
+// 档位后面的"自定义"：单选组外面的文字按钮（用户 2026-11-15）
+const customButton = (wrapper: VueWrapper) => wrapper.get('button[aria-pressed]');
+
+async function customize(wrapper: VueWrapper) {
+  await customButton(wrapper).trigger('click');
+}
+
+// 档位里选中的那一项的值
+const checkedLevels = (wrapper: VueWrapper) =>
+  wrapper
+    .get('[data-size-levels]')
+    .findAll<HTMLInputElement>('input[type="radio"]')
+    .filter(radio => radio.element.checked)
+    .map(radio => radio.element.value);
+
 function picker(wrapper: VueWrapper, label: string) {
   const found = wrapper.findAllComponents(ElColorPicker).find(item => item.props('ariaLabel') === label);
   if (!found) {
@@ -115,11 +130,58 @@ describe('SymbolEditor', () => {
     expect(symbols.isCustomized('szy_kt')).toBe(true);
   });
 
+  it.each([
+    ['csxhjctb_gyssp', '自定义大小'],
+    ['bgdc_cjdcqjx', '自定义线宽'],
+    ['szy_kt', '自定义描边宽度']
+  ])(
+    '%s："自定义"是紧跟档位的文字按钮，不在单选组里；自定义时档位都不选中、按钮按下（用户 2026-11-15）',
+    async (code, name) => {
+      const warn = vi.spyOn(console, 'warn');
+      const { wrapper, symbols } = mountEditor(code);
+      const button = customButton(wrapper);
+      expect(button.text()).toBe('自定义');
+      expect(button.attributes('aria-label')).toBe(name);
+      expect(button.element.closest('[role="radiogroup"]')).toBeNull();
+      expect(button.attributes('aria-pressed')).toBe('false');
+      expect(checkedLevels(wrapper)).toStrictEqual(['M']);
+
+      await customize(wrapper);
+      expect(customButton(wrapper).attributes('aria-pressed')).toBe('true');
+      expect(checkedLevels(wrapper)).toStrictEqual([]);
+      expect(customInput(wrapper).exists()).toBe(true);
+      // 只进入自定义，大小没变
+      expect(symbols.isCustomized(code)).toBe(false);
+
+      await choose(wrapper, 'L');
+      expect(customButton(wrapper).attributes('aria-pressed')).toBe('false');
+      expect(checkedLevels(wrapper)).toStrictEqual(['L']);
+      expect(customInput(wrapper).exists()).toBe(false);
+      // 单选组没有选中值时 Element 不报警告
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    }
+  );
+
+  it('大小本来就是自定义的像素：打开时档位都不选中、按钮按下；再点"自定义"不重置输入框', async () => {
+    const { wrapper, symbols, targets } = mountEditors([]);
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 6 });
+    targets.value = [{ code: 'csxhjctb_gyssp' }];
+    await nextTick();
+    expect(customButton(wrapper).attributes('aria-pressed')).toBe('true');
+    expect(checkedLevels(wrapper)).toStrictEqual([]);
+    expect((customInput(wrapper).element as HTMLInputElement).value).toBe('6');
+
+    await customInput(wrapper).setValue('7');
+    await customize(wrapper);
+    expect((customInput(wrapper).element as HTMLInputElement).value).toBe('7');
+  });
+
   it('自定义大小：初始为当前档位的像素；回车或失焦时确认并按步长取整，输入法选字的回车不算；不合法的值留在输入框里提示范围', async () => {
     const { wrapper, symbols } = mountEditor('csxhjctb_gyssp');
     expect(customInput(wrapper).exists()).toBe(false);
 
-    await choose(wrapper, '自定义');
+    await customize(wrapper);
     const input = customInput(wrapper);
     expect((input.element as HTMLInputElement).value).toBe('4');
 
@@ -143,7 +205,7 @@ describe('SymbolEditor', () => {
 
   it('自定义大小：和当前档位像素相同时不提交，输入框换成取整后的值；恢复默认后回到档位', async () => {
     const { wrapper, symbols } = mountEditor('bgdc_cjdcqjx');
-    await choose(wrapper, '自定义');
+    await customize(wrapper);
     await customInput(wrapper).setValue(' 1.84 ');
     await customInput(wrapper).trigger('keydown', { key: 'Enter' });
     expect(symbols.isCustomized('bgdc_cjdcqjx')).toBe(false);
@@ -161,14 +223,14 @@ describe('SymbolEditor', () => {
   it('不合法的输入：重新进入自定义、大小在别处变化时换成当前的像素，清掉提示', async () => {
     const { wrapper, symbols } = mountEditor('csxhjctb_gyssp');
     const invalidShown = () => wrapper.find('[class*="invalid"]').exists();
-    await choose(wrapper, '自定义');
+    await customize(wrapper);
     await customInput(wrapper).setValue('30');
     await customInput(wrapper).trigger('keydown', { key: 'Enter' });
     expect(invalidShown()).toBe(true);
 
     // 选回同一档，大小没变
     await choose(wrapper, 'M');
-    await choose(wrapper, '自定义');
+    await customize(wrapper);
     expect((customInput(wrapper).element as HTMLInputElement).value).toBe('4');
     expect(invalidShown()).toBe(false);
 
@@ -237,7 +299,7 @@ describe('SymbolEditor', () => {
 
   it('面的描边宽度可以自定义 0～8 像素，0 是无描边；清空输入框不算 0', async () => {
     const { wrapper, symbols } = mountEditor('szy_kt');
-    await choose(wrapper, '自定义');
+    await customize(wrapper);
     const input = wrapper.get('input[aria-label="自定义描边宽度，0～8 像素"]');
     const submit = async (text: string) => {
       await input.setValue(text);

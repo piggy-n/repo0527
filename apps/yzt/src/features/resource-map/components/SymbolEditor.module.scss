@@ -32,6 +32,16 @@
   gap: var(--space-sm);
 }
 
+// 档位和紧跟的"自定义"：300 宽的图例浮层里同一行（控件列 180，出现竖向滚动条时 174，两者共约 170），
+// 更窄时"自定义"换到下一行，不横向溢出
+.levels {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
 // 颜色的色值：#RRGGBB，半透明时带百分比
 .hex {
   font-size: var(--font-size-xs);
