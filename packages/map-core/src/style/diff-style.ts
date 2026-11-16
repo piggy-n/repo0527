@@ -21,8 +21,8 @@ export interface StyleSnapshot {
   readonly style: StyleSpecification;
   readonly images: StyleImages;
   /**
-   * MapLibre 引擎的三维模型层插在这个图层下面（ADR 0147 第 2 节）：页面声明的 sceneBelow 分组及以上的第一个图层；
-   * 没有时在最上面。不在样式规范里，对比快照时不看它
+   * MapLibre 引擎的三维模型层插在这个图层下面（ADR 0147 第 2 节、ADR 0161）：插槽生效时是插槽的图层，否则是页面声明的
+   * sceneBelow 分组及以上的第一个图层；都没有时在最上面。不在样式规范里，对比快照时不看它，只有它变了也会通知
    */
   readonly sceneBefore?: string;
 }

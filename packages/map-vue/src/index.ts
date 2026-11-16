@@ -12,7 +12,7 @@ export {
   type SceneEngine
 } from './runtime';
 export type { SceneDerivation } from './scene-binder';
-export type { StyleDerivation } from './style-binder';
+export type { SceneSlotDerivation, StyleDerivation } from './style-binder';
 export { useMap, useMapOverlay } from './use-map';
 export { usePageActive } from './use-page-active';
 export { useShownElementSize } from './use-shown-element-size';

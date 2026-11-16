@@ -5,7 +5,7 @@ import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './contex
 import { type OverlayOptions, resolveOverlayOptions } from './overlay';
 import { MAP_ERROR_REPORTER, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE } from './runtime';
 import { SceneBinder, type SceneDerivation } from './scene-binder';
-import { StyleBinder, type StyleDerivation } from './style-binder';
+import { type SceneSlotDerivation, StyleBinder, type StyleDerivation } from './style-binder';
 
 export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G> {
   /** 样式提交失败、视图运行中的错误；默认用 app 提供的 MAP_ERROR_REPORTER，没有时打印到控制台 */
@@ -18,6 +18,11 @@ export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G
 export interface MapHandle<G extends string> extends MapContext {
   /** 把推导函数绑定到分组；只能在同一个组件的 setup 中调用，一个分组只能绑定一次 */
   bindStyle(bindings: Partial<Readonly<Record<G, StyleDerivation>>>): void;
+  /**
+   * 把三维模型层插槽的推导函数绑定到样式（ADR 0161）：模型层插在推导出的图层下面，不在样式里、在 sceneBelow 及以上时按
+   * sceneBelow 放；和分组同一轮提交。只能在同一个组件的 setup 中调用一次
+   */
+  bindSceneSlot(derive: SceneSlotDerivation): void;
   /** 把三维内容的推导函数绑定到会话（ADR 0081 第 2 节）；只能在同一个组件的 setup 中调用一次 */
   bindScene(derive: SceneDerivation): void;
   /** 登记交互工具（ADR 0034）；只能在同一个组件的 setup 中调用，同一个 ID 只能登记一次，browse 是内置的移动 */
@@ -87,6 +92,7 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
   const handle: MapHandle<G> = {
     ...state.context,
     bindStyle: bindings => binder.bind(bindings),
+    bindSceneSlot: derive => binder.bindSlot(derive),
     bindScene: derive => sceneBinder.bind(derive),
     registerTools
   };

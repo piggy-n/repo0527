@@ -51,6 +51,20 @@ function slotted() {
   return new StyleModel({ groups: ['basemap', 'business', 'highlight'], sceneBelow: 'business' });
 }
 
+// basemap 两层、business 两层、highlight 一层；模型层的上限是 highlight
+function stacked() {
+  const model = new StyleModel({ groups: ['basemap', 'business', 'highlight'], sceneBelow: 'highlight' });
+  model.setGroups({
+    basemap: lineGroup('roads'),
+    business: {
+      sources: { parcels: geojson(), rivers: geojson() },
+      layers: [line('parcels-line', 'parcels'), line('rivers-line', 'rivers')]
+    },
+    highlight: lineGroup('picked')
+  });
+  return model;
+}
+
 describe('StyleModel', () => {
   it('composes groups in the declared order with the root properties', () => {
     using model = createModel();
@@ -407,6 +421,93 @@ describe('StyleModel', () => {
       expect(
         () => new StyleModel({ groups: ['basemap'], sceneBelow: 'labels' as 'basemap' })
       ).toThrow('三维模型层所在的分组 labels 没有声明');
+    });
+  });
+
+  describe('the runtime slot under a layer (ADR 0161)', () => {
+    it('places the model layer under the slot layer when it is below the ceiling group', async () => {
+      using model = stacked();
+      const changes = listen(model);
+      await nextMicrotask();
+      changes.length = 0;
+      const revision = model.revision;
+
+      model.setSceneSlot('rivers-line');
+
+      expect(model.sceneSlot).toBe('rivers-line');
+      expect(model.sceneBefore).toBe('rivers-line');
+      expect(model.revision).toBe(revision + 1);
+      await nextMicrotask();
+      // 只有位置变了：没有样式命令也要通知，视图按 sceneBefore 挪模型层
+      expect(changes).toHaveLength(1);
+      expect(changes[0].commands).toStrictEqual([]);
+      expect(changes[0].sceneBefore).toBe('rivers-line');
+      expect(changes[0].fromRevision).toBe(revision);
+      expect(changes[0].toRevision).toBe(revision + 1);
+    });
+
+    it('falls back to the ceiling group when the slot layer is missing, at or above the ceiling', async () => {
+      using model = stacked();
+      model.setSceneSlot('rivers-line');
+      const changes = listen(model);
+
+      // 图层还没提交：按上限；提交以后插槽生效
+      model.setSceneSlot('canals-line');
+      expect(model.sceneBefore).toBe('picked-line');
+      model.setGroup('business', {
+        sources: { parcels: geojson(), canals: geojson() },
+        layers: [line('parcels-line', 'parcels'), line('canals-line', 'canals')]
+      });
+      expect(model.sceneBefore).toBe('canals-line');
+      // 插槽的图层删掉了：回到上限
+      model.setGroup('business', lineGroup('parcels'));
+      expect(model.sceneBefore).toBe('picked-line');
+      // 上限的分组及以上永远在模型上面
+      model.setSceneSlot('picked-line');
+      expect(model.sceneBefore).toBe('picked-line');
+      await nextMicrotask();
+      expect(changes.at(-1)?.sceneBefore).toBe('picked-line');
+    });
+
+    it('does not count or notify a slot change that leaves the position as it is', async () => {
+      using model = stacked();
+      const changes = listen(model);
+      await nextMicrotask();
+      changes.length = 0;
+      const revision = model.revision;
+
+      // 不在样式里的图层：位置还是上限
+      model.setSceneSlot('canals-line');
+      model.setSceneSlot('canals-line');
+
+      expect(model.sceneSlot).toBe('canals-line');
+      expect(model.revision).toBe(revision);
+      await nextMicrotask();
+      expect(changes).toStrictEqual([]);
+    });
+
+    it('notifies once when the slot moves away and back within one tick', async () => {
+      using model = stacked();
+      const changes = listen(model);
+      await nextMicrotask();
+      changes.length = 0;
+
+      model.setSceneSlot('rivers-line');
+      model.setSceneSlot(undefined);
+      await nextMicrotask();
+
+      // 和上次通知的位置一样，也没有命令：不通知
+      expect(changes).toStrictEqual([]);
+      expect(model.sceneBefore).toBe('picked-line');
+    });
+
+    it('works without a ceiling group: the slot alone decides, otherwise on top', () => {
+      using model = createModel();
+      model.setGroups({ basemap: lineGroup('roads'), business: lineGroup('parcels') });
+      model.setSceneSlot('parcels-line');
+      expect(model.sceneBefore).toBe('parcels-line');
+      model.setSceneSlot(undefined);
+      expect(model.sceneBefore).toBeUndefined();
     });
   });
 });

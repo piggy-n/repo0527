@@ -34,8 +34,8 @@ export interface StyleModelOptions<G extends string> {
   readonly groups: readonly G[];
   readonly root?: StyleRoot;
   /**
-   * MapLibre 引擎的三维模型层叠在这个分组下面（ADR 0147 第 2 节）：它和以上的分组画在模型上面，以下的被模型挡住；
-   * 不给时模型层在最上面
+   * MapLibre 引擎的三维模型层的上限（ADR 0147 第 2 节、ADR 0161）：这个分组和以上的分组永远画在模型上面；没有插槽时
+   * 模型层就在它下面，以下的分组被模型挡住。不给时没有上限，没有插槽时模型层在最上面
    */
   readonly sceneBelow?: G;
 }
@@ -46,19 +46,43 @@ interface StyleModelEvents {
 
 const EMPTY_GROUP: StyleGroup = { sources: {}, layers: [] };
 
+// 组合的结果：快照，以及上限分组之前的图层个数（没有上限时为 undefined），插槽单独变化时按它重新定位置
+interface Composed {
+  readonly snapshot: StyleSnapshot;
+  readonly ceiling: number | undefined;
+}
+
+// 模型层插在哪个图层下面（ADR 0161）：插槽的图层在样式里、并且在上限以下时插在它下面，否则插在上限分组及以上的
+// 第一个图层下面；都没有时为 undefined（在最上面）
+function sceneBeforeOf(
+  layers: readonly LayerSpecification[],
+  ceiling: number | undefined,
+  slot: string | undefined
+): string | undefined {
+  const index = slot === undefined ? -1 : layers.findIndex(layer => layer.id === slot);
+  const at = index !== -1 && (ceiling === undefined || index < ceiling) ? index : ceiling;
+  return at === undefined ? undefined : layers[at]?.id;
+}
+
+function withSceneBefore(snapshot: StyleSnapshot, sceneBefore: string | undefined): StyleSnapshot {
+  const { style, images } = snapshot;
+  return sceneBefore === undefined ? { style, images } : { style, images, sceneBefore };
+}
+
 function compose<G extends string>(
   root: StyleRoot,
   order: readonly G[],
   groups: ReadonlyMap<G, StyleGroup>,
-  sceneBelow: G | undefined
-): StyleSnapshot {
+  sceneBelow: G | undefined,
+  slot: string | undefined
+): Composed {
   const sources: Record<string, SourceSpecification> = {};
   const layers: LayerSpecification[] = [];
   const images: Record<string, StyleImage> = {};
   const sourceOwners = new Map<string, G>();
   const layerOwners = new Map<string, G>();
   const imageOwners = new Map<string, G>();
-  // 三维模型层下面的图层个数：sceneBelow 之前各分组的图层
+  // 三维模型层的上限：sceneBelow 之前各分组的图层个数
   let below: number | undefined;
 
   for (const id of order) {
@@ -101,17 +125,21 @@ function compose<G extends string>(
   }
 
   const style: StyleSpecification = { ...root, version: 8, sources, layers };
-  const sceneBefore = below === undefined ? undefined : layers[below]?.id;
-  return sceneBefore === undefined ? { style, images } : { style, images, sceneBefore };
+  return { snapshot: withSceneBefore({ style, images }, sceneBeforeOf(layers, below, slot)), ceiling: below };
 }
 
-/** 样式模型：按分组组合样式，提交时修订号加 1，同一轮事件循环的变化合并通知（ADR 0022） */
+/**
+ * 样式模型：按分组组合样式，提交时修订号加 1，同一轮事件循环的变化合并通知（ADR 0022）。
+ * 三维模型层的位置也是快照的一部分：上限分组是构造时声明的，插槽在运行时设置（ADR 0161）
+ */
 export class StyleModel<const G extends string> implements Disposable {
   readonly #order: readonly G[];
   readonly #root: StyleRoot;
   readonly #sceneBelow: G | undefined;
   readonly #events = new ModelEvents<StyleModelEvents>('StyleModel');
   #groups = new Map<G, StyleGroup>();
+  #slot: string | undefined;
+  #ceiling: number | undefined;
   #current: StyleSnapshot;
   #revision = 0;
   // 上次通知时的快照，下次通知从它开始对比
@@ -128,7 +156,9 @@ export class StyleModel<const G extends string> implements Disposable {
     this.#order = [...groups];
     this.#root = root;
     this.#sceneBelow = sceneBelow;
-    this.#current = compose(root, this.#order, this.#groups, sceneBelow);
+    const { snapshot, ceiling } = compose(root, this.#order, this.#groups, sceneBelow, undefined);
+    this.#current = snapshot;
+    this.#ceiling = ceiling;
     this.#notified = { revision: 0, snapshot: this.#current };
   }
 
@@ -147,6 +177,11 @@ export class StyleModel<const G extends string> implements Disposable {
     return this.#current.sceneBefore;
   }
 
+  /** 设置的插槽，不管它现在是否生效（见 setSceneSlot） */
+  get sceneSlot(): string | undefined {
+    return this.#slot;
+  }
+
   /** 每次提交加 1 */
   get revision(): number {
     return this.#revision;
@@ -159,6 +194,25 @@ export class StyleModel<const G extends string> implements Disposable {
   /** 一次提交多个分组，修订号只加 1 */
   setGroups(groups: Partial<Readonly<Record<G, StyleGroup>>>): void {
     this.#commit(Object.entries<StyleGroup | undefined>(groups));
+  }
+
+  /**
+   * 三维模型层的插槽（ADR 0161）：模型层插在这个图层下面。图层不在样式里（还没提交、已经删掉）或者在 sceneBelow 分组及以上时
+   * 不生效，按 sceneBelow 放；之后的提交让它出现时生效。位置变了算一次提交（修订号加 1、通知里没有命令也通知），没变时只记下
+   */
+  setSceneSlot(layerId: string | undefined): void {
+    this.#events.assertAlive();
+    if (layerId === this.#slot) {
+      return;
+    }
+    this.#slot = layerId;
+    const sceneBefore = sceneBeforeOf(this.#current.style.layers, this.#ceiling, layerId);
+    if (sceneBefore === this.#current.sceneBefore) {
+      return;
+    }
+    this.#current = withSceneBefore(this.#current, sceneBefore);
+    this.#revision++;
+    this.#scheduleFlush();
   }
 
   on<E extends keyof StyleModelEvents>(event: E, callback: StyleModelEvents[E]): Unsubscribe {
@@ -184,9 +238,10 @@ export class StyleModel<const G extends string> implements Disposable {
       return;
     }
     // 先组合再改状态：校验失败时整次提交不生效
-    const snapshot = compose(this.#root, this.#order, next, this.#sceneBelow);
+    const { snapshot, ceiling } = compose(this.#root, this.#order, next, this.#sceneBelow, this.#slot);
     this.#groups = next;
     this.#current = snapshot;
+    this.#ceiling = ceiling;
     this.#revision++;
     this.#scheduleFlush();
   }
@@ -208,7 +263,8 @@ export class StyleModel<const G extends string> implements Disposable {
     // 先记下再通知：监听器里再次提交时，下一次通知从这里开始对比
     this.#notified = { revision: this.#revision, snapshot: this.#current };
     const commands = diffSnapshot(from.snapshot, this.#current);
-    if (commands.length === 0) {
+    // 只有模型层的位置变了也通知：视图收到空的命令时只挪模型层
+    if (commands.length === 0 && from.snapshot.sceneBefore === this.#current.sceneBefore) {
       return;
     }
     this.#events.emit('change', {

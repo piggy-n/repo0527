@@ -8,7 +8,7 @@ export interface MapSessionOptions<G extends string> {
   /** 样式分组的叠放顺序，从下到上 */
   readonly groups: readonly G[];
   readonly root?: StyleRoot;
-  /** MapLibre 引擎的三维模型层叠在这个分组下面；不给时在最上面（见 StyleModelOptions） */
+  /** MapLibre 引擎的三维模型层的上限：这个分组及以上永远画在模型上面，运行时的插槽只能在它以下（见 StyleModelOptions） */
   readonly sceneBelow?: G;
   readonly camera: CameraState;
 }

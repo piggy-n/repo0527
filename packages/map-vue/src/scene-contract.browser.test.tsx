@@ -197,13 +197,15 @@ interface PageOptions {
   readonly engine?: SceneEngine;
   /** 切到三维后等到就绪；三维模块加载失败的用例不等 */
   readonly waitReady?: boolean;
-  /** 资源（被模型挡住）和注记（画在模型上面）分组，sceneBelow 是 labels */
+  /** 资源（没有插槽时被模型挡住）和注记（画在模型上面）分组，sceneBelow 是 labels */
   readonly resources?: StyleGroup;
   readonly labels?: StyleGroup;
+  /** 三维模型层的插槽（ADR 0161）：不给时不绑定 */
+  readonly slot?: () => string | undefined;
 }
 
 // 页面：画布、底图、三维内容的推导函数；切到三维、等视图就绪。引擎像 app 一样由页面外面的一层提供
-async function mountPage({ engine = MAPLIBRE_ENGINE, waitReady = true, resources, labels }: PageOptions = {}) {
+async function mountPage({ engine = MAPLIBRE_ENGINE, waitReady = true, resources, labels, slot }: PageOptions = {}) {
   const content = shallowRef<SceneContent>(EMPTY_SCENE_CONTENT);
   const errors: unknown[] = [];
   let handle: MapHandle<Group> | undefined;
@@ -217,6 +219,9 @@ async function mountPage({ engine = MAPLIBRE_ENGINE, waitReady = true, resources
     });
     handle.bindStyle({ basemap: () => BACKGROUND, resources: () => resources ?? empty, labels: () => labels ?? empty });
     handle.bindScene(() => content.value);
+    if (slot) {
+      handle.bindSceneSlot(slot);
+    }
     return () => (
       <div style={{ position: 'relative', width: `${WIDTH}px`, height: `${HEIGHT}px` }}>
         <MapCanvas
@@ -680,6 +685,48 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
 
     await until(() => dominant(pixel(under), 1), '注记画在模型上面');
     expect(dominant(pixel(onModel), 0)).toBe(true);
+  });
+
+  it('叠放：插槽以上的二维画在模型上面，运行时换插槽只挪模型层（ADR 0161）', async () => {
+    // 资源里下面是一大块蓝色，上面是模型正下方的一小块绿色；插槽一开始没有，模型层在资源的最后
+    const parcel = square('parcel', 0.01, '#3050d0');
+    const over = square('over', 0.00005, '#20c040');
+    const slot = shallowRef<string | undefined>(undefined);
+    const page = await mountPage({
+      resources: { sources: { ...parcel.sources, ...over.sources }, layers: [...parcel.layers, ...over.layers] },
+      slot: () => slot.value
+    });
+    await locateBox(page);
+    const view = readyView(page);
+    const under = view.project(MODEL_AT);
+    if (!under) {
+      throw new Error('模型正下方不在画布上');
+    }
+    const onModel = [-60, 60]
+      .map(dx => ({ x: WIDTH / 2 + dx, y: HEIGHT / 2 }))
+      .find(point => {
+        const hit = view.pick(point);
+        return hit.kind === 'hit' && hit.surface === 'model' && Math.hypot(point.x - under.x, point.y - under.y) > 20;
+      });
+    if (!onModel) {
+      throw new Error('没有找到模型上的点');
+    }
+    await until(() => dominant(pixel(under), 0) && dominant(pixel(onModel), 0), '资源都被模型挡住');
+
+    // 插在小块绿色下面：绿色盖到模型上，蓝色还在模型下面
+    slot.value = 'over-fill';
+    await until(() => dominant(pixel(under), 1), '绿色画在模型上面');
+    expect(dominant(pixel(onModel), 0)).toBe(true);
+
+    // 插在蓝色下面：两块都盖在模型上
+    slot.value = 'parcel-fill';
+    await until(() => dominant(pixel(onModel), 2), '蓝色画在模型上面');
+    expect(dominant(pixel(under), 1)).toBe(true);
+
+    // 去掉插槽：回到资源的最后，都被模型挡住
+    slot.value = undefined;
+    await until(() => dominant(pixel(under), 0) && dominant(pixel(onModel), 0), '资源又被模型挡住');
+    expect(page.errors).toStrictEqual([]);
   });
 
   it('三维模块加载失败只让三维失败：二维照常可用，重试只重新加载模块', async () => {
