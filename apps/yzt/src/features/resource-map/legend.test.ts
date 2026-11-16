@@ -9,9 +9,8 @@ import {
   landuseLegendItems,
   type LegendEntry,
   legendEntries,
-  type LegendSwatch,
-  SWATCH_LIMITS,
-  swatchColor,
+  SUMMARY_LIMITS,
+  summaryItems,
   swatchOf
 } from './legend';
 import { RESOURCE_PALETTE } from './palette';
@@ -22,6 +21,8 @@ import {
   resourcesGroup
 } from './resource-layers';
 import type { ResourceSymbolOverride } from './resource-symbols';
+import { classItems } from './classification';
+import { resourceStyle } from './style-registry';
 import { sizeCurve } from './symbols';
 
 function layer(
@@ -121,8 +122,8 @@ describe('legendEntries', () => {
       mode: 'classified',
       // 统一样式的预览：按目录顺序从配色板取色
       swatch: lineSwatch(RESOURCE_PALETTE[2]),
-      // 名称前显示前三个取值的颜色
-      colors: ['#1E88E5', '#4FC3F7', '#2F80ED'],
+      // 摘要：没登记代表取值，取前几个取值，兜底不算
+      summary: [lineSwatch('#1E88E5'), lineSwatch('#4FC3F7')],
       values: [
         { key: '河流', label: '河流', swatch: lineSwatch('#1E88E5') },
         { key: '水渠', label: '水渠', swatch: lineSwatch('#4FC3F7') },
@@ -159,21 +160,29 @@ describe('legendEntries', () => {
     });
   });
 
-  it('预览的线宽、点的半径、面的描边按参考级别的像素，超过上限按上限；线型以线宽为单位（设计稿 5D.5）', () => {
+  it('预览的线宽、点的半径、面的描边是参考级别的实际像素，预览框放不下的由画的组件限制；线型以线宽为单位（设计稿 5D.5）', () => {
     const line = { geometry: 'line', color: '#000', width: 'XL', dash: 'dashed' } as const;
     expect(swatchOf(line)).toStrictEqual({ geometry: 'line', color: '#000', width: 4.32, dash: [3, 2] });
-    expect(swatchOf({ ...line, width: 12, dash: 'dotted' })).toMatchObject({ width: SWATCH_LIMITS.line, dash: [1, 2] });
+    expect(swatchOf({ ...line, width: 12, dash: 'dotted' })).toMatchObject({ width: 12, dash: [1, 2] });
 
     // 描边画在半径外面，两者加起来不超过上限
-    const point = { geometry: 'circle', size: 'M', fillColor: '#f00', strokeColor: '#fff', strokeWidth: 1 } as const;
+    const point = {
+      geometry: 'circle',
+      shape: 'pin',
+      size: 'M',
+      fillColor: '#f00',
+      strokeColor: '#fff',
+      strokeWidth: 1
+    } as const;
     expect(swatchOf(point)).toStrictEqual({
       geometry: 'circle',
+      shape: 'pin',
       fill: '#f00',
       stroke: '#fff',
       radius: 4,
       strokeWidth: 1
     });
-    expect(swatchOf({ ...point, size: 20, strokeWidth: 3 })).toMatchObject({ radius: SWATCH_LIMITS.circle - 3 });
+    expect(swatchOf({ ...point, size: 20, strokeWidth: 3 })).toMatchObject({ radius: 20, strokeWidth: 3 });
 
     const fill = {
       geometry: 'fill',
@@ -191,15 +200,36 @@ describe('legendEntries', () => {
       outlineWidth: 1.6,
       outlineDash: [4, 2, 1, 2]
     });
-    expect(swatchOf({ ...fill, outlineWidth: 8 })).toMatchObject({ outlineWidth: SWATCH_LIMITS.outline });
+    expect(swatchOf({ ...fill, outlineWidth: 8 })).toMatchObject({ outlineWidth: 8 });
     expect(swatchOf({ ...fill, outlineWidth: 0 })).toMatchObject({ outlineWidth: 0 });
   });
 
-  it('预览的主色：面是填充色，无填充时是描边色；线是线色；点是填充色', () => {
-    expect(swatchColor(fillSwatch('#0f0', '#00f') as LegendSwatch)).toBe('#0f0');
-    expect(swatchColor(fillSwatch('rgba(0, 0, 0, 0)', '#00f') as LegendSwatch)).toBe('#00f');
-    expect(swatchColor(lineSwatch('#f00') as LegendSwatch)).toBe('#f00');
-    expect(swatchColor({ geometry: 'circle', fill: '#f00', stroke: '#fff', radius: 4, strokeWidth: 1 })).toBe('#f00');
+  it('摘要的代表取值（ADR 0159）：登记了的按登记的先后，地类图斑是水田、乔木林地、城镇住宅用地、河流水面', () => {
+    const entries = legendEntries(ALL, new Map());
+    const dltb = entryOf(entries, 'bgdc_dltb');
+
+    expect(dltb.kind === 'landuse' && dltb.summary).toStrictEqual(
+      dltb.kind === 'landuse' && ['0101', '0301', '0701', '1101'].map(key => dltb.swatches.get(key))
+    );
+    expect(entryOf(entries, 'bgdc_czcdyd')).toMatchObject({
+      summary: [RESOURCE_PALETTE[0], RESOURCE_PALETTE[2], RESOURCE_PALETTE[4]].map(color => fillSwatch(color, color))
+    });
+  });
+
+  it('摘要的代表取值：没登记时取前几个，面 4 个、线和点 3 个；兜底和历史地类不算；登记的取值只留资源实际有的', () => {
+    // 只有兜底时没有代表取值，摘要退回统一样式的符号
+    const fallbackOnly = classItems({ kind: 'values', property: 'type', entries: [], fallback: '#000' });
+    expect(summaryItems(fallbackOnly, resourceStyle('csxhjctb_lctl'), 'line')).toStrictEqual([]);
+
+    const landuse = classItems({ kind: 'landuse-code' });
+    expect(summaryItems(landuse, {}, 'fill').map(item => item.key)).toStrictEqual(['0303', '0304', '0306', '0402']);
+    expect(summaryItems(landuse, {}, 'circle')).toHaveLength(SUMMARY_LIMITS.circle);
+    const only = classItems({ kind: 'landuse-code', only: ['0101', '0102'] });
+    expect(summaryItems(only, { summary: ['0301', '0102'] }, 'fill').map(item => item.key)).toStrictEqual(['0102']);
+    // 登记的一个都没有时退回前几个
+    expect(summaryItems(only, { summary: ['0301'] }, 'fill').map(item => item.key)).toStrictEqual(['0101', '0102']);
+    const legacy = classItems({ kind: 'landuse-name' }).filter(item => item.key.startsWith('legacy:') || item.key === '$other');
+    expect(summaryItems(legacy, {}, 'fill')).toStrictEqual([]);
   });
 
   it('颜色和分组推导出的图层是同一份：预览的颜色就是图层上的颜色', () => {
@@ -210,7 +240,7 @@ describe('legendEntries', () => {
     const fill = 'rgba(176,58,107,0.35)';
     expect(paintOf('bgdc_ccwjq')).toMatchObject({ 'fill-color': fill, 'fill-outline-color': RESOURCE_PALETTE[4] });
     expect(entryOf(entries, 'bgdc_ccwjq')).toMatchObject({ swatch: { fill } });
-    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
+    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({ 'icon-color': RESOURCE_PALETTE[6] });
   });
 
   it('符号覆盖：图层和图例都从叠加后的符号推导；分类样式不用统一样式的覆盖', () => {
@@ -238,11 +268,10 @@ describe('legendEntries', () => {
       'line-dasharray': [3, 2]
     });
     expect(entryOf(entries, 'csxhjctb_csnljsl')).toMatchObject({ swatch: { color: 'rgba(0, 128, 0, 1)' } });
-    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({
-      'circle-color': RESOURCE_PALETTE[6],
-      'circle-radius': sizeCurve('circle', 6),
-      'circle-stroke-color': 'rgba(0, 0, 0, 1)',
-      'circle-stroke-width': 3
+    // 点是 symbol 图层（ADR 0159）：icon-size 是半径曲线除以 4
+    expect(group.layers.find(item => item.id === 'resources-csxhjctb_tyhdp')).toMatchObject({
+      layout: { 'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.75, 12, 1.5, 16, 2.25] },
+      paint: { 'icon-color': RESOURCE_PALETTE[6], 'icon-halo-color': 'rgba(0, 0, 0, 1)', 'icon-halo-width': 3 }
     });
     expect(entryOf(entries, 'csxhjctb_tyhdp')).toMatchObject({ swatch: { stroke: 'rgba(0, 0, 0, 1)' } });
 
@@ -273,7 +302,8 @@ describe('legendEntries', () => {
       lineSwatch('rgba(255, 0, 0, 1)'),
       lineSwatch('#2F80ED')
     ]);
-    expect(hydl).toMatchObject({ colors: ['#1E88E5', 'rgba(255, 0, 0, 1)', '#2F80ED'] });
+    // 摘要按代表取值当前的符号画，改了颜色跟着变
+    expect(hydl).toMatchObject({ summary: [lineSwatch('#1E88E5'), lineSwatch('rgba(255, 0, 0, 1)')] });
     const dltb = entryOf(entries, 'bgdc_dltb');
     expect(dltb).toMatchObject({ kind: 'landuse', mode: 'uniform', swatch: { geometry: 'fill' } });
     expect(dltb.kind === 'landuse' ? dltb.swatches.get('0101') : null).toStrictEqual(

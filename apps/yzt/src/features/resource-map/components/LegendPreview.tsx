@@ -1,11 +1,10 @@
 import { defineComponent, type PropType } from 'vue';
 import type { LegendEntry } from '../legend';
-import { LegendSwatchIcon } from './LegendSwatchIcon';
-import styles from './LegendPreview.module.scss';
+import { LegendSummaryIcon, LegendSwatchIcon } from './LegendSwatchIcon';
 
 /**
- * 一个资源的符号摘要（设计稿 5D.5）：统一符号是它的预览，按属性配色是前三个取值的颜色并排，都是 28 × 20；
- * 图例浮层的标题用，同右侧图例收起时的摘要。当前图层的行首用小号的 20 × 14（原型的大小，用户 2026-11-15），整体按比例缩小
+ * 一个资源的符号摘要（ADR 0159）：统一样式是它的符号，按属性配色是代表取值按几何画的摘要（面拼色块、线是折线、点排成三角）。
+ * 图例浮层的标题、右侧图例收起时用 28 × 20；当前图层的行首用小号的 20 × 14，按小号的尺寸画，不整体缩放
  */
 export const LegendPreview = defineComponent({
   name: 'LegendPreview',
@@ -16,16 +15,11 @@ export const LegendPreview = defineComponent({
   setup(props) {
     return () => {
       const { entry } = props;
-      if (entry.kind === 'symbol' || entry.mode === 'uniform') {
-        return <LegendSwatchIcon swatch={entry.swatch} small={props.small} />;
+      const size = props.small ? 'small' : 'summary';
+      if (entry.kind === 'symbol' || entry.mode === 'uniform' || entry.summary.length === 0) {
+        return <LegendSwatchIcon swatch={entry.swatch} size={size} />;
       }
-      return (
-        <span class={[styles.colors, props.small && styles.small]} aria-hidden="true" data-colors>
-          {entry.colors.map(color => (
-            <i style={{ backgroundColor: color }} />
-          ))}
-        </span>
-      );
+      return <LegendSummaryIcon swatches={entry.summary} size={size} />;
     };
   }
 });

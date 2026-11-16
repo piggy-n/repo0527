@@ -272,8 +272,17 @@ function layerOf(
     const paint = { ...part.paint, 'line-opacity': opacity };
     return { ...shared, type: 'line', layout: part.layout, paint };
   }
-  const paint = { ...part.paint, 'circle-opacity': opacity, 'circle-stroke-opacity': opacity };
-  return { ...shared, type: 'circle', paint };
+  // 点的 symbol 图层（ADR 0159）：图标的透明度同时作用于填充和描边
+  const paint = { ...part.paint, 'icon-opacity': iconOpacity(opacity) };
+  return { ...shared, type: 'symbol', layout: part.layout, paint };
+}
+
+// SDF 符号的着色器（symbol_sdf.vertex.glsl）在不透明度低于 0.1 时整个不画，面、线和改版前的圆点还淡淡可见：
+// 点的透明度不低于 10%，0 仍是 0（ADR 0159 第 2 节）
+const MIN_ICON_OPACITY = 0.1;
+
+function iconOpacity(opacity: number): number {
+  return opacity === 0 ? 0 : Math.max(opacity, MIN_ICON_OPACITY);
 }
 
 // 有最小显示级别的资源，数据源和图层用同一个最小级别：更低的级别不请求瓦片

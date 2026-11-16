@@ -3,6 +3,7 @@ import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
 import { classItems } from '../classification';
+import { POINT_SHAPES } from '../point-shapes';
 import {
   effectiveOverride,
   fromStoredSymbols,
@@ -117,6 +118,9 @@ function checkedPatch(resource: Resource, patch: SymbolOverride): SymbolOverride
   }
   if (patch.fillStyle !== undefined && !Object.hasOwn(FILL_STYLES, patch.fillStyle)) {
     throw new Error(`没有填充方式 ${patch.fillStyle}`);
+  }
+  if (patch.shape !== undefined && !Object.hasOwn(POINT_SHAPES, patch.shape)) {
+    throw new Error(`没有形状 ${patch.shape}`);
   }
   return {
     ...patch,

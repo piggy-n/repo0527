@@ -6,11 +6,13 @@ import { PREFERENCE_WRITE_DEBOUNCE } from '@/shared/storage/use-preference';
 import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import { useResourceSymbols } from './composables/useResourceSymbols';
+import { POINT_SHAPE_NAMES } from './point-shapes';
 import {
   effectiveOverride,
   fromStoredSymbols,
   layerMode,
   pruneOverride,
+  RESOURCE_SYMBOLS_VERSION,
   type ResourceSymbolOverride,
   storedSymbolsSchema,
   targetOverride,
@@ -114,6 +116,20 @@ describe('存储格式', () => {
 
     const invalid = [{ fillStyle: 'wave' }, { patternColor: '不是颜色' }, { outlineWidth: 8.5 }, { outlineDash: 'wavy' }];
     expect(invalid.filter(uniform => storedSymbolsSchema.safeParse({ a: { uniform } }).success)).toStrictEqual([]);
+  });
+
+  it('点的形状（ADR 0159）：后加的可选字段，版本号不变；没写形状的旧数据照常读出，形状只能是 8 种之一', () => {
+    expect(RESOURCE_SYMBOLS_VERSION).toBe(1);
+    const old = { a: { uniform: { size: 'L', strokeWidth: 2 }, items: { 河流: { fillColor: BLUE } } } };
+    expect(storedSymbolsSchema.parse(old)).toStrictEqual(old);
+    const shaped = { a: { uniform: { shape: 'pin' }, items: { 河流: { shape: 'star', size: 'XL' } } } };
+    expect(storedSymbolsSchema.parse(shaped)).toStrictEqual(shaped);
+    const rejected = POINT_SHAPE_NAMES.filter(
+      shape => !storedSymbolsSchema.safeParse({ a: { uniform: { shape } } }).success
+    );
+    expect(rejected).toStrictEqual([]);
+    // 不认识的形状让整条作废：形状以后只能增加，不能改名或删除
+    expect(storedSymbolsSchema.safeParse({ a: { uniform: { shape: 'ring' } } }).success).toBe(false);
   });
 
   it('样式方式是统一样式或分类样式；各取值的覆盖按同样的规则校验', () => {

@@ -1,6 +1,7 @@
 import type { ExpressionSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
-import type { Feature, Geometry } from 'geojson';
+import type { Feature } from 'geojson';
 import type { StyleGroup } from '@mx/map-core';
+import type { ResourceLayerStyle } from './symbols';
 
 /** 分组名：选中要素的高亮，放在 resources 之上、basemap-labels 之下（ADR 0047 第 5 节） */
 export const SELECTION_GROUP = 'selection';
@@ -17,7 +18,40 @@ const OUTLINES: ExpressionSpecification = ['match', ['geometry-type'], ['Point',
 const POINTS: ExpressionSpecification = ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false];
 const LINE_LAYOUT = { 'line-join': 'round', 'line-cap': 'round' } as const;
 
-function detailLayers(color: string): LayerSpecification[] {
+type SymbolStyle = Extract<ResourceLayerStyle, { type: 'symbol' }>;
+
+/**
+ * 点按资源的形状高亮（ADR 0159）：给出这个高亮色下的样式，同资源点图层的形状、大小，描边换成高亮色、加宽；
+ * 推导方用 resourceHighlightStyle 得出，样式图片是资源分组里的，资源不在地图上时推导方给 null，点退回红色圆点
+ */
+export type PointHighlightOf = (color: string) => SymbolStyle | null;
+
+// 点：按资源的形状画；没有资源的样式时是红色圆点
+function pointLayer(
+  id: string,
+  color: string,
+  point: PointHighlightOf | null,
+  common: Pick<LayerSpecification & { type: 'circle' }, 'source' | 'source-layer' | 'minzoom' | 'filter'>,
+  radius: number
+): LayerSpecification {
+  const style = point?.(color);
+  if (style) {
+    return { id: `${id}-point`, type: 'symbol', ...common, layout: style.layout, paint: style.paint };
+  }
+  return {
+    id: `${id}-circle`,
+    type: 'circle',
+    ...common,
+    paint: {
+      'circle-color': color,
+      'circle-radius': radius,
+      'circle-stroke-color': '#ffffff',
+      'circle-stroke-width': 2
+    }
+  };
+}
+
+function detailLayers(color: string, point: PointHighlightOf | null): LayerSpecification[] {
   return [
     {
       id: `${SELECTION_GROUP}-fill`,
@@ -34,18 +68,9 @@ function detailLayers(color: string): LayerSpecification[] {
       layout: LINE_LAYOUT,
       paint: { 'line-color': color, 'line-width': 3 }
     },
-    {
-      id: `${SELECTION_GROUP}-circle`,
-      type: 'circle',
-      source: SOURCE,
-      filter: POINTS,
-      paint: { 'circle-color': color, 'circle-radius': 8, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 }
-    }
+    pointLayer(SELECTION_GROUP, color, point, { source: SOURCE, filter: POINTS }, 8)
   ];
 }
-
-const HIGHLIGHT_LAYERS = detailLayers(HIGHLIGHT_COLOR);
-const FLASH_LAYERS = detailLayers(FLASH_COLOR);
 
 /** 框选结果的批量高亮：画在资源的瓦片上，按 guid 过滤（ADR 0049 第 3 节） */
 export interface BatchHighlight {
@@ -56,41 +81,44 @@ export interface BatchHighlight {
   readonly minzoom: number | undefined;
   /** 不重复 */
   readonly guids: readonly string[];
+  /** 点资源按它的形状高亮（ADR 0159） */
+  readonly point: PointHighlightOf | null;
 }
 
-function batchLayers({ sourceId, sourceLayer, minzoom, guids }: BatchHighlight): LayerSpecification[] {
+function batchLayers({ sourceId, sourceLayer, minzoom, guids, point }: BatchHighlight): LayerSpecification[] {
   // match 的取值表按哈希查找，几千个 guid 也不逐个比较
   const listed: ExpressionSpecification = ['match', ['get', 'guid'], [...guids], true, false];
   const common = { source: sourceId, 'source-layer': sourceLayer, ...(minzoom === undefined ? {} : { minzoom }) };
+  const id = `${SELECTION_GROUP}-batch`;
   return [
     {
-      id: `${SELECTION_GROUP}-batch-fill`,
+      id: `${id}-fill`,
       type: 'fill',
       ...common,
       filter: ['all', POLYGONS, listed],
       paint: { 'fill-color': HIGHLIGHT_COLOR, 'fill-opacity': 0.12 }
     },
     {
-      id: `${SELECTION_GROUP}-batch-line`,
+      id: `${id}-line`,
       type: 'line',
       ...common,
       filter: ['all', OUTLINES, listed],
       layout: LINE_LAYOUT,
       paint: { 'line-color': HIGHLIGHT_COLOR, 'line-width': 2 }
     },
-    {
-      id: `${SELECTION_GROUP}-batch-circle`,
-      type: 'circle',
-      ...common,
-      filter: ['all', POINTS, listed],
-      paint: {
-        'circle-color': HIGHLIGHT_COLOR,
-        'circle-radius': 6,
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 2
-      }
-    }
+    pointLayer(id, HIGHLIGHT_COLOR, point, { ...common, filter: ['all', POINTS, listed] }, 6)
   ];
+}
+
+/** 详情里选中的要素 */
+export interface SelectedHighlight {
+  /**
+   * 完整几何和要素的属性（点选时取自瓦片：点按资源的分类取形状、大小，和资源的点图层用同一套表达式），原样交给数据源；
+   * 调用方只在选中的要素、详情变化时换新对象，拖透明度、预览颜色时数据源不重发（ADR 0022）
+   */
+  readonly feature: Feature;
+  /** 点资源按它的形状高亮（ADR 0159） */
+  readonly point: PointHighlightOf | null;
 }
 
 /**
@@ -98,16 +126,14 @@ function batchLayers({ sourceId, sourceLayer, minzoom, guids }: BatchHighlight):
  * 都没有时是空分组
  */
 export function selectionGroup(
-  geometry: Geometry | null,
+  selected: SelectedHighlight | null,
   flashing: boolean,
   batch: BatchHighlight | null = null
 ): StyleGroup {
   const batched = batch && batch.guids.length > 0 ? batchLayers(batch) : [];
-  if (!geometry) {
+  if (!selected) {
     return { sources: {}, layers: batched };
   }
-  // 几何直接引用查询结果，外面的要素每次换新对象（ADR 0022）
-  const data: Feature = { type: 'Feature', properties: {}, geometry };
-  const highlight = flashing ? FLASH_LAYERS : HIGHLIGHT_LAYERS;
-  return { sources: { [SOURCE]: { type: 'geojson', data } }, layers: [...batched, ...highlight] };
+  const highlight = detailLayers(flashing ? FLASH_COLOR : HIGHLIGHT_COLOR, selected.point);
+  return { sources: { [SOURCE]: { type: 'geojson', data: selected.feature } }, layers: [...batched, ...highlight] };
 }

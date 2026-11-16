@@ -31,7 +31,7 @@ export const ValueLegend = defineComponent({
                 aria-label={`编辑${value.label}样式`}
                 onClick={() => emit('edit', value.key)}
               >
-                <LegendSwatchIcon class={styles.swatch} swatch={value.swatch} />
+                <LegendSwatchIcon swatch={value.swatch} size="item" />
                 <span class={styles.label}>{value.label}</span>
                 {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
               </button>

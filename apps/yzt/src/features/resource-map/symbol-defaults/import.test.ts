@@ -116,6 +116,20 @@ describe('importSymbolDefaults', () => {
     );
   });
 
+  it('点的形状（ADR 0159）：和其他字段一样合并，报告写"形状"，文件里排在点的字段最前面', () => {
+    const exported = exportFile({
+      zhangsan: { csxhjctb_xxp: { items: { '08H213': { size: 'L', shape: 'star' } } } }
+    });
+    const result = run(exported);
+
+    expect(result.next).toBe(
+      `${JSON.stringify({ csxhjctb_xxp: { items: { '08H213': { shape: 'star', size: 'L' } } } }, null, 2)}\n`
+    );
+    expect(result.report).toEqual(
+      expect.arrayContaining(['  中小学（08H213） · 形状：代码默认 → star', '  中小学（08H213） · 大小：代码默认 → L'])
+    );
+  });
+
   it('只导入选中的资源，其他保持现在的发布默认；选了导出里没有的资源时报错', () => {
     const current = { szy_kt: { uniform: { fillColor: RED } } };
     const exported = exportFile({

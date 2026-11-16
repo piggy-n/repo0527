@@ -109,9 +109,9 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// 下拉框里某个线型选项的示意的 stroke-dasharray；实线没有
+// 下拉框里某个线型选项的示意（三段折线）第一段的 stroke-dasharray；实线没有
 const dasharray = (dash: string) =>
-  document.body.querySelector(`[data-dash="${dash}"] [data-swatch] line`)?.getAttribute('stroke-dasharray') ?? null;
+  document.body.querySelector(`[data-dash="${dash}"] [data-swatch] polyline`)?.getAttribute('stroke-dasharray') ?? null;
 
 describe('SymbolEditor', () => {
   it('点：档位、描边宽度点下就确认；改过之后可以恢复默认，只恢复这个资源', async () => {
@@ -128,6 +128,38 @@ describe('SymbolEditor', () => {
     await reset()?.trigger('click');
     expect(symbols.isCustomized('csxhjctb_gyssp')).toBe(false);
     expect(symbols.isCustomized('szy_kt')).toBe(true);
+  });
+
+  it('点的形状是第一行，带预览的下拉，点下就确认（ADR 0159）；选项按当前的填充色和描边画出 8 种形状', async () => {
+    const { wrapper, symbols } = mountEditor('csxhjctb_gyssp');
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { fillColor: 'rgba(255, 0, 0, 1)' });
+    await nextTick();
+    const rows = wrapper.findAll('[data-symbol-editor] > div').map(row => row.find('span').text());
+    expect(rows.slice(0, 2)).toStrictEqual(['形状', '大小']);
+    const shape = wrapper.findComponent(ElSelect);
+    expect(shape.props('ariaLabel')).toBe('公用设施点层的形状');
+
+    await shape.find('.el-select__wrapper').trigger('click');
+    await nextTick();
+    const options = [...document.body.querySelectorAll<HTMLElement>('[data-shape]')];
+    expect(options.map(option => [option.dataset.shape, option.textContent])).toStrictEqual([
+      ['circle', '圆'],
+      ['square', '方形'],
+      ['triangle', '三角形'],
+      ['diamond', '菱形'],
+      ['star', '五角星'],
+      ['hexagon', '六边形'],
+      ['cross', '十字'],
+      ['pin', '定位针']
+    ]);
+    const fills = options.map(option => option.querySelector('[data-piece]')?.getAttribute('fill'));
+    expect(new Set(fills)).toStrictEqual(new Set(['rgba(255, 0, 0, 1)']));
+
+    shape.vm.$emit('update:modelValue', 'pin');
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({
+      uniform: { shape: 'pin', fillColor: 'rgba(255, 0, 0, 1)' }
+    });
+    expect(symbols.symbolOf({ code: 'csxhjctb_gyssp' })).toMatchObject({ shape: 'pin' });
   });
 
   it.each([
@@ -338,10 +370,16 @@ describe('SymbolEditor', () => {
     await nextTick();
     await wrapper.findComponent(ElSelect).find('.el-select__wrapper').trigger('click');
     await nextTick();
-    // L 档 14 级 2.88 像素，线型的线段和间隔按线宽换算
-    expect(dasharray('dashed')).toBe('8.64 5.76');
-    expect(dasharray('dotted')).toBe('2.88 5.76');
+    // 示意是三段折线，每段的线型缩放到两端都是实的；虚线的实段比间隔长，点线的点比间隔短
+    const units = (dash: string) => dasharray(dash)?.split(' ').map(Number) ?? [];
+    const [dash = 0, gap = 0] = units('dashed');
+    expect(dash / gap).toBeCloseTo(1.5, 1);
+    const [dot = 0, space = 0] = units('dotted');
+    expect(dot / space).toBeCloseTo(0.5, 1);
     expect(dasharray('solid')).toBeNull();
+    expect(document.body.querySelector('[data-dash="dashed"] [data-swatch] polyline')?.getAttribute('stroke-width')).toBe(
+      '2.88'
+    );
   });
 
   it('颜色旁写出色值：#RRGGBB，半透明时带百分比', () => {

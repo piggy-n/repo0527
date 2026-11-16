@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { POINT_SHAPE_NAMES } from './point-shapes';
 import {
   type ColorField,
   FILL_STYLE_NAMES,
@@ -138,8 +139,10 @@ const sizeSchema = (kind: SizeKind) => {
 
 const strokeWidths: readonly number[] = POINT_STROKE_WIDTHS;
 
-// 存储时不知道资源的几何，各字段按自己的范围校验；不属于资源几何的字段在推导时不使用
+// 存储时不知道资源的几何，各字段按自己的范围校验；不属于资源几何的字段在推导时不使用。
+// 形状是后加的可选字段，版本号不变；形状的取值以后只能增加，不能改名或删除（ADR 0159）
 const overrideSchema = z.object({
+  shape: z.enum(POINT_SHAPE_NAMES).optional(),
   size: sizeSchema('circle').optional(),
   fillColor: colorSchema.optional(),
   strokeColor: colorSchema.optional(),

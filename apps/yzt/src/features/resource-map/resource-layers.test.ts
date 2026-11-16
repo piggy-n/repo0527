@@ -24,6 +24,7 @@ import {
   withYearForAll
 } from './resource-layers';
 import { BLANK_PATTERN_IMAGE_ID, patternImageId, patternImages } from './fill-patterns';
+import { POINT_SHAPE_NAMES, shapeImageId } from './point-shapes';
 import type { ResourceSymbolOverride } from './resource-symbols';
 import { resourceStyle } from './style-registry';
 
@@ -295,7 +296,7 @@ describe('resourcesGroup', () => {
     expect(layerOf(group, 'bgdc_czcdyd')['source-layer' as keyof LayerSpecification]).toBe('bgdc_czcdyd_2022');
   });
 
-  it('透明度乘在各几何类型的不透明度上：面、线，点连同白描边', () => {
+  it('透明度乘在各几何类型的不透明度上：面、线，点是图标的透明度，连同白描边（ADR 0159）', () => {
     let state = checkAll(initial);
     state = withDisplay(state, 'bgdc_cjdcq', { opacity: 0.5 });
     state = withDisplay(state, 'bgdc_cjdcqjx', { opacity: 0.6 });
@@ -305,10 +306,20 @@ describe('resourcesGroup', () => {
 
     expect(layerOf(group, 'bgdc_cjdcq').paint).toMatchObject({ 'fill-opacity': 0.5 });
     expect(layerOf(group, 'bgdc_cjdcqjx').paint).toMatchObject({ 'line-opacity': 0.6 });
-    expect(layerOf(group, 'csxhjctb_gyssp').paint).toMatchObject({
-      'circle-opacity': 0.7,
-      'circle-stroke-opacity': 0.7
-    });
+    expect(layerOf(group, 'csxhjctb_gyssp')).toMatchObject({ type: 'symbol', paint: { 'icon-opacity': 0.7 } });
+  });
+
+  it('点的透明度不低于 10%（ADR 0159）：SDF 符号的着色器在不透明度低于 0.1 时整个不画；0 照样是 0', () => {
+    const opacityOf = (opacity: number) => {
+      const group = derive(withDisplay(checkAll(initial), 'csxhjctb_gyssp', { opacity }));
+      const point = layerOf(group, 'csxhjctb_gyssp');
+      return point.type === 'symbol' ? point.paint?.['icon-opacity'] : undefined;
+    };
+
+    expect([0, 0.01, 0.05, 0.1, 0.5].map(opacityOf)).toStrictEqual([0, 0.1, 0.1, 0.1, 0.5]);
+    // 面、线照原样
+    const group = derive(withDisplay(checkAll(initial), 'bgdc_cjdcq', { opacity: 0.05 }));
+    expect(layerOf(group, 'bgdc_cjdcq').paint).toMatchObject({ 'fill-opacity': 0.05 });
   });
 
   it('面按需拆层（ADR 0045）：纹理图层、描边图层的 ID 加后缀，共用数据源、过滤和最小级别，透明度乘在每个图层上', () => {
@@ -405,11 +416,31 @@ describe('resourcesGroup', () => {
     };
     const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: code => overrides[code] });
 
+    // 公用设施点层的圆形图片也在（ADR 0159）
     expect(Object.keys(group.images ?? {}).toSorted()).toStrictEqual(
-      [BLANK_PATTERN_IMAGE_ID, ...([0, 1, 2] as const).map(band => patternImageId('dot', band))].toSorted()
+      [
+        BLANK_PATTERN_IMAGE_ID,
+        ...([0, 1, 2] as const).map(band => patternImageId('dot', band)),
+        shapeImageId('circle')
+      ].toSorted()
     );
     expect(group.images?.[patternImageId('dot', 1)]).toBe(patternImages(['dot'], false)[patternImageId('dot', 1)]);
-    expect(derive(state)).not.toHaveProperty('images');
+    // 没有花纹时只有点的形状图片（ADR 0159）
+    expect(Object.keys(derive(state).images ?? {})).toStrictEqual([shapeImageId('circle')]);
+    const noPoints = withDisplay(state, 'csxhjctb_gyssp', { checked: false });
+    expect(derive(noPoints)).not.toHaveProperty('images');
+  });
+
+  it.each(POINT_SHAPE_NAMES)('点的形状 %s（ADR 0159）：放进分组能通过 MapLibre 的校验，带上这种形状的图片', shape => {
+    const state = withDisplay(checkAll(initial), 'csxhjctb_gyssp', { opacity: 0.4 });
+    const overrides: Record<string, ResourceSymbolOverride> = {
+      csxhjctb_gyssp: { items: { '080901': { shape, size: 'XL', strokeWidth: 3 }, $other: { shape: 'pin' } } }
+    };
+    const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: code => overrides[code] });
+
+    expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
+    expect(Object.keys(group.images ?? {})).toContain(shapeImageId(shape));
+    expect(layerOf(group, 'csxhjctb_gyssp')).toMatchObject({ type: 'symbol', paint: { 'icon-opacity': 0.4 } });
   });
 
   it('每个图层只画自己几何类型的要素：面图层不画退化成线的要素', () => {

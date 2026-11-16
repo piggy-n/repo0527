@@ -3,6 +3,7 @@ import { featureFilter, type StyleSpecification, validateStyleMin } from '@mapli
 import { describe, expect, it } from 'vitest';
 import { type ClassItem, type ColorRule, legacyItem, symbolClasses } from './classification';
 import { BLANK_PATTERN_IMAGE_ID, patternImageId } from './fill-patterns';
+import { POINT_SHAPE_NAMES, shapeImages } from './point-shapes';
 import {
   classifiedLayers,
   colorLabel,
@@ -12,6 +13,7 @@ import {
   normalizeColor,
   normalizeSize,
   parseSize,
+  pointIconSize,
   type ResourceSymbol,
   resolveSymbol,
   sizeCurve,
@@ -23,7 +25,14 @@ import {
 } from './symbols';
 import { paintValueOf } from './test-expression';
 
-const POINT: ResourceSymbol = { geometry: 'circle', size: 'M', fillColor: '#D9433F', strokeColor: '#FFFFFF', strokeWidth: 1 };
+const POINT = {
+  geometry: 'circle',
+  shape: 'circle',
+  size: 'M',
+  fillColor: '#D9433F',
+  strokeColor: '#FFFFFF',
+  strokeWidth: 1
+} as const satisfies ResourceSymbol;
 const LINE: ResourceSymbol = { geometry: 'line', color: '#2278BE', width: 'M', dash: 'solid' };
 const FILL: ResourceSymbol = {
   geometry: 'fill',
@@ -43,6 +52,16 @@ const partOf = (layers: ResourceStyleLayers, suffix: 'pattern' | 'outline') =>
 const mainOf = (symbol: ResourceSymbol) => main(symbolLayers(symbol));
 // 颜色按 MapLibre 求值后的形式，便于和图层上的值比较
 const color = (value: string) => paintValueOf('fill', 'fill-color', value, {});
+// 点图层的描边宽度：表达式本身
+const halo = (part: ResourceLayerPart | undefined) =>
+  part?.type === 'symbol' ? part.paint['icon-halo-width'] : undefined;
+// 按要素求值的同一个数
+const perTile = (value: number) => ['case', ['has', '$'], value, value];
+// 点图层的描边宽度在 6、12、16 级的值
+const haloAt = (part: ResourceLayerPart | undefined) =>
+  [6, 12, 16].map(zoom =>
+    part?.type === 'symbol' ? paintValueOf('symbol', 'icon-halo-width', part.paint['icon-halo-width'], {}, zoom) : null
+  );
 
 describe('规范化', () => {
   it('颜色统一成 rgba(r, g, b, a)：同一个颜色的不同写法结果相同，透明度保留两位小数', () => {
@@ -114,6 +133,14 @@ describe('大小', () => {
     expect(sizeCurve('line', 'S')).toStrictEqual(['interpolate', ['linear'], ['zoom'], 6, 0.36, 10, 0.6, 14, 1.08, 17, 1.8]);
   });
 
+  it('点在某一级的 icon-size（ADR 0159）：同图层的曲线（半径 / 4），断点之间线性插值，两头取端点', () => {
+    expect([3, 6, 9, 12, 14, 16, 20].map(zoom => pointIconSize('M', zoom))).toStrictEqual([
+      0.5, 0.5, 0.75, 1, 1.25, 1.5, 1.5
+    ]);
+    expect(pointIconSize('XL', 16)).toBeCloseTo(3.6, 6);
+    expect(pointIconSize(8, 12)).toBe(2);
+  });
+
   it('自定义像素按参考级别换成倍率：点在 12 级、线在 14 级正好是这个像素', () => {
     expect(sizeCurve('circle', 8)).toStrictEqual(['interpolate', ['linear'], ['zoom'], 6, 4, 12, 8, 16, 12]);
     expect(sizeCurve('line', 3.6)[8]).toBe(3.6);
@@ -144,10 +171,19 @@ describe('覆盖', () => {
     expect(nextOverride(POINT, override, { dash: 'dashed' })).toStrictEqual({ size: 'L', strokeWidth: 3 });
     expect(nextOverride(POINT, override, { size: undefined })).toStrictEqual({ size: 'L', strokeWidth: 3 });
   });
+
+  it('点的形状（ADR 0159）：和其他字段一样只记和默认不同的；没写形状的覆盖是默认的圆', () => {
+    expect(nextOverride(POINT, undefined, { shape: 'pin' })).toStrictEqual({ shape: 'pin' });
+    expect(nextOverride(POINT, { shape: 'pin' }, { shape: 'circle' })).toStrictEqual({});
+    expect(resolveSymbol(POINT, { shape: 'star' })).toStrictEqual({ ...POINT, shape: 'star' });
+    expect(resolveSymbol(POINT, { size: 'L' })).toMatchObject({ shape: 'circle' });
+    // 不属于点的几何不认形状
+    expect(resolveSymbol(LINE, { shape: 'star' })).toStrictEqual(LINE);
+  });
 });
 
 describe('symbolLayers', () => {
-  it('面是填充加描边；线按线型设 dasharray，实线不设；点带描边', () => {
+  it('面是填充加描边；线按线型设 dasharray，实线不设', () => {
     expect(symbolLayers(FILL)).toStrictEqual({
       parts: [{ type: 'fill', paint: { 'fill-color': 'rgba(217,67,63,0.35)', 'fill-outline-color': '#D9433F' } }],
       images: {}
@@ -155,9 +191,85 @@ describe('symbolLayers', () => {
     expect(mainOf(LINE)).toMatchObject({ type: 'line', layout: { 'line-cap': 'round' } });
     expect(mainOf(LINE)).not.toHaveProperty(['paint', 'line-dasharray']);
     expect(mainOf({ ...LINE, dash: 'dashDot' })).toMatchObject({ paint: { 'line-dasharray': [4, 2, 1, 2] } });
-    expect(mainOf({ ...POINT, size: 'S', strokeWidth: 0 })).toMatchObject({
-      paint: { 'circle-radius': sizeCurve('circle', 'S'), 'circle-stroke-width': 0 }
+  });
+
+  it('点是 symbol 图层（ADR 0159）：形状的 SDF 图片，icon-size 是半径曲线除以 4，填充是 icon-color、描边是 icon-halo，不参与碰撞', () => {
+    expect(symbolLayers(POINT)).toStrictEqual({
+      parts: [
+        {
+          type: 'symbol',
+          layout: {
+            'icon-image': 'resources-shape-circle',
+            'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 1, 16, 1.5],
+            'icon-offset': ['literal', [0, 0]],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true
+          },
+          paint: { 'icon-color': '#D9433F', 'icon-halo-color': '#FFFFFF', 'icon-halo-width': 1 }
+        }
+      ],
+      images: shapeImages(['circle'])
     });
+    // 描边为 0 时描边色透明：halo 的抗锯齿会在边上留一圈描边色
+    expect(mainOf({ ...POINT, size: 'L', strokeWidth: 0 })).toMatchObject({
+      layout: { 'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 12, 1.6, 16, 2.4] },
+      paint: { 'icon-halo-color': 'rgba(0, 0, 0, 0)', 'icon-halo-width': 0 }
+    });
+  });
+
+  it('点的描边在每个断点按 icon-size 限制在 6 × icon-size − 1.09 以内，超出会露出图片的方框', () => {
+    // S 档的 icon-size 是 0.3、0.6、0.9
+    expect(haloAt(mainOf({ ...POINT, size: 'S', strokeWidth: 3 }))).toStrictEqual([0.71, 2.51, 3]);
+  });
+
+  it('描边随级别变化时按要素求值（每个要素一样），MapLibre 按瓦片的级别求值，和 icon-size 对得上；不变时是常量', () => {
+    expect(halo(mainOf({ ...POINT, size: 'S', strokeWidth: 3 }))).toStrictEqual([
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      6,
+      perTile(0.71),
+      12,
+      perTile(2.51),
+      16,
+      perTile(3)
+    ]);
+    expect(halo(mainOf(POINT))).toBe(1);
+    // 各取值不同时本来就是按要素的 match，不再包一层
+    const classified = main(
+      classifiedLayers(CLASSES, bySymbol({ 河流: { ...POINT, size: 'S', strokeWidth: 3 } }, POINT))
+    );
+    expect(JSON.stringify(halo(classified))).not.toContain('"has"');
+  });
+
+  it('定位针往上偏移，针尖落在要素的位置；其他形状的偏移是 [0, 0]，也要写上：写了 icon-offset 的图层倾斜时不按透视缩小', () => {
+    expect(mainOf({ ...POINT, shape: 'pin' })).toMatchObject({
+      layout: { 'icon-image': 'resources-shape-pin', 'icon-offset': ['literal', [0, -4.8]] }
+    });
+    expect(mainOf({ ...POINT, shape: 'star' })).toMatchObject({ layout: { 'icon-offset': ['literal', [0, 0]] } });
+    expect(main(symbolLayers({ ...POINT, shape: 'star' }, '#f5222d'))).toMatchObject({
+      layout: { 'icon-offset': ['literal', [0, 0]] }
+    });
+  });
+
+  it('选中高亮：同样的形状和大小，描边换成高亮色、比符号宽 2 像素，同样受 icon-size 限制', () => {
+    const highlight = symbolLayers({ ...POINT, size: 'S', strokeWidth: 0 }, '#f5222d');
+
+    expect(main(highlight)).toMatchObject({
+      layout: {
+        'icon-image': 'resources-shape-circle',
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.3, 12, 0.6, 16, 0.9]
+      },
+      paint: { 'icon-color': '#D9433F', 'icon-halo-color': '#f5222d' }
+    });
+    expect(haloAt(main(highlight))).toStrictEqual([0.71, 2, 2]);
+    // 面和线不受影响
+    expect(symbolLayers(FILL, '#f5222d')).toStrictEqual(symbolLayers(FILL));
+  });
+
+  it.each(POINT_SHAPE_NAMES)('形状 %s 的点图层能通过 MapLibre 的校验', shape => {
+    expect(validate(symbolLayers({ ...POINT, shape, size: 1, strokeWidth: 3 }))).toStrictEqual([]);
+    expect(validate(symbolLayers({ ...POINT, shape, size: 'XL' }, '#f5222d'))).toStrictEqual([]);
   });
 
   it('各种符号放进样式都能通过 MapLibre 的校验', () => {
@@ -304,14 +416,32 @@ describe('classifiedLayers', () => {
     expect(valueAt(outlined, 'fill-outline-color', '水渠', 14)).toStrictEqual(color('#1E88E5'));
   });
 
-  it('点：半径、填充色、描边色、描边宽度都可以按取值不同', () => {
-    const layers = classifiedLayers(CLASSES, bySymbol({ $other: { ...POINT, size: 8, strokeWidth: 3 } }, POINT));
+  it('点：形状、大小、填充色、描边色、描边宽度都可以按取值不同（ADR 0159），只带用到的形状的图片', () => {
+    const layers = classifiedLayers(
+      CLASSES,
+      bySymbol({ 河流: { ...POINT, shape: 'pin' }, $other: { ...POINT, shape: 'star', size: 8, strokeWidth: 3 } }, POINT)
+    );
     const style = main(layers);
+    const layout = (property: string, ccn: string) =>
+      style?.type === 'symbol' &&
+      paintValueOf('symbol', property, (style.layout as Record<string, unknown>)[property], { ccn });
 
-    expect(valueAt(style, 'circle-radius', '湖泊')).toBe(8);
-    expect(valueAt(style, 'circle-radius', '河流')).toBe(4);
-    expect(valueAt(style, 'circle-stroke-width', '湖泊')).toBe(3);
-    expect(valueAt(style, 'circle-stroke-width', '水渠')).toBe(1);
+    expect(['河流', '水渠', '湖泊'].map(ccn => String(layout('icon-image', ccn)))).toStrictEqual([
+      'resources-shape-pin',
+      'resources-shape-circle',
+      'resources-shape-star'
+    ]);
+    expect(layout('icon-size', '湖泊')).toBe(2);
+    expect(layout('icon-size', '河流')).toBe(1);
+    expect(layout('icon-offset', '河流')).toStrictEqual([0, -4.8]);
+    expect(layout('icon-offset', '水渠')).toStrictEqual([0, 0]);
+    expect(valueAt(style, 'icon-halo-width', '湖泊')).toBe(3);
+    expect(valueAt(style, 'icon-halo-width', '水渠')).toBe(1);
+    expect(Object.keys(layers.images).toSorted()).toStrictEqual([
+      'resources-shape-circle',
+      'resources-shape-pin',
+      'resources-shape-star'
+    ]);
     expect(validate(layers)).toStrictEqual([]);
   });
 });
