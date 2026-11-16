@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildFloorGrid } from './floor-grid.ts';
 import type { Vec3 } from './lcc2-data.ts';
-import { EYE_HEIGHT, type RoamPoint, routeOf, simplify, spawnOf, trackOf } from './roam.ts';
+import { EYE_HEIGHT, type RoamPoint, routeOf, routeWithCorners, simplify, spawnOf, trackOf } from './roam.ts';
 import { rectangle, walk } from './test-meshes.ts';
 
 // 20 × 4 米的地面；x 10～20 头顶 1.5 米有顶（矮墓道）；x 5.0～5.2 地上一道 0.35 米高的门槛
@@ -333,6 +333,78 @@ describe('routeOf', () => {
     expect(() => routeOf(track, 10, 30, grid)).toThrow('不在轨迹里');
     const offMesh: Vec3[] = walk([{ from: [30, 2], to: [40, 2] }], () => 0);
     expect(() => routeOf(trackOf(offMesh, grid), 1, 5, grid)).toThrow('脚下没有网格');
+  });
+});
+
+describe('routeWithCorners', () => {
+  it('拉直以后留下的拐点记下原因：真的拐弯是偏离超过容差，门框是中线脚下没有地面，通道收窄是两侧脚下没有地面', () => {
+    // 先往东 10 米、再往北 10 米的 L 形走廊
+    const bendGrid = buildFloorGrid([rectangle(0, 0, 11, 2, 0), rectangle(9, 0, 11, 12, 0)]);
+    const bendTrack = trackOf(walk([{ from: [0, 1], to: [10, 1] }, { from: [10, 1], to: [10, 12] }], () => 0), bendGrid);
+    const turn = routeWithCorners(bendTrack, 1, 19, bendGrid).corners;
+    expect(turn.map(({ reason }) => reason)).toStrictEqual(['deviation']);
+    expect(turn[0]?.offset).toBeGreaterThan(5);
+    // 轨迹从 x 0 起，拐弯处走过 10 米
+    expect(turn[0]?.distance).toBeCloseTo(10, 0);
+
+    // 同"拉直不切门框"：门洞 0.4 米宽，首尾连线在门框里
+    const doorGrid = buildFloorGrid([
+      rectangle(0, 0, 9.6, 4, 0),
+      rectangle(10.8, 0, 20, 4, 0),
+      rectangle(9.6, 1.8, 10.8, 2.2, 0)
+    ]);
+    const doorTrack = trackOf(
+      walk([{ from: [0, 1.4], to: [9.4, 2] }, { from: [9.4, 2], to: [11, 2] }, { from: [11, 2], to: [20, 2] }], () => 0),
+      doorGrid
+    );
+    const door = routeWithCorners(doorTrack, 1, 19, doorGrid).corners;
+    expect(door.length).toBeGreaterThan(0);
+    expect(door.every(({ offset }) => offset < 1)).toBe(true);
+    expect(door[0]?.reason).toBe('ground');
+    // 第一个过不去的位置在门框里
+    expect(door[0]?.at.x).toBeGreaterThan(9.5);
+
+    // 同"拉直后离墙仍有 0.2 米"：首尾连线在窄的一段离墙只有 0.06 米
+    const narrowGrid = buildFloorGrid([rectangle(0, 0, 10, 1.6, 0), rectangle(10, 0, 20, 0.6, 0)]);
+    const narrowTrack = trackOf(
+      walk(
+        [
+          { from: [0, 0.8], to: [10, 0.8] },
+          { from: [10, 0.8], to: [10.3, 0.3] },
+          { from: [10.3, 0.3], to: [20, 0.3] }
+        ],
+        () => 0
+      ),
+      narrowGrid
+    );
+    expect(routeWithCorners(narrowTrack, 1, 19, narrowGrid).corners[0]?.reason).toBe('side-ground');
+  });
+
+  it('身高范围里的东西和头顶余量分开记', () => {
+    // 4 米宽的厅里 x 9～11、y 1.6～2.4 一个 1 米高的台子（下面没有地面），扫描的人从北边绕过去
+    const table = buildFloorGrid([
+      rectangle(0, 0, 9, 4, 0),
+      rectangle(11, 0, 20, 4, 0),
+      rectangle(9, 0, 11, 1.6, 0),
+      rectangle(9, 2.4, 11, 4, 0),
+      rectangle(9, 1.6, 11, 2.4, 1)
+    ]);
+    const around = trackOf(
+      walk([{ from: [0, 2], to: [8, 2] }, { from: [8, 2], to: [10, 2.9] }, { from: [10, 2.9], to: [12, 2] }, { from: [12, 2], to: [20, 2] }], () => 0),
+      table
+    );
+    expect(routeWithCorners(around, 1, 19, table).corners.map(({ reason }) => reason)).toContain('obstacle');
+
+    // 头顶 1.75 米的矮通道（视点 1.55，头顶正好没有余量），x 9.9～10.1、y 0.5～0.7 吊着一盏灯，底在 1.7 米；
+    // 左右摆的轨迹从灯旁边过，首尾连线从灯下过
+    const lamp = buildFloorGrid([
+      rectangle(0, 0, 20, 1.2, 0),
+      rectangle(0, 0, 20, 1.2, 1.75),
+      rectangle(9.9, 0.5, 10.1, 0.7, 1.7)
+    ]);
+    const reasons = routeWithCorners(trackOf(zigzag, lamp), 1, 19, lamp).corners.map(({ reason }) => reason);
+    expect(reasons).toContain('headroom');
+    expect(reasons.every(reason => reason.endsWith('headroom'))).toBe(true);
   });
 });
 

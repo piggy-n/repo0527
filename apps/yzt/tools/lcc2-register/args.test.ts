@@ -16,9 +16,15 @@ describe('parseOptions', () => {
       roam: false,
       spawnAt: 0,
       routes: [],
+      diagnose: false,
       plan: null,
       help: false
     });
+  });
+
+  it('--diagnose：逐个列出拉直留下的拐点，带上它就是 --roam，不带值', () => {
+    expect(parseOptions(['a.lcc2', ...DATUM, '--diagnose'])).toMatchObject({ diagnose: true, roam: true });
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--diagnose=1'])).toThrow('不带值');
   });
 
   it('--plan：平面图写到一个 .svg 文件，带上它就是 --roam；忘了写值、不是 .svg 都报错', () => {
