@@ -376,14 +376,24 @@ describe('useResourceLayers', () => {
     expect(() => ctx.owner.setLabeled('bgdc_ccwjq', true)).toThrow('没有可标注的字段');
   });
 
-  it('标注只给画在地图上的资源：隐藏、移出、配置不合法时没有，加强标注也没有依据', async () => {
+  it('标注只给画在地图上、看得见的资源：配置不合法、透明度为 0、隐藏、移出时没有，加强标注也没有依据', async () => {
     using ctx = await loaded({ validate: invalidLanduse }, MAPLIBRE_LIKE);
     ctx.owner.add(['csxhjctb_hydl', 'bgdc_dltb']);
     ctx.owner.setLabeled('csxhjctb_hydl', true);
     ctx.owner.setLabeled('bgdc_dltb', true);
 
     expect(ctx.owner.labelTarget('bgdc_dltb')).toBeNull();
+    ctx.owner.setOpacity('csxhjctb_hydl', 0);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).toBeNull();
+    ctx.owner.setOpacity('csxhjctb_hydl', 0.5);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).not.toBeNull();
     ctx.owner.setVisible('csxhjctb_hydl', false);
+    expect(ctx.owner.deriveLabelsGroup(null).layers).toStrictEqual([]);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).toBeNull();
+
+    ctx.owner.setVisible('csxhjctb_hydl', true);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).not.toBeNull();
+    ctx.owner.remove(['csxhjctb_hydl']);
     expect(ctx.owner.deriveLabelsGroup(null).layers).toStrictEqual([]);
     expect(ctx.owner.labelTarget('csxhjctb_hydl')).toBeNull();
   });
@@ -398,7 +408,7 @@ describe('useResourceLayers', () => {
     expect(ctx.owner.labelTarget('csxhjctb_hydl')).toBeNull();
   });
 
-  it('标注读符号的覆盖：字号、点让开的大小随覆盖和预览变化；加强标注的要素在原来的标注里滤掉', async () => {
+  it('标注读符号的覆盖：字号随覆盖变化（点让开的大小见 resource-layers.test）；加强标注的要素在原来的标注里滤掉', async () => {
     const overrides = shallowRef<ReadonlyMap<string, ResourceSymbolOverride>>(new Map());
     using ctx = await loaded({ symbols: { overrideOf: code => overrides.value.get(code) } }, MAPLIBRE_LIKE);
     ctx.owner.add(['csxhjctb_hydl']);

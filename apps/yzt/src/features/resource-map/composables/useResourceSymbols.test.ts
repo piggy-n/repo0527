@@ -355,6 +355,11 @@ describe('useResourceSymbols', () => {
     });
     expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ field: 'type', size: 16, color: 'rgba(0, 0, 0, 1)' });
     expect(symbols.hasLabelOverride('csxhjctb_gyssp')).toBe(true);
+    // 图例的"改过符号"只说符号：只改了标注不算（标注在标注编辑器里恢复）
+    expect(symbols.isCustomized('csxhjctb_hydl')).toBe(false);
+    symbols.setLabel('csxhjctb_hydl', { size: 14 });
+    expect(symbols.isCustomized('csxhjctb_hydl')).toBe(false);
+    expect(symbols.isCustomized('csxhjctb_gyssp')).toBe(true);
 
     symbols.setLabel('csxhjctb_gyssp', { size: 12 });
     expect(symbols.overrides.value.get('csxhjctb_gyssp')?.label).toStrictEqual({

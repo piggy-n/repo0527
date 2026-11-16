@@ -21,6 +21,7 @@ import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
   isDrawn,
+  isLabelShown,
   labelTargetOf,
   mergeDisplayState,
   withAdded,
@@ -73,7 +74,7 @@ export interface ResourceLayers {
   /** 显示、隐藏标注（ADR 0160）；没有登记标注字段的资源抛错 */
   readonly setLabeled: (code: string, labeled: boolean) => void;
   /**
-   * 资源的标注图层要用的（ADR 0160）：画在地图上、开着标注、校验通过、有标注字段，三维里分组不为空时才有，
+   * 资源的标注图层要用的（ADR 0160）：画出标注（看得见）、校验通过、有标注字段，三维里分组不为空时才有，
    * 加强标注按它画；其他时候为 null
    */
   readonly labelTarget: (code: string) => LabelTarget | null;
@@ -286,7 +287,7 @@ export function useResourceLayers(
       const current = state.value;
       const resource = current.catalog?.resources.get(code);
       const display = current.displays.get(code);
-      if (!resource || !display?.labeled || !isDrawn(display) || hiddenInScene.value || configErrors.value.has(code)) {
+      if (!resource || !isLabelShown(display) || hiddenInScene.value || configErrors.value.has(code)) {
         return null;
       }
       return labelTargetOf(resource, display, options.symbols?.overrideOf(code));

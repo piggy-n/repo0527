@@ -1810,6 +1810,19 @@ describe('加强标注（ADR 0160）', () => {
     expect(owner.labelEmphasis.value).toBeNull();
   });
 
+  it('点在开着标注的资源的文字上：选中文字的要素，面板里排在上面的资源不再先命中', () => {
+    mockDetail();
+    const { owner, send, resources } = setup();
+    resources.labelTarget.mockImplementation(code => (code === 'bgdc_dltb' ? LANDUSE_LABEL : null));
+    const label: RenderedFeature = { ...rendered(DLTB, 2), layerId: 'resource-labels-bgdc_dltb' };
+
+    send(click(), [rendered(CZCDYD, 1), label]);
+
+    const current = owner.state.value;
+    const chosen = current.kind === 'detail' ? [current.candidate.target.resource.code, current.candidate.guid] : [];
+    expect(chosen).toStrictEqual(['bgdc_dltb', guid(2)]);
+  });
+
   it('框选的列表不加强标注', () => {
     const { owner, send, resources } = setup();
     resources.labelTarget.mockImplementation(() => ({ ...LANDUSE_LABEL, code: 'szy_kt', source: SZY }));

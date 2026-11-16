@@ -11,6 +11,7 @@ import {
   isDrawn,
   mergeDisplayState,
   isResourceBodyLayer,
+  labelTargetOf,
   resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
@@ -25,6 +26,7 @@ import {
   withYearForAll
 } from './resource-layers';
 import { BLANK_PATTERN_IMAGE_ID, patternImageId, patternImages } from './fill-patterns';
+import { resourceLabelLayer } from './labels';
 import { POINT_SHAPE_NAMES, shapeImageId } from './point-shapes';
 import type { ResourceSymbolOverride } from './resource-symbols';
 import { resourceStyle } from './style-registry';
@@ -540,6 +542,13 @@ describe('resourceLabelsGroup（ADR 0160）', () => {
     );
   });
 
+  it('透明度为 0 的资源不推导标注：看不见的文字不占位、不挡别的标注，也点不到', () => {
+    const state = withDisplay(labelAll(checkAll(initial)), 'bgdc_dltb', { opacity: 0 });
+
+    expect(idsOf(resourceLabelsGroup({ state, invalid: new Map() }))).not.toContain('resource-labels-bgdc_dltb');
+    expect(idsOf(resourceLabelsGroup({ state, invalid: new Map() }))).toContain('resource-labels-csxhjctb_hydl');
+  });
+
   it('加强标注的要素只在它所在资源的标注里滤掉', () => {
     const group = resourceLabelsGroup({
       state: labelAll(checkAll(initial)),
@@ -553,6 +562,29 @@ describe('resourceLabelsGroup（ADR 0160）', () => {
 
     expect(filterOf('bgdc_dltb')).toContain(`"!=",["to-string",["get","guid"]],"${'a'.repeat(32)}"`);
     expect(filterOf('csxhjctb_hydl')).not.toContain('guid');
+  });
+
+  it('点的文字让开画出的点：按资源的符号和覆盖算，点改大、换成定位针时偏移跟着变；线、面没有', () => {
+    const points = CATALOG.resources.get('csxhjctb_gyssp');
+    const lines = CATALOG.resources.get('csxhjctb_hydl');
+    if (!points || !lines) {
+      throw new Error('目录里没有公用设施点或水域线');
+    }
+    const display: ResourceDisplay = { added: true, checked: true, opacity: 1, year: 2025, labeled: true };
+    // 16 级（曲线的最后一个断点）往上让开多少
+    const upAt16 = (override?: ResourceSymbolOverride) => labelTargetOf(points, display, override)?.reach?.at(-1)?.up;
+
+    // 默认 M 档、半径 6，白描边 1
+    expect(upAt16()).toBe(7);
+    expect(upAt16({ mode: 'uniform', uniform: { size: 'XL' } })).toBeGreaterThan(7);
+    // 定位针从针尖往上伸出 2.4 倍半径
+    expect(upAt16({ items: { '080901': { shape: 'pin' } } })).toBeCloseTo(2.4 * 6 + 1);
+    expect(labelTargetOf(lines, display, undefined)?.reach).toBeNull();
+
+    const target = labelTargetOf(points, display, { items: { '080901': { shape: 'pin' } } });
+    const offset = target && resourceLabelLayer(target).layout?.['text-offset'];
+    // 16 级的偏移：(针头 15.4 + 间隔 3) / 12 号字，往上
+    expect(JSON.stringify(offset)).toContain(`16,["literal",[0,${-Number((18.4 / 12).toFixed(3))}]]`);
   });
 
   it('标注图层不算画出要素本身的图层：框选的估数不数它（ADR 0050）', () => {

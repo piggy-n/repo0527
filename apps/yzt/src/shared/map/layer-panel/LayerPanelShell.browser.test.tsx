@@ -117,6 +117,7 @@ const CURRENT_TOOLS: PanelToolItem[] = [
   'divider',
   { key: 'opacity', icon: 'layer-opacity', label: '透明度' },
   { key: 'legend', icon: 'map-legend', label: '图例' },
+  { key: 'label', icon: 'map-label', label: '标注' },
   'divider',
   { key: 'remove-layer', icon: 'layer-remove', label: '移除' }
 ];
@@ -168,7 +169,8 @@ async function headsAt(width: number) {
       .findAll('button')
       .at(-1)
       ?.element.getBoundingClientRect();
-    return last !== undefined && last.right <= panel.right && last.left >= panel.left;
+    // 标题行右边留 12：最右的按钮不压进这段留白
+    return last !== undefined && last.right <= panel.right - 12 && last.left >= panel.left;
   };
   const views = ctx.wrapper.get('[role="tablist"][aria-label="资源显示的内容"]').element;
   const tabs = [...views.querySelectorAll('[role="tab"]')].map(tab => tab.getBoundingClientRect());
@@ -345,7 +347,8 @@ describe('LayerPanelShell（真实的布局）', () => {
   });
 
   // 264 宽时标签行一行的余量只有约 4（应用字体实测），随字体变，这里不断言一行
-  it('360 宽的手机（264 宽的面板）：下段标题改成两个字"图层"以后，两段的工具栏也都在面板里（2026-11-16，原来最右的移除被裁掉约 13）；标签不横向溢出', async () => {
+  // 原来最右的移除被裁掉约 13；加了第 8 个按钮"标注"（ADR 0160）以后按钮再紧凑一档（2026-11-16）
+  it('360 宽的手机（264 宽的面板）：图层的 8 个按钮也在面板里，不压进右边的留白；标签不横向溢出', async () => {
     expect(await headsAt(264)).toMatchObject({ catalogInside: true, currentInside: true, viewsInside: true, panelScroll: false });
   });
 

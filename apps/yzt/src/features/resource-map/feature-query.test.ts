@@ -23,6 +23,7 @@ import {
   featureRows,
   identifyGeometry,
   identifyStep,
+  type IdentifyTask,
   isEmptyValue,
   pickResources,
   planBox,
@@ -405,6 +406,22 @@ const kindsOf = (tasks: readonly BoxTask[]) => tasks.map(task => [task.target.re
 // 半径 4 像素、没有描边的圆点
 const CIRCLE_MARK = () => ({ shape: 'circle' as const, iconSize: 1, strokeWidth: 0 });
 
+// 公用设施点：离点击位置 30 像素的点
+const POINTS = targetOf('csxhjctb_gyssp', 2025);
+const FAR: Point = { type: 'Point', coordinates: [30, 0] };
+
+// 点资源某个图层上的渲染要素
+const onPointLayer = (layerId: string, id: string, geometry: Point): RenderedFeature => ({
+  sourceId: POINTS.sourceId,
+  layerId,
+  properties: { guid: guid(id) },
+  geometry
+});
+
+// 渲染要素任务的候选：guid 的第一个字符和距离
+const candidateSummary = (task: IdentifyTask | undefined) =>
+  task?.kind === 'rendered' ? task.candidates.map(({ guid: id, distance }) => [id[0], distance]) : [];
+
 describe('planIdentify', () => {
   const ORIGIN = { x: 0, y: 0 };
   const features = [
@@ -428,28 +445,54 @@ describe('planIdentify', () => {
     ]);
   });
 
-  it('点到标注的文字（ADR 0160）：标注图层查到的要素距离算 0，离点超出容差也是候选；资源图层上同样远的点照样滤掉', () => {
-    const points = targetOf('csxhjctb_gyssp', 2025);
-    const far: Point = { type: 'Point', coordinates: [30, 0] };
-    const onLabel = (layerId: string, id: string): RenderedFeature => ({
-      sourceId: points.sourceId,
-      layerId,
-      properties: { guid: guid(id) },
-      geometry: far
-    });
+  it('点在标注的文字上（ADR 0160）：标注图层在点击位置查到的要素距离算 0，离点超出容差也是候选；资源图层上同样远的点照样滤掉', () => {
     const view = fakeView([
-      onLabel('resource-labels-csxhjctb_gyssp', 'a'),
-      onLabel(points.sourceId, 'b'),
-      onLabel('selection-labels-csxhjctb_gyssp', 'c')
+      onPointLayer('resource-labels-csxhjctb_gyssp', 'a', FAR),
+      onPointLayer(POINTS.sourceId, 'b', FAR),
+      onPointLayer('selection-labels-csxhjctb_gyssp', 'c', FAR)
     ]).view;
 
-    const [task] = planIdentify([points], ORIGIN, 15, view, null, () => CIRCLE_MARK) ?? [];
+    const [task] = planIdentify([POINTS], ORIGIN, 15, view, null, () => CIRCLE_MARK, () => true) ?? [];
 
-    const picked = task?.kind === 'rendered' ? task.candidates.map(({ guid: id, distance }) => [id[0], distance]) : [];
-    expect(picked).toStrictEqual([
+    expect(candidateSummary(task)).toStrictEqual([
       ['a', 0],
       ['c', 0]
     ]);
+  });
+
+  it('文字画在所有资源上面：先在点击位置查开着标注的资源，命中时是最上面那条文字的要素，面板里排在上面的资源不再先命中（ADR 0160）', () => {
+    const { view, queries } = fakeView([
+      rendered(DLTB.sourceId, { guid: guid('d') }, 0),
+      onPointLayer('resource-labels-csxhjctb_gyssp', 'a', FAR)
+    ]);
+
+    const tasks = planIdentify([DLTB, POINTS], ORIGIN, 15, view, null, () => CIRCLE_MARK, target => target === POINTS);
+
+    expect(kindsOf(tasks ?? [])).toStrictEqual([['csxhjctb_gyssp', 'rendered']]);
+    expect(candidateSummary(tasks?.[0])).toStrictEqual([['a', 0]]);
+    // 标注只在点击位置查，只查开着标注的资源
+    expect(queries[0]).toStrictEqual([ORIGIN, { sources: [POINTS.sourceId], withGeometry: false }]);
+  });
+
+  it('点击位置不在文字上时，容差框里碰到的文字不算：直接点中的点只有它一个候选', () => {
+    // 点击位置只查得到资源的点；容差框里还碰到另一个点的名称
+    const near: Point = { type: 'Point', coordinates: [0, 0] };
+    const onPoint = [
+      onPointLayer(POINTS.sourceId, 'e', near),
+      onPointLayer('resource-labels-csxhjctb_gyssp', 'f', FAR)
+    ];
+    const view = {
+      ...fakeView([]).view,
+      queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) =>
+        onPoint.filter(({ sourceId, layerId }) => {
+          const atPoint = 'from' in area || layerId === POINTS.sourceId;
+          return options.sources.includes(sourceId) && atPoint;
+        })
+    };
+
+    const [task] = planIdentify([POINTS], ORIGIN, 15, view, null, () => CIRCLE_MARK, () => true) ?? [];
+
+    expect(candidateSummary(task)).toStrictEqual([['e', 0]]);
   });
 
   it('二维 14 级起有渲染要素的用渲染要素，能后端识别的也不查；遇到第一个就停下，下面的资源不再查询；候选按屏幕距离排序', () => {
@@ -557,6 +600,17 @@ describe('planBox', () => {
       [BOX, { sources: [LCTL.sourceId], withGeometry: false }],
       [BOX, { sources: [DLTB.sourceId], withGeometry: false }]
     ]);
+  });
+
+  it('只用渲染要素时不算标注图层（ADR 0160）：框外的要素的文字伸进框里，不是候选、不算数', () => {
+    const features = [
+      rendered(SZY.sourceId, { guid: guid('a') }, 0),
+      { ...rendered(SZY.sourceId, { guid: guid('b') }, 0), layerId: 'resource-labels-szy_kt' }
+    ];
+
+    const [task] = planBox([SZY], BOX, 15, fakeView(features).view);
+
+    expect(task?.kind === 'rendered' ? task.candidates.map(({ guid: id }) => id) : []).toStrictEqual([guid('a')]);
   });
 
   it('点（ADR 0159）：换算几何，只留位置在框里的点；symbol 图层查到的是图标图片碰到框的点', () => {

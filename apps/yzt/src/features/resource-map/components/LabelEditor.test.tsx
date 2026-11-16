@@ -1,7 +1,7 @@
 import { NO_SOURCE_ERRORS } from '@mx/map-core';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker, ElSelect, ElSlider, ElSwitch } from 'element-plus';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
@@ -64,6 +64,11 @@ async function choose(wrapper: VueWrapper, text: string) {
   }
   await label.get('input').setValue(true);
 }
+
+// Element 的提示挂在 body 下，不归组件管
+afterEach(() => {
+  document.body.innerHTML = '';
+});
 
 describe('LabelEditor（ADR 0160）', () => {
   it('最上面是"显示标注"开关，默认关；关着时编辑器的控件都不能用，打开后能用', async () => {
@@ -144,7 +149,7 @@ describe('LabelEditor（ADR 0160）', () => {
     expect(zoomRangeText(14, 20)).toBe('14 级起');
   });
 
-  it('恢复默认标注只在改过时能用，去掉这个资源的标注；压盖的说明在问号里', async () => {
+  it('恢复默认标注只在改过时能用（关着标注时也能用），去掉这个资源的标注；压盖的说明在问号里', async () => {
     const { wrapper, symbols, layers } = mountEditor();
     layers.setLabeled('csxhjctb_xxp', true);
     await nextTick();
@@ -158,12 +163,26 @@ describe('LabelEditor（ADR 0160）', () => {
 
     expect(reset().attributes('disabled')).toBeDefined();
     symbols.setLabel('csxhjctb_xxp', { size: 18 });
+    // 关着标注时也能恢复：只改了标注的资源，图例上没有别的入口清掉它
+    layers.setLabeled('csxhjctb_xxp', false);
     await nextTick();
+    expect(reset().attributes('disabled')).toBeUndefined();
     await reset().trigger('click');
 
     expect(symbols.overrides.value.has('csxhjctb_xxp')).toBe(false);
     expect(wrapper.find('[aria-label="压盖：文字之间允许重叠"]').exists()).toBe(true);
     expect(wrapper.text()).not.toContain('文字之间允许重叠');
+  });
+
+  it('压盖后面的问号：悬停或键盘聚焦时显示"文字之间允许重叠"', async () => {
+    const { wrapper, layers } = mountEditor();
+    layers.setLabeled('csxhjctb_xxp', true);
+    await nextTick();
+    expect(document.body.textContent).not.toContain('文字之间允许重叠');
+
+    await wrapper.get('[aria-label="压盖：文字之间允许重叠"]').trigger('focus');
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('文字之间允许重叠'));
   });
 
   it('没有登记标注字段的资源说明没有字段', () => {

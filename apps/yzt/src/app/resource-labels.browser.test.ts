@@ -4,7 +4,7 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 import { buildCatalog } from '@/features/resource-map/catalog';
-import { pickResources, planIdentify } from '@/features/resource-map/feature-query';
+import { type PickResource, pickResources, planIdentify } from '@/features/resource-map/feature-query';
 import { selectionLabelsGroup } from '@/features/resource-map/labels';
 import {
   EMPTY_RESOURCE_LAYERS,
@@ -40,7 +40,7 @@ const SCHOOLS: FeatureCollection = {
   )
 };
 
-// 地类图斑：两块挨着的面，在学校下面
+// 地类图斑：两块挨着的面，学校和它们的名称都在面里
 const PARCELS: FeatureCollection = {
   type: 'FeatureCollection',
   features: [0, 1].map(
@@ -53,8 +53,8 @@ const PARCELS: FeatureCollection = {
           [
             [CENTER[0] - 0.006 + index * 0.006, CENTER[1] - 0.004],
             [CENTER[0] + index * 0.006, CENTER[1] - 0.004],
-            [CENTER[0] + index * 0.006, CENTER[1] - 0.0015],
-            [CENTER[0] - 0.006 + index * 0.006, CENTER[1] - 0.0015],
+            [CENTER[0] + index * 0.006, CENTER[1] + 0.004],
+            [CENTER[0] - 0.006 + index * 0.006, CENTER[1] + 0.004],
             [CENTER[0] - 0.006 + index * 0.006, CENTER[1] - 0.004]
           ]
         ]
@@ -245,14 +245,35 @@ describe('资源的标注（ADR 0160）', () => {
     };
     const click = aboveFirstSchool(ctx.toolView);
 
-    const [withLabels] = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf) ?? [];
+    const [withLabels] = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, () => true) ?? [];
     const picked = withLabels?.kind === 'rendered' ? withLabels.candidates.map(({ guid }) => guid) : [];
     expect(picked).toStrictEqual([guidOf(1)]);
 
     const cleared = nextIdle(ctx.map, '去掉标注后渲染完成');
     ctx.session.style.setGroup('resource-labels', { sources: {}, layers: [] });
     await cleared;
-    expect(planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf)).toStrictEqual([]);
+    expect(planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, () => true)).toStrictEqual([]);
+  });
+
+  it('面板里地类图斑在学校上面时，点学校名称的文字照样选中学校：文字画在所有资源上面', async () => {
+    using ctx = setup();
+    await nextIdle(ctx.map, '首次渲染完成');
+    const targets = pickResources({ ...STATE, order: [DLTB, XXP] }, new Map(), ZOOM);
+    const markOf = (target: PickResource) => {
+      const resource = STATE.catalog?.resources.get(target.resource.code);
+      return resource ? pointMarkOf(resource, ZOOM, overrideOf(resource.code)) : null;
+    };
+    const click = aboveFirstSchool(ctx.toolView);
+
+    const tasks = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, () => true) ?? [];
+    const summary = tasks.map(task => [
+      task.target.resource.code,
+      task.kind === 'rendered' ? task.candidates.map(({ guid }) => guid) : []
+    ]);
+    expect(summary).toStrictEqual([[XXP, [guidOf(1)]]]);
+    // 不认标注时点到的是上面的地类图斑
+    const [plain] = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf) ?? [];
+    expect(plain?.target.resource.code).toBe(DLTB);
   });
 
   it('加强标注：资源的标注滤掉这个要素，加强的标注画它；两组一起提交', async () => {

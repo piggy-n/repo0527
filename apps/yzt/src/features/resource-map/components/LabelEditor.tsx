@@ -36,6 +36,8 @@ import editorStyles from './SymbolEditor.module.scss';
 const PREDEFINE = [...COLOR_PRESETS];
 const SIZES: readonly number[] = LABEL_SIZES;
 const HALO_WIDTHS: readonly number[] = LABEL_HALO_WIDTHS;
+// 问号的说明悬停或键盘聚焦时显示
+const TOOLTIP_TRIGGERS: ('hover' | 'focus')[] = ['hover', 'focus'];
 
 /** 显示级别的文字：最大级别拉到头时不限制 */
 export function zoomRangeText(minzoom: number, maxzoom: number): string {
@@ -97,7 +99,7 @@ function renderLevels({ key, name, values, current, off, text = String, pick }: 
 
 /**
  * 一个资源的标注编辑器（ADR 0160，样板 local/design/legend-symbols-v1 第 3 块）：最上面"显示标注"开关，
- * 下面的行同符号编辑器（56 宽的名称列、浅灰底）；关着标注时编辑器不能操作。
+ * 下面的行同符号编辑器（56 宽的名称列、浅灰底）；关着标注时编辑器不能操作，只有"恢复默认标注"照常（图例上没有别的入口清掉只改了标注的覆盖）。
  * 下拉、档位、开关点下就确认；颜色拖动时预览、确认时写入（ADR 0044）；显示级别松手时写入
  */
 export const LabelEditor = defineComponent({
@@ -242,13 +244,13 @@ export const LabelEditor = defineComponent({
       );
     };
 
-    // 压盖：说明放进名称后面的问号，悬停才显示（用户 2026-11-16）
+    // 压盖：说明放进名称后面的问号，悬停或键盘聚焦才显示（用户 2026-11-16）
     const renderOverlap = (value: ResourceLabel, off: boolean) =>
       renderRow(
         'overlap',
         <span class={[editorStyles.label, styles.overlapName]}>
           压盖
-          <ElTooltip content="文字之间允许重叠" placement="top">
+          <ElTooltip content="文字之间允许重叠" placement="top" trigger={TOOLTIP_TRIGGERS}>
             <span class={styles.help} tabindex={0} aria-label="压盖：文字之间允许重叠">
               <SvgIcon name="help" size={14} />
             </span>
@@ -336,7 +338,7 @@ export const LabelEditor = defineComponent({
                 link
                 type="primary"
                 size="small"
-                disabled={off || !props.symbols.hasLabelOverride(props.code)}
+                disabled={!props.symbols.hasLabelOverride(props.code)}
                 onClick={() => props.symbols.resetLabel(props.code)}
               >
                 恢复默认标注

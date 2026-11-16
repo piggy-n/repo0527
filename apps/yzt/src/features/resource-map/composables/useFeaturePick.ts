@@ -503,8 +503,14 @@ export function useFeaturePick(
     start((targets, zoom, area) => {
       const hit = view.pick(point);
       const how: Identification = { mode: 'pick', anchor: hit.kind === 'hit' ? hit.lngLat : null };
-      const tasks = planIdentify(targets, point, zoom, view, area, target =>
-        resources.pointMark(target.resource.code, zoom)
+      const tasks = planIdentify(
+        targets,
+        point,
+        zoom,
+        view,
+        area,
+        target => resources.pointMark(target.resource.code, zoom),
+        target => resources.labelTarget(target.resource.code) !== null
       );
       return tasks && { tasks, how };
     });

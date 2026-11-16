@@ -1,4 +1,5 @@
 import type {
+  FilterSpecification,
   LayerSpecification,
   ProjectionSpecification,
   SourceSpecification
@@ -79,12 +80,20 @@ function fakeGesture(): GestureHandlerLike {
 
 class FakeMap implements MapLike {
   readonly fitBoundsCalls: [number, number, number, number][] = [];
+  // 现在样式里的图层，从下到上，和它们现在的样子（过滤条件随 setFilter 更新）；创建时是样式里的
+  readonly layerOrder: string[] = [];
+  readonly layerSpecs = new Map<string, LayerSpecification>();
   readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
   camera: { lng: number; lat: number; zoom: number };
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
     this.camera = { lng, lat, zoom: options.zoom ?? 0 };
+    const { style } = options;
+    for (const layer of style && typeof style !== 'string' ? style.layers : []) {
+      this.layerOrder.push(layer.id);
+      this.layerSpecs.set(layer.id, layer);
+    }
   }
 
   // GeoJSON 数据源的当前数据：测量的数据随鼠标更新，要能找到数据源
@@ -107,11 +116,25 @@ class FakeMap implements MapLike {
   readonly addedLayers: [string, string | undefined][] = [];
   addLayer(layer: LayerSpecification, beforeId?: string): void {
     this.addedLayers.push([layer.id, beforeId]);
+    const at = beforeId === undefined ? -1 : this.layerOrder.indexOf(beforeId);
+    this.layerOrder.splice(at === -1 ? this.layerOrder.length : at, 0, layer.id);
+    this.layerSpecs.set(layer.id, layer);
   }
-  removeLayer(): void {}
+  removeLayer(id: string): void {
+    const at = this.layerOrder.indexOf(id);
+    if (at !== -1) {
+      this.layerOrder.splice(at, 1);
+    }
+    this.layerSpecs.delete(id);
+  }
   setPaintProperty(): void {}
   setLayoutProperty(): void {}
-  setFilter(): void {}
+  setFilter(id: string, filter?: FilterSpecification | null): void {
+    const layer = this.layerSpecs.get(id);
+    if (layer && layer.type !== 'background') {
+      this.layerSpecs.set(id, { ...layer, filter: filter ?? undefined });
+    }
+  }
   setLayerZoomRange(): void {}
   addImage(): void {}
   updateImage(): void {}
@@ -632,6 +655,8 @@ const GROUPS = [
   'basemap',
   'resources',
   'selection',
+  'resource-labels',
+  'selection-labels',
   'region-clip',
   'basemap-labels',
   'boundaries',
@@ -1648,6 +1673,110 @@ describe('CurrentMapPage', () => {
 
     await button(wrapper, '移动').trigger('click');
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
+  });
+
+  it('资源的标注（ADR 0160）：标注在选中高亮之上、注记之下，查询详情里的要素在资源的标注里滤掉、在上面一组加强', async () => {
+    const guid = 'b'.repeat(32);
+    const square: Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [119, 32],
+          [119.01, 32],
+          [119.01, 32.01],
+          [119, 32]
+        ]
+      ]
+    };
+    server.use(
+      mock.get('/backend/api/query/attr/page', () =>
+        HttpResponse.json({ total: 1, list: [{ guid, DLMC: '水田', BSM: '320' }] })
+      ),
+      mock.get('/backend/api/query/scope/geojson', () => HttpResponse.json([{ guid, geom: JSON.stringify(square) }]))
+    );
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));
+    // 右键地类图斑的一行，打开标注
+    await layerRow(wrapper, 'bgdc_dltb').trigger('contextmenu');
+    await wrapper.get('[data-menu-item="label-visible"]').trigger('click');
+    await vi.waitFor(() => expect(map.layerOrder).toContain('resource-labels-bgdc_dltb'));
+    const layer = { id: 'resources-bgdc_dltb' };
+    map.renderedFeatures = [{ source: layer.id, layer, properties: { guid, dlmc: '水田' }, geometry: square }];
+    map.moveTo([119, 32], 15, {});
+
+    await button(wrapper, '点/框选').trigger('click');
+    map.mouse('click', 200, 150);
+    await vi.waitFor(() => expect(map.layerOrder).toContain('selection-labels-bgdc_dltb'));
+    await vi.waitFor(() => expect(map.layerOrder).toContain('selection-fill'));
+
+    const order = map.layerOrder.filter(id =>
+      ['resources-bgdc_dltb', 'selection-fill', 'resource-labels-bgdc_dltb', 'selection-labels-bgdc_dltb'].includes(id)
+    );
+    expect(order).toStrictEqual([
+      'resources-bgdc_dltb',
+      'selection-fill',
+      'resource-labels-bgdc_dltb',
+      'selection-labels-bgdc_dltb'
+    ]);
+    const firstLabel = map.layerOrder.findIndex(id => groupOf(id) === 'basemap-labels');
+    expect(map.layerOrder.indexOf('selection-labels-bgdc_dltb')).toBeLessThan(firstLabel);
+    const filterOf = (id: string) => {
+      const spec = map.layerSpecs.get(id);
+      return spec && 'filter' in spec ? JSON.stringify(spec.filter) : '';
+    };
+    expect(filterOf('resource-labels-bgdc_dltb')).toContain(`["!=",["to-string",["get","guid"]],"${guid}"]`);
+    expect(filterOf('selection-labels-bgdc_dltb')).toContain(`["==",["to-string",["get","guid"]],"${guid}"]`);
+
+    // 关闭详情：加强标注去掉，原来的标注不再滤掉这个要素
+    await button(wrapper, '移动').trigger('click');
+    await vi.waitFor(() => expect(map.layerOrder).not.toContain('selection-labels-bgdc_dltb'));
+    expect(filterOf('resource-labels-bgdc_dltb')).not.toContain(guid);
+  });
+
+  it('区划遮罩盖住资源的标注和加强标注：遮罩插在两组标注上面（ADR 0160）', async () => {
+    const guid = 'c'.repeat(32);
+    // 南京城里的一块图斑
+    const square: Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [118.79, 32.04],
+          [118.81, 32.04],
+          [118.81, 32.06],
+          [118.79, 32.04]
+        ]
+      ]
+    };
+    server.use(
+      mock.get('/backend/api/query/attr/page', () =>
+        HttpResponse.json({ total: 1, list: [{ guid, DLMC: '水田', BSM: '320' }] })
+      ),
+      mock.get('/backend/api/query/scope/geojson', () => HttpResponse.json([{ guid, geom: JSON.stringify(square) }]))
+    );
+    const boundaries = deferBoundaryFetch();
+    const { wrapper, map } = await readyPage(await freshModules());
+    await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));
+    await layerRow(wrapper, 'bgdc_dltb').trigger('contextmenu');
+    await wrapper.get('[data-menu-item="label-visible"]').trigger('click');
+    await vi.waitFor(() => expect(map.layerOrder).toContain('resource-labels-bgdc_dltb'));
+
+    await button(wrapper, '区划定位').trigger('click');
+    await button(wrapper, '南京').trigger('click');
+    boundaries.release('city');
+    await settle();
+
+    await vi.waitFor(() => expect(map.layerOrder).toContain('region-clip-mask'));
+    // 在南京城里点选那块图斑：画布左上角是相机中心
+    const layer = { id: 'resources-bgdc_dltb' };
+    map.renderedFeatures = [{ source: layer.id, layer, properties: { guid, dlmc: '水田' }, geometry: square }];
+    map.moveTo([118.8, 32.05], 15, {});
+    await button(wrapper, '点/框选').trigger('click');
+    map.mouse('click', 0, 0);
+    await vi.waitFor(() => expect(map.layerOrder).toContain('selection-labels-bgdc_dltb'));
+
+    const mask = map.layerOrder.indexOf('region-clip-mask');
+    expect(map.layerOrder.indexOf('resource-labels-bgdc_dltb')).toBeLessThan(mask);
+    expect(map.layerOrder.indexOf('selection-labels-bgdc_dltb')).toBeLessThan(mask);
   });
 
   it('点框选的提示和草稿更新不带动页面、工具栏或资源面板重渲染', async () => {

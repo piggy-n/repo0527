@@ -234,7 +234,9 @@ const groundPicker =
  * 既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
  * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交。
  * 三维里点到模型上时查模型脚下（ADR 0157 的规则甲）：命中点正下方的地面投影回屏幕，渲染要素、容差框都围着这一点，
- * 四角只打地面；模型本身永远不是结果
+ * 四角只打地面；模型本身永远不是结果。
+ * 标注的文字画在所有资源上面（ADR 0160）：先在点击位置查 labeled 认可的资源，点在文字上时结果就是最上面那条文字的要素；
+ * 不在文字上时逐个资源识别，不算标注图层（容差框碰到的文字不是点到了它）
  */
 export function planIdentify(
   targets: readonly PickResource[],
@@ -248,7 +250,8 @@ export function planIdentify(
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null,
-  markOf?: (target: PickResource) => PointMarkOf | null
+  markOf?: (target: PickResource) => PointMarkOf | null,
+  labeled?: (target: PickResource) => boolean
 ): IdentifyTask[] | null;
 export function planIdentify(
   targets: readonly PickResource[],
@@ -256,12 +259,17 @@ export function planIdentify(
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null = null,
-  markOf: (target: PickResource) => PointMarkOf | null = () => null
+  markOf: (target: PickResource) => PointMarkOf | null = () => null,
+  labeled: (target: PickResource) => boolean = () => false
 ): IdentifyTask[] | null {
   const pick = groundPicker(view);
   const clicked = view.pick(point);
   if (scope && (clicked.kind !== 'hit' || !scopeContains(scope, clicked.lngLat))) {
     return null;
+  }
+  const labelHit = labelHitTask(targets.filter(labeled), point, view, scope);
+  if (labelHit) {
+    return [labelHit];
   }
   // 识别围着的屏幕点：点到模型时是模型脚下的地面，投影不到时（相机背后）仍用点击位置
   const anchor = (clicked.kind === 'hit' && clicked.surface === 'model' && view.project(clicked.lngLat)) || point;
@@ -292,23 +300,19 @@ export function planIdentify(
     if (scope && !area) {
       continue;
     }
-    // 面的距离都是 0，没有范围时不用换算几何
-    const features = view.queryRendered(renderedArea(anchor, tolerance), {
-      sources: [target.sourceId],
-      withGeometry: tolerance > 0 || area !== null
-    });
+    // 面的距离都是 0，没有范围时不用换算几何；标注图层已经在点击位置查过
+    const features = view
+      .queryRendered(renderedArea(anchor, tolerance), {
+        sources: [target.sourceId],
+        withGeometry: tolerance > 0 || area !== null
+      })
+      .filter(({ layerId }) => !isLabelLayer(layerId));
     const project = (lngLat: LngLat) => view.project(lngLat);
     // 点按到画出的形状的距离过滤和排序，容差同改版前的圆点（ADR 0159 第 3 节）：symbol 图层查到的是整张图标图片
     const mark = type === 'circle' ? markOf(target) : null;
-    // 点到标注的文字就是点到了这个要素（ADR 0160）：距离算 0，同样按 guid 去重
-    const candidates = renderedCandidates(target, withinScope(features, area), feature => {
-      if (isLabelLayer(feature.layerId)) {
-        return 0;
-      }
-      return mark
-        ? markScreenDistance(feature, mark, anchor, project)
-        : screenDistance(feature.geometry, anchor, project);
-    });
+    const candidates = renderedCandidates(target, withinScope(features, area), feature =>
+      mark ? markScreenDistance(feature, mark, anchor, project) : screenDistance(feature.geometry, anchor, project)
+    );
     const rendered = mark ? candidates.filter(({ distance }) => distance <= tolerance) : candidates;
     const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
     if (server) {
@@ -326,6 +330,31 @@ export function planIdentify(
     }
   }
   return tasks;
+}
+
+// 点击位置落在哪条标注的文字上（ADR 0160）：只查开着标注的资源，取最上面那条文字所属的资源，候选是它在这一点的文字，
+// 距离算 0；文字所属的要素要在区划范围里。没点在文字上时为 null
+function labelHitTask(
+  targets: readonly PickResource[],
+  point: ScreenPoint,
+  view: Pick<ToolView, 'queryRendered'>,
+  scope: RegionScope | null
+): IdentifyTask | null {
+  if (targets.length === 0) {
+    return null;
+  }
+  const sources = targets.map(({ sourceId }) => sourceId);
+  const hits = view
+    .queryRendered(point, { sources, withGeometry: scope !== null })
+    .filter(({ layerId }) => isLabelLayer(layerId));
+  const shown = withinScope(hits, scope);
+  const [top] = shown;
+  const target = top && targets.find(({ sourceId }) => sourceId === top.sourceId);
+  if (!target) {
+    return null;
+  }
+  const candidates = renderedCandidates(target, shown, () => 0);
+  return candidates.length > 0 ? { kind: 'rendered', target, candidates } : null;
 }
 
 /** 后端识别用的范围：面用点击位置（只返回包含它的面），线、点用容差框四角拾取到的多边形；拾取不到时为 null */
@@ -462,7 +491,10 @@ export function planBox(
     }
     // 只用渲染要素（后端识别拾取不到范围时也退回这里）：能列出的候选按有效 guid 计数，列不出的不占额度
     const points = target.resource.geometry === 'circle';
-    const rendered = view.queryRendered(box, { sources, withGeometry: area !== null || points });
+    // 标注图层不算（ADR 0160）：查到的是文字碰到框，不是要素在框里
+    const rendered = view
+      .queryRendered(box, { sources, withGeometry: area !== null || points })
+      .filter(({ layerId }) => !isLabelLayer(layerId));
     const features = withinScope(points ? pointsInBox(rendered, box, lngLat => view.project(lngLat)) : rendered, area);
     const count = new Set(features.flatMap(({ properties: { guid } }) => (isFeatureGuid(guid) ? [guid] : []))).size;
     if (count > BOX_ESTIMATE_LIMIT) {

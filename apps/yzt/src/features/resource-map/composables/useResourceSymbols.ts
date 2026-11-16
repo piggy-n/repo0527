@@ -90,7 +90,9 @@ export interface ResourceSymbols {
   readonly resetResource: (code: string) => void;
   /** 恢复全部资源的默认 */
   readonly resetAll: () => void;
-  /** 资源有没有任何覆盖（选了统一样式也算） */
+  /**
+   * 资源的符号有没有覆盖（选了统一样式也算），图例的"改过符号"按它；只改了标注不算，标注在标注编辑器里恢复（ADR 0160）
+   */
   readonly isCustomized: (code: string) => boolean;
   /** 目标有没有覆盖 */
   readonly hasOverride: (target: SymbolTarget) => boolean;
@@ -415,7 +417,10 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
         overrides.value = new Map();
       }
     },
-    isCustomized: code => overrides.value.has(code),
+    isCustomized: code => {
+      const override = overrides.value.get(code);
+      return Boolean(override?.uniform ?? override?.mode ?? override?.items);
+    },
     hasOverride: target => targetOverride(overrides.value.get(target.code), target.item) !== undefined,
     labelOf: committedLabel,
     setLabel,

@@ -97,6 +97,14 @@ export function isDrawn(display: ResourceDisplay | undefined): boolean {
   return display !== undefined && display.added && display.checked;
 }
 
+/**
+ * 画出标注（ADR 0160）：资源画在地图上、开着标注、看得见。透明度为 0 时不画：看不见的文字照样占着避让的位置，
+ * 会挤掉别的标注，也会被点到
+ */
+export function isLabelShown(display: ResourceDisplay | undefined): display is ResourceDisplay {
+  return isDrawn(display) && display?.labeled === true && display.opacity > 0;
+}
+
 /** 当前地图里的资源（包括隐藏的），按叠放顺序从上到下 */
 export function addedCodes(state: ResourceLayersState): string[] {
   return state.order.filter(code => state.displays.get(code)?.added === true);
@@ -410,7 +418,7 @@ export interface ResourceLabelsInput {
 }
 
 /**
- * resource-labels 分组（ADR 0160）：画在地图上、开着标注、校验通过、登记了标注字段的资源，引用资源分组的数据源，
+ * resource-labels 分组（ADR 0160）：画出标注（isLabelShown）、校验通过、登记了标注字段的资源，引用资源分组的数据源，
  * 和 resources 分组读同一份状态、同一轮提交；碰撞时点 > 线 > 面，同一种几何按面板的先后
  */
 export function resourceLabelsGroup({
@@ -422,7 +430,7 @@ export function resourceLabelsGroup({
   const targets = state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display || !isDrawn(display) || !display.labeled || invalid.has(code)) {
+    if (!resource || !display || !isLabelShown(display) || invalid.has(code)) {
       return [];
     }
     const target = labelTargetOf(resource, display, overrideOf(code));
