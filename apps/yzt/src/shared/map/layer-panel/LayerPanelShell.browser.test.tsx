@@ -29,11 +29,11 @@ const TOKENS = {
 // n 行、每行 32 高的内容
 const rows = (n: number) => Array.from({ length: n }, (_, index) => h('div', { key: index, style: { height: '32px' } }));
 
-// 搜索行下面带数量的标签（用户 2026-11-16 选的丁），数量取真实目录的量级
+// 搜索行下面带数量的标签（用户 2026-11-16 选的丁），数量取真实目录的量级：三项都是两位数（清单有 16 个模型）
 const VIEWS = [
-  { id: 'all', label: '全部', count: 46 },
+  { id: 'all', label: '全部', count: 56 },
   { id: 'resources', label: '二维资源', count: 40 },
-  { id: 'models', label: '三维模型', count: 6 }
+  { id: 'models', label: '三维模型', count: 16 }
 ];
 
 /**
@@ -344,12 +344,13 @@ describe('LayerPanelShell（真实的布局）', () => {
     expect(await headsAt(294)).toStrictEqual(fits);
   });
 
-  it('360 宽的手机（264 宽的面板）：下段标题改成两个字"图层"以后，两段的工具栏也都在面板里（2026-11-16，原来最右的移除被裁掉约 13）', async () => {
+  // 264 宽时标签行一行的余量只有约 4（应用字体实测），随字体变，这里不断言一行
+  it('360 宽的手机（264 宽的面板）：下段标题改成两个字"图层"以后，两段的工具栏也都在面板里（2026-11-16，原来最右的移除被裁掉约 13）；标签不横向溢出', async () => {
     expect(await headsAt(264)).toMatchObject({ catalogInside: true, currentInside: true, viewsInside: true, panelScroll: false });
   });
 
   it('更窄（240 宽）时标签换到下一行，不横向溢出', async () => {
-    expect(await headsAt(240)).toMatchObject({ viewsInside: true, panelScroll: false });
+    expect(await headsAt(240)).toMatchObject({ viewsOneLine: false, viewsInside: true, panelScroll: false });
   });
 
   it('所在页面被缓存：停用期间量到的 0 不采用，再次激活的那一刻两段的高度和停用前一样（ADR 0063）', async () => {
