@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  LABEL_FONT_NAMES,
+  LABEL_HALO_WIDTHS,
+  LABEL_PLACEMENT_NAMES,
+  LABEL_SIZES,
+  LABEL_ZOOM_RANGE,
+  type LabelOverride
+} from './labels';
 import { POINT_SHAPE_NAMES } from './point-shapes';
 import {
   type ColorField,
@@ -30,6 +38,8 @@ export interface ResourceSymbolOverride {
   readonly mode?: SymbolMode;
   /** 分类样式各取值的覆盖，按取值的键 */
   readonly items?: Readonly<Record<string, SymbolOverride>>;
+  /** 标注的样式（ADR 0160），和样式方式无关；显隐是资源的显示状态，不在这里 */
+  readonly label?: LabelOverride;
 }
 
 export type SymbolOverrides = ReadonlyMap<string, ResourceSymbolOverride>;
@@ -54,7 +64,7 @@ export const RESOURCE_SYMBOLS_VERSION = 1;
 /** 代码给出的样式方式：按属性配色的资源默认是分类样式 */
 export const CODE_DEFAULT_MODE: SymbolMode = 'classified';
 
-const isEmpty = (override: SymbolOverride | undefined) => !override || Object.keys(override).length === 0;
+const isEmpty = (override: object | undefined) => !override || Object.keys(override).length === 0;
 
 /**
  * 一层覆盖决定的样式方式（ADR 0123 第 3 节、ADR 0154）：选过的方式；没选过时调过统一样式的是统一样式，
@@ -71,8 +81,8 @@ export function layerMode(override: ResourceSymbolOverride | undefined, below: S
 }
 
 /**
- * 去掉空的统一样式和取值，什么都不剩时为 undefined；样式方式和下面一层的默认方式相同、
- * 由调过的内容也推得出时不记（ADR 0154）
+ * 去掉空的统一样式、取值和标注，什么都不剩时为 undefined；样式方式和下面一层的默认方式相同、
+ * 由调过的内容也推得出时不记（ADR 0154）。标注不参与推断样式方式
  */
 export function pruneOverride(
   override: ResourceSymbolOverride,
@@ -88,7 +98,8 @@ export function pruneOverride(
   const pruned: ResourceSymbolOverride = {
     ...(content.uniform ? { uniform: content.uniform } : {}),
     ...(keepsMode ? { mode } : {}),
-    ...(content.items ? { items: content.items } : {})
+    ...(content.items ? { items: content.items } : {}),
+    ...(isEmpty(override.label) ? {} : { label: override.label })
   };
   return Object.keys(pruned).length > 0 ? pruned : undefined;
 }
@@ -160,13 +171,31 @@ const overrideSchema = z.object({
   outlineDash: z.enum(LINE_DASH_NAMES).optional()
 });
 
+const labelZoomSchema = z.number().int().min(LABEL_ZOOM_RANGE.min).max(LABEL_ZOOM_RANGE.max);
+
+// 标注（ADR 0160）是后加的可选字段，版本号不变；字体、放置方式的取值以后只能增加，不能改名或删除。
+// 字段名不在这里校验：登记改了时推导退回默认字段（labels.ts 的 resolveLabel）
+const labelSchema = z.object({
+  field: z.string().optional(),
+  font: z.enum(LABEL_FONT_NAMES).optional(),
+  size: z.literal(LABEL_SIZES).optional(),
+  color: colorSchema.optional(),
+  haloColor: colorSchema.optional(),
+  haloWidth: z.literal(LABEL_HALO_WIDTHS).optional(),
+  placement: z.enum(LABEL_PLACEMENT_NAMES).optional(),
+  minzoom: labelZoomSchema.optional(),
+  maxzoom: labelZoomSchema.optional(),
+  overlap: z.boolean().optional()
+});
+
 /** 存下的符号覆盖：按资源的普通对象 */
 export const storedSymbolsSchema = z.record(
   z.string(),
   z.object({
     uniform: overrideSchema.optional(),
     mode: z.enum(['uniform', 'classified']).optional(),
-    items: z.record(z.string(), overrideSchema).optional()
+    items: z.record(z.string(), overrideSchema).optional(),
+    label: labelSchema.optional()
   })
 );
 

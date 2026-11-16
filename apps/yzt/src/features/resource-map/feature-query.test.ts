@@ -64,7 +64,13 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number, checked = true): ResourceDisplay => ({ added: true, checked, opacity: 1, year });
+const display = (year: number, checked = true): ResourceDisplay => ({
+  added: true,
+  checked,
+  opacity: 1,
+  year,
+  labeled: false
+});
 
 // 从上到下：水域线、村级调查区、地类图斑、坑塘（没勾选）、公用设施点
 const STATE: ResourceLayersState = {
@@ -396,6 +402,9 @@ const CJDCQJX = targetOf('bgdc_cjdcqjx', 2022);
 
 const kindsOf = (tasks: readonly BoxTask[]) => tasks.map(task => [task.target.resource.code, task.kind]);
 
+// 半径 4 像素、没有描边的圆点
+const CIRCLE_MARK = () => ({ shape: 'circle' as const, iconSize: 1, strokeWidth: 0 });
+
 describe('planIdentify', () => {
   const ORIGIN = { x: 0, y: 0 };
   const features = [
@@ -416,6 +425,30 @@ describe('planIdentify', () => {
       [{ from: { x: -8, y: -8 }, to: { x: 8, y: 8 } }, { sources: [LCTL.sourceId], withGeometry: true }],
       [ORIGIN, { sources: [DLTB.sourceId], withGeometry: false }],
       [ORIGIN, { sources: [SZY.sourceId], withGeometry: false }]
+    ]);
+  });
+
+  it('点到标注的文字（ADR 0160）：标注图层查到的要素距离算 0，离点超出容差也是候选；资源图层上同样远的点照样滤掉', () => {
+    const points = targetOf('csxhjctb_gyssp', 2025);
+    const far: Point = { type: 'Point', coordinates: [30, 0] };
+    const onLabel = (layerId: string, id: string): RenderedFeature => ({
+      sourceId: points.sourceId,
+      layerId,
+      properties: { guid: guid(id) },
+      geometry: far
+    });
+    const view = fakeView([
+      onLabel('resource-labels-csxhjctb_gyssp', 'a'),
+      onLabel(points.sourceId, 'b'),
+      onLabel('selection-labels-csxhjctb_gyssp', 'c')
+    ]).view;
+
+    const [task] = planIdentify([points], ORIGIN, 15, view, null, () => CIRCLE_MARK) ?? [];
+
+    const picked = task?.kind === 'rendered' ? task.candidates.map(({ guid: id, distance }) => [id[0], distance]) : [];
+    expect(picked).toStrictEqual([
+      ['a', 0],
+      ['c', 0]
     ]);
   });
 
@@ -636,6 +669,16 @@ describe('weightedEstimate', () => {
     ];
 
     expect(weightedEstimate('bgdc_dltb', features)).toBe(2 + 25 + 2);
+  });
+
+  it('标注图层（ADR 0160）不算：开着标注时估数不变', () => {
+    const body = [onLayer(DLTB, null, clusterOf(20)), onLayer(DLTB, null, { guid: guid('a') })];
+    const labels: RenderedFeature[] = [
+      { sourceId: DLTB.sourceId, layerId: 'resource-labels-bgdc_dltb', properties: clusterOf(20) },
+      { sourceId: DLTB.sourceId, layerId: 'resource-labels-bgdc_dltb', properties: { bsm: '9' } }
+    ];
+
+    expect(weightedEstimate('bgdc_dltb', [...body, ...labels])).toBe(weightedEstimate('bgdc_dltb', body));
   });
 
   it('point_count 不是正数时按 1；不是聚合要素时 point_count 不算', () => {

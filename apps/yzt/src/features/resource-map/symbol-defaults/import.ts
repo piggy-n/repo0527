@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { classItems } from '../classification';
+import { labelFieldsOf } from '../label-fields';
+import { compactLabel, LABEL_KEYS, type LabelField, type LabelOverride } from '../labels';
 import {
   CODE_DEFAULT_MODE,
   fromStoredSymbols,
@@ -51,6 +53,20 @@ const FIELD_LABELS: Readonly<Record<SymbolField, string>> = {
 
 // 写入文件和报告里的字段顺序：点、线、面
 const FIELDS: readonly SymbolField[] = [...new Set(Object.values(SYMBOL_FIELDS).flat())];
+
+// 报告里标注的字段名，和标注编辑器的叫法一致（ADR 0160）
+const LABEL_FIELD_LABELS: Readonly<Record<LabelField, string>> = {
+  field: '字段',
+  font: '字体',
+  size: '字号',
+  color: '颜色',
+  haloColor: '描边色',
+  haloWidth: '描边宽度',
+  placement: '放置',
+  minzoom: '最小显示级别',
+  maxzoom: '最大显示级别',
+  overlap: '压盖'
+};
 
 const compareText = (a: string, b: string) => {
   if (a === b) {
@@ -125,6 +141,31 @@ function mergeItems(
 }
 
 /**
+ * 标注的新默认（ADR 0160）：现在的发布默认叠加这个用户的标注；没有登记标注字段的资源、不在登记里的字段跳过，
+ * 原因记进 skipped
+ */
+function mergedLabel(
+  code: string,
+  person: LabelOverride | undefined,
+  current: LabelOverride | undefined,
+  skipped: string[]
+): LabelOverride | undefined {
+  if (!person) {
+    return current;
+  }
+  const fields = labelFieldsOf(code);
+  if (fields.length === 0) {
+    skipped.push(`${code}：没有登记标注字段，标注用不上`);
+    return current;
+  }
+  const known = person.field === undefined || fields.some(option => option.field === person.field);
+  if (!known) {
+    skipped.push(`${code}：标注字段 ${person.field} 不在登记里`);
+  }
+  return compactLabel({ ...current, ...person, field: known ? (person.field ?? current?.field) : current?.field });
+}
+
+/**
  * 一个资源的新默认：现在的发布默认叠加这个用户的覆盖，就是他在页面上看到的样子；样式方式按他看到的写。
  * 取值不在规则里、没登记分类的资源带了取值或方式时跳过这些部分，原因记进 skipped
  */
@@ -135,12 +176,14 @@ function mergedDefault(
   skipped: string[]
 ): ResourceSymbolOverride | undefined {
   const uniform = { ...current?.uniform, ...person.uniform };
+  const label = mergedLabel(code, person.label, current?.label, skipped);
+  const labelPart = label ? { label } : {};
   const rule = resourceStyle(code).color;
   if (!rule) {
     if (person.items || person.mode) {
       skipped.push(`${code}：没有登记分类，只有统一样式，取值和样式方式用不上`);
     }
-    return pruneOverride({ uniform });
+    return pruneOverride({ uniform, ...labelPart });
   }
   const keys = new Set(classItems(rule).map(item => item.key));
   const entries = Object.entries(person.items ?? {});
@@ -150,10 +193,18 @@ function mergedDefault(
   }
   const items = mergeItems(current?.items, Object.fromEntries(entries.filter(([key]) => keys.has(key))));
   const mode = layerMode(person, layerMode(current, CODE_DEFAULT_MODE));
-  return pruneOverride({ uniform, mode, items });
+  return pruneOverride({ uniform, mode, items, ...labelPart });
 }
 
-const shown = (value: string | number | undefined) => (value === undefined ? '代码默认' : String(value));
+const shown = (value: string | number | boolean | undefined) => (value === undefined ? '代码默认' : String(value));
+
+function labelLines(before: LabelOverride | undefined, after: LabelOverride | undefined): string[] {
+  return LABEL_KEYS.flatMap(key => {
+    const from = before?.[key];
+    const to = after?.[key];
+    return from === to ? [] : [`  标注 · ${LABEL_FIELD_LABELS[key]}：${shown(from)} → ${shown(to)}`];
+  });
+}
 
 function fieldLines(prefix: string, before: SymbolOverride | undefined, after: SymbolOverride | undefined): string[] {
   return FIELDS.flatMap(field => {
@@ -186,6 +237,7 @@ function resourceLines(
     const name = label === undefined || label === key ? key : `${label}（${key}）`;
     lines.push(...fieldLines(`  ${name} · `, before?.items?.[key], after?.items?.[key]));
   }
+  lines.push(...labelLines(before?.label, after?.label));
   return lines.length > 0 ? [code, ...lines] : [];
 }
 
@@ -197,16 +249,25 @@ function fieldsOf(override: SymbolOverride): Record<string, string | number> {
   return Object.fromEntries(entries);
 }
 
+function labelFieldsOfOverride(label: LabelOverride): Record<string, string | number | boolean> {
+  const entries = LABEL_KEYS.flatMap(key => {
+    const value = label[key];
+    return value === undefined ? [] : [[key, value] as const];
+  });
+  return Object.fromEntries(entries);
+}
+
 const byKey = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]) => compareText(a, b);
 
-/** 发布默认符号文件的固定格式：按 code、取值排序，字段按点、线、面的顺序，结尾换行 */
+/** 发布默认符号文件的固定格式：按 code、取值排序，字段按点、线、面的顺序，标注在最后，结尾换行 */
 export function symbolDefaultsText(overrides: SymbolOverrides): string {
-  const resources = [...overrides].toSorted(byKey).map(([code, { uniform, mode, items }]) => {
+  const resources = [...overrides].toSorted(byKey).map(([code, { uniform, mode, items, label }]) => {
     const sortedItems = Object.entries(items ?? {}).toSorted(byKey);
     const value = {
       ...(uniform ? { uniform: fieldsOf(uniform) } : {}),
       ...(mode ? { mode } : {}),
-      ...(items ? { items: Object.fromEntries(sortedItems.map(([key, item]) => [key, fieldsOf(item)])) } : {})
+      ...(items ? { items: Object.fromEntries(sortedItems.map(([key, item]) => [key, fieldsOf(item)])) } : {}),
+      ...(label ? { label: labelFieldsOfOverride(label) } : {})
     };
     return [code, value] as const;
   });

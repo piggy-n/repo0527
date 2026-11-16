@@ -83,9 +83,21 @@ export const CurrentMapPage = defineComponent({
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
     // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源和高亮，注记、边界在它上面
     // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面。
-    // MapLibre 引擎的三维模型挡住注记以下的分组，注记、边界、区划高亮和测量画在模型上面（ADR 0147 第 2 节）
+    // MapLibre 引擎的三维模型挡住注记以下的分组，注记、边界、区划高亮和测量画在模型上面（ADR 0147 第 2 节）。
+    // 资源的标注在选中高亮之上、区划遮罩之下（区划外的标注被盖住），查询详情里那个要素的加强标注紧挨着压在上面（ADR 0160）
     const map = provideMap({
-      groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
+      groups: [
+        'basemap',
+        'resources',
+        'selection',
+        'resource-labels',
+        'selection-labels',
+        'region-clip',
+        'basemap-labels',
+        'boundaries',
+        'region',
+        'measure'
+      ],
       sceneBelow: 'basemap-labels',
       camera: JIANGSU_CAMERA
     });
@@ -203,6 +215,9 @@ export const CurrentMapPage = defineComponent({
       'basemap-labels': basemap.deriveLabelsGroup,
       resources: resources.deriveGroup,
       selection: pick.deriveGroup,
+      // 加强标注的要素原来的标注滤掉，两组读同一份状态、同一轮提交（ADR 0160）
+      'resource-labels': () => resources.deriveLabelsGroup(pick.labelEmphasis.value),
+      'selection-labels': pick.deriveLabelsGroup,
       // 选中市或区县、边界加载好后裁剪（ADR 0051 第 1 节）
       'region-clip': () => regionClipGroup(readyBoundary(region.state.value)),
       boundaries: boundaries.deriveGroup,

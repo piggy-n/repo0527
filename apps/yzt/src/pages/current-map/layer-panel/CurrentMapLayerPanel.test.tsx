@@ -165,6 +165,8 @@ const legendShown = () => ({
 });
 // 右键菜单里的定位；焦点在不在右键菜单里
 const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
+const menuItem = (key: string) =>
+  required(document.querySelector<HTMLButtonElement>(`[data-menu-item="${key}"]`), `菜单项 ${key}`);
 const menuHasFocus = () => Boolean(document.activeElement?.closest('[data-panel-menu]'));
 const roamItem = () => required(document.querySelector<HTMLButtonElement>('[data-menu-item="roam"]'), '漫游');
 // 目录显示的内容（用户 2026-11-15，2026-11-16 改成搜索行下面带数量的标签）：显示着的节点、选中的标签、
@@ -261,6 +263,38 @@ describe('CurrentMapLayerPanel', () => {
     expect(legendCodes.at(-1)).toBeNull();
   });
 
+  it('标注（ADR 0160）：工具栏第 8 个按钮、右键菜单的"标注…"打开第三种浮层；菜单直接显示、隐藏标注', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+
+    await tool(wrapper, 'label').trigger('click');
+    expect(popover()?.getAttribute('aria-label')).toBe('水域线层的标注');
+    expect(tool(wrapper, 'label').attributes('aria-pressed')).toBe('true');
+    expect(popover()?.querySelector('[data-label-editor="csxhjctb_hydl"]')).not.toBeNull();
+    await tool(wrapper, 'label').trigger('click');
+    expect(popover()).toBeNull();
+
+    await row(wrapper, 'csxhjctb_hydl').trigger('contextmenu');
+    expect(menuItem('label-visible').textContent).toContain('显示标注');
+    menuItem('label-visible').click();
+    await nextTick();
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.labeled).toBe(true);
+    expect(popover()).toBeNull();
+
+    await row(wrapper, 'bgdc_dltb').trigger('contextmenu');
+    expect(menuItem('label-visible').textContent).toContain('显示标注');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('contextmenu');
+    expect(menuItem('label-visible').textContent).toContain('隐藏标注');
+    menuItem('label').click();
+    await nextTick();
+    expect(selectedRow(wrapper)).toBe('csxhjctb_hydl');
+    expect(popover()?.getAttribute('aria-label')).toBe('水域线层的标注');
+  });
+
   it('换选中的行时浮层跟着换；隐藏的行仍在图层里，复选框不改选中', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
@@ -326,6 +360,8 @@ describe('CurrentMapLayerPanel', () => {
       'visible',
       'opacity',
       'legend',
+      'label-visible',
+      'label',
       'locate',
       'move-up',
       'move-down',
@@ -379,6 +415,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(locate).not.toHaveBeenCalled();
     expect(tool(wrapper, 'opacity').attributes('aria-disabled')).toBe('true');
     expect(tool(wrapper, 'legend').attributes('aria-disabled')).toBe('true');
+    expect(tool(wrapper, 'label').attributes('aria-disabled')).toBe('true');
     expect(wrapper.get('[data-roam="station"]').attributes('aria-disabled')).toBe('true');
 
     await tool(wrapper, 'move-up').trigger('click');

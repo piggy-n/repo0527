@@ -173,6 +173,29 @@ export function shapeOffset(shape: PointShape): readonly [number, number] {
   return shape === 'pin' ? [0, -PIN.tipY * SHAPE_BASE_RADIUS] : [0, 0];
 }
 
+/** 形状从锚点往上、往下、往两侧伸出多远（半径的倍数） */
+export interface ShapeReach {
+  readonly up: number;
+  readonly down: number;
+  readonly side: number;
+}
+
+/** 形状伸出锚点的距离：定位针的针尖在锚点，往上到针头的顶，往下没有；其他形状的中心在锚点（标注据此让开点，ADR 0160） */
+export function shapeReach(shape: PointShape): ShapeReach {
+  if (shape === 'circle') {
+    return { up: 1, down: 1, side: 1 };
+  }
+  if (shape === 'pin') {
+    return { up: fixed(PIN.tipY - PIN.cy + PIN.r), down: 0, side: PIN.r };
+  }
+  const points = POLYGONS[shape];
+  return {
+    up: Math.max(...points.map(([, y]) => -y)),
+    down: Math.max(...points.map(([, y]) => y)),
+    side: Math.max(...points.map(([x]) => Math.abs(x)))
+  };
+}
+
 /** 一个点在屏幕上画出的样子：形状、当前级别的 icon-size、描边宽度（像素） */
 export interface PointMark {
   readonly shape: PointShape;

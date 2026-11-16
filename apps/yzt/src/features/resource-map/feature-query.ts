@@ -14,6 +14,7 @@ import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@mx/map-
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
+import { isLabelLayer } from './labels';
 import { LANDUSE_FIELD_LABELS } from './landuse';
 import { markDistance } from './point-shapes';
 import { isDrawn, isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
@@ -299,9 +300,15 @@ export function planIdentify(
     const project = (lngLat: LngLat) => view.project(lngLat);
     // 点按到画出的形状的距离过滤和排序，容差同改版前的圆点（ADR 0159 第 3 节）：symbol 图层查到的是整张图标图片
     const mark = type === 'circle' ? markOf(target) : null;
-    const candidates = renderedCandidates(target, withinScope(features, area), feature =>
-      mark ? markScreenDistance(feature, mark, anchor, project) : screenDistance(feature.geometry, anchor, project)
-    );
+    // 点到标注的文字就是点到了这个要素（ADR 0160）：距离算 0，同样按 guid 去重
+    const candidates = renderedCandidates(target, withinScope(features, area), feature => {
+      if (isLabelLayer(feature.layerId)) {
+        return 0;
+      }
+      return mark
+        ? markScreenDistance(feature, mark, anchor, project)
+        : screenDistance(feature.geometry, anchor, project);
+    });
     const rendered = mark ? candidates.filter(({ distance }) => distance <= tolerance) : candidates;
     const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
     if (server) {

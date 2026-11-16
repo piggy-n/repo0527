@@ -118,7 +118,8 @@ describe('资源图层的偏好', () => {
       added: true,
       checked: true,
       opacity: 0.5,
-      year: 2023
+      year: 2023,
+      labeled: false
     });
     expect(ctx.owner.state.value.displays.get('bgdc_dltb')).toMatchObject({ added: false, checked: false });
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl']);
@@ -229,6 +230,29 @@ describe('资源图层的偏好', () => {
     expect(ctx.owner.batchYear.value).toBeNull();
   });
 
+  it('标注的显隐（ADR 0160）：随显示状态写入、还原；2026-11-16 之前存下的没有这一项，不显示标注，版本不变', async () => {
+    const store = createMemoryStore(
+      stored(
+        { csxhjctb_hydl: { added: true, checked: true, opacity: 1, year: 2025, labeled: true }, bgdc_dltb: HIDDEN },
+        ['csxhjctb_hydl', 'bgdc_dltb']
+      )
+    );
+    using ctx = setup(store);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.labeled).toBe(true);
+    expect(ctx.owner.state.value.displays.get('bgdc_dltb')?.labeled).toBe(false);
+
+    ctx.owner.setLabeled('bgdc_dltb', true);
+    ctx.owner.setLabeled('csxhjctb_hydl', false);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+
+    expect(store.entries.get(KEY)).toMatchObject({
+      version: 1,
+      value: { displays: { bgdc_dltb: { labeled: true }, csxhjctb_hydl: { labeled: false } } }
+    });
+  });
+
   it('修改后防抖写入：每个资源的加入、显示、透明度、年份和叠放顺序', async () => {
     const store = createMemoryStore();
     using ctx = setup(store);
@@ -244,9 +268,9 @@ describe('资源图层的偏好', () => {
       version: 1,
       value: {
         displays: {
-          bgdc_dltb: { added: true, checked: false, opacity: 1, year: 2022 },
-          bgdc_cjdcq: { added: false, checked: false, opacity: 1, year: 2024 },
-          csxhjctb_hydl: { added: true, checked: true, opacity: 0.4, year: 2025 }
+          bgdc_dltb: { added: true, checked: false, opacity: 1, year: 2022, labeled: false },
+          bgdc_cjdcq: { added: false, checked: false, opacity: 1, year: 2024, labeled: false },
+          csxhjctb_hydl: { added: true, checked: true, opacity: 0.4, year: 2025, labeled: false }
         },
         order: ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_cjdcq'],
         batchYear: null

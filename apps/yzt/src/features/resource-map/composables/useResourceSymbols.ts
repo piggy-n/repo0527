@@ -3,6 +3,18 @@ import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
 import { classItems } from '../classification';
+import { labelFieldsOf } from '../label-fields';
+import {
+  LABEL_FONT_NAMES,
+  LABEL_HALO_WIDTHS,
+  LABEL_SIZES,
+  LABEL_ZOOM_RANGE,
+  type LabelColorField,
+  type LabelOverride,
+  nextLabelOverride,
+  PLACEMENTS_OF,
+  type ResourceLabel
+} from '../labels';
 import { POINT_SHAPES } from '../point-shapes';
 import {
   effectiveOverride,
@@ -21,7 +33,15 @@ import {
   toStoredSymbols,
   withTargetOverride
 } from '../resource-symbols';
-import { classDefaultSymbol, defaultSymbol, defaultSymbolMode, resourceStyle, symbolModeOf } from '../style-registry';
+import {
+  classDefaultSymbol,
+  defaultLabel,
+  defaultSymbol,
+  defaultSymbolMode,
+  resourceLabel,
+  resourceStyle,
+  symbolModeOf
+} from '../style-registry';
 import {
   COLOR_FIELDS,
   type ColorField,
@@ -74,6 +94,21 @@ export interface ResourceSymbols {
   readonly isCustomized: (code: string) => boolean;
   /** 目标有没有覆盖 */
   readonly hasOverride: (target: SymbolTarget) => boolean;
+  /**
+   * 确认过的标注（ADR 0160，不含预览），标注编辑器按它显示；目录里没有、没有登记标注字段的资源为 null。
+   * 标注的样式存在资源的覆盖里，跟着"恢复默认"和发布的默认符号走
+   */
+  readonly labelOf: (code: string) => ResourceLabel | null;
+  /** 改标注并保存；参数不合法时抛错，同时清掉这个资源标注的预览 */
+  readonly setLabel: (code: string, patch: LabelOverride) => void;
+  /** 拖动取色时的标注颜色预览，不保存；和确认的颜色相同时清掉预览；颜色解析不了、资源没有标注时抛错 */
+  readonly previewLabelColor: (code: string, field: LabelColorField, color: string) => void;
+  /** 丢弃这个资源标注的预览（编辑器卸载、换了资源） */
+  readonly clearLabelPreview: (code: string) => void;
+  /** 恢复这个资源的默认标注 */
+  readonly resetLabel: (code: string) => void;
+  /** 标注有没有覆盖 */
+  readonly hasLabelOverride: (code: string) => boolean;
 }
 
 export interface ResourceSymbolsOptions {
@@ -84,6 +119,49 @@ export interface ResourceSymbolsOptions {
 }
 
 const STROKE_WIDTHS: readonly number[] = POINT_STROKE_WIDTHS;
+const LABEL_SIZE_VALUES: readonly number[] = LABEL_SIZES;
+const LABEL_HALO_VALUES: readonly number[] = LABEL_HALO_WIDTHS;
+
+// 拖动取色时标注颜色的临时预览，同符号的预览（ADR 0044 第 6 节）
+interface LabelPreview {
+  readonly code: string;
+  readonly field: LabelColorField;
+  readonly color: string;
+}
+
+const isZoom = (value: number) =>
+  Number.isInteger(value) && value >= LABEL_ZOOM_RANGE.min && value <= LABEL_ZOOM_RANGE.max;
+
+// 标注的改动按资源校验（界面先校验，这里是最后一道）；合并后最小级别不能比最大级别大
+function checkLabelPatch(resource: Resource, current: ResourceLabel, patch: LabelOverride): void {
+  const { field, font, size, color, haloColor, haloWidth, placement, minzoom, maxzoom } = patch;
+  if (field !== undefined && !labelFieldsOf(resource.code).some(option => option.field === field)) {
+    throw new Error(`资源 ${resource.code} 的标注没有字段 ${field}`);
+  }
+  if (font !== undefined && !LABEL_FONT_NAMES.includes(font)) {
+    throw new Error(`没有字体 ${font}`);
+  }
+  if (size !== undefined && !LABEL_SIZE_VALUES.includes(size)) {
+    throw new RangeError(`字号只能是 ${LABEL_SIZES.join('、')}，收到 ${size}`);
+  }
+  if (haloWidth !== undefined && !LABEL_HALO_VALUES.includes(haloWidth)) {
+    throw new RangeError(`描边宽度只能是 ${LABEL_HALO_WIDTHS.join('、')}，收到 ${haloWidth}`);
+  }
+  for (const value of [color, haloColor]) {
+    if (value !== undefined && normalizeColor(value) === null) {
+      throw new Error(`不是颜色：${value}`);
+    }
+  }
+  if (placement !== undefined && !PLACEMENTS_OF[resource.geometry].includes(placement)) {
+    throw new Error(`资源 ${resource.code} 的标注不能放在${placement}`);
+  }
+  const from = minzoom ?? current.minzoom;
+  const to = maxzoom ?? current.maxzoom;
+  if (!isZoom(from) || !isZoom(to) || from > to) {
+    const { min, max } = LABEL_ZOOM_RANGE;
+    throw new RangeError(`显示级别应是 ${min}～${max} 之间的整数、从小到大，收到 ${from}～${to}`);
+  }
+}
 
 // 自定义大小按步长取整，越界时抛错
 function requireSize(kind: SizeKind, size: SymbolSize): SymbolSize {
@@ -149,6 +227,7 @@ interface ResolvedTarget {
 export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSymbols {
   const overrides = shallowRef<SymbolOverrides>(new Map());
   const preview = shallowRef<SymbolPreview | null>(null);
+  const labelPreview = shallowRef<LabelPreview | null>(null);
   const resources = computed(() => toValue(options.catalog)?.resources);
 
   if (options.preferences) {
@@ -237,6 +316,62 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     preview.value = { code: target.code, ...item, field, color: normalized };
   };
 
+  // 确认过的标注；目录里没有、没有登记标注字段时为 null
+  const committedLabel = (code: string) => {
+    const resource = resources.value?.get(code);
+    return resource ? resourceLabel(resource, overrides.value.get(code)) : null;
+  };
+
+  const clearLabelPreviewOf = (code: string) => {
+    if (labelPreview.value?.code === code) {
+      labelPreview.value = null;
+    }
+  };
+
+  const setLabel = (code: string, patch: LabelOverride) => {
+    const resource = resources.value?.get(code);
+    const defaults = resource && defaultLabel(resource);
+    const current = committedLabel(code);
+    if (!resource || !defaults || !current) {
+      throw new Error(`资源 ${code} 不在目录里，或者没有可标注的字段`);
+    }
+    checkLabelPatch(resource, current, patch);
+    const override = overrides.value.get(code);
+    const label = nextLabelOverride(defaults, override?.label, patch);
+    clearLabelPreviewOf(code);
+    replace(code, pruneOverride({ ...override, label }, defaultModeOf(code)));
+  };
+
+  const previewLabelColor = (code: string, field: LabelColorField, color: string) => {
+    const current = committedLabel(code);
+    if (!current) {
+      throw new Error(`资源 ${code} 不在目录里，或者没有可标注的字段`);
+    }
+    const normalized = normalizeColor(color);
+    if (normalized === null) {
+      throw new Error(`${field} 不是颜色：${color}`);
+    }
+    // 取色器取消时把颜色重置回确认的值并再报一次（ADR 0044 第 6 节）
+    if (normalizeColor(current[field]) === normalized) {
+      if (labelPreview.value?.code === code && labelPreview.value.field === field) {
+        labelPreview.value = null;
+      }
+      return;
+    }
+    labelPreview.value = { code, field, color: normalized };
+  };
+
+  // 推导用的覆盖：符号的预览之外，再叠加标注颜色的预览
+  const overrideOf: SymbolOverrideOf = code => {
+    const override = effectiveOverride(overrides.value, preview.value, code, defaultModeOf(code));
+    const previewing = labelPreview.value;
+    if (previewing?.code !== code) {
+      return override;
+    }
+    const color: Partial<Record<LabelColorField, string>> = { [previewing.field]: previewing.color };
+    return { ...override, label: { ...override?.label, ...color } };
+  };
+
   const setMode = (code: string, mode: SymbolMode) => {
     if (!resources.value?.has(code) || !resourceStyle(code).color) {
       throw new Error(`资源 ${code} 不在目录里，或者不按属性配色`);
@@ -248,7 +383,7 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
   return {
     overrides: shallowReadonly(overrides),
     preview: shallowReadonly(preview),
-    overrideOf: code => effectiveOverride(overrides.value, preview.value, code, defaultModeOf(code)),
+    overrideOf,
     modeOf: code => {
       const style = resourceStyle(code);
       return resources.value?.has(code) && style.color ? symbolModeOf(style, overrides.value.get(code)) : null;
@@ -270,15 +405,29 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     },
     resetResource: code => {
       clearPreviewIf(previewing => previewing.code === code);
+      clearLabelPreviewOf(code);
       replace(code, undefined);
     },
     resetAll: () => {
       preview.value = null;
+      labelPreview.value = null;
       if (overrides.value.size > 0) {
         overrides.value = new Map();
       }
     },
     isCustomized: code => overrides.value.has(code),
-    hasOverride: target => targetOverride(overrides.value.get(target.code), target.item) !== undefined
+    hasOverride: target => targetOverride(overrides.value.get(target.code), target.item) !== undefined,
+    labelOf: committedLabel,
+    setLabel,
+    previewLabelColor,
+    clearLabelPreview: clearLabelPreviewOf,
+    resetLabel: code => {
+      clearLabelPreviewOf(code);
+      const override = overrides.value.get(code);
+      if (override?.label) {
+        replace(code, pruneOverride({ ...override, label: undefined }, defaultModeOf(code)));
+      }
+    },
+    hasLabelOverride: code => overrides.value.get(code)?.label !== undefined
   };
 }

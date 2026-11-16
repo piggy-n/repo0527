@@ -132,6 +132,41 @@ describe('存储格式', () => {
     expect(storedSymbolsSchema.safeParse({ a: { uniform: { shape: 'ring' } } }).success).toBe(false);
   });
 
+  it('标注（ADR 0160）：后加的可选字段，版本号不变；没有标注的旧数据照常读出，取值不在范围里时整条作废', () => {
+    const label = {
+      field: 'name',
+      font: 'semibold',
+      size: 16,
+      color: BLUE,
+      haloColor: BLACK,
+      haloWidth: 1.5,
+      placement: 'auto',
+      minzoom: 12,
+      maxzoom: 18,
+      overlap: true
+    };
+    expect(storedSymbolsSchema.parse({ a: { label } })).toStrictEqual({ a: { label } });
+    const old = { a: { uniform: { size: 'L' } } };
+    expect(storedSymbolsSchema.parse(old)).toStrictEqual(old);
+    const invalid = [
+      { size: 13 },
+      { haloWidth: 2.5 },
+      { font: 'SimSun' },
+      { placement: 'below' },
+      { minzoom: 7 },
+      { maxzoom: 21 },
+      { color: '红' }
+    ];
+    expect(invalid.filter(bad => storedSymbolsSchema.safeParse({ a: { label: bad } }).success)).toStrictEqual([]);
+  });
+
+  it('标注和样式方式无关：空的标注去掉，只有标注的资源也是覆盖', () => {
+    expect(pruneOverride({ label: {} })).toBeUndefined();
+    expect(pruneOverride({ label: { size: 16 } })).toStrictEqual({ label: { size: 16 } });
+    expect(pruneOverride({ mode: 'classified', label: { size: 16 } })).toStrictEqual({ label: { size: 16 } });
+    expect(layerMode({ label: { size: 16 } }, 'uniform')).toBe('uniform');
+  });
+
   it('样式方式是统一样式或分类样式；各取值的覆盖按同样的规则校验', () => {
     const items = { 河流: { width: 'XL', color: BLUE } };
     expect(storedSymbolsSchema.safeParse({ a: { mode: 'uniform', items } }).success).toBe(true);

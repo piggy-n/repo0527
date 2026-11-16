@@ -6,6 +6,7 @@ import { computed, effectScope, nextTick, shallowRef, watch } from 'vue';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
 import { EMPTY_RESOURCE_LAYERS, validateCatalog } from '../resource-layers';
+import type { ResourceSymbolOverride } from '../resource-symbols';
 import type { SymbolOverride } from '../symbols';
 import { type ResourceLayersOptions, useResourceLayers } from './useResourceLayers';
 
@@ -141,7 +142,8 @@ describe('useResourceLayers', () => {
       added: true,
       checked: true,
       opacity: 0.3,
-      year: 2023
+      year: 2023,
+      labeled: false
     });
     expect(ctx.owner.deriveGroup().sources['resources-csxhjctb_hydl']).toMatchObject({
       tiles: [`${TILE_BASE}csxhjctb_hydl_2023/{z}/{x}/{y}.pbf`]
@@ -337,7 +339,8 @@ describe('useResourceLayers', () => {
       added: true,
       checked: true,
       opacity: 0.5,
-      year: 2024
+      year: 2024,
+      labeled: false
     });
     expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
     const fill = fillOf();
@@ -354,5 +357,61 @@ describe('useResourceLayers', () => {
     expect(ctx.owner.minzoomOf('bgdc_cjdcq')).toBe(8);
     expect(ctx.owner.minzoomOf('bgdc_dltb')).toBeUndefined();
     expect(ctx.owner.minzoomOf('nope')).toBeUndefined();
+  });
+
+  it('标注（ADR 0160）：默认不开；开关只改显示状态；没有登记字段的资源抛错', async () => {
+    using ctx = await loaded({}, MAPLIBRE_LIKE);
+    ctx.owner.add(['csxhjctb_hydl']);
+    expect(ctx.owner.deriveLabelsGroup(null).layers).toStrictEqual([]);
+
+    ctx.owner.setLabeled('csxhjctb_hydl', true);
+    const before = ctx.owner.state.value;
+    ctx.owner.setLabeled('csxhjctb_hydl', true);
+    expect(ctx.owner.state.value).toBe(before);
+    const ids = ctx.owner.deriveLabelsGroup(null).layers.map(({ id }) => id);
+    expect(ids).toStrictEqual(['resource-labels-csxhjctb_hydl']);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).toMatchObject({ source: 'resources-csxhjctb_hydl', opacity: 1 });
+
+    expect(() => ctx.owner.setLabeled('bgdc_cjdcq', true)).not.toThrow();
+    expect(() => ctx.owner.setLabeled('bgdc_ccwjq', true)).toThrow('没有可标注的字段');
+  });
+
+  it('标注只给画在地图上的资源：隐藏、移出、配置不合法时没有，加强标注也没有依据', async () => {
+    using ctx = await loaded({ validate: invalidLanduse }, MAPLIBRE_LIKE);
+    ctx.owner.add(['csxhjctb_hydl', 'bgdc_dltb']);
+    ctx.owner.setLabeled('csxhjctb_hydl', true);
+    ctx.owner.setLabeled('bgdc_dltb', true);
+
+    expect(ctx.owner.labelTarget('bgdc_dltb')).toBeNull();
+    ctx.owner.setVisible('csxhjctb_hydl', false);
+    expect(ctx.owner.deriveLabelsGroup(null).layers).toStrictEqual([]);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).toBeNull();
+  });
+
+  it('三维引擎不画样式图层时标注分组也为空（同资源分组）', async () => {
+    using ctx = await loaded();
+    ctx.owner.add(['csxhjctb_hydl']);
+    ctx.owner.setLabeled('csxhjctb_hydl', true);
+    ctx.dimension.value = '3d';
+
+    expect(ctx.owner.deriveLabelsGroup(null).layers).toStrictEqual([]);
+    expect(ctx.owner.labelTarget('csxhjctb_hydl')).toBeNull();
+  });
+
+  it('标注读符号的覆盖：字号、点让开的大小随覆盖和预览变化；加强标注的要素在原来的标注里滤掉', async () => {
+    const overrides = shallowRef<ReadonlyMap<string, ResourceSymbolOverride>>(new Map());
+    using ctx = await loaded({ symbols: { overrideOf: code => overrides.value.get(code) } }, MAPLIBRE_LIKE);
+    ctx.owner.add(['csxhjctb_hydl']);
+    ctx.owner.setLabeled('csxhjctb_hydl', true);
+    const sizes = computed(() =>
+      ctx.owner.deriveLabelsGroup(null).layers.map(item => (item.type === 'symbol' ? item.layout?.['text-size'] : null))
+    );
+    expect(sizes.value).toStrictEqual([12]);
+
+    overrides.value = new Map([['csxhjctb_hydl', { label: { size: 18 } }]]);
+    expect(sizes.value).toStrictEqual([18]);
+
+    const [hidden] = ctx.owner.deriveLabelsGroup({ code: 'csxhjctb_hydl', guid: 'a'.repeat(32) }).layers;
+    expect(hidden && 'filter' in hidden ? JSON.stringify(hidden.filter) : '').toContain('"!="');
   });
 });

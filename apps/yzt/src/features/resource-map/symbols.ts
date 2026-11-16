@@ -76,6 +76,15 @@ const BASE_STOPS: Readonly<Record<'circle' | 'line', SizeStops>> = {
   ]
 };
 
+// SDF 符号的着色器（symbol_sdf.vertex.glsl）在不透明度低于 0.1 时整个不画，面、线和改版前的圆点还淡淡可见：
+// 点的图标和标注的文字不低于 10%，0 仍是 0（ADR 0159 第 2 节、ADR 0160）
+const MIN_SDF_OPACITY = 0.1;
+
+/** SDF 符号（点的图标、标注的文字）用的不透明度 */
+export function sdfOpacity(opacity: number): number {
+  return opacity === 0 ? 0 : Math.max(opacity, MIN_SDF_OPACITY);
+}
+
 /** 点的描边宽度（像素，不随缩放） */
 export const POINT_STROKE_WIDTHS = [0, 1, 2, 3] as const;
 
