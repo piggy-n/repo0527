@@ -34,6 +34,7 @@ const MODE_LABELS: Readonly<Record<SymbolMode, string>> = { uniform: '统一样�
 
 // 报告里的字段名，和符号编辑器的叫法一致
 const FIELD_LABELS: Readonly<Record<SymbolField, string>> = {
+  shape: '形状',
   size: '大小',
   fillColor: '填充色',
   strokeColor: '描边色',

@@ -1,9 +1,11 @@
 // @vitest-environment node
-import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
+import { featureFilter, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import { type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
-import { type BatchHighlight, selectionGroup } from './selection-style';
+import { type BatchHighlight, type PointHighlightOf, type SelectedHighlight, selectionGroup } from './selection-style';
+import { symbolLayers } from './symbols';
+import { paintValueOf } from './test-expression';
 
 const SQUARE: Geometry = {
   type: 'Polygon',
@@ -16,6 +18,9 @@ const SQUARE: Geometry = {
     ]
   ]
 };
+
+// 选中的面，没有点的样式
+const SELECTED: SelectedHighlight = { geometry: SQUARE, properties: {}, point: null };
 
 // 按 MapLibre 的语义求值过滤条件：这种几何类型的要素会被哪些图层画出
 function drawnBy(group: StyleGroup, type: 'Polygon' | 'MultiPolygon' | 'LineString' | 'MultiLineString' | 'Point') {
@@ -32,7 +37,7 @@ function dataOf(group: StyleGroup) {
   return source?.type === 'geojson' && typeof source.data === 'object' ? source.data : undefined;
 }
 
-const paints = (flashing: boolean) => selectionGroup(SQUARE, flashing).layers.map(layer => layer.paint);
+const paints = (flashing: boolean) => selectionGroup(SELECTED, flashing).layers.map(layer => layer.paint);
 
 describe('selectionGroup', () => {
   it('没有几何时是空分组', () => {
@@ -41,8 +46,8 @@ describe('selectionGroup', () => {
   });
 
   it('几何放进 selection 数据源，直接引用；外面的要素每次换新对象', () => {
-    const first = selectionGroup(SQUARE, false);
-    const second = selectionGroup(SQUARE, false);
+    const first = selectionGroup(SELECTED, false);
+    const second = selectionGroup(SELECTED, false);
 
     expect(first.sources).toStrictEqual({
       selection: { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: SQUARE } }
@@ -53,7 +58,7 @@ describe('selectionGroup', () => {
   });
 
   it('面画填充和描边，线只画线，点画圆；多部件的同样处理', () => {
-    const group = selectionGroup(SQUARE, false);
+    const group = selectionGroup(SELECTED, false);
 
     expect(drawnBy(group, 'Polygon')).toStrictEqual(['selection-fill', 'selection-line']);
     expect(drawnBy(group, 'MultiPolygon')).toStrictEqual(['selection-fill', 'selection-line']);
@@ -78,7 +83,7 @@ describe('selectionGroup', () => {
   it('ID 以分组名为前缀，和资源、注记一起组合后通过校验', () => {
     const model = new StyleModel({ groups: ['resources', 'selection', 'basemap-labels'] });
 
-    expect(() => model.setGroups({ selection: selectionGroup(SQUARE, true) })).not.toThrow();
+    expect(() => model.setGroups({ selection: selectionGroup(SELECTED, true) })).not.toThrow();
     expect(model.current.layers.map(({ id }) => id)).toStrictEqual([
       'selection-fill',
       'selection-line',
@@ -91,7 +96,8 @@ const BATCH: BatchHighlight = {
   sourceId: 'resources-bgdc_dltb',
   sourceLayer: 'bgdc_dltb_2022',
   minzoom: undefined,
-  guids: ['a'.repeat(32), 'b'.repeat(32)]
+  guids: ['a'.repeat(32), 'b'.repeat(32)],
+  point: null
 };
 
 // 按 MapLibre 的语义求值：这个要素会被哪些图层画出
@@ -111,6 +117,52 @@ function sourcesOf(group: StyleGroup) {
 }
 
 const GUID_A = 'a'.repeat(32);
+
+// 按 cc 取形状的点资源：中小学是五角星，其他是定位针
+const POINT_HIGHLIGHT: PointHighlightOf = color => {
+  const [part] = symbolLayers(
+    { geometry: 'circle', shape: 'pin', size: 'M', fillColor: '#00f', strokeColor: '#fff', strokeWidth: 1 },
+    color
+  ).parts;
+  return part?.type === 'symbol' ? { type: 'symbol', layout: part.layout, paint: part.paint } : null;
+};
+
+describe('selectionGroup：点按资源的形状高亮（ADR 0159）', () => {
+  it('有点的样式时点是 symbol 图层：同资源的形状和大小，描边是高亮色，闪烁时换成浅红；要素带着瓦片里的属性', () => {
+    const point: SelectedHighlight = {
+      geometry: { type: 'Point', coordinates: [119, 33] },
+      properties: { cc: '08H213', guid: 'a'.repeat(32) },
+      point: POINT_HIGHLIGHT
+    };
+    const group = selectionGroup(point, false);
+    const layer = group.layers.find(({ id }) => id === 'selection-point');
+
+    expect(drawnBy(group, 'Point')).toStrictEqual(['selection-point']);
+    expect(layer).toMatchObject({
+      type: 'symbol',
+      source: 'selection',
+      layout: { 'icon-image': 'resources-shape-pin', 'icon-offset': ['literal', [0, -4.8]] },
+      paint: { 'icon-color': '#00f', 'icon-halo-color': '#f5222d' }
+    });
+    const halo = layer?.type === 'symbol' ? layer.paint?.['icon-halo-width'] : undefined;
+    expect(paintValueOf('symbol', 'icon-halo-width', halo, {}, 12)).toBe(3);
+    expect(selectionGroup(point, true).layers.at(-1)).toMatchObject({ paint: { 'icon-halo-color': '#ff7875' } });
+    expect(dataOf(group)).toMatchObject({ properties: { cc: '08H213' } });
+    expect(validateStyleMin({ version: 8, sources: group.sources, layers: [...group.layers] })).toStrictEqual([]);
+  });
+
+  it('框选的点同样按形状高亮，画在资源的瓦片上', () => {
+    const group = selectionGroup(null, false, { ...BATCH, point: POINT_HIGHLIGHT });
+
+    expect(drawnFeature(group, 'Point', GUID_A)).toStrictEqual(['selection-batch-point']);
+    expect(group.layers.at(-1)).toMatchObject({
+      type: 'symbol',
+      source: 'resources-bgdc_dltb',
+      'source-layer': 'bgdc_dltb_2022',
+      paint: { 'icon-halo-color': '#f5222d' }
+    });
+  });
+});
 
 describe('selectionGroup：框选的批量高亮', () => {
   it('画在资源的瓦片上：引用资源的数据源和瓦片图层，不加数据源；列表里的 guid 才画，按几何类型分层', () => {
@@ -142,7 +194,7 @@ describe('selectionGroup：框选的批量高亮', () => {
 
   it('没有 guid 时不出图层；和选中的那个同时有时画在它下面', () => {
     expect(selectionGroup(null, false, { ...BATCH, guids: [] })).toStrictEqual({ sources: {}, layers: [] });
-    expect(selectionGroup(SQUARE, false, BATCH).layers.map(({ id }) => id)).toStrictEqual([
+    expect(selectionGroup(SELECTED, false, BATCH).layers.map(({ id }) => id)).toStrictEqual([
       'selection-batch-fill',
       'selection-batch-line',
       'selection-batch-circle',

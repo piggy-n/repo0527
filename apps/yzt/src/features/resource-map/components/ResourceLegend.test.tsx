@@ -102,9 +102,15 @@ async function back(wrapper: VueWrapper) {
 // 预览里用到的颜色：SVG 各图形的填充和描边
 const swatchColors = (swatch: Omit<DOMWrapper<Element>, 'exists'>) =>
   swatch
-    .findAll('rect, line, circle')
+    .findAll('rect, polyline, circle, path')
     .flatMap(shape => [shape.attributes('fill'), shape.attributes('stroke')])
     .filter(color => color !== undefined);
+
+// 摘要里画出的各类（data-piece）的颜色：线是描边，面和点是填充
+const summaryColors = (summary: Omit<DOMWrapper<Element>, 'exists'>) =>
+  summary
+    .findAll('[data-piece]')
+    .map(piece => (piece.element.tagName === 'polyline' ? piece.attributes('stroke') : piece.attributes('fill')));
 
 const entries = (wrapper: VueWrapper) => wrapper.findAll('[data-legend]').map(item => item.attributes('data-legend'));
 const landuseShown = (wrapper: VueWrapper) => wrapper.find('[data-landuse-section]').exists();
@@ -208,11 +214,11 @@ describe('ResourceLegend', () => {
     expect(button(wrapper, '收起地类图斑').attributes('aria-expanded')).toBe('true');
   });
 
-  it('复合图例默认展开（ADR 0094），收起后显示多色块摘要；浏览与配置分开，状态变化不改收起', async () => {
+  it('复合图例默认展开（ADR 0094），名称前是按几何画的摘要（ADR 0159）；浏览与配置分开，状态变化不改收起', async () => {
     const { wrapper, owner } = mountLegend();
     await nextTick();
     expect(landuseShown(wrapper)).toBe(true);
-    expect(wrapper.find('[data-legend="bgdc_dltb"] [data-colors]').exists()).toBe(true);
+    expect(wrapper.get('[data-legend="bgdc_dltb"] [data-summary]').attributes('data-summary')).toBe('fill');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
 
     await button(wrapper, '收起地类图斑').trigger('click');
@@ -311,20 +317,18 @@ describe('ResourceLegend', () => {
     expect(resetAll()).toBe(true);
   });
 
-  it('按属性配色的条目名称前是前三个取值的颜色；改过符号的条目、取值名称后有小圆点（设计稿 5D.5）', async () => {
+  it('按属性配色的条目名称前是代表取值按几何画的摘要（ADR 0159）；改过符号的条目、取值名称后有小圆点（设计稿 5D.5）', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     await nextTick();
     const row = (code: string) => wrapper.get(`[data-legend="${code}"] > div`);
     const edited = (code: string) => row(code).find('[data-edited]').exists();
 
-    // 河流、水渠、其他三个取值的颜色
-    expect(row('csxhjctb_hydl').findAll('[data-colors] i').map(chip => chip.attributes('style'))).toStrictEqual([
-      'background-color: rgb(30, 136, 229);',
-      'background-color: rgb(79, 195, 247);',
-      'background-color: rgb(47, 128, 237);'
-    ]);
-    expect(row('bgdc_ccwjq').find('[data-colors]').exists()).toBe(false);
+    // 水域线层只有河流、水渠两个取值（兜底不算）：三段折线依次是河流、水渠、河流
+    const hydl = row('csxhjctb_hydl').get('[data-summary]');
+    expect(hydl.attributes('data-summary')).toBe('line');
+    expect(summaryColors(hydl)).toStrictEqual(['#1E88E5', '#4FC3F7', '#1E88E5']);
+    expect(row('bgdc_ccwjq').find('[data-summary]').exists()).toBe(false);
     expect([edited('bgdc_ccwjq'), edited('csxhjctb_hydl')]).toStrictEqual([false, false]);
 
     symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });

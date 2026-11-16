@@ -3,6 +3,7 @@ import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode,
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendSwatch, swatchOf } from '../legend';
 import { COLOR_PRESETS } from '../palette';
+import { POINT_SHAPE_NAMES, POINT_SHAPES } from '../point-shapes';
 import type { SymbolTarget } from '../resource-symbols';
 import {
   type ColorField,
@@ -50,8 +51,9 @@ function colorPatch(field: ColorField, color: string): SymbolOverride {
 }
 
 /**
- * 符号的编辑器（ADR 0044 第 6 节，设计稿 5D.5）：浅灰底的一块，名称在左、控件在右，颜色旁写出色值；线型、填充方式的选项带示意。
- * 点选的档位、描边宽度、线型点下就确认；
+ * 符号的编辑器（ADR 0044 第 6 节，设计稿 5D.5）：浅灰底的一块，名称在左、控件在右，颜色旁写出色值；
+ * 点的形状（ADR 0159）、线型、填充方式的选项带示意，按当前的颜色画。
+ * 形状、点选的档位、描边宽度、线型点下就确认；
  * 颜色拖动时预览、确认时写入，取消由取色器报回原来的颜色、拥有者清掉预览；自定义大小回车或失焦时确认，不合法时留在输入框里
  */
 export const SymbolEditor = defineComponent({
@@ -289,6 +291,37 @@ export const SymbolEditor = defineComponent({
       </div>
     );
 
+    // 点的形状（ADR 0159）：选项带预览，按当前的填充色和描边画出这种形状
+    const renderShape = (value: Extract<ResourceSymbol, { geometry: 'circle' }>) => (
+      <div key="shape" class={styles.row}>
+        <span class={styles.label}>形状</span>
+        <ElSelect
+          class={styles.select}
+          size="small"
+          modelValue={value.shape}
+          ariaLabel={`${props.name}的形状`}
+          onUpdate:modelValue={(name: unknown) => {
+            const shape = POINT_SHAPE_NAMES.find(item => item === name);
+            if (shape) {
+              set({ shape });
+            }
+          }}>
+          {{
+            prefix: () => <LegendSwatchIcon swatch={swatchOf(value)} />,
+            default: () =>
+              POINT_SHAPE_NAMES.map(shape => (
+                <ElOption key={shape} value={shape} label={POINT_SHAPES[shape]}>
+                  <span class={styles.option} data-shape={shape}>
+                    <LegendSwatchIcon swatch={swatchOf({ ...value, shape })} />
+                    {POINT_SHAPES[shape]}
+                  </span>
+                </ElOption>
+              ))
+          }}
+        </ElSelect>
+      </div>
+    );
+
     // 填充方式：选项带预览，按当前的颜色画出这种填充方式的样子
     const renderFillStyle = (value: Extract<ResourceSymbol, { geometry: 'fill' }>) => (
       <div key="fillStyle" class={styles.row}>
@@ -323,6 +356,7 @@ export const SymbolEditor = defineComponent({
       const value = symbol.value;
       if (value?.geometry === 'circle') {
         return [
+          renderShape(value),
           ...renderSize(),
           renderColor('填充色', 'fillColor', value.fillColor),
           renderColor('描边色', 'strokeColor', value.strokeColor),

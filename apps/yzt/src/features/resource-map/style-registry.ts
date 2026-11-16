@@ -53,6 +53,7 @@ import {
 import {
   classifiedLayers,
   darkenColor,
+  type ResourceLayerStyle,
   type ResourceStyleLayers,
   type ResourceSymbol,
   resolveSymbol,
@@ -68,6 +69,11 @@ export interface ResourceStyle {
   /** 用这个属性作要素 ID，跨瓦片稳定，点选高亮用 */
   readonly promoteId?: string;
   readonly checked?: boolean;
+  /**
+   * 图例摘要画的代表取值（取值的键，ADR 0159）：按它们当前的符号画，用户改了颜色、形状会跟着变；
+   * 不写时取前几个取值（不含兜底和历史地类）
+   */
+  readonly summary?: readonly string[];
   /** 发布的默认符号（ADR 0154）：叠加在算出的默认符号上，用户的覆盖再叠加在它上面 */
   readonly symbols?: ResourceSymbolOverride;
 }
@@ -80,14 +86,19 @@ function valueRule(property: string, entries: readonly ClassEntry[], fallback = 
 // 水域的兜底色和类别同是蓝色系
 const WATER_FALLBACK = '#2F80ED';
 
-// 按属性配色：字段和取值来自探查（ADR 0123），点层比面层少的取值只列实际有的
+// 按属性配色：字段和取值来自探查（ADR 0123），点层比面层少的取值只列实际有的。
+// 图例摘要的代表取值（summary，ADR 0159）：地类图斑由用户 2026-11-16 确定，其余按 2026-11-01 探查的抽样次数取最常见的、
+// 各大类一个，待用户确认；没写的取前几个取值
 const RESOURCE_STYLES = new Map<string, ResourceStyle>([
-  ['bgdc_dltb', { color: { kind: 'landuse-code' }, promoteId: 'bsm', checked: true }],
-  ['bgdc_dltb_czc', { color: { kind: 'landuse-name' } }],
-  ['bgdc_czcdyd', { color: valueRule('czclx', URBAN_VILLAGE_TYPES) }],
+  [
+    'bgdc_dltb',
+    { color: { kind: 'landuse-code' }, promoteId: 'bsm', checked: true, summary: ['0101', '0301', '0701', '1101'] }
+  ],
+  ['bgdc_dltb_czc', { color: { kind: 'landuse-name' }, summary: ['0102', '0307', '0702', '1107'] }],
+  ['bgdc_czcdyd', { color: valueRule('czclx', URBAN_VILLAGE_TYPES), summary: ['201', '202', '203'] }],
   ['lcsh_sltb', { color: valueRule('lin_zhong', FOREST_TYPES) }],
-  ['lcsh_cdtb', { color: { kind: 'landuse-code', only: GRASSLAND_LANDUSE } }],
-  ['lcsh_sdtb', { color: { kind: 'landuse-code', only: WETLAND_LANDUSE } }],
+  ['lcsh_cdtb', { color: { kind: 'landuse-code', only: GRASSLAND_LANDUSE }, summary: ['0404', '0301', '0102'] }],
+  ['lcsh_sdtb', { color: { kind: 'landuse-code', only: WETLAND_LANDUSE }, summary: ['1106', '1101', '0301'] }],
   ['lcsh_hmtb', { color: valueRule('tu_rang_lx', SOIL_TYPES) }],
   ['csxhjctb_xxa', { color: valueRule('cc', SCHOOL_TYPES) }],
   ['csxhjctb_xxp', { color: valueRule('cc', pickEntries(SCHOOL_TYPES, '08H212', '08H213', '08H214', '08H215')) }],
@@ -131,7 +142,7 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['bgdc_gddb', { color: valueRule('lyd', FARMLAND_GRADES) }],
   ['bgdc_pzwjstd', { color: valueRule('ywlx', UNBUILT_LAND_TYPES) }],
   ['bgdc_xzqjx', { color: valueRule('jxlx', BOUNDARY_TYPES) }],
-  ['bgdc_yjjbnttb', { color: valueRule('dlmc', PERMANENT_FARMLAND_TYPES) }],
+  ['bgdc_yjjbnttb', { color: valueRule('dlmc', PERMANENT_FARMLAND_TYPES), summary: ['水田', '水浇地', '旱地'] }],
   [
     'bgdc_cjdcqjx',
     {
@@ -195,7 +206,7 @@ function colorSymbol(geometry: ResourceGeometry, color: string): ResourceSymbol 
   if (geometry === 'line') {
     return { geometry: 'line', color, width: 'M', dash: 'solid' };
   }
-  return { geometry: 'circle', size: 'M', fillColor: color, strokeColor: '#FFFFFF', strokeWidth: 1 };
+  return { geometry: 'circle', shape: 'circle', size: 'M', fillColor: color, strokeColor: '#FFFFFF', strokeWidth: 1 };
 }
 
 // 统一符号的面是 0.35 透明度的填充加同色描边
@@ -273,4 +284,26 @@ export function resourceStyleLayers(
     return symbolLayers(uniformSymbol(resource, override, style));
   }
   return classifiedLayers(symbolClasses(rule), item => classSymbol(resource, item, override, style));
+}
+
+/**
+ * 点资源的选中高亮（ADR 0159）：和资源的点图层同样按要素的属性取形状、大小，描边换成高亮色、加宽；
+ * 图片就是资源分组里的那几张。不是点资源时为 null
+ */
+export function resourceHighlightStyle(
+  resource: Resource,
+  color: string,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): Extract<ResourceLayerStyle, { type: 'symbol' }> | null {
+  if (resource.geometry !== 'circle') {
+    return null;
+  }
+  const rule = style.color;
+  const { parts } =
+    !rule || symbolModeOf(style, override) === 'uniform'
+      ? symbolLayers(uniformSymbol(resource, override, style), color)
+      : classifiedLayers(symbolClasses(rule), item => classSymbol(resource, item, override, style), color);
+  const [part] = parts;
+  return part?.type === 'symbol' ? { type: 'symbol', layout: part.layout, paint: part.paint } : null;
 }

@@ -1,4 +1,4 @@
-// 图例以浏览为主，复杂条目默认显示多色块摘要，配置单独展开（ADR 0066）
+// 图例以浏览为主，复杂条目默认展开、收起时显示按几何画的摘要，配置单独展开（ADR 0066、0159）
 
 .legend {
   display: flex;
@@ -120,27 +120,13 @@ button.summary {
   color: var(--color-text-placeholder);
 }
 
-// 复杂色条与普通面符号共用 28 × 20 的展示区域
+// 摘要和单一符号共用 28 × 20 的展示区域（ADR 0159）
 .preview {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 20px;
-}
-
-.colors {
-  display: flex;
-  width: 28px;
-  height: 20px;
-  overflow: hidden;
-  border-radius: 2px;
-  opacity: var(--legend-opacity, 1);
-
-  i {
-    flex: 1;
-    height: 100%;
-  }
 }
 
 .name {

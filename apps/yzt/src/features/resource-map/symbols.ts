@@ -1,9 +1,9 @@
 import {
-  type CircleLayerSpecification,
   Color,
   type ExpressionSpecification,
   type FillLayerSpecification,
-  type LineLayerSpecification
+  type LineLayerSpecification,
+  type SymbolLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleImages } from '@mx/map-core';
 import type { ResourceGeometry } from './catalog';
@@ -17,6 +17,14 @@ import {
   patternImages
 } from './fill-patterns';
 import type { MatchOutput } from './match-expression';
+import {
+  maxHaloWidth,
+  type PointShape,
+  SHAPE_BASE_RADIUS,
+  shapeImageId,
+  shapeImages,
+  shapeOffset
+} from './point-shapes';
 
 // 符号模型（ADR 0044 第 1 节、ADR 0045 第 1 节）：点、线、面各自能调整的字段，以及符号到图层的转换；
 // 数值沿用旧项目的 layerSymbolModel.js
@@ -109,6 +117,8 @@ export function isFillPattern(style: FillStyle): style is FillPattern {
 }
 
 export interface PointFields {
+  /** 形状（ADR 0159）；以前存下的覆盖没有这个字段，是默认的圆 */
+  readonly shape: PointShape;
   readonly size: SymbolSize;
   readonly fillColor: string;
   readonly strokeColor: string;
@@ -145,7 +155,7 @@ export type SymbolField = keyof SymbolOverride;
 
 /** 各几何能调整的字段 */
 export const SYMBOL_FIELDS: Readonly<Record<ResourceGeometry, readonly SymbolField[]>> = {
-  circle: ['size', 'fillColor', 'strokeColor', 'strokeWidth'],
+  circle: ['shape', 'size', 'fillColor', 'strokeColor', 'strokeWidth'],
   line: ['color', 'width', 'dash'],
   fill: ['fillColor', 'fillStyle', 'patternColor', 'outlineColor', 'outlineWidth', 'outlineDash']
 };
@@ -274,6 +284,7 @@ export function resolveSymbol(defaults: ResourceSymbol, override: SymbolOverride
   if (defaults.geometry === 'circle') {
     return {
       geometry: 'circle',
+      shape: override.shape ?? defaults.shape,
       size: override.size ?? defaults.size,
       fillColor: override.fillColor ?? defaults.fillColor,
       strokeColor: override.strokeColor ?? defaults.strokeColor,
@@ -325,7 +336,11 @@ export type ResourceLayerStyle =
       readonly layout: NonNullable<LineLayerSpecification['layout']>;
       readonly paint: NonNullable<LineLayerSpecification['paint']>;
     }
-  | { readonly type: 'circle'; readonly paint: NonNullable<CircleLayerSpecification['paint']> };
+  | {
+      readonly type: 'symbol';
+      readonly layout: NonNullable<SymbolLayerSpecification['layout']>;
+      readonly paint: NonNullable<SymbolLayerSpecification['paint']>;
+    };
 
 // 其他线型的图层后缀（ADR 0046 第 2 节）；实线如果用到，总在主图层
 const DASH_SUFFIXES = { dashed: 'dashed', dotted: 'dotted', dashDot: 'dash-dot' } as const;
@@ -422,14 +437,19 @@ function dashLayer(
   };
 }
 
+/** 选中高亮的描边比符号自己的描边宽 2 像素（ADR 0159） */
+export const HIGHLIGHT_HALO_EXTRA = 2;
+
 /**
  * 资源的图层（ADR 0044 第 4 节、ADR 0045 第 2 节、ADR 0046 第 2 节）：每个取值一个符号，按属性组合成 match，
  * 所有取值相同的属性直接用这个值；随缩放的大小、描边颜色保留外层的缩放插值，在各断点的输出里做 match；
- * 线型不同的取值按线型拆成多个图层。面按需拆成主图层、纹理图层（有取值用了花纹）、描边图层（有取值是复杂描边）
+ * 线型不同的取值按线型拆成多个图层。面按需拆成主图层、纹理图层（有取值用了花纹）、描边图层（有取值是复杂描边）。
+ * 点是一个 symbol 图层（ADR 0159）；给了 highlight 时是点的选中高亮：同样的形状和大小，描边换成这个颜色、加宽
  */
 export function classifiedLayers(
   classes: SymbolClasses,
-  symbolOf: (item: ClassItem) => ResourceSymbol
+  symbolOf: (item: ClassItem) => ResourceSymbol,
+  highlight?: string
 ): ResourceStyleLayers {
   const { items, combine } = classes;
   // 按键找符号：combine 交回来的取值不一定是同一个对象
@@ -478,17 +498,68 @@ export function classifiedLayers(
     };
     return { parts: dashParts(item => line(item).dash, undefined, LINE_LAYOUT, paint), images: NO_IMAGES };
   }
-  const circle = symbolAt('circle');
-  const paint = {
-    'circle-color': value(item => circle(item).fillColor),
-    'circle-radius': curve(item => sizeStops('circle', circle(item).size)),
-    'circle-stroke-color': value(item => circle(item).strokeColor),
-    'circle-stroke-width': value(item => circle(item).strokeWidth)
-  };
-  return { parts: [{ type: 'circle', paint }], images: NO_IMAGES };
+  return pointLayers(items, symbolAt('circle'), value, highlight);
 }
 
 type ValueOf = <T extends MatchOutput>(output: (item: ClassItem) => T) => T | ExpressionSpecification;
+
+type PointSymbol = Extract<ResourceSymbol, { geometry: 'circle' }>;
+
+// 点的 icon-size：半径除以图片里形状的半径；按 M 档曲线的断点，和原来 circle-radius 的曲线相同
+const iconSizes = (symbol: PointSymbol): number[] =>
+  sizeStops('circle', symbol.size).map(([, pixels]) => Number((pixels / SHAPE_BASE_RADIUS).toFixed(4)));
+
+const POINT_ZOOMS = sizeStops('circle', 'M').map(([zoom]) => zoom);
+
+/**
+ * 点的 symbol 图层（ADR 0159）：SDF 形状图片按取值 match，填充是 icon-color，描边是 icon-halo；
+ * 描边宽度在每个断点按 icon-size 限制，超出距离场的范围会露出图片的方框（实测）；描边为 0 时描边色透明，免得边缘有一圈抗锯齿的描边色。
+ * 点不参与碰撞，全部画出、都能查到
+ */
+function pointLayers(
+  items: readonly ClassItem[],
+  point: (item: ClassItem) => PointSymbol,
+  value: ValueOf,
+  highlight: string | undefined
+): ResourceStyleLayers {
+  const shapeOf = (item: ClassItem) => point(item).shape;
+  // 各断点的值相同时直接用这个值，否则外层按缩放插值
+  const zoomCurve = (at: (item: ClassItem, index: number) => number) => {
+    const outputs = POINT_ZOOMS.map((_, index) => value(item => at(item, index)));
+    const [first] = outputs;
+    if (first !== undefined && same(outputs)) {
+      return first;
+    }
+    return interpolateZoom(POINT_ZOOMS.map((zoom, index) => [zoom, outputs[index] ?? 0]));
+  };
+  const extra = highlight === undefined ? 0 : HIGHLIGHT_HALO_EXTRA;
+  const haloWidth = (item: ClassItem, index: number) => {
+    const size = iconSizes(point(item))[index] ?? 0;
+    return Number(Math.min(point(item).strokeWidth + extra, maxHaloWidth(size)).toFixed(2));
+  };
+  const haloColor = (item: ClassItem) => {
+    if (highlight !== undefined) {
+      return highlight;
+    }
+    return point(item).strokeWidth === 0 ? TRANSPARENT : point(item).strokeColor;
+  };
+  const offsets = items.some(item => shapeOf(item) === 'pin')
+    ? { 'icon-offset': value((item): ExpressionSpecification => ['literal', [...shapeOffset(shapeOf(item))]]) }
+    : {};
+  const layout: NonNullable<SymbolLayerSpecification['layout']> = {
+    'icon-image': value(item => shapeImageId(shapeOf(item))),
+    'icon-size': zoomCurve((item, index) => iconSizes(point(item))[index] ?? 0),
+    ...offsets,
+    'icon-allow-overlap': true,
+    'icon-ignore-placement': true
+  };
+  const paint = {
+    'icon-color': value(item => point(item).fillColor),
+    'icon-halo-color': value(haloColor),
+    'icon-halo-width': zoomCurve(haloWidth)
+  };
+  return { parts: [{ type: 'symbol', layout, paint }], images: shapeImages(items.map(shapeOf)) };
+}
 
 // 按线型拆出的图层：base 是主图层的后缀，paint 是各线型共用的部分
 type DashParts = (
@@ -580,7 +651,7 @@ const UNIFORM: SymbolClasses = {
   }
 };
 
-/** 统一样式的图层：同分类样式的规则，只有一个取值 */
-export function symbolLayers(symbol: ResourceSymbol): ResourceStyleLayers {
-  return classifiedLayers(UNIFORM, () => symbol);
+/** 统一样式的图层：同分类样式的规则，只有一个取值；highlight 同 classifiedLayers */
+export function symbolLayers(symbol: ResourceSymbol, highlight?: string): ResourceStyleLayers {
+  return classifiedLayers(UNIFORM, () => symbol, highlight);
 }

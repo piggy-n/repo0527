@@ -1,13 +1,29 @@
-// 符号预览（设计稿 5D.5）：28 × 20 的 SVG，尺寸固定
+// 图例符号（ADR 0159）：按目标尺寸画的 SVG，尺寸固定；隐藏的行、右侧图例按图层的透明度变淡
 
 .swatch {
   display: block;
   flex: none;
+  opacity: var(--legend-opacity, 1);
 }
 
-// 点的最外圈：白色描边在浅色面板上也看得出边界
+// 点的最外圈：白色描边在浅色面板上也看得出边界；宽度按描边写在元素上
 .halo {
   fill: none;
   stroke: var(--color-border);
+  stroke-linejoin: round;
+}
+
+// 色块拼图里块之间的白线
+.separator {
+  fill: none;
+  stroke: var(--color-bg-container);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+// 色块拼图外面一圈中性的框
+.frame {
+  fill: none;
+  stroke: var(--color-text-disabled);
   stroke-width: 1;
 }

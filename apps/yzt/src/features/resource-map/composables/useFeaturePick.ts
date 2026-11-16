@@ -219,7 +219,7 @@ export function useFeaturePick(
     MapContext,
     'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer' | 'sceneCapabilities'
   >,
-  resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene'>,
+  resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene' | 'pointHighlight'>,
   options: FeaturePickOptions = {}
 ): FeaturePick {
   if (!getCurrentScope()) {
@@ -713,7 +713,8 @@ export function useFeaturePick(
       sourceId: target.sourceId,
       sourceLayer: sourceLayerOf(code, target.year),
       minzoom: target.resource.minzoom,
-      guids: candidates.map(({ guid }) => guid)
+      guids: candidates.map(({ guid }) => guid),
+      point: resources.pointHighlight(code)
     };
   };
 
@@ -745,7 +746,16 @@ export function useFeaturePick(
     close,
     deriveGroup: () => {
       const status = detail.value;
-      return selectionGroup(status?.kind === 'ready' ? status.detail.geometry : null, flashing.value, batchHighlight());
+      const candidate = selected.value;
+      const highlight =
+        status?.kind === 'ready' && candidate
+          ? {
+              geometry: status.detail.geometry,
+              properties: candidate.properties,
+              point: resources.pointHighlight(candidate.target.resource.code)
+            }
+          : null;
+      return selectionGroup(highlight, flashing.value, batchHighlight());
     }
   };
 }

@@ -49,7 +49,7 @@ export const LanduseLegend = defineComponent({
             aria-label={`编辑${item.name}样式`}
             onClick={() => emit('edit', item.key)}
           >
-            {swatch && <LegendSwatchIcon class={styles.swatch} swatch={swatch} />}
+            {swatch && <LegendSwatchIcon swatch={swatch} size="item" />}
             <span class={styles.name}>{item.name}</span>
             {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
           </button>

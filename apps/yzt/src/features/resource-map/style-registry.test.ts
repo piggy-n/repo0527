@@ -8,6 +8,7 @@ import { paletteColor, RESOURCE_PALETTE } from './palette';
 import {
   classDefaultSymbol,
   defaultSymbol,
+  resourceHighlightStyle,
   resourceStyle,
   resourceStyleLayers,
   sourceLayerOf,
@@ -345,6 +346,27 @@ describe('登记表', () => {
     expect(resourceStyle('constructor')).toStrictEqual({});
   });
 
+  it('图例摘要登记的代表取值（ADR 0159）都是资源实际有的取值（写了 only 的按 only），不重复、不超过 4 个，不是兜底和历史地类', () => {
+    const registered = RULE_CODES.filter(code => resourceStyle(code).summary !== undefined);
+    expect(registered).toStrictEqual([
+      'bgdc_dltb',
+      'bgdc_dltb_czc',
+      'bgdc_czcdyd',
+      'lcsh_cdtb',
+      'lcsh_sdtb',
+      'bgdc_yjjbnttb'
+    ]);
+    // 每个资源不合要求的取值：不在规则里、兜底、历史地类、重复，或者超过 4 个
+    const problems = registered.flatMap(code => {
+      const summary = resourceStyle(code).summary ?? [];
+      const keys = new Set(classItems(colorRuleOf(code)).map(item => item.key));
+      const wrong = summary.filter(key => !keys.has(key) || key === OTHER_ITEM || key.startsWith('legacy:'));
+      return wrong.length > 0 || repeated(summary) || summary.length > 4 ? [[code, wrong]] : [];
+    });
+    expect(problems).toStrictEqual([]);
+    expect(resourceStyle('bgdc_dltb').summary).toStrictEqual(['0101', '0301', '0701', '1101']);
+  });
+
   it('瓦片里的图层名默认是"code_年份"，例外只对那一年生效', () => {
     expect(sourceLayerOf('bgdc_dltb', 2022)).toBe('bgdc_dltb_2022');
     expect(sourceLayerOf('bgdc_czcdyd', 2022)).toBe('bgdc_czcdyd_2022');
@@ -376,10 +398,28 @@ describe('默认样式', () => {
     expect(mainLayer(resource('csxhjctb_hydl', 'line', 2))).toMatchObject({
       paint: { 'line-color': colorExpression(colorRuleOf('csxhjctb_hydl')) }
     });
+    // 点是圆形的 symbol 图层（ADR 0159）
     expect(mainLayer(resource('csxhjctb_tyhdp', 'circle', 3))).toMatchObject({
-      type: 'circle',
-      paint: { 'circle-color': RESOURCE_PALETTE[3], 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 1 }
+      type: 'symbol',
+      layout: { 'icon-image': 'resources-shape-circle' },
+      paint: { 'icon-color': RESOURCE_PALETTE[3], 'icon-halo-color': '#FFFFFF', 'icon-halo-width': 1 }
     });
+  });
+
+  it('点资源的选中高亮（ADR 0159）：形状、大小和取值的匹配同资源的点图层，描边换成高亮色；不是点资源时没有', () => {
+    const school = resource('csxhjctb_xxp', 'circle', 3);
+    const override = { items: { '08H213': { shape: 'star' as const } } };
+    const highlight = resourceHighlightStyle(school, '#f5222d', override);
+    const layer = mainLayer(school, undefined, override);
+
+    expect(highlight?.layout).toStrictEqual(layer?.type === 'symbol' ? layer.layout : undefined);
+    expect(highlight?.paint).toMatchObject({ 'icon-halo-color': '#f5222d' });
+    const image = (cc: string) => String(paintValueOf('symbol', 'icon-image', highlight?.layout['icon-image'], { cc }));
+    expect([image('08H213'), image('08H212')]).toStrictEqual(['resources-shape-star', 'resources-shape-circle']);
+    // 统一样式按统一样式的形状
+    const uniform = resourceHighlightStyle(school, '#f5222d', { mode: 'uniform', uniform: { shape: 'pin' } });
+    expect(uniform?.layout).toMatchObject({ 'icon-image': 'resources-shape-pin' });
+    expect(resourceHighlightStyle(resource('bgdc_dltb', 'fill'), '#f5222d')).toBeNull();
   });
 
   it('覆盖叠加到默认符号上（ADR 0044）：线宽、线型、颜色都换成覆盖的值', () => {

@@ -26,6 +26,7 @@ import {
   isEmptyValue,
   pickResources,
   planBox,
+  pointsInBox,
   planIdentify,
   type PickCandidate,
   type PickResource,
@@ -523,6 +524,33 @@ describe('planBox', () => {
       [BOX, { sources: [LCTL.sourceId], withGeometry: false }],
       [BOX, { sources: [DLTB.sourceId], withGeometry: false }]
     ]);
+  });
+
+  it('点（ADR 0159）：换算几何，只留位置在框里的点；symbol 图层查到的是图标图片碰到框的点', () => {
+    const gyssp = targetOf('csxhjctb_gyssp', 2025);
+    const at = (id: string, coordinates: Point['coordinates']): RenderedFeature => ({
+      sourceId: gyssp.sourceId,
+      layerId: gyssp.sourceId,
+      properties: { guid: guid(id) },
+      geometry: { type: 'Point', coordinates }
+    });
+    const features: RenderedFeature[] = [
+      at('a', [10, 10]),
+      // 图标碰到了框，点在框外
+      at('b', [208, 50]),
+      { ...at('c', [0, 0]), geometry: { type: 'MultiPoint', coordinates: [[-5, -5], [100, 100]] } }
+    ];
+    const { view, queries } = fakeView(features);
+
+    const [task] = planBox([gyssp], BOX, 15, view);
+
+    expect(task?.kind === 'rendered' ? task.candidates.map(({ guid: id }) => id) : []).toStrictEqual([
+      guid('a'),
+      guid('c')
+    ]);
+    expect(queries).toStrictEqual([[BOX, { sources: [gyssp.sourceId], withGeometry: true }]]);
+    // 反着画的框也一样
+    expect(pointsInBox(features, { from: BOX.to, to: BOX.from }, project)).toHaveLength(2);
   });
 
   it('14 级以下登记的数据集查后端（框的四角拾取成多边形）并继续看下面的资源，遇到渲染要素的结果停下', () => {

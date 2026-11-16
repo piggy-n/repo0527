@@ -353,6 +353,31 @@ export type BoxTask =
   | IdentifyTask
   | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number };
 
+// 在 a、b 之间（含两端，a、b 不分先后）
+const between = (value: number, a: number, b: number) => value >= Math.min(a, b) && value <= Math.max(a, b);
+
+/**
+ * 框里的点（ADR 0159）：点是 symbol 图层，查到的是图标图片和框相交的点，图片四周留着描边用的距离场，比画出的形状大一圈；
+ * 框选只留位置在框里的点。其他几何、没有几何的要素原样留下
+ */
+export function pointsInBox(
+  features: readonly RenderedFeature[],
+  box: ScreenBox,
+  project: (lngLat: LngLat) => ScreenPoint | null
+): readonly RenderedFeature[] {
+  const { from, to } = box;
+  const inside = ([lng, lat]: Position) => {
+    const point = lng === undefined || lat === undefined ? null : project([lng, lat]);
+    return point !== null && between(point.x, from.x, to.x) && between(point.y, from.y, to.y);
+  };
+  return features.filter(({ geometry }) => {
+    if (geometry?.type === 'Point') {
+      return inside(geometry.coordinates);
+    }
+    return geometry?.type === 'MultiPoint' ? geometry.coordinates.some(inside) : true;
+  });
+}
+
 // 范围在屏幕上的外包框；有顶点投影不到时为 null
 function screenBounds(area: RegionScope, project: (lngLat: LngLat) => ScreenPoint | null): ScreenBox | null {
   const positions = (area.type === 'Polygon' ? [area.coordinates] : area.coordinates).flat(2);
@@ -421,7 +446,9 @@ export function planBox(
       }
     }
     // 只用渲染要素（后端识别拾取不到范围时也退回这里）：能列出的候选按有效 guid 计数，列不出的不占额度
-    const features = withinScope(view.queryRendered(box, { sources, withGeometry: area !== null }), area);
+    const points = target.resource.geometry === 'circle';
+    const rendered = view.queryRendered(box, { sources, withGeometry: area !== null || points });
+    const features = withinScope(points ? pointsInBox(rendered, box, lngLat => view.project(lngLat)) : rendered, area);
     const count = new Set(features.flatMap(({ properties: { guid } }) => (isFeatureGuid(guid) ? [guid] : []))).size;
     if (count > BOX_ESTIMATE_LIMIT) {
       tasks.push({ kind: 'too-many', target, estimate: count });

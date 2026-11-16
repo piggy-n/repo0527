@@ -272,8 +272,8 @@ function layerOf(
     const paint = { ...part.paint, 'line-opacity': opacity };
     return { ...shared, type: 'line', layout: part.layout, paint };
   }
-  const paint = { ...part.paint, 'circle-opacity': opacity, 'circle-stroke-opacity': opacity };
-  return { ...shared, type: 'circle', paint };
+  // 点的 symbol 图层（ADR 0159）：图标的透明度同时作用于填充和描边
+  return { ...shared, type: 'symbol', layout: part.layout, paint: { ...part.paint, 'icon-opacity': opacity } };
 }
 
 // 有最小显示级别的资源，数据源和图层用同一个最小级别：更低的级别不请求瓦片

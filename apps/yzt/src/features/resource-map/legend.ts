@@ -1,5 +1,5 @@
-import type { Resource } from './catalog';
-import { classItems, legacyItem, OTHER_ITEM } from './classification';
+import type { Resource, ResourceGeometry } from './catalog';
+import { type ClassItem, classItems, legacyItem, OTHER_ITEM } from './classification';
 import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
 import { isDrawn, type ResourceLayersState } from './resource-layers';
 import {
@@ -8,15 +8,16 @@ import {
   type SymbolMode,
   type SymbolOverrideOf
 } from './resource-symbols';
-import { classSymbol, resourceStyle, symbolModeOf, uniformSymbol } from './style-registry';
+import { classSymbol, type ResourceStyle, resourceStyle, symbolModeOf, uniformSymbol } from './style-registry';
 import type { FillPattern } from './fill-patterns';
+import type { PointShape } from './point-shapes';
 import { isFillPattern, LINE_DASHES, type LineDash, type ResourceSymbol, sizePixels } from './symbols';
 
 // 图例的推导（ADR 0043）：输入是显示状态、样式登记表和符号覆盖，不读地图；
 // 预览取自分组推导用的同一份符号（uniformSymbol、classSymbol，ADR 0044 第 4 节）
 
 /**
- * 一个符号的预览：面是填充加描边（有花纹时叠上花纹），线是一段线，点是带描边的圆点。
+ * 一个符号的预览：面是填充加描边（有花纹时叠上花纹），线是一段线，点是带描边的形状。
  * 宽度和半径是预览里的像素（按参考级别的实际像素，超过上限按上限）；线型以线宽为单位，同 MapLibre 的 line-dasharray
  */
 export type LegendSwatch =
@@ -37,6 +38,7 @@ export type LegendSwatch =
     }
   | {
       readonly geometry: 'circle';
+      readonly shape: PointShape;
       readonly fill: string;
       readonly stroke: string;
       /** 不含描边的半径；描边画在它外面，同 MapLibre 的 circle-stroke-width */
@@ -50,16 +52,25 @@ export const SWATCH_LIMITS = { line: 6, circle: 9, outline: 4 } as const;
 // 无填充的面：预览里填充透明
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
-/** 预览的主色：面是填充色（无填充时是描边色），线是线色，点是填充色；按属性配色的条目用前三个取值的主色 */
-export function swatchColor(swatch: LegendSwatch): string {
-  if (swatch.geometry === 'fill') {
-    return swatch.fill === TRANSPARENT ? swatch.outline : swatch.fill;
-  }
-  return swatch.geometry === 'line' ? swatch.color : swatch.fill;
-}
+/** 按属性配色的摘要最多画几个代表取值（ADR 0159）：面拼成 2 × 2 的色块，线是三段折线，点排成三角 */
+export const SUMMARY_LIMITS: Readonly<Record<ResourceGeometry, number>> = { fill: 4, line: 3, circle: 3 };
 
-/** 按属性配色的条目在名称前显示几个取值的颜色 */
-const PREVIEW_COLORS = 3;
+// 兜底和历史地类不当代表
+const isRepresentable = ({ key }: ClassItem) => key !== OTHER_ITEM && !key.startsWith(legacyItem(''));
+
+/**
+ * 摘要画的代表取值（ADR 0159）：登记了的按登记的先后，只留资源实际有的取值；没登记、或者登记的一个都没有时，
+ * 取前几个取值。兜底、历史地类不算
+ */
+export function summaryItems(
+  items: readonly ClassItem[],
+  style: ResourceStyle,
+  geometry: ResourceGeometry
+): readonly ClassItem[] {
+  const candidates = items.filter(isRepresentable);
+  const registered = (style.summary ?? []).flatMap(key => candidates.filter(item => item.key === key));
+  return (registered.length > 0 ? registered : candidates).slice(0, SUMMARY_LIMITS[geometry]);
+}
 
 /** 按取值配色的一个取值；key 是分类样式里取值的键 */
 export interface LegendValue {
@@ -87,8 +98,8 @@ export type LegendEntry =
       readonly year: number;
       readonly mode: SymbolMode;
       readonly swatch: LegendSwatch;
-      /** 前三个取值的主色，名称前面显示 */
-      readonly colors: readonly string[];
+      /** 摘要：代表取值的预览，按几何画（ADR 0159） */
+      readonly summary: readonly LegendSwatch[];
       readonly values: readonly LegendValue[];
     }
   | {
@@ -98,8 +109,8 @@ export type LegendEntry =
       readonly year: number;
       readonly mode: SymbolMode;
       readonly swatch: LegendSwatch;
-      /** 前三个取值的主色，名称前面显示 */
-      readonly colors: readonly string[];
+      /** 摘要：代表取值的预览，按几何画（ADR 0159） */
+      readonly summary: readonly LegendSwatch[];
       readonly match: 'code' | 'name';
       /** 各取值的预览，按取值的键 */
       readonly swatches: ReadonlyMap<string, LegendSwatch>;
@@ -129,7 +140,8 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   // 描边在半径外面，两者加起来不超过上限：超过时半径让出位置
   const { strokeWidth } = symbol;
   const radius = Math.min(sizePixels('circle', symbol.size), SWATCH_LIMITS.circle - strokeWidth);
-  return { geometry: 'circle', fill: symbol.fillColor, stroke: symbol.strokeColor, radius, strokeWidth };
+  const { shape, fillColor: fill, strokeColor: stroke } = symbol;
+  return { geometry: 'circle', shape, fill, stroke, radius, strokeWidth };
 }
 
 /** 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code */
@@ -146,18 +158,19 @@ export function legendEntry(
     return { kind: 'symbol', code, name, year, swatch };
   }
   const mode = symbolModeOf(style, override);
-  const values = classItems(rule).map(item => ({
+  const items = classItems(rule);
+  const values = items.map(item => ({
     key: item.key,
     label: item.label,
     swatch: swatchOf(classSymbol(resource, item, override, style))
   }));
-  const colors = values.slice(0, PREVIEW_COLORS).map(value => swatchColor(value.swatch));
+  const swatches = new Map(values.map(value => [value.key, value.swatch]));
+  const summary = summaryItems(items, style, resource.geometry).flatMap(item => swatches.get(item.key) ?? []);
   if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {
-    const swatches = new Map(values.map(value => [value.key, value.swatch]));
     const match = rule.kind === 'landuse-code' ? 'code' : 'name';
-    return { kind: 'landuse', code, name, year, mode, swatch, colors, match, swatches };
+    return { kind: 'landuse', code, name, year, mode, swatch, summary, match, swatches };
   }
-  return { kind: 'values', code, name, year, mode, swatch, colors, values };
+  return { kind: 'values', code, name, year, mode, swatch, summary, values };
 }
 
 /** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */

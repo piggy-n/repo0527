@@ -22,6 +22,14 @@ import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import type { PickCandidate } from '../feature-query';
 import { type ResourceDisplay, type ResourceLayersState, withYearForAll } from '../resource-layers';
+import type { PointHighlightOf } from '../selection-style';
+
+// 五角星的高亮样式，描边是给的颜色（ADR 0159）
+const STAR_HIGHLIGHT: PointHighlightOf = color => ({
+  type: 'symbol',
+  layout: { 'icon-image': 'resources-shape-star' },
+  paint: { 'icon-halo-color': color }
+});
 import { type FeaturePick, hasMorePages, useFeaturePick } from './useFeaturePick';
 
 const server = setupServer();
@@ -204,7 +212,9 @@ function setup(
     errors,
     configErrors: computed(() => errors.value),
     hidden,
-    hiddenInScene: computed(() => hidden.value)
+    hiddenInScene: computed(() => hidden.value),
+    // 点资源按形状高亮的样式（ADR 0159）：默认没有，用例换成给定的样式
+    pointHighlight: vi.fn<(code: string) => PointHighlightOf | null>(() => null)
   };
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
@@ -1113,6 +1123,23 @@ describe('useFeaturePick：框选', () => {
     resources.hidden.value = false;
 
     expect(layerIds(owner)).toHaveLength(3);
+  });
+
+  it('点按资源的形状高亮（ADR 0159）：批量高亮按资源取样式，有样式时点是 symbol 图层', () => {
+    mockDetail();
+    const { owner, send, resources } = setup(15);
+    resources.pointHighlight.mockImplementation(code => (code === 'bgdc_dltb' ? STAR_HIGHLIGHT : null));
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    const group = owner.deriveGroup();
+    expect(resources.pointHighlight).toHaveBeenCalledWith('bgdc_dltb');
+    expect(group.layers.at(-1)).toMatchObject({
+      id: 'selection-batch-point',
+      type: 'symbol',
+      source: DLTB,
+      layout: { 'icon-image': 'resources-shape-star' },
+      paint: { 'icon-halo-color': '#f5222d' }
+    });
   });
 
   it('批量高亮和资源用同一个最小显示级别，级别跟着目录走（ADR 0137）', () => {

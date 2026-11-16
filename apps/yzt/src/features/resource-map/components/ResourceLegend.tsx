@@ -7,23 +7,14 @@ import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries } from '../legend';
 import type { SymbolTarget } from '../resource-symbols';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
+import { LegendPreview } from './LegendPreview';
 import { LegendSettings } from './LegendSettings';
-import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './ResourceLegend.module.scss';
 import { ValueLegend } from './ValueLegend';
 
-// 按属性配色的条目在名称前显示前三个取值的颜色（设计稿 5D.5）
-const renderColors = (colors: readonly string[]) => (
-  <span class={styles.colors} aria-hidden="true" data-colors>
-    {colors.map(color => (
-      <i style={{ backgroundColor: color }} />
-    ))}
-  </span>
-);
-
 /**
  * 资源图层的图例（ADR 0043、0044，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
- * 不读地图、不等视图就绪；复合图例默认展开、可以收起成多色块摘要，配置由独立按钮打开（ADR 0066、0094）。
+ * 不读地图、不等视图就绪；复合图例默认展开、可以收起成按几何画的摘要（ADR 0159），配置由独立按钮打开（ADR 0066、0094）。
  * 放在功能面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器、取色器和弹出层随之卸载，丢弃取色预览；
  * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置
  */
@@ -173,7 +164,7 @@ export const ResourceLegend = defineComponent({
       />
     );
 
-    // 复合图例收起时显示多色块摘要；单一符号直接展示，配置按钮不承担展开图例的动作
+    // 名称前是和图例浮层标题同一个摘要（ADR 0159）；单一符号直接展示，配置按钮不承担展开图例的动作
     const renderEntry = (entry: LegendEntry): VNode => {
       const isOpen = !collapsed.value.has(entry.code);
       const uniform = entry.kind === 'symbol' || entry.mode === 'uniform';
@@ -183,7 +174,7 @@ export const ResourceLegend = defineComponent({
             {!uniform && <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>}
           </span>
           <span class={styles.preview}>
-            {uniform ? <LegendSwatchIcon swatch={entry.swatch} /> : renderColors(entry.colors)}
+            <LegendPreview entry={entry} />
           </span>
           <span class={styles.name} title={entry.name}>{entry.name}</span>
           <span class={styles.year}>{entry.year}</span>

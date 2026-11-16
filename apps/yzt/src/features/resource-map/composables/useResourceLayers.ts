@@ -18,6 +18,7 @@ import type { Resource, ResourceCatalog } from '../catalog';
 import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
+  isDrawn,
   mergeDisplayState,
   withAdded,
   withMoved,
@@ -35,6 +36,8 @@ import {
   storedResourceLayersSchema,
   toStoredResourceLayers
 } from '../resource-layers-preference';
+import type { PointHighlightOf } from '../selection-style';
+import { resourceHighlightStyle } from '../style-registry';
 import type { ResourceSymbols } from './useResourceSymbols';
 
 /** 资源图层的拥有者（ADR 0041 第 3 节）：页面把 deriveGroup 绑定到 resources 分组，面板通过 props 拿到它 */
@@ -80,6 +83,11 @@ export interface ResourceLayers {
    * 引用资源数据源的推导（框选的批量高亮）这时也不能有图层
    */
   readonly hiddenInScene: ComputedRef<boolean>;
+  /**
+   * 点资源的选中高亮按它的形状和大小画（ADR 0159）：读它的符号覆盖，图片在资源分组里；
+   * 不是点资源、没画在地图上（包括三维里分组为空、配置不合法）时为 null，高亮退回红色圆点
+   */
+  readonly pointHighlight: (code: string) => PointHighlightOf | null;
   readonly deriveGroup: () => StyleGroup;
 }
 
@@ -239,6 +247,21 @@ export function useResourceLayers(
     ),
     setYearForAll,
     hiddenInScene,
+    pointHighlight: code => {
+      const current = state.value;
+      const resource = current.catalog?.resources.get(code);
+      if (
+        !resource ||
+        resource.geometry !== 'circle' ||
+        hiddenInScene.value ||
+        !isDrawn(current.displays.get(code)) ||
+        configErrors.value.has(code)
+      ) {
+        return null;
+      }
+      const override = options.symbols?.overrideOf(code);
+      return color => resourceHighlightStyle(resource, color, override);
+    },
     deriveGroup: () =>
       hiddenInScene.value
         ? NO_RESOURCES

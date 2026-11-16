@@ -4,6 +4,7 @@ import { effectScope, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
 import { defaultSymbol } from '../style-registry';
+import type { PointShape } from '../point-shapes';
 import type { ColorField, FillStyle, LineDash, SymbolField } from '../symbols';
 import { useResourceSymbols } from './useResourceSymbols';
 
@@ -119,6 +120,8 @@ describe('useResourceSymbols', () => {
     expect(() => symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { strokeWidth: 1.5 })).toThrow('描边宽度');
     // 类型不允许，模拟界面传来的脏值
     expect(() => symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { dash: 'wavy' as LineDash })).toThrow('没有线型');
+    expect(() => symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { shape: 'ring' as PointShape })).toThrow('没有形状');
+    expect(() => symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { shape: 'pin' })).toThrow('没有 shape');
     expect(() => symbols.previewColor({ code: 'csxhjctb_gyssp' }, 'color', '#000')).toThrow('没有 color');
     expect(() => symbols.previewColor({ code: 'bgdc_ccwjq' }, 'fillColor', '不是颜色')).toThrow('不是颜色');
     expect(symbols.overrides.value).toBe(before);

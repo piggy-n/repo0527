@@ -24,22 +24,26 @@ export function colorOf(expression: unknown, properties: Record<string, string>)
   return String(parsed.value.evaluate({ zoom: 12 }, { type: 'Polygon', properties }));
 }
 
-/** 按 MapLibre 的语义求一个 paint 属性在某一级、某个要素上的值；缩放只能作为顶层插值的输入等规则也一并检查 */
+/**
+ * 按 MapLibre 的语义求一个 paint 或 layout 属性在某一级、某个要素上的值；缩放只能作为顶层插值的输入等规则也一并检查。
+ * symbol 图层的 icon-image 求出的是图片，转成字符串是图片的 ID
+ */
 export function paintValueOf(
-  layerType: 'fill' | 'line' | 'circle',
+  layerType: 'fill' | 'line' | 'circle' | 'symbol',
   property: string,
   value: unknown,
   properties: Record<string, string>,
   zoom = 12
 ): unknown {
   const paint: Record<string, unknown> = latest[`paint_${layerType}`];
+  const layout: Record<string, unknown> = latest[`layout_${layerType}`];
   // 同 FILL_COLOR，按属性规范使用
-  const spec = paint[property] as StylePropertySpecification;
+  const spec = (paint[property] ?? layout[property]) as StylePropertySpecification;
   const parsed = createPropertyExpression(value, property, spec);
   if (parsed.result !== 'success') {
     throw new Error(parsed.value.map(({ message }) => message).join('；'));
   }
-  const geometry = { fill: 'Polygon', line: 'LineString', circle: 'Point' } as const;
+  const geometry = { fill: 'Polygon', line: 'LineString', circle: 'Point', symbol: 'Point' } as const;
   return parsed.value.evaluate({ zoom }, { type: geometry[layerType], properties });
 }
 
