@@ -59,8 +59,12 @@ function printRoam(
   console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
   // 路线先在局部系里算一遍，清单的写法和平面图都用它；拉直留下的拐点按原因计数，--diagnose 时逐个列出
   const localRoutes = options.routes.map((span) => {
-    const { points, corners } = routeWithCorners(track, span.from, span.to, result.grid);
-    console.log(`路线 ${span.id}：${cornerSummary(corners, STRAIGHT_HORIZONTAL)}`);
+    const tolerance = span.tolerance ?? STRAIGHT_HORIZONTAL;
+    const { points, corners } = routeWithCorners(track, span.from, span.to, result.grid, {
+      tolerance,
+      stretches: options.stretches
+    });
+    console.log(`路线 ${span.id}（容差 ${tolerance} 米）：${cornerSummary(corners, tolerance)}`);
     if (options.diagnose) {
       corners.forEach((corner) => console.log(cornerLine(corner)));
     }
