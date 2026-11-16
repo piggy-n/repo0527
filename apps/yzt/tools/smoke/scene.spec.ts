@@ -1,6 +1,7 @@
 import type { Locator, Page } from 'playwright/test';
 import { expect, test } from './fixtures.ts';
 import { roomB3dm, roomManifest, roomTileset, splatFiles } from './scene-model.ts';
+import { SCENE_TIER_SETTINGS } from './scene-tiers.ts';
 
 // 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts），同 static-basemap.spec.ts；冒烟不导入应用源码
 const LAND_COLORS = [[0xf3, 0xf1, 0xe9]];
@@ -260,8 +261,15 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
 // 冒烟的浏览器是软件渲染，auto 本来就是低档：这里只看产物里的检查、Worker、提示和设备上记的降档
 test('三维降档：上次崩溃的页面留下标记，打开三维时提示，能恢复原来的画质', async ({ context, page, request }) => {
   test.setTimeout(120_000);
+  // 发布的档位是部署方按现场的机器选的（docs/config/scene-tier.md），这里只看文件是合法的档位
   const file = await request.get('/scene-tier.json');
-  expect(await file.json()).toStrictEqual({ tier: 'auto' });
+  const published: unknown = await file.json();
+  const tier = typeof published === 'object' && published !== null && 'tier' in published ? published.tier : undefined;
+  // 只有 tier 一项，值是应用认的档位
+  expect(published).toStrictEqual({ tier });
+  expect(SCENE_TIER_SETTINGS).toContain(tier);
+  // 降档的流程按 auto 走：页面读档位的请求（带时间戳）拦下来给 auto
+  await context.route(/\/scene-tier\.json(\?|$)/, route => route.fulfill({ json: { tier: 'auto' } }));
   // 崩溃的页面：标准档开着三维时被杀，标记留下，也没有 Worker 替它回答
   const crashed = JSON.stringify({ tier: 'standard', configured: 'auto', restored: false });
   await context.addInitScript({

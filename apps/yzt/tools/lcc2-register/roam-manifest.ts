@@ -4,7 +4,7 @@ import type { FloorGrid } from './floor-grid.ts';
 import type { Vec3 } from './lcc2-data.ts';
 import { type Correction, meshToLngLatHeight, type Placement, yawToManifestHeading } from './placement.ts';
 import type { GridProjection } from './projection.ts';
-import { EYE_HEIGHT, type RoamPoint, routeOf, spawnOf, type TrackSample } from './roam.ts';
+import { EYE_HEIGHT, type RoamPoint, routeOf, spawnOf, type Stretch, type TrackSample } from './roam.ts';
 
 /** 换算要用的：投影、索引的 offset、修正、高程基准的差、算出的摆放 */
 export interface RoamFrame {
@@ -64,14 +64,16 @@ export function manifestPath(points: readonly RoamPoint[], frame: RoamFrame): Ma
   });
 }
 
-/** 一条路线；grid 是 trackOf 用的那份 */
+/** 一条路线；grid 是 trackOf 用的那份，stretches 是按轨迹米数分段的拉直容差 */
 export function manifestRoute(
   track: readonly TrackSample[],
   span: RouteSpan,
   frame: RoamFrame,
-  grid: FloorGrid
+  grid: FloorGrid,
+  stretches: readonly Stretch[] = []
 ): ManifestRoute {
-  return { id: span.id, name: span.name, path: manifestPath(routeOf(track, span.from, span.to, grid), frame) };
+  const points = routeOf(track, span.from, span.to, grid, { tolerance: span.tolerance, stretches });
+  return { id: span.id, name: span.name, path: manifestPath(points, frame) };
 }
 
 /** 概要取的取样点：每 step 米第一个；平面图的米数标在同一批点上 */

@@ -1,8 +1,21 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildFloorGrid } from './floor-grid.ts';
+import { buildFloorGrid, floorsAt } from './floor-grid.ts';
 import type { Vec3 } from './lcc2-data.ts';
-import { EYE_HEIGHT, type RoamPoint, routeOf, simplify, spawnOf, trackOf } from './roam.ts';
+import {
+  EYE_HEIGHT,
+  firstBelow,
+  joinRuns,
+  lowerEyes,
+  lowestAround,
+  type RoamPoint,
+  routeOf,
+  routeWithCorners,
+  simplify,
+  spawnOf,
+  trackOf,
+  windowMinIndex
+} from './roam.ts';
 import { rectangle, walk } from './test-meshes.ts';
 
 // 20 × 4 米的地面；x 10～20 头顶 1.5 米有顶（矮墓道）；x 5.0～5.2 地上一道 0.35 米高的门槛
@@ -333,6 +346,365 @@ describe('routeOf', () => {
     expect(() => routeOf(track, 10, 30, grid)).toThrow('不在轨迹里');
     const offMesh: Vec3[] = walk([{ from: [30, 2], to: [40, 2] }], () => 0);
     expect(() => routeOf(trackOf(offMesh, grid), 1, 5, grid)).toThrow('脚下没有网格');
+  });
+});
+
+describe('routeWithCorners', () => {
+  it('拉直以后留下的拐点记下原因：真的拐弯是偏离超过容差，门框是中线脚下没有地面，通道收窄是两侧脚下没有地面', () => {
+    // 先往东 10 米、再往北 10 米的 L 形走廊
+    const bendGrid = buildFloorGrid([rectangle(0, 0, 11, 2, 0), rectangle(9, 0, 11, 12, 0)]);
+    const bendTrack = trackOf(walk([{ from: [0, 1], to: [10, 1] }, { from: [10, 1], to: [10, 12] }], () => 0), bendGrid);
+    const turn = routeWithCorners(bendTrack, 1, 19, bendGrid).corners;
+    expect(turn.map(({ reason }) => reason)).toStrictEqual(['deviation']);
+    expect(turn[0]?.offset).toBeGreaterThan(5);
+    // 轨迹从 x 0 起，拐弯处走过 10 米
+    expect(turn[0]?.distance).toBeCloseTo(10, 0);
+
+    // 同"拉直不切门框"：门洞 0.4 米宽，首尾连线在门框里
+    const doorGrid = buildFloorGrid([
+      rectangle(0, 0, 9.6, 4, 0),
+      rectangle(10.8, 0, 20, 4, 0),
+      rectangle(9.6, 1.8, 10.8, 2.2, 0)
+    ]);
+    const doorTrack = trackOf(
+      walk([{ from: [0, 1.4], to: [9.4, 2] }, { from: [9.4, 2], to: [11, 2] }, { from: [11, 2], to: [20, 2] }], () => 0),
+      doorGrid
+    );
+    const door = routeWithCorners(doorTrack, 1, 19, doorGrid).corners;
+    expect(door.length).toBeGreaterThan(0);
+    expect(door.every(({ offset }) => offset < 1)).toBe(true);
+    expect(door[0]?.reason).toBe('ground');
+    // 第一个过不去的位置在门框里
+    expect(door[0]?.at.x).toBeGreaterThan(9.5);
+
+    // 同"拉直后离墙仍有 0.2 米"：首尾连线在窄的一段离墙只有 0.06 米
+    const narrowGrid = buildFloorGrid([rectangle(0, 0, 10, 1.6, 0), rectangle(10, 0, 20, 0.6, 0)]);
+    const narrowTrack = trackOf(
+      walk(
+        [
+          { from: [0, 0.8], to: [10, 0.8] },
+          { from: [10, 0.8], to: [10.3, 0.3] },
+          { from: [10.3, 0.3], to: [20, 0.3] }
+        ],
+        () => 0
+      ),
+      narrowGrid
+    );
+    expect(routeWithCorners(narrowTrack, 1, 19, narrowGrid).corners[0]?.reason).toBe('side-ground');
+  });
+
+  it('身高范围里的东西和头顶余量分开记', () => {
+    // 4 米宽的厅里 x 9～11、y 1.6～2.4 一个 1 米高的台子（下面没有地面），扫描的人从北边绕过去
+    const table = buildFloorGrid([
+      rectangle(0, 0, 9, 4, 0),
+      rectangle(11, 0, 20, 4, 0),
+      rectangle(9, 0, 11, 1.6, 0),
+      rectangle(9, 2.4, 11, 4, 0),
+      rectangle(9, 1.6, 11, 2.4, 1)
+    ]);
+    const around = trackOf(
+      walk([{ from: [0, 2], to: [8, 2] }, { from: [8, 2], to: [10, 2.9] }, { from: [10, 2.9], to: [12, 2] }, { from: [12, 2], to: [20, 2] }], () => 0),
+      table
+    );
+    expect(routeWithCorners(around, 1, 19, table).corners.map(({ reason }) => reason)).toContain('obstacle');
+
+    // 头顶 1.75 米的矮通道（视点 1.55，头顶正好没有余量），x 9.9～10.1、y 0.5～0.7 吊着一盏灯，底在 1.6 米；
+    // 左右摆的轨迹从灯旁边过，首尾连线从灯下过（灯下视点要降到 1.4）
+    const reasons = routeWithCorners(trackOf(zigzag, LAMP), 1, 19, LAMP).corners.map(({ reason }) => reason);
+    expect(reasons.length).toBeGreaterThan(0);
+    expect(reasons.every(reason => reason === 'headroom' || reason === 'side-headroom')).toBe(true);
+  });
+});
+
+// 1.2 米宽、头顶 1.75 米的矮通道，x 9.9～10.1、y 0.5～0.7 吊着一盏灯，底在 1.6 米
+const LAMP = buildFloorGrid([
+  rectangle(0, 0, 20, 1.2, 0),
+  rectangle(0, 0, 20, 1.2, 1.75),
+  rectangle(9.9, 0.5, 10.1, 0.7, 1.6)
+]);
+
+// 路线上 (x, y) 处视点以上到头顶的米数（路线按前后两点插值，头顶取这一格地板以上 0.5 米以上最低的表面）
+function headroomAlong(route: readonly RoamPoint[], grid: ReturnType<typeof buildFloorGrid>): number {
+  let least = Infinity;
+  for (let i = 1; i < route.length; i++) {
+    const a = route[i - 1];
+    const b = route[i];
+    const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.05);
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const x = a.x + (b.x - a.x) * t;
+      const y = a.y + (b.y - a.y) * t;
+      const floor = a.floor + (b.floor - a.floor) * t;
+      const eye = a.eye + (b.eye - a.eye) * t;
+      const top = floorsAt(grid, x, y).find(height => height > floor + 0.5);
+      if (top !== undefined) {
+        least = Math.min(least, top - floor - eye);
+      }
+    }
+  }
+  return least;
+}
+
+// 沿 y 3 走，到 x 10 的柱子前往南绕 0.8 米
+const AROUND_PILLAR = [
+  { from: [0, 3], to: [9.2, 3] },
+  { from: [9.2, 3], to: [9.6, 2.2] },
+  { from: [9.6, 2.2], to: [10.4, 2.2] },
+  { from: [10.4, 2.2], to: [10.8, 3] },
+  { from: [10.8, 3], to: [20, 3] }
+] as const;
+
+// 路线上 x 在 from～to 之间的点最北到哪
+const northmost = (route: readonly RoamPoint[], from: number, to: number) =>
+  Math.max(...route.filter(({ x }) => x > from && x < to).map(({ y }) => y));
+
+describe('拉直：贪心拉线、直线上重算眼高、按路线的容差', () => {
+  it('直线只在挡住的地方拐：厅里一根柱子挡住首尾连线，左右摆的轨迹拉成两段，不在摆动处拐', () => {
+    // 3 米宽的厅，x 9.6～10.4、y 0～1.75 是一根柱子（没有地面）；扫描的人在 y 1.4～2.2 之间每 2 米摆一次，从柱子北边过
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 9.6, 3, 0),
+      rectangle(10.4, 0, 20, 3, 0),
+      rectangle(9.6, 1.75, 10.4, 3, 0),
+      rectangle(0, 0, 20, 3, 2.5)
+    ]);
+    const track = trackOf(
+      walk(
+        Array.from({ length: 10 }, (_, i) => ({
+          from: [i * 2, i % 2 === 0 ? 1.4 : 2.2] as const,
+          to: [(i + 1) * 2, i % 2 === 0 ? 2.2 : 1.4] as const
+        })),
+        () => 0
+      ),
+      grid
+    );
+    const { points, corners } = routeWithCorners(track, 1, 19, grid);
+    // 拐点在柱子北边以东、从起点还看得到的最远处（轨迹每 2 米走约 2.15 米）
+    expect(corners).toHaveLength(1);
+    expect(corners[0]?.distance).toBeGreaterThan(10.5);
+    expect(corners[0]?.distance).toBeLessThan(17);
+    // 柱子旁边离柱子（y 1.75）至少约 0.2 米
+    const nearPillar = along(points).filter(({ x }) => x > 9.5 && x < 10.5);
+    expect(Math.min(...nearPillar.map(({ y }) => y))).toBeGreaterThan(1.9);
+  });
+
+  it('矮通道两侧的顶低几厘米：直线上的视点按新位置的头顶重算，左右摆的轨迹照样拉直，视点不碰顶', () => {
+    // 1.2 米宽的通道，y 0.6 以北头顶 1.80，以南 1.76；扫描的人在 y 0.35～0.85 之间摆，南边的点视点按 1.76 算成 1.56
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 20, 1.2, 0),
+      rectangle(0, 0.6, 20, 1.2, 1.8),
+      rectangle(0, 0, 20, 0.6, 1.76)
+    ]);
+    const route = routeOf(trackOf(zigzag, grid), 1, 19, grid);
+    expect(bend(route)).toBeLessThan(0.03);
+    expect(Math.min(...route.map(({ eye }) => eye))).toBeGreaterThan(1.5);
+    // 视点以上到顶至少 0.2 米（抽稀的竖直容差 0.08 米以内）
+    expect(headroomAlong(route, grid)).toBeGreaterThan(0.2 - 0.08);
+  });
+
+  it('直线上的视点只往低里重算，不比原来的路线高：网格里门楣只扫到扫描仪经过的一条，直线从没扫到的地方过，视点照样压低', () => {
+    // 同"蹲着扫的矮门"：x 6～7 是 0.4 米高的门槛石，门楣在 1.2 米，但网格里只有 y 1.8～2.2 这一条（扫描仪蹲着从这里过）；
+    // 扫描的人从 y 3 斜着走到门口、出门再斜着走回 y 3，首尾连线在门口 y 约 2.8，头顶在网格里是空的
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 6, 4, 0),
+      rectangle(6, 0, 7, 4, 0.4),
+      rectangle(7, 0, 12, 4, 0),
+      rectangle(6, 1.8, 7, 2.2, 1.2)
+    ]);
+    const track = trackOf(
+      walk(
+        [
+          { from: [0, 3], to: [6, 2] },
+          { from: [6, 2], to: [7, 2] },
+          { from: [7, 2], to: [12, 3] }
+        ],
+        (x) => (x >= 6 && x < 7 ? -0.25 : 0)
+      ),
+      grid
+    );
+    const route = routeOf(track, 1, 11, grid);
+    // 拉直了（门口离首尾连线不到 1 米），门口的视点仍是扫描仪蹲着过时的 0.6
+    expect(bend(route)).toBeLessThan(0.03);
+    expect(routeAt(route, 6.5).eye).toBeLessThanOrEqual(0.6 + 0.08);
+  });
+
+  it('实心的柱子不从中间穿过：柱子下面没有地面，跨洞从相邻格借到的地面不算，柱顶不当成能从下面钻过的顶', () => {
+    // 4 米宽的厅，x 9.8～10.2、y 2.8～3.2 一根 0.4 米见方、顶 1.77 米的实心柱；扫描的人沿 y 3 走，到柱子前往南绕 0.8 米
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 9.8, 4, 0),
+      rectangle(10.2, 0, 20, 4, 0),
+      rectangle(9.8, 0, 10.2, 2.8, 0),
+      rectangle(9.8, 3.2, 10.2, 4, 0),
+      rectangle(9.8, 2.8, 10.2, 3.2, 1.77)
+    ]);
+    const track = trackOf(walk(AROUND_PILLAR, () => 0), grid);
+    const route = routeOf(track, 1, 19, grid);
+    expect(along(route).filter(({ x, y }) => x > 9.8 && x < 10.2 && y > 2.8 && y < 3.2)).toStrictEqual([]);
+  });
+
+  it('矮顶之后的实心台子不从中间穿过：前后 1 米有矮处、视点下限放低时，台子照样挡住', () => {
+    // x 7.5～8.5 头顶 1.5 米（视点 1.3），之后 x 8.8～9.2、y 2.8～3.2 一个 0.4 米见方、1.5 米高的实心台子；扫描的人从南边绕过台子
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 8.8, 4, 0),
+      rectangle(9.2, 0, 20, 4, 0),
+      rectangle(8.8, 0, 9.2, 2.8, 0),
+      rectangle(8.8, 3.2, 9.2, 4, 0),
+      rectangle(8.8, 2.8, 9.2, 3.2, 1.5),
+      rectangle(7.5, 0, 8.5, 4, 1.5)
+    ]);
+    const track = trackOf(
+      walk(
+        [
+          { from: [0, 3], to: [8.4, 3] },
+          { from: [8.4, 3], to: [8.8, 2.2] },
+          { from: [8.8, 2.2], to: [9.2, 2.2] },
+          { from: [9.2, 2.2], to: [9.6, 3] },
+          { from: [9.6, 3], to: [20, 3] }
+        ],
+        () => 0
+      ),
+      grid
+    );
+    const route = routeOf(track, 1, 19, grid);
+    expect(along(route).filter(({ x, y }) => x > 8.8 && x < 9.2 && y > 2.8 && y < 3.2)).toStrictEqual([]);
+  });
+
+  it('两侧的头顶也压低视点：灯在首尾连线旁边 0.2 米内（灯下有地面），直线不从灯旁边擦过', () => {
+    // 同 LAMP 的通道，灯挪到 x 11.9～12.1、y 0.8～1.0，底 1.6 米。左右摆的轨迹在 x 12 处 y 约 0.37，离灯远；
+    // 首尾连线在 x 12 处 y 约 0.64：中线不在灯下，北侧 0.2 米在灯下，按两侧的头顶视点要降到 1.4
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 20, 1.2, 0),
+      rectangle(0, 0, 20, 1.2, 1.75),
+      rectangle(11.9, 0.8, 12.1, 1.0, 1.6)
+    ]);
+    const route = routeOf(trackOf(zigzag, grid), 1, 19, grid);
+    // 灯旁边路线北侧 0.2 米处不在灯的格子（y 0.8～1.0）里
+    const beside = along(route).filter(({ x }) => x > 11.85 && x < 12.15);
+    expect(beside.length).toBeGreaterThan(0);
+    expect(Math.max(...beside.map(({ y }) => y))).toBeLessThan(0.6);
+  });
+
+  it('直线上的视点不能比原来的路线低太多：原来绕开的低灯，直线不从它下面过', () => {
+    const route = routeOf(trackOf(zigzag, LAMP), 1, 19, LAMP);
+    const underLamp = along(route).filter(({ x, y }) => x > 9.85 && x < 10.15 && y > 0.45 && y < 0.75);
+    expect(underLamp).toStrictEqual([]);
+    expect(headroomAlong(route, LAMP)).toBeGreaterThan(0.2 - 0.08);
+  });
+
+  it('按路线调大水平容差：宽坡道上左右摆 1.6 米的轨迹，默认 1 米留着拐点，容差 2 米拉成一条直线', () => {
+    // 4 米宽的厅，扫描的人在 y 1.2～2.8 之间每 3 米摆一次
+    const grid = buildFloorGrid([rectangle(0, 0, 21, 4, 0)]);
+    const track = trackOf(
+      walk(
+        Array.from({ length: 7 }, (_, i) => ({
+          from: [i * 3, i % 2 === 0 ? 1.2 : 2.8] as const,
+          to: [(i + 1) * 3, i % 2 === 0 ? 2.8 : 1.2] as const
+        })),
+        () => 0
+      ),
+      grid
+    );
+    expect(bend(routeOf(track, 1, 20, grid))).toBeGreaterThan(0.5);
+    expect(bend(routeOf(track, 1, 20, grid, { tolerance: 2 }))).toBeLessThan(0.03);
+  });
+
+  it('按轨迹米数分段的容差几段重叠时，取写在后面的', () => {
+    // 同上：4 米宽的厅，扫描的人在 y 1.2～2.8 之间每 3 米摆一次
+    const grid = buildFloorGrid([rectangle(0, 0, 21, 4, 0)]);
+    const track = trackOf(
+      walk(
+        Array.from({ length: 7 }, (_, i) => ({
+          from: [i * 3, i % 2 === 0 ? 1.2 : 2.8] as const,
+          to: [(i + 1) * 3, i % 2 === 0 ? 2.8 : 1.2] as const
+        })),
+        () => 0
+      ),
+      grid
+    );
+    const wide = { from: 0, to: 30, tolerance: 2 };
+    const narrow = { from: 0, to: 30, tolerance: 1 };
+    expect(bend(routeOf(track, 1, 20, grid, { stretches: [narrow, wide] }))).toBeLessThan(0.03);
+    expect(bend(routeOf(track, 1, 20, grid, { stretches: [wide, narrow] }))).toBeGreaterThan(0.5);
+  });
+
+  it('按轨迹米数分段的容差：宽坡道那一段拉直，后面进小室又出来的一段照样走', () => {
+    // 4 米宽的坡道（x 0～12），扫描的人在 y 1.2～2.8 之间每 3 米摆一次；之后是 1.2 米宽的通道（y 1.4～2.6），
+    // x 16～17 北边有一间 1.5 米深的小室（y 2.6～4.1），扫描的人进去到 y 3.6 再出来
+    const grid = buildFloorGrid([
+      rectangle(0, 0, 12, 4, 0),
+      rectangle(12, 1.4, 24, 2.6, 0),
+      rectangle(16, 2.6, 17, 4.1, 0)
+    ]);
+    const segments = [
+      ...Array.from({ length: 4 }, (_, i) => ({
+        from: [i * 3, i % 2 === 0 ? 1.2 : 2.8] as const,
+        to: [(i + 1) * 3, i % 2 === 0 ? 2.8 : 1.2] as const
+      })),
+      { from: [12, 1.2] as const, to: [12.5, 2] as const },
+      { from: [12.5, 2] as const, to: [16.5, 2] as const },
+      { from: [16.5, 2] as const, to: [16.5, 3.6] as const },
+      { from: [16.5, 3.6] as const, to: [16.5, 2] as const },
+      { from: [16.5, 2] as const, to: [24, 2] as const }
+    ];
+    const track = trackOf(walk(segments, () => 0), grid);
+    // 坡道走完时轨迹上约 13.6 米
+    const end = track.find(({ point }) => point[0] >= 12)?.distance ?? 0;
+    const whole = routeOf(track, 0.5, 26, grid, { tolerance: 2 });
+    const parted = routeOf(track, 0.5, 26, grid, { stretches: [{ from: 0, to: end, tolerance: 2 }] });
+    // 整条用 2 米：小室没进去（1.6 米深的往返在容差以内，被拉直跳过）
+    expect(northmost(whole, 15.5, 17.5)).toBeLessThan(3);
+    // 只有坡道用 2 米：坡道上只剩首尾两个点，小室照样进去
+    expect(parted.filter(({ x }) => x < 11.5).length).toBeLessThanOrEqual(2);
+    expect(northmost(parted, 15.5, 17.5)).toBeGreaterThan(3.3);
+  });
+});
+
+describe('直线上重算视点的几步', () => {
+  it('windowMinIndex：每个位置前后各 half 个里最小的那个', () => {
+    const values = [1.6, 1.6, 1.2, 1.6, 1.6, 1.6];
+    // 一样小时取自己
+    expect(windowMinIndex(values, 1)).toStrictEqual([0, 2, 2, 2, 4, 5]);
+    expect(windowMinIndex(values, 2)).toStrictEqual([2, 2, 2, 2, 2, 5]);
+    expect(windowMinIndex(values, 0)).toStrictEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('lowestAround：原来的路线前后 reach 米内最低的眼高，只看 first～last 之间的点，算上插值的 original', () => {
+    const arcs = [0, 1, 2, 3, 4];
+    const eyes = [1.6, 1.6, 1.3, 1.6, 1.6];
+    // 弧长 3 前后 1 米：2～4 米的点，含 2 米处的 1.3
+    expect(lowestAround(arcs, eyes, 0, 4, 3, 1.6, 1)).toBe(1.3);
+    // 弧长 3.5 前后 1 米：2.5～4.5 米，2 米处不算
+    expect(lowestAround(arcs, eyes, 0, 4, 3.5, 1.6, 1)).toBe(1.6);
+    expect(lowestAround(arcs, eyes, 0, 4, 3.5, 1.5, 1)).toBe(1.5);
+    // 2 米处在 first 以前
+    expect(lowestAround(arcs, eyes, 3, 4, 3, 1.6, 1)).toBe(1.6);
+    // 默认前后 1 米
+    expect(lowestAround(arcs, eyes, 0, 4, 2.9, 1.6)).toBe(1.3);
+  });
+
+  it('firstBelow：取过前后最小值的视点逐点和下限比，第一个低于下限的位置', () => {
+    expect(firstBelow([1.6, 1.5, 1.4], [1.55, 1.55, 1.35])).toBe(1);
+    expect(firstBelow([1.6, 1.4], [1.55, 1.35])).toBe(-1);
+    // 等于下限不算低于
+    expect(firstBelow([1.55], [1.55])).toBe(-1);
+  });
+
+  it('lowerEyes：前后取最低、不高于原来的眼高；取过最低以后低于下限时返回压低它的点', () => {
+    const originals = [1.6, 1.6, 1.6, 1.6, 1.6];
+    const floors = [1.35, 1.35, 1.35, 1.35, 1.35];
+    // 一格 1.4 的灯：前后各一个点跟着降
+    expect(lowerEyes([1.6, 1.6, 1.4, 1.6, 1.6], originals, floors, 1)).toStrictEqual({ eyes: [1.6, 1.4, 1.4, 1.4, 1.6] });
+    // 不高于原来的眼高
+    expect(lowerEyes([1.6, 1.6, 1.6], [1.6, 1.3, 1.6], [1.25, 1.25, 1.25], 0)).toStrictEqual({ eyes: [1.6, 1.3, 1.6] });
+    // 第 1 个点自己 1.3 在它的下限 1.25 以上，但第 0 个点取过最低以后是 1.3，低于它的下限 1.5：返回压低它的第 1 个点
+    expect(lowerEyes([1.6, 1.3], [1.6, 1.3], [1.5, 1.25], 1)).toStrictEqual({ below: 1 });
+  });
+
+  it('joinRuns：几段首尾相接，接头处的视点取两段里低的', () => {
+    const a = line(0);
+    const c = line(2);
+    expect(joinRuns([[a, line(1, 1.5)], [line(1, 1.4), c]])).toStrictEqual([a, line(1, 1.4), c]);
+    expect(joinRuns([[a, line(1, 1.3)], [line(1, 1.6), c]])).toStrictEqual([a, line(1, 1.3), c]);
+    expect(joinRuns([[a, line(1)], [], [line(1), c]])).toStrictEqual([a, line(1), c]);
   });
 });
 

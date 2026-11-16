@@ -15,7 +15,7 @@
 | `standard` | 标准档 |
 | `high` | 高档：独显的显存 8 GB 以上、内存 16 GB 以上的机器（下面"高档的要求"） |
 
-读不到文件、格式不对时按 `auto` 定这次的档位，浏览器控制台有一条警告。这不当成部署方改了配置：这台设备记的降档照用（包括不能恢复的），也不检查、不删别的页面的崩溃标记（分不出它们是不是改配置以前的，留给下一个读到配置的页面）；这个页面自己的标记里配置记成 `null`，别的页面照样认。二维稳定后预加载三维模块时一起读（带时间戳，不用缓存），不拖慢地图；仓库里的来源是 `apps/yzt/public/scene-tier.json`（`auto`），部署见 [deployment.md](../deployment.md)"三维的设备档位"。
+读不到文件、格式不对时按 `auto` 定这次的档位，浏览器控制台有一条警告。这不当成部署方改了配置：这台设备记的降档照用（包括不能恢复的），也不检查、不删别的页面的崩溃标记（分不出它们是不是改配置以前的，留给下一个读到配置的页面）；这个页面自己的标记里配置记成 `null`，别的页面照样认。二维稳定后预加载三维模块时一起读（带时间戳，不用缓存），不拖慢地图；仓库里的来源是 `apps/yzt/public/scene-tier.json`，现在是 `high`（2026-11-15 按现场的机器改的，用户确认是有意的），部署见 [deployment.md](../deployment.md)"三维的设备档位"。生产冒烟（`tools/smoke/scene.spec.ts`）只检查发布的文件是合法的档位，崩溃降档那条用拦截下来的 `auto` 走。
 
 ## 各档的数值
 
@@ -95,7 +95,7 @@ ADR 0155 第 4 节定的是"按页面的标记、打开三维时确认留下标�
 
 | 文件 | 内容 |
 |---|---|
-| `apps/yzt/public/scene-tier.json` | 发布的默认配置（`auto`） |
+| `apps/yzt/public/scene-tier.json` | 发布的配置（现在是 `high`） |
 | `apps/yzt/src/shared/config/scene-tier-options.ts` | 三档的数值，只写常量（测量工具也导入） |
 | `apps/yzt/src/shared/config/scene-tier-file.ts` | 读、校验 `scene-tier.json` |
 | `apps/yzt/src/shared/map/scene-tier/renderer-class.ts` | 按显卡的名字分软件渲染、集显，`auto` 的档位 |

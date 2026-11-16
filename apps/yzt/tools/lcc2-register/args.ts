@@ -1,6 +1,7 @@
 // 命令行参数：pnpm --filter yzt lcc2:register 后面的参数原样传进来
 import type { Vec3 } from './lcc2-data.ts';
 import { ToolError } from './errors.ts';
+import type { Stretch } from './roam.ts';
 
 export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement（ADR 0149 第 4 节，docs/config/3dt-manifest.md）
 
@@ -16,7 +17,12 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
   --no-fit               不拟合轨迹和网格之间的平移，只用人工修正（轨迹不可信时）
   --roam                 再给出步行的出生点（清单的 spawn），并每 20 米列一行轨迹的概要，用来挑路线段（ADR 0156 第 4 节）
   --spawn-at <米>        出生点从轨迹的这个米数往后找（扫描不是从入口开始时），带上它就是 --roam
-  --route <ID:名称:起-止>  轨迹上起～止米这一段做成一条路线（清单的 routes），可以写多次、ID 不能重复，带上它就是 --roam
+  --route <ID:名称:起-止[:容差]>
+                         轨迹上起～止米这一段做成一条路线（清单的 routes），可以写多次、ID 不能重复，带上它就是 --roam；
+                         容差是拉直的水平容差（米，默认 1）：扫描的人在宽的坡道、走廊里左右摆得大时调大
+  --straight <起-止:容差>  轨迹上起～止米这一段拉直的水平容差（米），比 --route 写的优先，可以写多次，几段重叠时取写在后面的：
+                         一条路线里只有宽的坡道、走廊一段要调大时用，进小室又出来这类地方留默认值
+  --diagnose             再逐个列出拉直以后留下的拐点和原因（每条路线的计数总会打印），带上它就是 --roam
   --plan <文件.svg>      再画一张平面图：地板、轨迹和每 20 米的米数（同概要）、出生点、路线，挑路线段和核对用；
                          相对路径放在 local/ 下（如 lcc2-plan/xz-gshm.svg），带上它就是 --roam
   --help、-h             显示这段说明
@@ -36,17 +42,22 @@ export interface Options {
   readonly roam: boolean;
   readonly spawnAt: number;
   readonly routes: readonly RouteSpan[];
+  /** 按轨迹米数分段的拉直容差 */
+  readonly stretches: readonly Stretch[];
+  /** 逐个列出拉直以后留下的拐点和原因 */
+  readonly diagnose: boolean;
   /** 平面图写到哪个文件，原样保留，由调用方决定相对路径放在哪；不画时为 null */
   readonly plan: string | null;
   readonly help: boolean;
 }
 
-/** 轨迹上做成路线的一段：清单里的 ID、名称，轨迹上的起止米数 */
+/** 轨迹上做成路线的一段：清单里的 ID、名称，轨迹上的起止米数，拉直的水平容差（米，没写时用默认值） */
 export interface RouteSpan {
   readonly id: string;
   readonly name: string;
   readonly from: number;
   readonly to: number;
+  readonly tolerance?: number;
 }
 
 function finite(name: string, text: string): number {
@@ -68,12 +79,34 @@ function vector(name: string, text: string): Vec3 {
 }
 
 function routeSpan(name: string, text: string): RouteSpan {
-  const match = /^([\w-]+):([^:]+):([\d.]+)-([\d.]+)$/u.exec(text.trim());
+  const match = /^([\w-]+):([^:]+):([\d.]+)-([\d.]+)(?::([\d.]+))?$/u.exec(text.trim());
   if (!match) {
-    throw new ToolError(`参数 ${name} 要写成 ID:名称:起-止（米），如 tomb:进墓室:120-380：${text}`);
+    throw new ToolError(
+      `参数 ${name} 要写成 ID:名称:起-止（米），可以再加 :容差（米），如 tomb:进墓室:120-380 或 hall:进厅:25-75:3：${text}`
+    );
   }
-  const [, id, title, from, to] = match;
-  return { id, name: title, from: finite(name, from), to: finite(name, to) };
+  const [, id, title, from, to, tolerance] = match;
+  const span = { id, name: title, from: finite(name, from), to: finite(name, to) };
+  if (tolerance === undefined) {
+    return span;
+  }
+  const value = finite(name, tolerance);
+  if (!(value > 0)) {
+    throw new ToolError(`参数 ${name} 的容差要大于 0：${text}`);
+  }
+  return { ...span, tolerance: value };
+}
+
+function stretch(name: string, text: string): Stretch {
+  const match = /^([\d.]+)-([\d.]+):([\d.]+)$/u.exec(text.trim());
+  if (!match) {
+    throw new ToolError(`参数 ${name} 要写成 起-止:容差（米），如 545-600:3：${text}`);
+  }
+  const [from, to, tolerance] = match.slice(1).map(part => finite(name, part));
+  if (!(to > from) || !(tolerance > 0)) {
+    throw new ToolError(`参数 ${name} 的止要大于起、容差要大于 0：${text}`);
+  }
+  return { from, to, tolerance };
 }
 
 function planFile(name: string, text: string): string {
@@ -94,6 +127,8 @@ export function parseOptions(argv: readonly string[]): Options {
     roam: false,
     spawnAt: 0,
     routes: [],
+    stretches: [],
+    diagnose: false,
     plan: null,
     help: false
   };
@@ -151,6 +186,15 @@ export function parseOptions(argv: readonly string[]): Options {
         options.roam = true;
         break;
       }
+      case '--straight':
+        options.stretches = [...options.stretches, stretch(name, value())];
+        options.roam = true;
+        break;
+      case '--diagnose':
+        noValue();
+        options.diagnose = true;
+        options.roam = true;
+        break;
       case '--plan':
         options.plan = planFile(name, value());
         options.roam = true;

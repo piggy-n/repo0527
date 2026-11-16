@@ -16,9 +16,28 @@ describe('parseOptions', () => {
       roam: false,
       spawnAt: 0,
       routes: [],
+      stretches: [],
+      diagnose: false,
       plan: null,
       help: false
     });
+  });
+
+  it('--straight：按轨迹米数分段的拉直容差，可以写多次，带上它就是 --roam；写错、止不大于起、容差不大于 0 都报错', () => {
+    const options = parseOptions(['a.lcc2', ...DATUM, '--straight', '15-50:3', '--straight=545.5-600:2.5']);
+    expect(options.roam).toBe(true);
+    expect(options.stretches).toStrictEqual([
+      { from: 15, to: 50, tolerance: 3 },
+      { from: 545.5, to: 600, tolerance: 2.5 }
+    ]);
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '15-50'])).toThrow('起-止:容差');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '50-15:3'])).toThrow('止要大于起');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '15-50:0'])).toThrow('容差要大于 0');
+  });
+
+  it('--diagnose：逐个列出拉直留下的拐点，带上它就是 --roam，不带值', () => {
+    expect(parseOptions(['a.lcc2', ...DATUM, '--diagnose'])).toMatchObject({ diagnose: true, roam: true });
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--diagnose=1'])).toThrow('不带值');
   });
 
   it('--plan：平面图写到一个 .svg 文件，带上它就是 --roam；忘了写值、不是 .svg 都报错', () => {
@@ -93,6 +112,12 @@ describe('parseOptions', () => {
       { id: 'loop', name: '墓外环路', from: 300.5, to: 460 }
     ]);
     expect(() => parseOptions(['a.lcc2', '--route', '进墓室:15-250', ...DATUM])).toThrow('ID:名称:起-止');
+    // 第四段是拉直的水平容差
+    expect(parseOptions(['a.lcc2', ...DATUM, '--route', 'hall:进厅:25-75:3']).routes).toStrictEqual([
+      { id: 'hall', name: '进厅', from: 25, to: 75, tolerance: 3 }
+    ]);
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--route', 'hall:进厅:25-75:0'])).toThrow('容差要大于 0');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--route', 'hall:进厅:25-75:'])).toThrow('ID:名称:起-止');
     // 同一模型的路线 ID 重复时清单校验不过，在读模型之前就拒绝
     expect(() =>
       parseOptions(['a.lcc2', ...DATUM, '--route', 'tomb:进墓室:100-280', '--route=tomb:出墓室:300-400'])

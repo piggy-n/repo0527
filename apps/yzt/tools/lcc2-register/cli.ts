@@ -10,7 +10,8 @@ import { gridProjection } from './projection.ts';
 import { writePlan } from './plan-file.ts';
 import { type PlanInput, planSvg } from './plan-svg.ts';
 import { manifestPath, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
-import { routeOf, spawnOf, trackOf } from './roam.ts';
+import { cornerLine, cornerSummary, toleranceLabel } from './roam-report.ts';
+import { routeWithCorners, spawnOf, STRAIGHT_HORIZONTAL, trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
 
@@ -56,11 +57,20 @@ function printRoam(
   outline(track).forEach((line) => console.log(line));
   const spawn = manifestSpawn(track, options.spawnAt, frame);
   console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
-  // 路线先在局部系里算一遍，清单的写法和平面图都用它
-  const localRoutes = options.routes.map((span) => ({
-    ...span,
-    points: routeOf(track, span.from, span.to, result.grid)
-  }));
+  // 路线先在局部系里算一遍，清单的写法和平面图都用它；拉直留下的拐点按原因计数，--diagnose 时逐个列出
+  const localRoutes = options.routes.map((span) => {
+    const tolerance = span.tolerance ?? STRAIGHT_HORIZONTAL;
+    const { points, corners } = routeWithCorners(track, span.from, span.to, result.grid, {
+      tolerance,
+      stretches: options.stretches
+    });
+    const label = toleranceLabel(span, tolerance, options.stretches);
+    console.log(`路线 ${span.id}（${label}）：${cornerSummary(corners)}`);
+    if (options.diagnose) {
+      corners.forEach((corner) => console.log(cornerLine(corner)));
+    }
+    return { ...span, points };
+  });
   if (localRoutes.length > 0) {
     const routes = localRoutes.map(({ id, name, points }) => ({ id, name, path: manifestPath(points, frame) }));
     const lines = routes.map(
