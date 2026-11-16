@@ -36,7 +36,7 @@ function mountTree() {
         nodes={NODES}
         expanded={new Set(['base', 'land', 'models', 'suzhou'])}
         selection={EMPTY_CATALOG_SELECTION}
-        label="资源目录"
+        label="资源"
       />
     )),
     { attachTo: host }

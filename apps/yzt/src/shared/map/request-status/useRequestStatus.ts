@@ -9,7 +9,7 @@ export interface RequestStatus {
   readonly items: ComputedRef<readonly RequestItem[]>;
   /** 当前时间（同 performance.now）：有在加载的、刚结束的时每 250 毫秒走一格，空闲时不走 */
   readonly now: Readonly<Ref<number>>;
-  /** 显示着加载中的项（加载超过 0.4 秒），当前图层的行内转圈用同一份 */
+  /** 显示着加载中的项（加载超过 0.4 秒），面板图层列表的行内转圈用同一份 */
   readonly loadingKeys: ComputedRef<ReadonlySet<string>>;
 }
 

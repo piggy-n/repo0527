@@ -30,7 +30,7 @@ function mountTree() {
         nodes={NODES}
         expanded={expanded.value}
         selection={selection.value}
-        label="资源目录"
+        label="资源"
         onUpdate:selection={(next: CatalogSelection) => (selection.value = next)}
         onUpdate:expanded={(next: ReadonlySet<string>) => (expanded.value = next)}
         onAdd={(keys: readonly string[]) => events.push(['add', ...keys])}

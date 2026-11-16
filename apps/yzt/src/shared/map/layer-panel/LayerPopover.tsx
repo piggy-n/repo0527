@@ -13,12 +13,12 @@ import {
 import { layerPopoverPlacement, type PopoverPlacement } from './popover-placement';
 import styles from './LayerPopover.module.scss';
 
-// 手机宽度时盖在面板下段上：离面板左右边、当前图层标题下面这么多
+// 手机宽度时盖在面板下段上：离面板左右边、图层标题下面这么多
 const SHEET_INSET = 8;
 const SHEET_TOP = 40;
 
 /**
- * 当前图层的浮层（透明度、图例，ADR 0157）：在面板右边，箭头对着选中的行，换选中项、行换了位置、滚动列表、面板的布局和窗口变化时跟着走；
+ * 图层的浮层（透明度、图例，ADR 0157）：在面板右边，箭头对着选中的行，换选中项、行换了位置、滚动列表、面板的布局和窗口变化时跟着走；
  * 手机宽度时盖在面板的下段上，没有箭头。开关由页面持有：再点入口、点关闭、按 Esc 关闭，不因为点外面关闭；
  * 面板停用时（漫游时被缓存）不响应 Esc。关闭时焦点在浮层里的，还给箭头对着的元素
  */
@@ -33,7 +33,7 @@ export const LayerPopover = defineComponent({
      * 在 DOM 更新以后取，它读到的响应式状态（选中、组的展开、行的顺序）变了就重新放
      */
     anchor: { type: Function as PropType<() => HTMLElement | null>, required: true },
-    /** 当前图层的滚动区 */
+    /** 图层的滚动区 */
     list: { type: Function as PropType<() => HTMLElement | null>, required: true },
     /**
      * 面板的布局（外壳给的两段高度）：拖动分割线、目录变高变矮时行挪了位置、元素不变，读到的值变了就重新放，

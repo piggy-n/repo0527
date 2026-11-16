@@ -7,13 +7,15 @@ import { SvgIcon } from '../../icons/SvgIcon';
 import { type ListSplit, ratioForCheckedHeight, splitLists } from './panel-split';
 import styles from './LayerPanelShell.module.scss';
 
-/** 资源目录标题后面的一个页签 */
+/** 搜索行下面的一个标签：资源显示什么（用户 2026-11-16 选的丁） */
 export interface PanelTab {
   readonly id: string;
   readonly label: string;
+  /** 这一项显示的项数（搜索时是匹配的项数）；null 或不给时只有名称（数据还没到或读不到） */
+  readonly count?: number | null;
 }
 
-/** 交给浮层插槽的元素：浮层贴着面板、箭头对着当前图层里的行 */
+/** 交给浮层插槽的元素：浮层贴着面板、箭头对着图层里的行 */
 export interface PanelFloatingContext {
   readonly panel: () => HTMLElement | null;
   readonly list: () => HTMLElement | null;
@@ -31,25 +33,25 @@ const renderSectionTitle = (title: string) => <span class={styles.sectionTitle}>
 const arrowStep = (event: KeyboardEvent) => ({ ArrowUp: -1, ArrowDown: 1 })[event.key] ?? 0;
 
 /**
- * 资源图层面板的外壳（ADR 0157，取代 0053 第 6 节的两区）：头部只有标题和收起，收起后是竖条，下面是"资源目录"和"当前图层"两段，
- * 中间的分割线可以拖动（高度的分法同 ADR 0060，panel-split.ts）。两段的内容、工具栏和浮层都由页面经插槽给出；
- * 分割线的位置由页面持有（记在偏好里），收起与否由页面给出。会挡住定位，登记为贴左边的悬浮元素
+ * 资源图层面板的外壳（ADR 0157，取代 0053 第 6 节的两区）：头部只有标题和收起，收起后是竖条，下面是"资源"和"图层"
+ * 两段（叫法用户 2026-11-16 定），中间的分割线可以拖动（高度的分法同 ADR 0060，panel-split.ts）。两段的内容、工具栏和
+ * 浮层都由页面经插槽给出；分割线的位置由页面持有（记在偏好里），收起与否由页面给出。会挡住定位，登记为贴左边的悬浮元素
  */
 export const LayerPanelShell = defineComponent({
   name: 'LayerPanelShell',
   props: {
     title: { type: String, required: true },
     /**
-     * 资源目录这一段的状态：不是 ready 时目录换成加载中或失败和重试；搜索行、浮层照常（页面按目录当前显示的内容给，
+     * 资源目录的状态：不是 ready 时上段的目录换成加载中或失败和重试；搜索行、标签行、浮层照常（页面按目录当前显示的内容给，
      * 只看三维模型时资源目录没到也是 ready，ADR 0157）
      */
     status: { type: String as PropType<'ready' | 'loading' | 'failed'>, default: 'ready' },
     collapsed: { type: Boolean, default: false },
-    /** 分割线的位置：当前图层占可用高度的比例 */
+    /** 分割线的位置：图层占可用高度的比例 */
     ratio: { type: Number, required: true },
-    /** 资源目录标题后面的文字页签（目录显示什么，ADR 0157）；空的时候没有 */
+    /** 搜索行下面带数量的标签（资源显示什么，ADR 0157；用户 2026-11-16 选的丁）；空的时候没有这一行 */
     views: { type: Array as PropType<readonly PanelTab[]>, default: () => [] },
-    /** 选中的那个页签的 id */
+    /** 选中的那个标签的 id */
     view: { type: String, default: '' }
   },
   emits: {
@@ -88,18 +90,22 @@ export const LayerPanelShell = defineComponent({
       }
     });
     const available = computed(() => Math.max(0, Math.floor(columnHeight.value - chrome.value - SPLITTER_HEIGHT)));
-    // 两段本来的高度：标题、搜索行和滚动区里包的一层分别量，不受分到的高度影响
+    // 两段本来的高度：标题、搜索行、标签行和滚动区里包的一层分别量，不受分到的高度影响
     const box = { box: 'border-box' } as const;
     const filter = ref<HTMLElement>();
+    const viewsRow = ref<HTMLElement>();
     const catalogInner = ref<HTMLElement>();
     const currentHead = ref<HTMLElement>();
     const currentInner = ref<HTMLElement>();
     const { height: catalogHeadHeight } = useShownElementSize(catalogHead, undefined, box);
     const { height: filterHeight } = useShownElementSize(filter, undefined, box);
+    const { height: viewsHeight } = useShownElementSize(viewsRow, undefined, box);
     const { height: catalogInnerHeight } = useShownElementSize(catalogInner, undefined, box);
     const { height: currentHeadHeight } = useShownElementSize(currentHead, undefined, box);
     const { height: currentInnerHeight } = useShownElementSize(currentInner, undefined, box);
-    const catalogHeight = computed(() => catalogHeadHeight.value + filterHeight.value + catalogInnerHeight.value);
+    const catalogHeight = computed(
+      () => catalogHeadHeight.value + filterHeight.value + viewsHeight.value + catalogInnerHeight.value
+    );
     const currentHeight = computed(() => currentHeadHeight.value + currentInnerHeight.value);
     // 都量到之前不设高度，按内容排
     const split = computed(() =>
@@ -135,7 +141,7 @@ export const LayerPanelShell = defineComponent({
     );
     onScopeDispose(() => stopSplitterDrag?.());
 
-    // 拖动分割线：按住后跟着指针改当前图层的高度，松开时结束
+    // 拖动分割线：按住后跟着指针改图层的高度，松开时结束
     const onSplitterPointerDown = (event: PointerEvent) => {
       if (event.button !== 0 || !adjustable.value || !(event.currentTarget instanceof HTMLElement)) {
         return;
@@ -176,7 +182,7 @@ export const LayerPanelShell = defineComponent({
       splitter.addEventListener('lostpointercapture', onEnd);
     };
 
-    // 分割线上按上下方向键：往上是当前图层变高
+    // 分割线上按上下方向键：往上是图层变高
     const onSplitterKeydown = (event: KeyboardEvent) => {
       const step = arrowStep(event);
       if (step === 0 || !adjustable.value) {
@@ -186,50 +192,60 @@ export const LayerPanelShell = defineComponent({
       setCurrentHeight(currentSectionHeight.value - step * RATIO_STEP * available.value);
     };
 
+    // 资源目录的状态文字跟着上段叫"资源"（用户 2026-11-16）
     const renderStatus = () =>
       props.status === 'failed' ? (
         <div class={styles.status}>
-          <span>资源目录加载失败</span>
+          <span>资源加载失败</span>
           <ElButton size="small" onClick={() => emit('retry')}>
             重试
           </ElButton>
         </div>
       ) : (
-        <div class={styles.status}>正在加载资源目录…</div>
+        <div class={styles.status}>正在加载资源…</div>
       );
+
+    // 搜索行下面一行带数量的标签：读屏名称带上数量；数量为 0 的变灰，没有数量的只有名称
+    const renderViews = () => (
+      <div ref={viewsRow} class={styles.views} role="tablist" aria-label="资源显示的内容">
+        {props.views.map(item => {
+          const selected = props.view === item.id;
+          const count = item.count ?? null;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              class={[styles.view, selected && styles.currentView, count === 0 && styles.emptyView]}
+              aria-selected={selected}
+              aria-label={count === null ? item.label : `${item.label} ${count} 项`}
+              data-catalog-view={item.id}
+              onClick={() => emit('update:view', item.id)}
+            >
+              {item.label}
+              {count !== null && <span class={styles.viewCount}>{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
 
     const renderCore = () => (
       <div ref={sections} class={styles.sections}>
         <section
           class={styles.section}
-          aria-label="资源目录"
+          aria-label="资源"
           style={split.value ? { height: `${split.value.tree}px` } : undefined}
           data-panel-section="catalog"
         >
           <div ref={catalogHead} class={styles.sectionHead}>
-            {renderSectionTitle('资源目录')}
-            {props.views.length > 0 && (
-              <nav class={[styles.tabs, styles.views]} role="tablist" aria-label="资源目录显示的内容">
-                {props.views.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="tab"
-                    class={[styles.tab, props.view === item.id && styles.currentTab]}
-                    aria-selected={props.view === item.id}
-                    data-catalog-view={item.id}
-                    onClick={() => emit('update:view', item.id)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-            )}
+            {renderSectionTitle('资源')}
             {slots.catalogTools()}
           </div>
           <div ref={filter} class={styles.filter}>
             {slots.catalogFilter()}
           </div>
+          {props.views.length > 0 && renderViews()}
           <div class={styles.scroll}>
             <div ref={catalogInner} class={styles.catalog}>
               {props.status === 'ready' ? slots.catalog() : renderStatus()}
@@ -240,7 +256,7 @@ export const LayerPanelShell = defineComponent({
           class={[styles.splitter, !adjustable.value && styles.fixed]}
           role="separator"
           aria-orientation="horizontal"
-          aria-label="调整资源目录和当前图层的高度"
+          aria-label="调整资源和图层的高度"
           aria-disabled={!adjustable.value}
           aria-valuenow={Math.round(props.ratio * 100)}
           tabindex={0}
@@ -253,12 +269,12 @@ export const LayerPanelShell = defineComponent({
         </div>
         <section
           class={styles.section}
-          aria-label="当前图层"
+          aria-label="图层"
           style={split.value ? { height: `${split.value.checked}px` } : undefined}
           data-panel-section="current"
         >
           <div ref={currentHead} class={styles.sectionHead}>
-            {renderSectionTitle('当前图层')}
+            {renderSectionTitle('图层')}
             {slots.currentTools()}
           </div>
           <div ref={list} class={styles.scroll} data-current-list>

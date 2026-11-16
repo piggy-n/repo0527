@@ -17,7 +17,7 @@ const isControl = (target: EventTarget | null) =>
   target instanceof Element && target.closest('button, input, select, .el-select, .el-checkbox') !== null;
 
 /**
- * 当前图层里的一组（二维图层、三维模型，ADR 0157）：可以收起；每行是手柄、复选框和各 feature 自己的内容（插槽 row）。
+ * 图层里的一组（二维图层、三维模型，ADR 0157）：可以收起；每行是手柄、复选框和各 feature 自己的内容（插槽 row）。
  * 只能单选；按住手柄拖动或在手柄上按上下方向键在本组里排序（ADR 0054），两组各一个拖动实例，不能跨组。
  * 选中、显隐、移动、定位、移除、右键都只报告给页面，由页面交给对应的拥有者
  */
@@ -33,7 +33,7 @@ export const CurrentLayerGroup = defineComponent({
     tagNote: { type: String, default: undefined },
     /** 整组变淡：二维里的模型 */
     dimmed: { type: Boolean, default: false },
-    /** 不显示标题（当前图层里只有这一组时，用户 2026-11-15）：没有收起、展开，行一直显示；有标签时标签和说明单独一行 */
+    /** 不显示标题（图层里只有这一组时，用户 2026-11-15）：没有收起、展开，行一直显示；有标签时标签和说明单独一行 */
     headless: { type: Boolean, default: false },
     open: { type: Boolean, default: true },
     keys: { type: Array as PropType<readonly string[]>, required: true },

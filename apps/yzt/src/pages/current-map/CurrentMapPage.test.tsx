@@ -2107,10 +2107,10 @@ describe('CurrentMapPage', () => {
     });
   });
 
-  it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {
+  it('资源目录加载失败：列表显示失败和重试（文字跟着上段叫"资源"，用户 2026-11-16）；重试期间显示加载中，成功后显示资源', async () => {
     server.use(mock.get(TREE_URL, () => HttpResponse.json({ code: 500, msg: '系统异常', success: false, data: null })));
     const { wrapper } = await readyPage();
-    await vi.waitFor(() => expect(wrapper.text()).toContain('资源目录加载失败'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('资源加载失败'));
 
     // 重试的请求先挂起，由用例决定什么时候返回
     let release: (() => void) | undefined;
@@ -2122,8 +2122,8 @@ describe('CurrentMapPage', () => {
       })
     );
     await button(wrapper, '重试').trigger('click');
-    await vi.waitFor(() => expect(wrapper.text()).toContain('正在加载资源目录'));
-    expect(wrapper.text()).not.toContain('资源目录加载失败');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('正在加载资源…'));
+    expect(wrapper.text()).not.toContain('资源加载失败');
 
     release?.();
     await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
@@ -2151,7 +2151,7 @@ describe('CurrentMapPage', () => {
     mockManifest();
     const page = await readyPage();
     const { wrapper } = page;
-    await vi.waitFor(() => expect(wrapper.text()).toContain('资源目录加载失败'));
+    await vi.waitFor(() => expect(wrapper.text()).toContain('资源加载失败'));
 
     await switchTo(wrapper, '三维');
     await addModel(wrapper, 'sz-station');

@@ -36,7 +36,7 @@ export const CatalogTree = defineComponent({
     /** 要加入、移出的项的键，按目录的先后 */
     add: (keys: readonly string[]) => Array.isArray(keys),
     remove: (keys: readonly string[]) => Array.isArray(keys),
-    /** 定位到当前图层里的这一项：只对已添加的项发出 */
+    /** 定位到图层里的这一项：只对已添加的项发出 */
     locate: (key: string) => typeof key === 'string',
     menu: (key: string, point: MenuPoint) => typeof key === 'string' && typeof point === 'object'
   },
