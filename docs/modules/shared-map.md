@@ -349,7 +349,7 @@ const readout = useMapReadout(map);
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
 | `CurrentLayerList.tsx` | 图层（下段）的列表（ADR 0161，取代两组的 `CurrentLayerGroup`）：资源和模型平铺，每行是手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（一个实例）；筛选时页面只给看得见的行，移动的位置按它们算；`dimmedOf` 的行变淡（二维里的模型，说明由行的内容自己给），`note` 是列表上面的一行说明 |
 | `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示；标题行窄时变紧凑）、右键菜单（先隐藏着量尺寸，放好、显示以后焦点才进第一个能用的项，浏览器不让隐藏的元素得到焦点；项的 `hint` 是不能用的原因，代替快捷键显示；`returnFocus` 给出关闭以后接焦点的元素，焦点在菜单里时才还）、开在面板右边的浮层（箭头对着页面给的 `anchor`：选中的行；`anchor` 读到的状态（选中、筛选、行的顺序）或外壳的 `layout`（拖动分隔条、目录变高变矮）变了就重新放，手机宽度时 `layout` 引起的重新放等到下一帧（盖在下段上时最大高度跟着变，内容比外壳量的那层浅）；不监听面板和滚动区的尺寸，免得报 ResizeObserver loop；手机宽度时盖在下段上；面板停用时不响应 Esc；关闭时焦点在里面的还给 `anchor`） |
-| `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度（拖到最小时资源留标题、搜索行、标签行和 3 行，共 208；图层留标题和 2 行，共 112）、在滚动区里露出一行（纯函数和小工具） |
+| `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度（拖到最小时资源留标题、搜索行、标签行和 3 行，共 208；图层留标题和 2 行，共 112，有标签行时加上它，三维里共 144，外壳把量到的标签行高度交给 `checkedExtra`）、在滚动区里露出一行（纯函数和小工具） |
 | `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 
 - 选中、浮层、菜单、三维里的筛选这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`），资源和模型平铺的顺序在页面的 `useCurrentLayers`（`pages/current-map/layer-panel`，ADR 0161：资源、模型各自的先后在拥有者里，怎样穿插只记在这里、不持久化，地图按它放模型层、点选按它取锚点）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者

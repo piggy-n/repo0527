@@ -117,7 +117,8 @@ export const LayerPanelShell = defineComponent({
             available: available.value,
             tree: catalogHeight.value,
             checked: currentHeight.value,
-            ratio: props.ratio
+            ratio: props.ratio,
+            checkedExtra: currentViewsHeight.value
           })
         : null
     );
@@ -125,7 +126,7 @@ export const LayerPanelShell = defineComponent({
     // 拖动改变不了两段时分割线不响应，也不显示成能拖的样子
     const adjustable = computed(() => split.value?.adjustable ?? false);
     const setCurrentHeight = (height: number) => {
-      const ratio = ratioForCheckedHeight(available.value, height);
+      const ratio = ratioForCheckedHeight(available.value, height, currentViewsHeight.value);
       if (ratio !== null) {
         emit('update:ratio', ratio);
       }

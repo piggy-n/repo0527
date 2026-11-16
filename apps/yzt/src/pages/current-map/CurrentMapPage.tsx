@@ -213,8 +213,9 @@ export const CurrentMapPage = defineComponent({
       'basemap-labels': basemap.deriveLabelsGroup,
       resources: resources.deriveGroup,
       selection: pick.deriveGroup,
-      // 选中市或区县、边界加载好后裁剪（ADR 0051 第 1 节）
-      'region-clip': () => regionClipGroup(readyBoundary(region.state.value)),
+      // 选中市或区县、边界加载好后裁剪（ADR 0051 第 1 节）。遮罩一直画在模型上面，漫游时区划不适用、撤掉遮罩，
+      // 不盖住漫游的画面；区划的选择不变，退出后原样回来（ADR 0161 第 7 节）
+      'region-clip': () => regionClipGroup(roaming.value ? null : readyBoundary(region.state.value)),
       boundaries: boundaries.deriveGroup,
       region: region.deriveGroup,
       measure: measure.deriveGroup

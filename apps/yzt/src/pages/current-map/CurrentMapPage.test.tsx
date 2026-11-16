@@ -301,11 +301,13 @@ const TILESET_JSON = {
 };
 
 /**
- * 三维渲染器的替身（真实的是 @mx/map-three）：瓦片集等用例调用 ready 才就绪；拾取、投影都落空。
- * 三维视图第一次切到三维时创建它
+ * 三维渲染器的替身（真实的是 @mx/map-three）：瓦片集等用例调用 ready 才就绪；拾取只打到用例用 hitModel 放的模型，
+ * 投影落空。三维视图第一次切到三维时创建它
  */
 function fakeRenderer() {
   const pending = new Map<string, (sphere: TilesetSphere) => void>();
+  // 屏幕上的点 "x,y" 打到的模型
+  const hits = new Map<string, NonNullable<ReturnType<SceneRenderer['pick']>>>();
   const renderer: SceneRenderer = {
     attach: () => undefined,
     detach: () => undefined,
@@ -323,7 +325,7 @@ function fakeRenderer() {
     addSplat: () => new Promise(() => undefined),
     updateSplat: () => undefined,
     removeSplat: () => undefined,
-    pick: () => null,
+    pick: ({ x, y }) => hits.get(`${x},${y}`) ?? null,
     project: () => null,
     setLift: () => undefined,
     lowestHeight: () => null,
@@ -334,7 +336,10 @@ function fakeRenderer() {
   };
   /** 让还在加载的瓦片集就绪；还没交给渲染器时抛错 */
   const ready = (id: string) => required(pending.get(id), `瓦片集 ${id} 没有在加载`)(MODEL_SPHERE);
-  return { renderer, ready };
+  /** 屏幕上这一点打到模型，命中点在 lngLat、高 30 米 */
+  const hitModel = ({ x, y }: { x: number; y: number }, lngLat: [number, number]) =>
+    void hits.set(`${x},${y}`, { lngLat, height: 30 });
+  return { renderer, ready, hitModel };
 }
 
 interface PageModules {
@@ -754,6 +759,7 @@ function sceneOf(page: ReturnType<typeof mountPage>) {
   const renderer = required(page.renderers[0], '没有创建三维渲染器');
   return {
     session,
+    hitModel: renderer.hitModel,
     ready: async (id: string) => {
       await vi.waitFor(() => renderer.ready(id));
       await settle();
@@ -1894,7 +1900,7 @@ describe('CurrentMapPage', () => {
       expect(sceneOf(page).session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
     });
 
-    it('图层里排在最上面那个模型上面的资源画在模型上面：模型层插在它下面；斜着看时提示，"俯视"回到俯视（ADR 0161）', async () => {
+    it('图层里排在最上面那个模型上面的资源画在模型上面：模型层插在它下面，点到模型上按鼠标下的地面识别；斜着看时提示，"俯视"回到俯视（ADR 0161）', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper, map } = page;
@@ -1932,8 +1938,27 @@ describe('CurrentMapPage', () => {
       expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
       expect(session.style.sceneBefore).toBe('resources-bgdc_dltb');
 
-      // 回到二维不提示
+      // 点到模型上：画在模型上面的地类图斑按鼠标下的地面查后端，不查模型脚下（ADR 0161 第 9 节）
       await wrapper.get('[data-current-row="model:sz-station"] input[type="checkbox"]').setValue(true);
+      const geometries: unknown[] = [];
+      server.use(
+        mock.get('/backend/api/query/scope/geojson/page', ({ request }) => {
+          geometries.push(JSON.parse(new URL(request.url).searchParams.get('geometry') ?? 'null'));
+          return HttpResponse.json({ total: 0, list: [], pageNum: 1, pages: 0 });
+        })
+      );
+      const ground = map.unproject([200, 150]);
+      sceneOf(page).hitModel({ x: 200, y: 150 }, [ground.lng + 1, ground.lat - 1]);
+      await button(wrapper, '点/框选').trigger('click');
+      map.mouse('click', 200, 150);
+      await vi.waitFor(() => expect(geometries).toHaveLength(1));
+      expect(geometries[0]).toStrictEqual({
+        type: 'Point',
+        coordinates: [expect.closeTo(ground.lng, 6), expect.closeTo(ground.lat, 6)]
+      });
+      await button(wrapper, '移动').trigger('click');
+
+      // 回到二维不提示
       await switchTo(wrapper, '二维');
       map.tilt(40);
       await settle();
@@ -1982,6 +2007,10 @@ describe('CurrentMapPage', () => {
       await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
+      // 区划遮罩一直画在模型上面（ADR 0161）：没有资源画在模型上面、没有选中时，模型层就在遮罩下面
+      const masked = () => scene.session.style.current.layers.some(({ id }) => id === 'region-clip-mask');
+      await vi.waitFor(() => expect(masked()).toBe(true));
+      expect(scene.session.style.sceneBefore).toBe('region-clip-mask');
       await button(wrapper, '测距').trigger('click');
       expect(scene.session.tool.active).toBe('measure-distance');
       expect(shownPanels(wrapper)).toStrictEqual(['legend']);
@@ -2000,9 +2029,12 @@ describe('CurrentMapPage', () => {
       expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
       expect(wrapper.get('[data-panel-group]').isVisible()).toBe(false);
       expect(optionsPopoverVisible('basemap')).toBe(false);
+      // 漫游时区划不适用：遮罩撤掉，不盖住漫游的画面（ADR 0161 第 7 节），区划的选择还在
+      expect(masked()).toBe(false);
 
       await button(wrapper, '退出漫游').trigger('click');
       await settle();
+      expect(masked()).toBe(true);
       expect(scene.session.scene.current.underground).toBeNull();
       expect(button(wrapper, '移动').attributes('aria-pressed')).toBe('true');
       expect(labels()).toEqual(expect.arrayContaining(['默认视角', '放大', '缩小', '二维', '三维']));

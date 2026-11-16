@@ -462,7 +462,7 @@ describe('StyleModel', () => {
       // 插槽的图层删掉了：回到上限
       model.setGroup('business', lineGroup('parcels'));
       expect(model.sceneBefore).toBe('picked-line');
-      // 上限的分组及以上永远在模型上面
+      // 插槽正好是上限分组的第一层：和按上限放是同一个位置（上限分组的后面几层、更上面的分组见下一个用例）
       model.setSceneSlot('picked-line');
       expect(model.sceneBefore).toBe('picked-line');
       await nextMicrotask();
@@ -499,6 +499,29 @@ describe('StyleModel', () => {
       // 和上次通知的位置一样，也没有命令：不通知
       expect(changes).toStrictEqual([]);
       expect(model.sceneBefore).toBe('picked-line');
+    });
+
+    it('ignores a slot on a later layer of the ceiling group or in a group above it: the ceiling group stays on top', async () => {
+      using model = new StyleModel({ groups: ['basemap', 'business', 'highlight', 'labels'], sceneBelow: 'highlight' });
+      model.setGroups({
+        business: lineGroup('parcels'),
+        highlight: { sources: { picked: geojson() }, layers: [line('picked-line', 'picked'), line('picked-casing', 'picked')] },
+        labels: lineGroup('names')
+      });
+      const changes = listen(model);
+
+      // 上限分组的第二层、上限以上的分组：都回到上限分组的第一层
+      model.setSceneSlot('picked-casing');
+      expect(model.sceneBefore).toBe('picked-line');
+      model.setSceneSlot('names-line');
+      expect(model.sceneBefore).toBe('picked-line');
+      // 上限以下的照常生效
+      model.setSceneSlot('parcels-line');
+      expect(model.sceneBefore).toBe('parcels-line');
+      model.setSceneSlot('picked-casing');
+      expect(model.sceneBefore).toBe('picked-line');
+      await nextMicrotask();
+      expect(changes.at(-1)?.sceneBefore).toBe('picked-line');
     });
 
     it('works without a ceiling group: the slot alone decides, otherwise on top', () => {

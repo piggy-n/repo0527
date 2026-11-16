@@ -239,8 +239,9 @@ const groundPicker =
  * 既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
  * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交。
  * 三维里点到模型上时（ADR 0157 的规则甲）：画在模型下面的资源查模型脚下，命中点正下方的地面投影回屏幕，渲染要素、容差框都围着
- * 这一点；画在模型上面的资源（ADR 0161）按鼠标下的地面识别，围着点击位置、区划按只打地面的拾取判断。四角都只打地面；
- * 模型本身永远不是结果
+ * 这一点；画在模型上面的资源（ADR 0161）按鼠标下的地面识别，围着点击位置。四角都只打地面；模型本身永远不是结果。
+ * 区划遮罩一直盖在模型上面（ADR 0161）：鼠标下的地面（只打地面的拾取）在区划外就是点在遮罩上，整次不识别；在区划里时，
+ * 画在模型下面的资源再看模型脚下在不在区划里（区划外的楼伸进来时跳过它们）
  */
 export function planIdentify(
   targets: readonly PickResource[],
@@ -275,9 +276,8 @@ export function planIdentify(
   const anchorOf = (target: PickResource) => (overModels(target) ? ground : foot);
   const inScope = ({ located }: ClickAnchor) =>
     !scope || (located.kind === 'hit' && scopeContains(scope, located.lngLat));
-  // 点击位置不在区划里（遮罩上）：用到的锚点都在区划外时不识别；没有资源时按模型脚下
-  const anchors = new Set(targets.length > 0 ? targets.map(anchorOf) : [foot]);
-  if (![...anchors].some(inScope)) {
+  // 鼠标下的地面在区划外：这个像素是遮罩，等于点在空白处（ADR 0051 第 3 节），不识别；没点到模型时它就是点击位置
+  if (!inScope(ground)) {
     return null;
   }
   // 同一个锚点、同一种几何类型（容差由它决定）的资源共用范围，求交、整理只算一次
@@ -309,6 +309,7 @@ export function planIdentify(
     const { geometry: type, code } = target.resource;
     const tolerance = PICK_TOLERANCES[type];
     const anchorPoint = anchorOf(target);
+    // 画在模型下面的资源：模型脚下在区划外（区划外的楼伸进来）时跳过
     if (!inScope(anchorPoint)) {
       continue;
     }
