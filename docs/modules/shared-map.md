@@ -343,15 +343,16 @@ const readout = useMapReadout(map);
 
 | 文件 | 内容 |
 |---|---|
-| `LayerPanelShell.tsx` | 外壳：头部只有标题和收起（2026-11-15 删掉了主节点、统计报表、分节点资源三个页签）、收起后的竖条、上下两段"资源""图层"（2026-11-16 用户定的叫法）和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`，`floating` 收到面板、图层滚动区和两段分到的高度（`layout`）；`views`、`view` 是搜索行下面一行带数量的标签（`PanelTab` 的 `count` 为 null 时只写名称，为 0 时变灰；现状底图用来切换显示全部、二维资源或三维模型，2026-11-16 用户选的丁），这一行算进上段本来的高度；登记为贴左边的悬浮元素 |
+| `LayerPanelShell.tsx` | 外壳：头部只有标题和收起（2026-11-15 删掉了主节点、统计报表、分节点资源三个页签）、收起后的竖条、上下两段"资源""图层"（2026-11-16 用户定的叫法）和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`，`floating` 收到面板、图层滚动区和两段分到的高度（`layout`）；`views`、`view` 是搜索行下面一行带数量的标签（`PanelTab` 的 `count` 为 null 时只写名称，为 0 时变灰；现状底图用来切换显示全部、二维资源或三维模型，2026-11-16 用户选的丁），这一行算进上段本来的高度；`currentViews`、`currentView` 是"图层"标题下面同样的一行（现状底图三维里的筛选，ADR 0161），算进下段本来的高度；登记为贴左边的悬浮元素 |
+| `PanelTabs.tsx` | 一行带数量的标签：两段共用，读屏名称带数量，为 0 的变灰、仍可以点；每个标签带 `data-<kind>-view`（`kind` 是 `catalog` 或 `current`） |
 | `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：只有项能选中，Ctrl、Shift 多选，分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时是添加、移除；`catalogCover` 算出选中的项里能添加、能移除的 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中 |
-| `CurrentLayerGroup.tsx` | 图层（下段）的一组：手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（两组各一个实例，不能跨组），整组变淡、标签 `tag` 和它的说明 `tagNote`（二维里的模型组，悬停标签看说明）；`headless` 时不显示标题（只有这一组时），有标签时标签和说明单独一行 |
-| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示；标题行窄时变紧凑）、右键菜单（先隐藏着量尺寸，放好、显示以后焦点才进第一个能用的项，浏览器不让隐藏的元素得到焦点；项的 `hint` 是不能用的原因，代替快捷键显示；`returnFocus` 给出关闭以后接焦点的元素，焦点在菜单里时才还）、开在面板右边的浮层（箭头对着页面给的 `anchor`：选中的行，组收起时是组的标题；`anchor` 读到的状态（选中、组的展开、行的顺序）或外壳的 `layout`（拖动分隔条、目录变高变矮）变了就重新放，手机宽度时 `layout` 引起的重新放等到下一帧（盖在下段上时最大高度跟着变，内容比外壳量的那层浅）；不监听面板和滚动区的尺寸，免得报 ResizeObserver loop；手机宽度时盖在下段上；面板停用时不响应 Esc；关闭时焦点在里面的还给 `anchor`） |
+| `CurrentLayerList.tsx` | 图层（下段）的列表（ADR 0161，取代两组的 `CurrentLayerGroup`）：资源和模型平铺，每行是手柄、复选框和插槽 `row` 给的内容；单选，键盘，拖动排序用 `useSortableList`（一个实例）；筛选时页面只给看得见的行，移动的位置按它们算；`dimmedOf` 的行变淡（二维里的模型，说明由行的内容自己给），`note` 是列表上面的一行说明 |
+| `PanelToolbar.tsx`、`PanelMenu.tsx`、`LayerPopover.tsx` | 工具栏（不可用的用 `aria-disabled`，悬停照样有提示；标题行窄时变紧凑）、右键菜单（先隐藏着量尺寸，放好、显示以后焦点才进第一个能用的项，浏览器不让隐藏的元素得到焦点；项的 `hint` 是不能用的原因，代替快捷键显示；`returnFocus` 给出关闭以后接焦点的元素，焦点在菜单里时才还）、开在面板右边的浮层（箭头对着页面给的 `anchor`：选中的行；`anchor` 读到的状态（选中、筛选、行的顺序）或外壳的 `layout`（拖动分隔条、目录变高变矮）变了就重新放，手机宽度时 `layout` 引起的重新放等到下一帧（盖在下段上时最大高度跟着变，内容比外壳量的那层浅）；不监听面板和滚动区的尺寸，免得报 ResizeObserver loop；手机宽度时盖在下段上；面板停用时不响应 Esc；关闭时焦点在里面的还给 `anchor`） |
 | `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度（拖到最小时资源留标题、搜索行、标签行和 3 行，共 208；图层留标题和 2 行，共 112）、在滚动区里露出一行（纯函数和小工具） |
 | `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 
-- 选中、浮层、菜单这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
+- 选中、浮层、菜单、三维里的筛选这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`），资源和模型平铺的顺序在页面的 `useCurrentLayers`（`pages/current-map/layer-panel`，ADR 0161：资源、模型各自的先后在拥有者里，怎样穿插只记在这里、不持久化，地图按它放模型层、点选按它取锚点）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
 - 页面给 `reveal` 一个新对象时，面板在图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行；页面先展开左侧面板）；`requests` 给出加载超过 0.4 秒的行，资源行在名称后面转圈
 
 ## 请求状态（ADR 0158）
