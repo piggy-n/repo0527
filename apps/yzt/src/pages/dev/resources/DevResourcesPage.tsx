@@ -10,6 +10,7 @@ import { appConfig } from '@/shared/config/app-config';
 import { http } from '@/shared/http/client';
 import { LANDUSE_GROUPS } from '@/features/resource-map/landuse';
 import { backendTransformRequest } from '@/shared/map/backend-request';
+import { MAP_FONT_STACKS } from '@/shared/map/map-fonts';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import styles from './DevResourcesPage.module.scss';
 
@@ -34,9 +35,8 @@ const SOURCE_LAYER_EXCEPTIONS: Readonly<Record<string, string>> = {
   bgdc_dltb_czc_2021: 'dltb_czc_2021'
 };
 const MISSING_RESOURCE = 'dev_missing';
-// 标注实验：字形只放 0-255 一个区段，汉字靠 localIdeographFontFamily 用本地字体画。public/fonts 不入库（ADR 0013），
-// 要先把字形放到 public/fonts/glyphs/Noto Sans Regular/0-255.pbf，见 docs/archive/migration.md 的现状底图实测
-const GLYPHS = `${window.location.origin}/fonts/glyphs/{fontstack}/{range}.pbf`;
+// 标注实验：样式不写 glyphs，汉字、数字、拉丁字母都按 text-font 的普惠体在本地画，不请求字形（ADR 0160）；
+// 下面"请求过的字形"应当一直是空的
 const LABEL_SAMPLES = ['水田', '城镇住宅用地', '乡村道路（硬化）', 'Ⅰ级水源地', '长江 Changjiang 2022', '0.5亩·河流'];
 
 function labelsGroup(): StyleGroup {
@@ -59,7 +59,7 @@ function labelsGroup(): StyleGroup {
         id: 'labels-samples',
         type: 'symbol',
         source: 'labels-samples',
-        layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 16 },
+        layout: { 'text-field': ['get', 'name'], 'text-font': [...MAP_FONT_STACKS.regular], 'text-size': 16 },
         paint: { 'text-color': '#000000', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1 }
       }
     ]
@@ -213,7 +213,6 @@ export const DevResourcesPage = defineComponent({
     const errors = ref<string[]>([]);
     const map = provideMap({
       groups: ['resources', 'labels'],
-      root: { glyphs: GLYPHS },
       camera: INITIAL_CAMERA,
       onError: error => (errors.value = [String(error), ...errors.value].slice(0, 20))
     });

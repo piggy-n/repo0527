@@ -43,7 +43,10 @@ export function reportMapError(error: unknown): void {
   console.error('[map]', error);
 }
 
-/** 业务地图画布的选项：缩放范围，发往后端的瓦片请求带 token，静态底图的地名用页面的字体在本地画（ADR 0133） */
+/**
+ * 业务地图画布的选项：缩放范围，发往后端的瓦片请求带 token。地图文字按 text-font 写的普惠体在本地画（ADR 0160），
+ * 这里的字体名只在 text-font 是默认值时用到；保持真值，样式带了 glyphs 时汉字也在本地画、不请求字形
+ */
 export const JIANGSU_MAP_OPTIONS: MapCanvasMapOptions = {
   ...JIANGSU_ZOOM_RANGE,
   transformRequest: backendTransformRequest,

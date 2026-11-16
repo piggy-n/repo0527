@@ -1,0 +1,89 @@
+// 标注编辑器（ADR 0160）：上面是"显示标注"开关，下面的行用符号编辑器的样式（SymbolEditor.module.scss）
+
+.labelEditor {
+  display: flex;
+  flex-direction: column;
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: 32px;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+// 字段的选项：名称在左，有值的比例在右
+.fieldOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.fieldName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share {
+  flex: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+// 字体的选项按这个字重显示
+.semibold {
+  font-weight: var(--font-weight-semibold);
+}
+
+// 显示级别：范围滑块加文字；滑块两端各留 8，圆点放大时不贴边
+.zoom {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.slider {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 var(--space-sm);
+}
+
+.zoomText {
+  flex: none;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+// "压盖"后面的问号，悬停或聚焦时显示说明
+.overlapName {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.help {
+  display: inline-flex;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  cursor: help;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.none {
+  padding: var(--space-sm) 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

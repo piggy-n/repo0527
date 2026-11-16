@@ -65,7 +65,9 @@ function fakePick(initial: FeaturePickState, initialDetail: FeatureDetailStatus 
     retry: vi.fn<FeaturePick['retry']>(),
     locate: vi.fn<FeaturePick['locate']>(),
     close: vi.fn<FeaturePick['close']>(),
-    deriveGroup: () => ({ sources: {}, layers: [] })
+    deriveGroup: () => ({ sources: {}, layers: [] }),
+    labelEmphasis: computed(() => null),
+    deriveLabelsGroup: () => ({ sources: {}, layers: [] })
   };
   return { pick, state, detail };
 }

@@ -130,6 +130,32 @@ describe('importSymbolDefaults', () => {
     );
   });
 
+  it('标注（ADR 0160）：和符号一起发布成默认，报告写"标注 · 字号"；没登记字段的资源、不认识的字段跳过并说明', () => {
+    const current = { csxhjctb_hydl: { label: { size: 14, overlap: true } } };
+    const exported = exportFile({
+      zhangsan: {
+        csxhjctb_hydl: { label: { field: 'ccn', size: 16 } },
+        csxhjctb_xxp: { label: { field: 'guid', color: RED } },
+        bgdc_ccwjq: { uniform: { fillColor: BLUE }, label: { size: 18 } }
+      }
+    });
+
+    const result = run(exported, current);
+
+    expect(JSON.parse(result.next)).toStrictEqual({
+      bgdc_ccwjq: { uniform: { fillColor: BLUE } },
+      csxhjctb_hydl: { label: { field: 'ccn', size: 16, overlap: true } },
+      csxhjctb_xxp: { label: { color: RED } }
+    });
+    expect(result.report).toContain('  标注 · 字段：代码默认 → ccn');
+    expect(result.report).toContain('  标注 · 字号：14 → 16');
+    expect(result.report).toContain('  csxhjctb_xxp：标注字段 guid 不在登记里');
+    expect(result.report).toContain('  bgdc_ccwjq：没有登记标注字段，标注用不上');
+    // 文件里标注排在符号后面，字段按编辑器的先后
+    expect(result.next.indexOf('"label"')).toBeGreaterThan(result.next.indexOf('"uniform"'));
+    expect(run(exportFile({ zhangsan: JSON.parse(result.next) }), JSON.parse(result.next)).changed).toBe(false);
+  });
+
   it('只导入选中的资源，其他保持现在的发布默认；选了导出里没有的资源时报错', () => {
     const current = { szy_kt: { uniform: { fillColor: RED } } };
     const exported = exportFile({

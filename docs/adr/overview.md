@@ -31,7 +31,7 @@
 | 登录与会话 | 会话存 localStorage，SM2 用 sm-crypto-v2，权限声明在路由 meta 上；结束会话统一走 `endSession()` | 0015 | [auth](../modules/auth.md) |
 | 异步 | 能收敛的不写成操作；可替换操作用 `LatestController`；服务端写操作不适用；revision、operation、version 的命名 | 0039 | [utils](../modules/utils.md) |
 | 偏好 | IndexedDB + idb-keyval，经 `shared/storage`；一个总开关加每项一个分项开关 | 0042、0140 | [storage](../modules/storage.md) |
-| 发布的默认符号 | 某个人调好的图例样式经控制台片段导出、`symbols:import` 合并进 `resource-symbol-defaults.json`，叠加在算出的默认符号上，用户的覆盖再叠加在上面；不改偏好的版本和 schema，别人的自定义照样读出；点的形状是后加的可选字段，版本不变，取值只能增加 | 0154、0159 | [storage](../modules/storage.md)"发布的默认符号" |
+| 发布的默认符号 | 某个人调好的图例样式经控制台片段导出、`symbols:import` 合并进 `resource-symbol-defaults.json`，叠加在算出的默认符号上，用户的覆盖再叠加在上面；不改偏好的版本和 schema，别人的自定义照样读出；点的形状、标注是后加的可选字段，版本不变，取值只能增加 | 0154、0159、0160 | [storage](../modules/storage.md)"发布的默认符号" |
 | 页面缓存 | 路由 meta 加布局里常驻的 `KeepAlive`；`VITE_PAGE_STATE_RESET=true` 时不缓存，`.env` 提交的是 true | 0063、0114、0138 | [layout](../modules/layout.md)、[composables](../modules/composables.md) |
 | 加载策略 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟 | 0061、0062 | [perf](../modules/perf.md)、[fonts](../design/fonts.md) |
 
@@ -39,7 +39,7 @@
 
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
-| 字体与系统名称 | 普惠体 3.0 自托管、不入库，只放 `public/fonts/`；系统名称用 SVG 轮廓 | 0012、0013、0062 | [fonts](../design/fonts.md)、[system-title](../modules/system-title.md) |
+| 字体与系统名称 | 普惠体 3.0 自托管、不入库，只放 `public/fonts/`；系统名称用 SVG 轮廓；地图文字不写 glyphs，`text-font` 写普惠体，在本地画 | 0012、0013、0062、0160 | [fonts](../design/fonts.md)、[system-title](../modules/system-title.md) |
 | 布局组件 | `@mx/ui` 的 `Mx*`；浅灰底标题栏复用 `MxPanel headerTone="muted"`；分栏布局可以宽屏收起，把手由页面给出 | 0016、0076、0100、0101 | [ui](../modules/ui.md)、[page-layout](../design/page-layout.md) |
 | 拖动排序 | `useSortableList` 包 SortableJS，顺序交给拥有者，只能按住手柄拖 | 0054 | [composables](../modules/composables.md) |
 | 文件传输 | `shared/file-transfer` 负责上传进度、二进制下载、文件名和取消；预览按格式加载 | 0075 | [file-transfer](../modules/file-transfer.md)、[file-management](../modules/file-management.md) |

@@ -6,16 +6,11 @@ import type {
   LineLayerSpecification,
   SymbolLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup, StyleRoot } from '@mx/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
+import { MAP_FONT_STACKS } from '../map-fonts';
 import labelsUrl from './data/jiangsu-labels.json?url';
 import { STATIC_CITY_LINE_COLOR, STATIC_LAND_COLOR, STATIC_OUTSIDE_COLOR } from './static-palette';
-
-/**
- * 静态底图的地名只有汉字，由 MapLibre 用本地字体画，这个地址不会被请求；样式校验要求有 text-field 时必须有 glyphs。
- * 使用 useBasemap 的页面都要在 provideMap 时传入，标注可以在页面上随时打开（ADR 0133、0146）
- */
-export const BASEMAP_STYLE_ROOT: StyleRoot = { glyphs: '/fonts/glyphs/{fontstack}/{range}.pbf' };
 
 const BACKGROUND: BackgroundLayerSpecification = {
   id: 'basemap-background',
@@ -79,7 +74,7 @@ function labelLayer(
     source: LABELS_SOURCE_ID,
     ...(minzoom === undefined ? {} : { minzoom }),
     filter: ['==', ['get', 'level'], level],
-    layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': size },
+    layout: { 'text-field': ['get', 'name'], 'text-font': [...MAP_FONT_STACKS.regular], 'text-size': size },
     paint: {
       'text-color': color,
       'text-opacity': opacity,
@@ -90,7 +85,7 @@ function labelLayer(
   };
 }
 
-/** 静态底图的 basemap-labels 分组：市、区县的地名，二三维都画（ADR 0146）；市名在上，避让时优先 */
+/** 静态底图的 basemap-labels 分组：市、区县的地名，二三维都画（ADR 0146），用页面的普惠体在本地画（ADR 0160）；市名在上，避让时优先 */
 export function staticLabelsGroup(opacity: number): StyleGroup {
   return {
     sources: { [LABELS_SOURCE_ID]: LABELS_SOURCE },

@@ -11,10 +11,12 @@ import {
   isDrawn,
   mergeDisplayState,
   isResourceBodyLayer,
+  labelTargetOf,
   lowestLayerOf,
   resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
+  resourceLabelsGroup,
   resourcesGroup,
   resourceSourceId,
   resourceTileBase,
@@ -25,6 +27,7 @@ import {
   withYearForAll
 } from './resource-layers';
 import { BLANK_PATTERN_IMAGE_ID, patternImageId, patternImages } from './fill-patterns';
+import { resourceLabelLayer } from './labels';
 import { POINT_SHAPE_NAMES, shapeImageId } from './point-shapes';
 import type { ResourceSymbolOverride } from './resource-symbols';
 import { resourceStyle } from './style-registry';
@@ -122,8 +125,20 @@ describe('mergeDisplayState', () => {
 
     expect(state.catalog).toBe(CATALOG);
     expect(state.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'csxhjctb_gyssp']);
-    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ added: true, checked: true, opacity: 1, year: 2022 });
-    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({ added: false, checked: false, opacity: 1, year: 2025 });
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({
+      added: true,
+      checked: true,
+      opacity: 1,
+      year: 2022,
+      labeled: false
+    });
+    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({
+      added: false,
+      checked: false,
+      opacity: 1,
+      year: 2025,
+      labeled: false
+    });
   });
 
   it('同一个目录：返回原来的状态对象', () => {
@@ -141,7 +156,13 @@ describe('mergeDisplayState', () => {
     const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, HYDL, GYSSP));
 
     expect(next.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_gyssp']);
-    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ added: true, checked: true, opacity: 0.4, year: 2025 });
+    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({
+      added: true,
+      checked: true,
+      opacity: 0.4,
+      year: 2025,
+      labeled: false
+    });
     expect(next.displays.get('bgdc_dltb')?.checked).toBe(false);
     expect(next.displays.has('bgdc_cjdcqjx')).toBe(false);
   });
@@ -153,7 +174,13 @@ describe('mergeDisplayState', () => {
     const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, CJDCQJX, HYDL, GYSSP));
 
     expect(next.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_gyssp']);
-    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ added: false, checked: false, opacity: 1, year: 2024 });
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({
+      added: false,
+      checked: false,
+      opacity: 1,
+      year: 2024,
+      labeled: false
+    });
   });
 
   it('年份：仍在资源的年份里就保留，否则改用最新的一年', () => {
@@ -174,9 +201,9 @@ describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
 
   it('画在地图上要已加入并且显示', () => {
     expect(isDrawn(undefined)).toBe(false);
-    expect(isDrawn({ added: true, checked: true, opacity: 1, year: 2022 })).toBe(true);
-    expect(isDrawn({ added: true, checked: false, opacity: 1, year: 2022 })).toBe(false);
-    expect(isDrawn({ added: false, checked: true, opacity: 1, year: 2022 })).toBe(false);
+    expect(isDrawn({ added: true, checked: true, opacity: 1, year: 2022, labeled: false })).toBe(true);
+    expect(isDrawn({ added: true, checked: false, opacity: 1, year: 2022, labeled: false })).toBe(false);
+    expect(isDrawn({ added: false, checked: true, opacity: 1, year: 2022, labeled: false })).toBe(false);
   });
 
   it('加入：放到最前面并显示；一次加多个时整批在最前，批内保持给出的先后；已加入的不动、不重复', () => {
@@ -210,11 +237,23 @@ describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
 
     state = withRemoved(state, ['bgdc_dltb']);
     expect(addedCodes(state)).toStrictEqual(['csxhjctb_hydl']);
-    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ added: false, checked: false, opacity: 0.5, year: 2022 });
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({
+      added: false,
+      checked: false,
+      opacity: 0.5,
+      year: 2022,
+      labeled: false
+    });
 
     state = withAdded(state, ['bgdc_dltb']);
     expect(addedCodes(state)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
-    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ added: true, checked: true, opacity: 0.5, year: 2022 });
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({
+      added: true,
+      checked: true,
+      opacity: 0.5,
+      year: 2022,
+      labeled: false
+    });
   });
 
   it('没有要加入、移出的时返回原来的状态对象；有目录里没有的资源时抛错', () => {
@@ -523,6 +562,96 @@ describe('validateCatalog', () => {
   });
 });
 
+const idsOf = (group: StyleGroup) => group.layers.map(({ id }) => id);
+
+// 全部开着标注
+const labelAll = (state: ResourceLayersState) =>
+  state.order.reduce((next, code) => withDisplay(next, code, { labeled: true }), state);
+
+describe('resourceLabelsGroup（ADR 0160）', () => {
+  const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+
+  it('默认都不开标注（用户 2026-11-16）：分组为空', () => {
+    expect([...initial.displays.values()].some(display => display.labeled)).toBe(false);
+    const group = resourceLabelsGroup({ state: checkAll(initial), invalid: new Map() });
+    expect(group).toStrictEqual({ sources: {}, layers: [] });
+  });
+
+  it('只给画在地图上、开着标注、校验通过、登记了字段的资源；用资源分组里的数据源', () => {
+    // 村级调查区隐藏，公用设施点校验不通过，村级调查区界线没有登记字段
+    const state = withDisplay(labelAll(checkAll(initial)), 'bgdc_cjdcq', { checked: false });
+    const group = resourceLabelsGroup({ state, invalid: new Map([['csxhjctb_gyssp', ['不合法']]]) });
+    const resources = derive(state, new Map([['csxhjctb_gyssp', ['不合法']]]));
+
+    expect(idsOf(group)).toStrictEqual(['resource-labels-bgdc_dltb', 'resource-labels-csxhjctb_hydl']);
+    expect(group.sources).toStrictEqual({});
+    expect(group.layers.flatMap(item => ('source' in item ? [item.source] : [])).toSorted()).toStrictEqual(
+      Object.keys(resources.sources)
+        .filter(id => id !== 'resources-bgdc_cjdcqjx')
+        .toSorted()
+    );
+  });
+
+  it('透明度为 0 的资源不推导标注：看不见的文字不占位、不挡别的标注，也点不到', () => {
+    const state = withDisplay(labelAll(checkAll(initial)), 'bgdc_dltb', { opacity: 0 });
+
+    expect(idsOf(resourceLabelsGroup({ state, invalid: new Map() }))).not.toContain('resource-labels-bgdc_dltb');
+    expect(idsOf(resourceLabelsGroup({ state, invalid: new Map() }))).toContain('resource-labels-csxhjctb_hydl');
+  });
+
+  it('加强标注的要素只在它所在资源的标注里滤掉', () => {
+    const group = resourceLabelsGroup({
+      state: labelAll(checkAll(initial)),
+      invalid: new Map(),
+      emphasis: { code: 'bgdc_dltb', guid: 'a'.repeat(32) }
+    });
+    const filterOf = (code: string) => {
+      const found = group.layers.find(item => item.id === `resource-labels-${code}`);
+      return found && 'filter' in found ? JSON.stringify(found.filter) : '';
+    };
+
+    expect(filterOf('bgdc_dltb')).toContain(`"!=",["to-string",["get","guid"]],"${'a'.repeat(32)}"`);
+    expect(filterOf('csxhjctb_hydl')).not.toContain('guid');
+  });
+
+  it('点的文字让开画出的点：按资源的符号和覆盖算，点改大、换成定位针时偏移跟着变；线、面没有', () => {
+    const points = CATALOG.resources.get('csxhjctb_gyssp');
+    const lines = CATALOG.resources.get('csxhjctb_hydl');
+    if (!points || !lines) {
+      throw new Error('目录里没有公用设施点或水域线');
+    }
+    const display: ResourceDisplay = { added: true, checked: true, opacity: 1, year: 2025, labeled: true };
+    // 16 级（曲线的最后一个断点）往上让开多少
+    const upAt16 = (override?: ResourceSymbolOverride) => labelTargetOf(points, display, override)?.reach?.at(-1)?.up;
+
+    // 默认 M 档、半径 6，白描边 1
+    expect(upAt16()).toBe(7);
+    expect(upAt16({ mode: 'uniform', uniform: { size: 'XL' } })).toBeGreaterThan(7);
+    // 定位针从针尖往上伸出 2.4 倍半径
+    expect(upAt16({ items: { '080901': { shape: 'pin' } } })).toBeCloseTo(2.4 * 6 + 1);
+    expect(labelTargetOf(lines, display, undefined)?.reach).toBeNull();
+
+    const target = labelTargetOf(points, display, { items: { '080901': { shape: 'pin' } } });
+    const offset = target && resourceLabelLayer(target).layout?.['text-offset'];
+    // 16 级的偏移：(针头 15.4 + 间隔 3) / 12 号字，往上
+    expect(JSON.stringify(offset)).toContain(`16,["literal",[0,${-Number((18.4 / 12).toFixed(3))}]]`);
+  });
+
+  it('标注图层不算画出要素本身的图层：框选的估数不数它（ADR 0050）', () => {
+    expect(isResourceBodyLayer('bgdc_dltb', 'resource-labels-bgdc_dltb')).toBe(false);
+    expect(isResourceBodyLayer('bgdc_dltb', 'selection-labels-bgdc_dltb')).toBe(false);
+  });
+
+  it('开着标注时和资源分组一起通过 MapLibre 的校验（样式不写 glyphs）', () => {
+    const state = labelAll(checkAll(initial));
+    const { sources, layers } = derive(state);
+    const labels = resourceLabelsGroup({ state, invalid: new Map() }).layers;
+
+    expect(labels.length).toBeGreaterThan(0);
+    expect(validateStyleMin({ version: 8, sources, layers: [...layers, ...labels] })).toStrictEqual([]);
+  });
+});
+
 describe('批量设置年份（ADR 0052 第 2 节）', () => {
   const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
 
@@ -538,8 +667,20 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
 
     const next = withYearForAll(state, 2023);
 
-    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ added: true, checked: true, opacity: 0.4, year: 2023 });
-    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ added: false, checked: false, opacity: 1, year: 2023 });
+    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({
+      added: true,
+      checked: true,
+      opacity: 0.4,
+      year: 2023,
+      labeled: false
+    });
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({
+      added: false,
+      checked: false,
+      opacity: 1,
+      year: 2023,
+      labeled: false
+    });
     expect(next.displays.get('bgdc_dltb')).toBe(state.displays.get('bgdc_dltb'));
     expect(next.displays.get('csxhjctb_gyssp')).toBe(state.displays.get('csxhjctb_gyssp'));
     expect(next.order).toBe(state.order);

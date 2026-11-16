@@ -6,11 +6,13 @@ const displaySchema = z.object({
   added: z.boolean().optional(),
   checked: z.boolean(),
   opacity: z.number().min(0).max(1),
-  year: z.number().int()
+  year: z.number().int(),
+  // 2026-11-16 之前存下的没有这一项，那时没有标注，按不显示算（ADR 0160）；格式只是多了一项，版本不变
+  labeled: z.boolean().optional()
 });
 
 /**
- * 存下的资源图层偏好（ADR 0042）：每个资源的加入、勾选、透明度、年份和叠放顺序，以及最后一次批量设置的年份（ADR 0116）。
+ * 存下的资源图层偏好（ADR 0042）：每个资源的加入、勾选、透明度、年份、标注的显隐和叠放顺序，以及最后一次批量设置的年份（ADR 0116）。
  * 除了类型和范围，还要自洽：顺序不能有重复，并且和各资源的设置一一对应，否则会推导出重复的图层 ID
  */
 export const storedResourceLayersSchema = z
@@ -40,12 +42,12 @@ export function toStoredResourceLayers(
 
 /**
  * 存下的偏好还原成不带目录的显示状态；目录到了以后按 ADR 0041 第 3 节合并，不直接使用。
- * 没有 added 的是改版前存的：勾选过的资源算已加入，叠放顺序不变（ADR 0157）
+ * 没有 added 的是改版前存的：勾选过的资源算已加入，叠放顺序不变（ADR 0157）；没有 labeled 的不显示标注（ADR 0160）
  */
 export function fromStoredResourceLayers({ displays, order }: StoredResourceLayers): ResourceLayersState {
-  const restored = Object.entries(displays).map(([code, { added, ...display }]): [string, ResourceDisplay] => [
+  const restored = Object.entries(displays).map(([code, { added, labeled, ...display }]): [string, ResourceDisplay] => [
     code,
-    { ...display, added: added ?? display.checked }
+    { ...display, added: added ?? display.checked, labeled: labeled ?? false }
   ]);
   return { catalog: null, displays: new Map(restored), order };
 }

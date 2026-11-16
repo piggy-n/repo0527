@@ -48,6 +48,7 @@ import {
   OTHER_ITEM,
   symbolClasses
 } from './classification';
+import { codeDefaultLabel, type PointLook, type ResourceLabel, resolveLabel } from './labels';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor } from './palette';
 import type { PointMark } from './point-shapes';
@@ -317,6 +318,44 @@ export function resourceHighlightStyle(
       : classifiedLayers(symbolClasses(rule), item => classSymbol(resource, item, override, style), color);
   const [part] = parts;
   return part?.type === 'symbol' ? { type: 'symbol', layout: part.layout, paint: part.paint } : null;
+}
+
+/** 默认标注（ADR 0160）：代码给出的默认叠加发布的默认；没有登记标注字段的资源为 null */
+export function defaultLabel(
+  resource: Resource,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ResourceLabel | null {
+  const defaults = codeDefaultLabel(resource);
+  return defaults && resolveLabel(resource, defaults, style.symbols?.label);
+}
+
+/** 叠加用户覆盖后的标注；没有登记标注字段的资源为 null */
+export function resourceLabel(
+  resource: Resource,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ResourceLabel | null {
+  const defaults = defaultLabel(resource, style);
+  return defaults && resolveLabel(resource, defaults, override?.label);
+}
+
+/** 点资源画出的各种点（统一样式一种，分类样式每个取值一种），标注据此让开点；不是点资源时为空 */
+export function pointLooks(
+  resource: Resource,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): PointLook[] {
+  if (resource.geometry !== 'circle') {
+    return [];
+  }
+  const rule = style.color;
+  const symbols =
+    !rule || symbolModeOf(style, override) === 'uniform'
+      ? [uniformSymbol(resource, override, style)]
+      : classItems(rule).map(item => classSymbol(resource, item, override, style));
+  return symbols.flatMap(symbol =>
+    symbol.geometry === 'circle' ? [{ shape: symbol.shape, size: symbol.size, strokeWidth: symbol.strokeWidth }] : []
+  );
 }
 
 /** 按要素的属性给出它在地图上画出的样子 */

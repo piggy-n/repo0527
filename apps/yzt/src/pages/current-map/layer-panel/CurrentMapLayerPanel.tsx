@@ -3,6 +3,7 @@ import { useMap } from '@mx/map-vue';
 import { ElButton, ElInput } from 'element-plus';
 import { computed, defineComponent, nextTick, onScopeDispose, type PropType, ref, type VNode, watch } from 'vue';
 import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSelect';
+import { LabelEditor } from '@/features/resource-map/components/LabelEditor';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
 import { LegendPreview } from '@/features/resource-map/components/LegendPreview';
 import { ResourceLayerRow } from '@/features/resource-map/components/ResourceLayerRow';
@@ -15,6 +16,7 @@ import {
   resourceCodeOfKey,
   resourceKey
 } from '@/features/resource-map/layer-panel';
+import { labelFieldsOf } from '@/features/resource-map/label-fields';
 import { fillOpacityOf, legendEntry } from '@/features/resource-map/legend';
 import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSelect';
 import { ModelLayerRow } from '@/features/scene-models/components/ModelLayerRow';
@@ -52,6 +54,7 @@ import { OpacitySlider } from '@/shared/map/OpacitySlider';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { COVER_OPACITY, type MoveAction, moveIndex, selectionAfterRemoval, steppedKey } from './current-list';
 import styles from './CurrentMapLayerPanel.module.scss';
+import { labelMenuEntries, type LabelRowState, labelToolItem } from './label-entries';
 import type { CurrentLayers } from './useCurrentLayers';
 
 // 新加入的行滑入、定位到的行闪两下的时长，和样式里的动画一致
@@ -71,8 +74,10 @@ const CATALOG_VIEWS: readonly { readonly id: CatalogView; readonly label: string
 
 const catalogViewOf = (id: string): CatalogView | undefined => CATALOG_VIEWS.find(item => item.id === id)?.id;
 
-/** 浮层：透明度或图例（用户 2026-11-14：两个分开，没有页签） */
-type PopoverKind = 'opacity' | 'legend';
+/** 浮层：透明度、图例或标注（用户 2026-11-14：分开，没有页签；标注是第三种，ADR 0160） */
+type PopoverKind = 'opacity' | 'legend' | 'label';
+
+const POPOVER_NAMES: Readonly<Record<PopoverKind, string>> = { opacity: '透明度', legend: '图例', label: '标注' };
 
 /** 开着的右键菜单：在资源还是图层上，右键的是哪一项，在哪里打开 */
 interface PanelMenuState {
@@ -420,6 +425,16 @@ export const CurrentMapLayerPanel = defineComponent({
       }
     };
 
+    // 一行和标注有关的状态：模型没有标注，资源要登记了标注字段（ADR 0160）
+    const labelRow = (key: string): LabelRowState => {
+      const code = resourceCodeOfKey(key);
+      return {
+        model: code === null,
+        labelable: code !== null && labelFieldsOf(code).length > 0,
+        labeled: code !== null && state.value.displays.get(code)?.labeled === true
+      };
+    };
+
     const togglePopover = (kind: PopoverKind) => {
       popover.value = popover.value?.kind === kind ? null : { kind, configuring: false };
     };
@@ -532,6 +547,8 @@ export const CurrentMapLayerPanel = defineComponent({
           disabled: key === null || model,
           pressed: popover.value?.kind === 'legend'
         },
+        // 第 8 个按钮：标题改成两个字后放得下（ADR 0160）
+        labelToolItem(key === null ? null : labelRow(key), popover.value?.kind === 'label'),
         'divider',
         { key: 'remove-layer', icon: 'layer-remove', label: '移除图层', tip: '移除', disabled: key === null }
       ];
@@ -544,6 +561,8 @@ export const CurrentMapLayerPanel = defineComponent({
       }
       if ((action === 'opacity' || action === 'legend') && resourceCodeOfKey(key) !== null) {
         togglePopover(action);
+      } else if (action === 'label' && labelRow(key).labelable) {
+        togglePopover('label');
       } else if (action === 'remove-layer') {
         removeKeys([key]);
       } else if (action === 'move-up' || action === 'move-down' || action === 'move-top' || action === 'move-bottom') {
@@ -599,6 +618,7 @@ export const CurrentMapLayerPanel = defineComponent({
           ? ([
               { key: 'opacity', label: '透明度', icon: 'layer-opacity' },
               { key: 'legend', label: '图例', icon: 'map-legend' },
+              ...labelMenuEntries(labelRow(current.key)),
               'divider'
             ] satisfies PanelMenuEntry[])
           : []),
@@ -665,6 +685,18 @@ export const CurrentMapLayerPanel = defineComponent({
       } else if ((action === 'opacity' || action === 'legend') && id === null) {
         choose(current.key);
         popover.value = { kind: action, configuring: false };
+      } else if (action === 'label-visible' || action === 'label') {
+        const code = resourceCodeOfKey(current.key);
+        const row = labelRow(current.key);
+        if (code === null || !row.labelable) {
+          return;
+        }
+        if (action === 'label-visible') {
+          props.resources.setLabeled(code, !row.labeled);
+        } else {
+          choose(current.key);
+          popover.value = { kind: 'label', configuring: false };
+        }
       } else if (action === 'roam' && id !== null && roamable(id)) {
         props.models.startRoam(id);
       } else if (action === 'retry' && id !== null) {
@@ -853,8 +885,8 @@ export const CurrentMapLayerPanel = defineComponent({
           layout={context.layout}
           anchor={popoverAnchor}
           sheet={props.sheet}
-          width={legend ? 300 : 280}
-          label={`${resource.name}的${legend ? '图例' : '透明度'}`}
+          width={current.kind === 'opacity' ? 280 : 300}
+          label={`${resource.name}的${POPOVER_NAMES[current.kind]}`}
           onClose={() => (popover.value = null)}
         >
           {{
@@ -888,8 +920,11 @@ export const CurrentMapLayerPanel = defineComponent({
                 <SvgIcon name="close" size={16} />
               </button>
             ],
-            default: () =>
-              legend
+            default: () => {
+              if (current.kind === 'label') {
+                return [<LabelEditor layers={props.resources} symbols={props.symbols} code={code} />];
+              }
+              return legend
                 ? [
                     <LayerLegend
                       layers={props.resources}
@@ -907,7 +942,8 @@ export const CurrentMapLayerPanel = defineComponent({
                       label={`${resource.name}的透明度`}
                       onChange={(value: number) => props.resources.setOpacity(code, value)}
                     />
-                  ]
+                  ];
+            }
           }}
         </LayerPopover>
       );

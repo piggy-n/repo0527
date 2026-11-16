@@ -53,6 +53,7 @@ import {
   queryCapabilityOf,
   serverCandidates
 } from '../feature-query';
+import { type LabelEmphasis, type LabelTarget, selectionLabelsGroup } from '../labels';
 import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
 import { isDrawn, type ResourceLayersState } from '../resource-layers';
@@ -158,6 +159,13 @@ export interface FeaturePick {
   readonly close: () => void;
   /** 绑定到 selection 分组 */
   readonly deriveGroup: () => StyleGroup;
+  /**
+   * 正在加强标注的要素（ADR 0160）：查询详情里正在看的那一个，而且它所在的资源开着标注；框选、悬停、在图层里选中一行都不算。
+   * 页面把它交给资源的标注分组，滤掉这个要素原来的标注
+   */
+  readonly labelEmphasis: ComputedRef<LabelEmphasis | null>;
+  /** 绑定到 selection-labels 分组：加强标注，和资源的标注分组读同一份状态、同一轮提交 */
+  readonly deriveLabelsGroup: () => StyleGroup;
 }
 
 export interface FeaturePickOptions {
@@ -221,7 +229,10 @@ export function useFeaturePick(
     MapContext,
     'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer' | 'sceneCapabilities'
   >,
-  resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene' | 'pointHighlight' | 'pointMark'>,
+  resources: Pick<
+    ResourceLayers,
+    'state' | 'configErrors' | 'hiddenInScene' | 'pointHighlight' | 'pointMark' | 'labelTarget'
+  >,
   options: FeaturePickOptions = {}
 ): FeaturePick {
   if (!getCurrentScope()) {
@@ -325,6 +336,16 @@ export function useFeaturePick(
       return null;
     }
     return { type: 'Feature', properties: { ...candidate.properties }, geometry: status.detail.geometry };
+  });
+
+  // 加强标注（ADR 0160）：不等详情，用瓦片里的这个要素；资源不再画在地图上、关了标注时没有
+  const emphasis = computed((): { readonly target: LabelTarget; readonly guid: string } | null => {
+    const candidate = selected.value;
+    if (!candidate || !isShown(resources.state.value, candidate.target)) {
+      return null;
+    }
+    const target = resources.labelTarget(candidate.target.resource.code);
+    return target && { target, guid: candidate.guid };
   });
 
   // 会话只存选中要素的身份（ADR 0047 第 4 节）：详情里的那一个，或框选列表里已取到的全部（ADR 0049 第 3 节）
@@ -492,7 +513,8 @@ export function useFeaturePick(
         view,
         area,
         target => resources.pointMark(target.resource.code, zoom),
-        target => overModels(target.resource.code)
+        target => overModels(target.resource.code),
+        target => resources.labelTarget(target.resource.code) !== null
       );
       return tasks && { tasks, how };
     });
@@ -776,6 +798,11 @@ export function useFeaturePick(
           ? resources.pointHighlight(candidate.target.resource.code)
           : null;
       return selectionGroup(feature && { feature, point }, flashing.value, batchHighlight());
-    }
+    },
+    labelEmphasis: computed(() => {
+      const current = emphasis.value;
+      return current && { code: current.target.code, guid: current.guid };
+    }),
+    deriveLabelsGroup: () => selectionLabelsGroup(emphasis.value?.target ?? null, emphasis.value?.guid ?? null)
   };
 }

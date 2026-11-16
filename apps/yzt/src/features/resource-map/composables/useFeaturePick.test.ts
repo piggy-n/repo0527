@@ -23,6 +23,7 @@ import { buildCatalog } from '../catalog';
 import type { PickCandidate } from '../feature-query';
 import { type ResourceDisplay, type ResourceLayersState, withYearForAll } from '../resource-layers';
 import type { PointMark } from '../point-shapes';
+import type { LabelTarget } from '../labels';
 import type { PointHighlightOf } from '../selection-style';
 import type { PointMarkOf } from '../style-registry';
 import { type FeaturePick, hasMorePages, useFeaturePick } from './useFeaturePick';
@@ -67,7 +68,7 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number): ResourceDisplay => ({ added: true, checked: true, opacity: 1, year });
+const display = (year: number): ResourceDisplay => ({ added: true, checked: true, opacity: 1, year, labeled: false });
 
 function withDisplay(state: ResourceLayersState, code: string, change: Partial<ResourceDisplay>): ResourceLayersState {
   const current = state.displays.get(code);
@@ -232,7 +233,9 @@ function setup(
     // 点资源按形状高亮的样式（ADR 0159）：默认没有，用例换成给定的样式
     pointHighlight: vi.fn<(code: string) => PointHighlightOf | null>(() => null),
     // 点画出的样子：默认没有，点选照旧按到点的距离
-    pointMark: vi.fn<(code: string, zoom: number) => PointMarkOf | null>(() => null)
+    pointMark: vi.fn<(code: string, zoom: number) => PointMarkOf | null>(() => null),
+    // 标注图层要用的（ADR 0160）：默认没开标注，用例换成给定的
+    labelTarget: vi.fn<(code: string) => LabelTarget | null>(() => null)
   };
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
@@ -1783,5 +1786,82 @@ describe('useFeaturePick：点资源（ADR 0159）', () => {
     expect(candidates.map(({ guid: id }) => id)).toStrictEqual([guid(1), guid(2)]);
     expect(candidates[0]?.distance).toBe(0);
     expect(candidates[1]?.distance).toBeCloseTo(2, 6);
+  });
+});
+
+describe('加强标注（ADR 0160）', () => {
+  // 地类图斑开着标注时的标注图层参数
+  const LANDUSE_LABEL: LabelTarget = {
+    code: 'bgdc_dltb',
+    geometry: 'fill',
+    source: DLTB,
+    sourceLayer: 'bgdc_dltb_2022',
+    filter: ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false],
+    minzoom: undefined,
+    label: {
+      field: 'dlmc',
+      font: 'regular',
+      size: 12,
+      color: '#1F2937',
+      haloColor: '#FFFFFF',
+      haloWidth: 1.5,
+      placement: 'center',
+      minzoom: 15,
+      maxzoom: 20,
+      overlap: false
+    },
+    reach: null,
+    opacity: 1
+  };
+
+  it('查询详情里正在看的要素、所在资源开着标注：加强它，不等详情到；资源关了标注、关闭详情时没有', () => {
+    mockDetail();
+    const { owner, send, resources } = setup();
+    const labeled = shallowRef(true);
+    resources.labelTarget.mockImplementation(code => (labeled.value && code === 'bgdc_dltb' ? LANDUSE_LABEL : null));
+
+    send(click(), [rendered(DLTB, 1)]);
+
+    expect(owner.state.value.kind).toBe('detail');
+    expect(owner.labelEmphasis.value).toStrictEqual({ code: 'bgdc_dltb', guid: guid(1) });
+    expect(owner.deriveLabelsGroup().layers).toMatchObject([
+      {
+        id: 'selection-labels-bgdc_dltb',
+        source: DLTB,
+        filter: ['all', LANDUSE_LABEL.filter, ['==', ['to-string', ['get', 'guid']], guid(1)]]
+      }
+    ]);
+
+    labeled.value = false;
+    expect(owner.labelEmphasis.value).toBeNull();
+    expect(owner.deriveLabelsGroup().layers).toStrictEqual([]);
+
+    labeled.value = true;
+    owner.close();
+    expect(owner.labelEmphasis.value).toBeNull();
+  });
+
+  it('点在开着标注的资源的文字上：选中文字的要素，面板里排在上面的资源不再先命中', () => {
+    mockDetail();
+    const { owner, send, resources } = setup();
+    resources.labelTarget.mockImplementation(code => (code === 'bgdc_dltb' ? LANDUSE_LABEL : null));
+    const label: RenderedFeature = { ...rendered(DLTB, 2), layerId: 'resource-labels-bgdc_dltb' };
+
+    send(click(), [rendered(CZCDYD, 1), label]);
+
+    const current = owner.state.value;
+    const chosen = current.kind === 'detail' ? [current.candidate.target.resource.code, current.candidate.guid] : [];
+    expect(chosen).toStrictEqual(['bgdc_dltb', guid(2)]);
+  });
+
+  it('框选的列表不加强标注', () => {
+    const { owner, send, resources } = setup();
+    resources.labelTarget.mockImplementation(() => ({ ...LANDUSE_LABEL, code: 'szy_kt', source: SZY }));
+
+    dragBox(send, [rendered(SZY, 1), rendered(SZY, 2)]);
+
+    expect(owner.state.value.kind).toBe('candidates');
+    expect(owner.labelEmphasis.value).toBeNull();
+    expect(owner.deriveLabelsGroup().layers).toStrictEqual([]);
   });
 });

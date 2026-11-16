@@ -6,17 +6,20 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup, StyleImage, StyleImages } from '@mx/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
+import { type LabelEmphasis, labelsGroupOf, type LabelTarget, pointReach, resourceLabelLayer } from './labels';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
   DEFAULT_OPACITY,
+  pointLooks,
   type ResourceStyle,
+  resourceLabel,
   resourceStyleLayers,
   resourceStyle,
   SOURCE_MAXZOOM,
   sourceLayerOf,
   tilesetOf
 } from './style-registry';
-import { isBodyLayerSuffix, type ResourceLayerPart } from './symbols';
+import { isBodyLayerSuffix, type ResourceLayerPart, sdfOpacity } from './symbols';
 
 // 资源图层的显示状态与分组推导（ADR 0041 第 3、4 节），都是纯函数；拥有者 useResourceLayers 持有状态并调用它们
 
@@ -59,6 +62,8 @@ export interface ResourceDisplay {
   readonly opacity: number;
   /** 资源的年份之一 */
   readonly year: number;
+  /** 显示标注（ADR 0160）：只对画在地图上、登记了标注字段的资源起作用；默认都不开（用户 2026-11-16） */
+  readonly labeled: boolean;
 }
 
 /** 按 code 的显示状态；连同它所基于的目录放在一起，推导只读这一份，不会读到目录换了、状态还没合并的中间态 */
@@ -87,12 +92,20 @@ export function latestYear(resource: Resource): number {
 // 登记表里默认勾选的资源（地类图斑）默认加入并显示
 function defaultDisplay(resource: Resource): ResourceDisplay {
   const shown = resourceStyle(resource.code).checked ?? false;
-  return { added: shown, checked: shown, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
+  return { added: shown, checked: shown, opacity: DEFAULT_OPACITY, year: latestYear(resource), labeled: false };
 }
 
 /** 画在地图上：已加入当前地图并且显示 */
 export function isDrawn(display: ResourceDisplay | undefined): boolean {
   return display !== undefined && display.added && display.checked;
+}
+
+/**
+ * 画出标注（ADR 0160）：资源画在地图上、开着标注、看得见。透明度为 0 时不画：看不见的文字照样占着避让的位置，
+ * 会挤掉别的标注，也会被点到
+ */
+export function isLabelShown(display: ResourceDisplay | undefined): display is ResourceDisplay {
+  return isDrawn(display) && display?.labeled === true && display.opacity > 0;
 }
 
 /** 当前地图里的资源（包括隐藏的），按叠放顺序从上到下 */
@@ -284,16 +297,8 @@ function layerOf(
     return { ...shared, type: 'line', layout: part.layout, paint };
   }
   // 点的 symbol 图层（ADR 0159）：图标的透明度同时作用于填充和描边
-  const paint = { ...part.paint, 'icon-opacity': iconOpacity(opacity) };
+  const paint = { ...part.paint, 'icon-opacity': sdfOpacity(opacity) };
   return { ...shared, type: 'symbol', layout: part.layout, paint };
-}
-
-// SDF 符号的着色器（symbol_sdf.vertex.glsl）在不透明度低于 0.1 时整个不画，面、线和改版前的圆点还淡淡可见：
-// 点的透明度不低于 10%，0 仍是 0（ADR 0159 第 2 节）
-const MIN_ICON_OPACITY = 0.1;
-
-function iconOpacity(opacity: number): number {
-  return opacity === 0 ? 0 : Math.max(opacity, MIN_ICON_OPACITY);
 }
 
 // 有最小显示级别的资源，数据源和图层用同一个最小级别：更低的级别不请求瓦片
@@ -322,8 +327,37 @@ function resourceEntry(
 }
 
 /**
+ * 资源的标注图层要用的（ADR 0160）：数据源、瓦片图层名、几何过滤、级别和透明度来自资源，样式是默认标注叠加覆盖；
+ * 点资源的文字按画出的点让开。没有登记标注字段的资源为 null
+ */
+export function labelTargetOf(
+  resource: Resource,
+  { opacity, year }: ResourceDisplay,
+  override: ResourceSymbolOverride | undefined,
+  style: ResourceStyle = resourceStyle(resource.code)
+): LabelTarget | null {
+  const label = resourceLabel(resource, override, style);
+  if (!label) {
+    return null;
+  }
+  const { code, geometry, minzoom } = resource;
+  return {
+    code,
+    geometry,
+    source: resourceSourceId(code),
+    sourceLayer: sourceLayerOf(code, year),
+    filter: GEOMETRY_FILTERS[geometry],
+    minzoom,
+    label,
+    reach: geometry === 'circle' ? pointReach(pointLooks(resource, override, style)) : null,
+    opacity
+  };
+}
+
+/**
  * 逐个资源校验它的数据源和图层（ADR 0041 第 4 节），返回不合法的资源和原因；只在目录变化时调用。
- * 样式默认取登记表，参数留给测试；按默认符号校验，覆盖的取值已由拥有者和存储格式限定在合法范围（ADR 0044）
+ * 样式默认取登记表，参数留给测试；按默认符号校验，覆盖的取值已由拥有者和存储格式限定在合法范围（ADR 0044）。
+ * 登记了标注字段的资源连同默认标注的图层一起校验（ADR 0160）
  */
 export function validateCatalog(
   catalog: ResourceCatalog | null,
@@ -332,10 +366,13 @@ export function validateCatalog(
 ): ReadonlyMap<string, readonly string[]> {
   const invalid = new Map<string, readonly string[]>();
   for (const resource of catalog?.resources.values() ?? []) {
-    const display = { added: true, checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
+    const display = { added: true, checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource), labeled: true };
     try {
-      const { id, source, layers } = resourceEntry(resource, display, tileBase, styleOf(resource.code), undefined);
-      const errors = validateStyleMin({ version: 8, sources: { [id]: source }, layers: [...layers] });
+      const style = styleOf(resource.code);
+      const { id, source, layers } = resourceEntry(resource, display, tileBase, style, undefined);
+      const label = labelTargetOf(resource, display, undefined, style);
+      const all = label ? [...layers, resourceLabelLayer(label)] : [...layers];
+      const errors = validateStyleMin({ version: 8, sources: { [id]: source }, layers: all });
       if (errors.length > 0) {
         invalid.set(resource.code, errors.map(({ message }) => message));
       }
@@ -398,4 +435,36 @@ export function lowestLayerOf(
   }
   const [part] = resourceStyleLayers(resource, resourceStyle(code), overrideOf(code)).parts;
   return part && partLayerId(resourceSourceId(code), part);
+}
+
+export interface ResourceLabelsInput {
+  readonly state: ResourceLayersState;
+  /** 校验不通过的资源，不进入推导 */
+  readonly invalid: ReadonlyMap<string, unknown>;
+  /** 用户调整的符号和标注；不传时都用默认 */
+  readonly overrideOf?: SymbolOverrideOf;
+  /** 正在加强标注的要素：它所在资源的标注滤掉它（ADR 0160） */
+  readonly emphasis?: LabelEmphasis | null;
+}
+
+/**
+ * resource-labels 分组（ADR 0160）：画出标注（isLabelShown）、校验通过、登记了标注字段的资源，引用资源分组的数据源，
+ * 和 resources 分组读同一份状态、同一轮提交；碰撞时点 > 线 > 面，同一种几何按面板的先后
+ */
+export function resourceLabelsGroup({
+  state,
+  invalid,
+  overrideOf = noSymbolOverride,
+  emphasis = null
+}: ResourceLabelsInput): StyleGroup {
+  const targets = state.order.flatMap(code => {
+    const resource = state.catalog?.resources.get(code);
+    const display = state.displays.get(code);
+    if (!resource || !display || !isLabelShown(display) || invalid.has(code)) {
+      return [];
+    }
+    const target = labelTargetOf(resource, display, overrideOf(code));
+    return target ? [target] : [];
+  });
+  return labelsGroupOf(targets, emphasis);
 }

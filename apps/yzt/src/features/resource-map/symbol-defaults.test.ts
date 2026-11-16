@@ -7,7 +7,7 @@ import { PREFERENCE_WRITE_DEBOUNCE } from '@/shared/storage/use-preference';
 import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import { useResourceSymbols } from './composables/useResourceSymbols';
-import { defaultSymbol, resourceStyleLayers } from './style-registry';
+import { defaultLabel, defaultSymbol, resourceStyleLayers } from './style-registry';
 import { symbolLayers } from './symbols';
 
 // 发布的默认符号（ADR 0154）换成固定的一份：用户的覆盖叠加在它上面，没调过的用户直接看到它
@@ -16,8 +16,8 @@ const SHIPPED = vi.hoisted(() => ({
   bgdc_ccwjq: { uniform: { fillColor: 'rgba(255, 0, 0, 1)', outlineWidth: 'L' } },
   // 按属性配色的线，默认改成统一样式
   csxhjctb_hydl: { mode: 'uniform', uniform: { color: 'rgba(0, 0, 0, 1)' }, items: { 河流: { width: 'L' } } },
-  // 按属性配色的点，只调了一个取值，默认仍是分类样式
-  csxhjctb_gyssp: { items: { '080901': { size: 'L' } } }
+  // 按属性配色的点，只调了一个取值，默认仍是分类样式；标注改成 16 号、自动放置（ADR 0160）
+  csxhjctb_gyssp: { items: { '080901': { size: 'L' } }, label: { size: 16, placement: 'auto' } }
 }));
 
 vi.mock('./resource-symbol-defaults.json', () => ({ default: SHIPPED }));
@@ -86,6 +86,27 @@ describe('发布的默认符号', () => {
     expect(resourceStyleLayers(resourceOf('csxhjctb_hydl'))).toStrictEqual(
       symbolLayers({ geometry: 'line', color: BLACK, width: 'M', dash: 'solid' })
     );
+  });
+
+  it('发布的默认标注（ADR 0160）叠加在代码给出的默认上：没调过的用户看到它，改动和它比较，恢复默认标注回到它', async () => {
+    using ctx = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    const { symbols } = ctx;
+
+    expect(defaultLabel(resourceOf('csxhjctb_gyssp'))).toMatchObject({ field: 'name', size: 16, placement: 'auto' });
+    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ size: 16, placement: 'auto' });
+    expect(symbols.hasLabelOverride('csxhjctb_gyssp')).toBe(false);
+
+    symbols.setLabel('csxhjctb_gyssp', { size: 18 });
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({ label: { size: 18 } });
+    // 改回发布的默认就不再记；改回代码给出的默认（12 号）要记下
+    symbols.setLabel('csxhjctb_gyssp', { size: 16 });
+    expect(symbols.overrides.value.has('csxhjctb_gyssp')).toBe(false);
+    symbols.setLabel('csxhjctb_gyssp', { size: 12 });
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({ label: { size: 12 } });
+
+    symbols.resetLabel('csxhjctb_gyssp');
+    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ size: 16, placement: 'auto' });
   });
 
   it('已经保存的覆盖照样读出，叠加在上面：改过的字段是用户的值，没改过的跟随新的默认，读出后不写回', async () => {

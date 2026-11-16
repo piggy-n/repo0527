@@ -339,4 +339,90 @@ describe('useResourceSymbols', () => {
     expect(symbols.overrides.value.size).toBe(0);
     expect(symbols.preview.value).toBeNull();
   });
+
+  it('标注（ADR 0160）：只记和默认不同的字段，和符号的覆盖放在一起；没有登记字段的资源没有标注', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+
+    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ field: 'name', size: 12, placement: 'top' });
+    expect(symbols.labelOf('bgdc_ccwjq')).toBeNull();
+
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 'L' });
+    symbols.setLabel('csxhjctb_gyssp', { field: 'type', size: 16, color: '#000' });
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({
+      uniform: { size: 'L' },
+      label: { field: 'type', size: 16, color: 'rgba(0, 0, 0, 1)' }
+    });
+    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ field: 'type', size: 16, color: 'rgba(0, 0, 0, 1)' });
+    expect(symbols.hasLabelOverride('csxhjctb_gyssp')).toBe(true);
+    // 图例的"改过符号"只说符号：只改了标注不算（标注在标注编辑器里恢复）
+    expect(symbols.isCustomized('csxhjctb_hydl')).toBe(false);
+    symbols.setLabel('csxhjctb_hydl', { size: 14 });
+    expect(symbols.isCustomized('csxhjctb_hydl')).toBe(false);
+    expect(symbols.isCustomized('csxhjctb_gyssp')).toBe(true);
+
+    symbols.setLabel('csxhjctb_gyssp', { size: 12 });
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')?.label).toStrictEqual({
+      field: 'type',
+      color: 'rgba(0, 0, 0, 1)'
+    });
+  });
+
+  it('标注的参数不合法时抛错，覆盖不变：没登记的字段、这种几何没有的放置方式、级别反了或越界、不是颜色、资源没有字段', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    symbols.setLabel('csxhjctb_gyssp', { size: 14 });
+
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { field: 'guid' })).toThrow('没有字段');
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { placement: 'line' })).toThrow('不能放在');
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { minzoom: 18, maxzoom: 16 })).toThrow(RangeError);
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { minzoom: 18 })).not.toThrow();
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { maxzoom: 17 })).toThrow(RangeError);
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { maxzoom: 21 })).toThrow(RangeError);
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { color: '不是颜色' })).toThrow('不是颜色');
+    expect(() => symbols.setLabel('bgdc_ccwjq', { size: 14 })).toThrow('没有可标注的字段');
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')?.label).toStrictEqual({ size: 14, minzoom: 18 });
+  });
+
+  it('标注颜色的预览：参与推导、不写入；取色器报回确认的颜色时清掉；确认时写入并清掉', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+
+    symbols.previewLabelColor('csxhjctb_gyssp', 'color', '#ff0000');
+    expect(symbols.overrides.value.has('csxhjctb_gyssp')).toBe(false);
+    expect(symbols.overrideOf('csxhjctb_gyssp')).toStrictEqual({ label: { color: 'rgba(255, 0, 0, 1)' } });
+    expect(symbols.overrideOf('csxhjctb_hydl')).toBeUndefined();
+
+    // 取消时取色器报回确认过的颜色（点的默认文字颜色）
+    symbols.previewLabelColor('csxhjctb_gyssp', 'color', '#374151');
+    expect(symbols.overrideOf('csxhjctb_gyssp')).toBeUndefined();
+
+    symbols.previewLabelColor('csxhjctb_gyssp', 'haloColor', '#000');
+    symbols.setLabel('csxhjctb_gyssp', { haloColor: '#000' });
+    expect(symbols.overrideOf('csxhjctb_gyssp')).toStrictEqual({ label: { haloColor: 'rgba(0, 0, 0, 1)' } });
+    expect(() => symbols.previewLabelColor('csxhjctb_gyssp', 'color', '红')).toThrow('不是颜色');
+    expect(() => symbols.previewLabelColor('bgdc_ccwjq', 'color', '#000')).toThrow('没有可标注的字段');
+  });
+
+  it('恢复默认标注只去掉标注；恢复一个资源、全部恢复时标注和它的预览一起去掉', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 'L' });
+    symbols.setLabel('csxhjctb_gyssp', { size: 16 });
+    symbols.setLabel('csxhjctb_hydl', { size: 16 });
+
+    symbols.resetLabel('csxhjctb_gyssp');
+    expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({ uniform: { size: 'L' } });
+    expect(symbols.hasLabelOverride('csxhjctb_gyssp')).toBe(false);
+
+    symbols.previewLabelColor('csxhjctb_hydl', 'color', '#f00');
+    symbols.resetResource('csxhjctb_hydl');
+    expect(symbols.overrideOf('csxhjctb_hydl')).toBeUndefined();
+
+    symbols.setLabel('csxhjctb_hydl', { size: 14 });
+    symbols.previewLabelColor('csxhjctb_hydl', 'color', '#f00');
+    symbols.resetAll();
+    expect(symbols.overrideOf('csxhjctb_hydl')).toBeUndefined();
+    expect(symbols.overrides.value.size).toBe(0);
+  });
 });

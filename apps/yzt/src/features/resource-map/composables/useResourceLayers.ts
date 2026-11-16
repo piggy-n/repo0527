@@ -15,10 +15,14 @@ import { appConfig } from '@/shared/config/app-config';
 import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
+import { labelFieldsOf } from '../label-fields';
+import type { LabelEmphasis, LabelTarget } from '../labels';
 import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
   isDrawn,
+  isLabelShown,
+  labelTargetOf,
   lowestLayerOf,
   mergeDisplayState,
   withAdded,
@@ -27,6 +31,7 @@ import {
   resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
+  resourceLabelsGroup,
   resourcesGroup,
   resourceTileBase,
   validateCatalog,
@@ -67,6 +72,13 @@ export interface ResourceLayers {
   readonly setOpacity: (code: string, opacity: number) => void;
   /** 不是这个资源的年份时抛错 */
   readonly setYear: (code: string, year: number) => void;
+  /** 显示、隐藏标注（ADR 0160）；没有登记标注字段的资源抛错 */
+  readonly setLabeled: (code: string, labeled: boolean) => void;
+  /**
+   * 资源的标注图层要用的（ADR 0160）：画出标注（看得见）、校验通过、有标注字段，三维里分组不为空时才有，
+   * 加强标注按它画；其他时候为 null
+   */
+  readonly labelTarget: (code: string) => LabelTarget | null;
   /** 批量设置可选的年份：多年份资源的年份并集加上固定的 2020、2021，新的在前（ADR 0094）；目录还没加载时没有 */
   readonly batchYears: ComputedRef<readonly number[]>;
   /**
@@ -100,6 +112,11 @@ export interface ResourceLayers {
    * 为 undefined。页面交给 bindSceneSlot，也用它判断有没有二维图层画在模型上面
    */
   readonly sceneSlot: (codes: readonly string[]) => string | undefined;
+  /**
+   * resource-labels 分组（ADR 0160）：页面把它和 resources 一起绑定；emphasis 是查询详情里正在加强标注的要素，
+   * 它原来的标注滤掉，由页面从点选的拥有者传进来
+   */
+  readonly deriveLabelsGroup: (emphasis: LabelEmphasis | null) => StyleGroup;
 }
 
 export interface ResourceLayersOptions {
@@ -232,6 +249,13 @@ export function useResourceLayers(
       return display.year === year ? display : { ...display, year };
     });
 
+  const setLabeled = (code: string, labeled: boolean) => {
+    if (labelFieldsOf(code).length === 0) {
+      throw new Error(`资源 ${code} 没有可标注的字段`);
+    }
+    update(code, display => (display.labeled === labeled ? display : { ...display, labeled }));
+  };
+
   const setYearForAll = (year: number) => {
     state.value = withYearForAll(state.value, year);
     lastBatchYear.value = year;
@@ -264,6 +288,16 @@ export function useResourceLayers(
     moveLayer,
     setOpacity,
     setYear,
+    setLabeled,
+    labelTarget: code => {
+      const current = state.value;
+      const resource = current.catalog?.resources.get(code);
+      const display = current.displays.get(code);
+      if (!resource || !isLabelShown(display) || hiddenInScene.value || configErrors.value.has(code)) {
+        return null;
+      }
+      return labelTargetOf(resource, display, options.symbols?.overrideOf(code));
+    },
     batchYears,
     batchYear: computed(() =>
       lastBatchYear.value !== null && batchYears.value.includes(lastBatchYear.value) ? lastBatchYear.value : null
@@ -294,6 +328,15 @@ export function useResourceLayers(
     sceneSlot: codes =>
       hiddenInScene.value
         ? undefined
-        : lowestLayerOf(state.value, configErrors.value, codes, options.symbols?.overrideOf)
+        : lowestLayerOf(state.value, configErrors.value, codes, options.symbols?.overrideOf),
+    deriveLabelsGroup: emphasis =>
+      hiddenInScene.value
+        ? NO_RESOURCES
+        : resourceLabelsGroup({
+            state: state.value,
+            invalid: configErrors.value,
+            overrideOf: options.symbols?.overrideOf,
+            emphasis
+          })
   };
 }
