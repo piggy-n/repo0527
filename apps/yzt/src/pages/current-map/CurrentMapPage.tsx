@@ -54,7 +54,10 @@ import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 import { CurrentMapLayerPanel } from './layer-panel/CurrentMapLayerPanel';
+import { useCurrentLayers } from './layer-panel/useCurrentLayers';
 import { mapPageLayout } from './map-page-layout';
+import { TiltHint } from './TiltHint';
+import { tiltHintShown } from './tilt-hint';
 
 // 功能标签、独立详情和底图分开管理，功能与详情同列上下排列（ADR 0070）
 const FUNCTION_PANELS = ['boundaries', 'legend', 'region-locate', 'coordinate-locate'] as const;
@@ -84,10 +87,11 @@ export const CurrentMapPage = defineComponent({
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
     // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源和高亮，注记、边界在它上面
     // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面。
-    // MapLibre 引擎的三维模型挡住注记以下的分组，注记、边界、区划高亮和测量画在模型上面（ADR 0147 第 2 节）
+    // MapLibre 引擎的三维模型层在资源里：图层列表里排在最上面那个模型上面的资源画在模型上面，其余被模型挡住；高亮、区划遮罩
+    // 及以上永远画在模型上面（ADR 0161，取代 ADR 0147 第 2 节的静态位置）
     const map = provideMap({
       groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
-      sceneBelow: 'basemap-labels',
+      sceneBelow: 'selection',
       camera: JIANGSU_CAMERA,
       root: BASEMAP_STYLE_ROOT
     });
@@ -122,6 +126,8 @@ export const CurrentMapPage = defineComponent({
     // 三维模型（ADR 0081）：资源目录里列出模型，二维里也能加入（ADR 0157），所以进页面就读清单
     const sceneModelsQuery = useSceneModelsQuery(true);
     const models = useSceneModels(map, sceneModelsQuery.data);
+    // 图层里平铺的资源和模型（ADR 0161）：顺序就是叠放，面板显示和操作，地图按它放模型层
+    const layerList = useCurrentLayers(resources, models);
     // 地图数据的请求状态（ADR 0158）：资源图层、三维里的模型、底图（几个数据源合成一项）；状态栏右边的条目和当前图层的
     // 行内转圈用同一份。接口请求不算，它们各自有加载状态
     const requests = useRequestStatus(() => {
@@ -181,6 +187,8 @@ export const CurrentMapPage = defineComponent({
     // 识别只打开独立详情，不切走正在查看的功能标签
     const pick = useFeaturePick(map, resources, {
       scope: () => readyBoundary(region.state.value)?.geometry ?? null,
+      // 画在模型上面的资源点到模型时按鼠标下的地面识别（ADR 0161）
+      overModels: code => layerList.overModels.value.includes(code),
       onIdentifyStart: () => {
         sides.activate('right');
         detailOpen.value = true;
@@ -212,6 +220,19 @@ export const CurrentMapPage = defineComponent({
       measure: measure.deriveGroup
     });
     map.bindScene(models.deriveContent);
+    // 模型层插在画在模型上面的资源下面；没有时按 sceneBelow，在资源的最后（ADR 0161）
+    map.bindSceneSlot(() => resources.sceneSlot(layerList.overModels.value));
+    // 斜着看时提示二维和模型会错开、可以一键俯视（ADR 0161）
+    const camera = map.useCamera();
+    const tilted = computed(() =>
+      tiltHintShown({
+        scene: map.dimension.value === '3d',
+        pitch: camera.value.pitch,
+        overModels: resources.sceneSlot(layerList.overModels.value) !== undefined,
+        shownModel: layerList.shownModel.value
+      })
+    );
+    const lookDown = () => map.runCameraOperation(control => control.flyTo({ pitch: 0 }));
 
     // 功能入口按显示状态开关；关闭定位面板不清掉区划和位置点
     // 按点击时右边是否显示决定：窄屏时让给了左边就是重新显示，不是关闭
@@ -337,6 +358,7 @@ export const CurrentMapPage = defineComponent({
       return (
         <CurrentMapLayerPanel
           resources={resources}
+          current={layerList}
           symbols={symbols}
           layout={panelLayout}
           models={models}
@@ -390,6 +412,12 @@ export const CurrentMapPage = defineComponent({
             {scopeShown && (
               <div key="scope" class={styles.scope}>
                 <RegionScopeBar region={region} />
+              </div>
+            )}
+            {/* 斜着看时的提示在地图下方居中，排在面板前面：重叠时被面板盖住 */}
+            {tilted.value && scopeShown && (
+              <div key="tilt" class={styles.tilt}>
+                <TiltHint onTopDown={lookDown} />
               </div>
             )}
             <div key="left" class={[styles.left, underground && styles.noStatus]}>

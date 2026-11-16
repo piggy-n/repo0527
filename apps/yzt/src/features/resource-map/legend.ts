@@ -1,3 +1,4 @@
+import { Color } from '@maplibre/maplibre-gl-style-spec';
 import type { Resource, ResourceGeometry } from './catalog';
 import { type ClassItem, classItems, legacyItem, OTHER_ITEM } from './classification';
 import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
@@ -138,6 +139,21 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   }
   const { shape, fillColor: fill, strokeColor: stroke, strokeWidth } = symbol;
   return { geometry: 'circle', shape, fill, stroke, radius: sizePixels('circle', symbol.size), strokeWidth };
+}
+
+// 一个预览的填充有多不透明：只看面，花纹画在填充上面、不算
+const fillAlpha = (swatch: LegendSwatch) => (swatch.geometry === 'fill' ? (Color.parse(swatch.fill)?.a ?? 0) : 0);
+
+/**
+ * 面画在地图上的填充色里最大的不透明度（0～1，不含图层透明度）：统一符号看统一的填充，按属性配色看各个取值；线、点为 0。
+ * 当前图层判断不透明的面会不会把模型盖住（ADR 0161）
+ */
+export function fillOpacityOf(entry: LegendEntry): number {
+  if (entry.kind === 'symbol' || entry.mode === 'uniform') {
+    return fillAlpha(entry.swatch);
+  }
+  const swatches = entry.kind === 'values' ? entry.values.map(value => value.swatch) : [...entry.swatches.values()];
+  return Math.max(0, ...swatches.map(fillAlpha));
 }
 
 /** 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code */

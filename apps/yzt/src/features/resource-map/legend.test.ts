@@ -5,10 +5,12 @@ import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import {
+  fillOpacityOf,
   landuseItemLabel,
   landuseLegendItems,
   type LegendEntry,
   legendEntries,
+  legendEntry,
   SUMMARY_LIMITS,
   summaryItems,
   swatchOf
@@ -422,5 +424,32 @@ describe('landuseLegendItems', () => {
 
     expect(mangrove && landuseItemLabel(mangrove)).toBe('0303 红树林地');
     expect(legacy && landuseItemLabel(legacy)).toBe('城市用地');
+  });
+});
+
+// 目录里一个资源的图例条目画出的填充有多不透明
+function opacityOf(code: string, override?: ResourceSymbolOverride): number {
+  const resource = CATALOG.resources.get(code);
+  if (!resource) {
+    throw new Error(`目录里没有 ${code}`);
+  }
+  return fillOpacityOf(legendEntry(resource, 2022, override));
+}
+
+describe('fillOpacityOf（ADR 0161 的"盖住模型"）', () => {
+  it('面画出的填充色里最大的不透明度：默认的地类都不透明', () => {
+    expect(opacityOf('bgdc_dltb')).toBe(1);
+    // 一类改成半透明，其他仍不透明
+    expect(opacityOf('bgdc_dltb', { items: { '0101': { fillColor: 'rgba(255, 0, 0, 0.3)' } } })).toBe(1);
+  });
+
+  it('统一符号只看统一的填充；无填充是 0', () => {
+    expect(opacityOf('bgdc_dltb', { mode: 'uniform', uniform: { fillColor: 'rgba(255, 0, 0, 0.5)' } })).toBe(0.5);
+    expect(opacityOf('bgdc_dltb', { mode: 'uniform', uniform: { fillStyle: 'none' } })).toBe(0);
+  });
+
+  it('线、点不算', () => {
+    expect(opacityOf('csxhjctb_csnljsl')).toBe(0);
+    expect(opacityOf('csxhjctb_tyhdp')).toBe(0);
   });
 });

@@ -11,6 +11,7 @@ import {
   isDrawn,
   mergeDisplayState,
   isResourceBodyLayer,
+  lowestLayerOf,
   resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
@@ -186,6 +187,21 @@ describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
     expect(addedCodes(next)).toStrictEqual(['csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_dltb']);
     expect(next.order).toStrictEqual(['csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx']);
     expect(next.displays.get('csxhjctb_gyssp')).toMatchObject({ added: true, checked: true });
+  });
+
+  it('加入到给出的位置（ADR 0161）：整批插在已加入的资源里的第 at 位，超出时接在最后', () => {
+    const state = withAdded(initial, ['csxhjctb_hydl']);
+    expect(addedCodes(state)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb']);
+
+    const next = withAdded(state, ['csxhjctb_gyssp', 'bgdc_cjdcq'], 1);
+    expect(addedCodes(next)).toStrictEqual(['csxhjctb_hydl', 'csxhjctb_gyssp', 'bgdc_cjdcq', 'bgdc_dltb']);
+    expect(next.order.slice(4)).toStrictEqual(['bgdc_cjdcqjx']);
+    expect(addedCodes(withAdded(state, ['bgdc_cjdcqjx'], 9))).toStrictEqual([
+      'csxhjctb_hydl',
+      'bgdc_dltb',
+      'bgdc_cjdcqjx'
+    ]);
+    expect(() => withAdded(state, ['bgdc_cjdcqjx'], -1)).toThrow(RangeError);
   });
 
   it('移出：设置保留；移出后再加入，重新放到最前面并显示，透明度和年份沿用', () => {
@@ -456,6 +472,40 @@ describe('resourcesGroup', () => {
     const { sources, layers } = derive(checkAll(initial));
 
     expect(validateStyleMin({ version: 8, sources, layers: layers.slice() })).toStrictEqual([]);
+  });
+});
+
+describe('lowestLayerOf（ADR 0161 的插槽）', () => {
+  const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+  // 地类图斑的描边拆出来、水域线层按线型拆层：最下面那层不一定没有后缀
+  const overrides: Record<string, ResourceSymbolOverride> = {
+    bgdc_dltb: { items: { '0101': { fillStyle: 'dot', outlineWidth: 'L', outlineDash: 'dotted' } } },
+    csxhjctb_hydl: { mode: 'uniform', uniform: { dash: 'dashed' } }
+  };
+  const overrideOf = (code: string) => overrides[code];
+  const state = { ...checkAll(initial), order: ['csxhjctb_gyssp', 'csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx'] };
+  const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf });
+  // 分组里这个资源最下面的一层
+  const firstLayerOf = (code: string) =>
+    group.layers.find(item => 'source' in item && item.source === resourceSourceId(code))?.id;
+
+  it('给出的资源里画在地图上的、最下面那个资源的最下面一层，同 resourcesGroup', () => {
+    expect(lowestLayerOf(state, new Map(), ['csxhjctb_gyssp', 'csxhjctb_hydl'], overrideOf)).toBe(
+      firstLayerOf('csxhjctb_hydl')
+    );
+    expect(lowestLayerOf(state, new Map(), ['csxhjctb_gyssp', 'csxhjctb_hydl', 'bgdc_dltb'], overrideOf)).toBe(
+      firstLayerOf('bgdc_dltb')
+    );
+  });
+
+  it('隐藏的、校验没通过的跳过，往上找；都没画时为 undefined', () => {
+    const hidden = withDisplay(state, 'csxhjctb_hydl', { checked: false });
+    expect(lowestLayerOf(hidden, new Map(), ['csxhjctb_gyssp', 'csxhjctb_hydl'], overrideOf)).toBe(
+      'resources-csxhjctb_gyssp'
+    );
+    const invalid = new Map([['csxhjctb_gyssp', ['配置错误']]]);
+    expect(lowestLayerOf(hidden, invalid, ['csxhjctb_gyssp', 'csxhjctb_hydl'], overrideOf)).toBeUndefined();
+    expect(lowestLayerOf(state, new Map(), [], overrideOf)).toBeUndefined();
   });
 });
 

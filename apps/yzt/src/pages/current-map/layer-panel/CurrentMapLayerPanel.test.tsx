@@ -17,6 +17,7 @@ import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus
 import { required } from '@/shared/testing/required';
 import { LayerPopover } from '@/shared/map/layer-panel/LayerPopover';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
+import { type CurrentLayers, useCurrentLayers } from './useCurrentLayers';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -79,6 +80,7 @@ async function mountPanel({
 } = {}) {
   let owner: ResourceLayers | undefined;
   let models: SceneModels | undefined;
+  let current: CurrentLayers | undefined;
   let context: MapContext | undefined;
   const legendCodes: (string | null)[] = [];
   const sceneStatus = shallowRef<SceneStatus>(new Map());
@@ -101,12 +103,15 @@ async function mountPanel({
     const layers = useResourceLayers(map, { catalog, symbols, tileBase: 'http://localhost/tiles/' });
     const layout = useResourcePanelLayout();
     const sceneModels = useSceneModels({ ...map, sceneStatus }, MODELS);
+    const list = useCurrentLayers(layers, sceneModels);
     owner = layers;
     models = sceneModels;
+    current = list;
     context = map;
     return () => (
       <CurrentMapLayerPanel
         resources={layers}
+        current={list}
         symbols={symbols}
         layout={layout}
         models={sceneModels}
@@ -123,13 +128,14 @@ async function mountPanel({
   });
   const wrapper = mount(Page, { attachTo: document.body });
   await nextTick();
-  if (!owner || !models || !context) {
+  if (!owner || !models || !current || !context) {
     throw new Error('页面没有创建拥有者');
   }
   return {
     wrapper,
     owner,
     models,
+    current,
     map: context,
     sceneStatus,
     legendCodes,
@@ -178,6 +184,16 @@ const viewTabs = (wrapper: VueWrapper) =>
 async function showView(wrapper: VueWrapper, view: 'all' | 'models' | 'resources') {
   await wrapper.get(`[data-catalog-view="${view}"]`).trigger('click');
 }
+// 图层（下段）的标签（ADR 0161）：三维里才有
+const layerTabs = (wrapper: VueWrapper) =>
+  wrapper.findAll('[data-current-view]').map(item => item.attributes('aria-label'));
+async function showLayers(wrapper: VueWrapper, view: 'all' | 'models' | 'resources') {
+  await wrapper.get(`[data-current-view="${view}"]`).trigger('click');
+}
+// 图层里全部的行（资源、模型的键）
+const rowKeys = (wrapper: VueWrapper) =>
+  wrapper.findAll('[data-current-row]').map(item => item.attributes('data-current-row'));
+const coverOf = (wrapper: VueWrapper, code: string) => row(wrapper, code).find('[data-row-cover]').exists();
 
 afterEach(() => {
   // Element 的提示挂在 body 下，不归组件管
@@ -340,8 +356,8 @@ describe('CurrentMapLayerPanel', () => {
     expect(document.querySelector('[data-panel-menu]')).toBeNull();
   });
 
-  it('三维模型在目录最后、按市分组；加入后进"三维模型"组，资源、模型一起加时各自放在本组最上面（ADR 0157）', async () => {
-    const { wrapper, models } = await mountPanel();
+  it('三维模型在目录最后、按市分组；加入后和资源平铺：模型放在最上面，资源放在最上面那个模型的下面，选中最上面的新行（ADR 0161）', async () => {
+    const { wrapper, models, owner } = await mountPanel();
     await tool(wrapper, 'expand-all').trigger('click');
     const keys = wrapper.findAll('[data-catalog-node]').map(item => item.attributes('data-catalog-node'));
     expect(keys.slice(-4)).toStrictEqual(['model-root', 'model-city:320500', 'model:station', 'model:white']);
@@ -351,26 +367,37 @@ describe('CurrentMapLayerPanel', () => {
     await wrapper.get('[data-catalog-node="model:white"]').trigger('click', { ctrlKey: true });
     await tool(wrapper, 'add').trigger('click');
     expect(models.added.value).toStrictEqual(['white']);
-    expect(wrapper.findAll('[data-current-group]').map(group => group.attributes('data-current-group'))).toStrictEqual([
-      'layers',
-      'models'
-    ]);
-    expect(wrapper.findAll('[data-current-row]').map(item => item.attributes('data-current-row'))).toStrictEqual([
-      'resource:csxhjctb_lrdl',
+    // 没有组，一个列表
+    expect(wrapper.findAll('[role="listbox"]')).toHaveLength(1);
+    expect(rowKeys(wrapper)).toStrictEqual(['model:white', 'resource:csxhjctb_lrdl', 'resource:bgdc_dltb']);
+    expect(selectedRow(wrapper)).toBe('model:white');
+
+    // 地类图斑挪到模型上面以后，再加的资源还是放在模型下面（默认不盖住模型）
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    await node(wrapper, 'bgdc_cjdcq').trigger('click');
+    await tool(wrapper, 'add').trigger('click');
+    expect(rowKeys(wrapper)).toStrictEqual([
       'resource:bgdc_dltb',
-      'model:white'
+      'model:white',
+      'resource:bgdc_cjdcq',
+      'resource:csxhjctb_lrdl'
     ]);
-    expect(selectedRow(wrapper)).toBe('csxhjctb_lrdl');
+    // 资源的拥有者里也是这个先后，地图按它画
+    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_lrdl']);
+    expect(selectedRow(wrapper)).toBe('bgdc_cjdcq');
   });
 
-  it('二维里模型组变淡、标"仅三维"：不能定位、不能漫游，没有透明度和图例，移动只改列表顺序；勾选、移动、移除照常', async () => {
-    const { wrapper, models } = await mountPanel();
-    models.add(['white', 'station']);
+  it('二维里模型行留在原位、变淡，悬停说明"切换到三维后显示"，不写"仅三维"：不能定位、不能漫游，没有透明度和图例；勾选、移动、移除照常', async () => {
+    const { wrapper, models, current } = await mountPanel();
+    current.add(['model:white', 'model:station']);
     await nextTick();
-    const group = wrapper.get('[data-current-group="models"]');
-    expect(group.classes().join(' ')).toMatch(/dimmed/);
-    expect(group.text()).toContain('仅三维');
+    expect(rowKeys(wrapper)).toStrictEqual(['model:white', 'model:station', 'resource:bgdc_dltb']);
     const station = () => wrapper.get('[data-current-row="model:station"]');
+    expect(station().classes().join(' ')).toMatch(/dimmed/);
+    expect(row(wrapper, 'bgdc_dltb').classes().join(' ')).not.toMatch(/dimmed/);
+    expect(station().get('[data-row-text]').attributes('data-row-hint')).toBe('切换到三维后显示');
+    expect(wrapper.text()).not.toContain('仅三维');
 
     const locate = vi.spyOn(models, 'locate');
     await station().trigger('click');
@@ -481,13 +508,14 @@ describe('CurrentMapLayerPanel', () => {
     expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
   });
 
-  it('三维里模型组照常：选中模型时定位能用，交给拥有者飞过去（还没加载完的等加载完）', async () => {
+  it('三维里模型行照常：不变淡，选中模型时定位能用，交给拥有者飞过去（还没加载完的等加载完）', async () => {
     const { wrapper, models, map } = await mountPanel();
     models.add(['station']);
     map.setDimension('3d');
     await nextTick();
-    const group = wrapper.get('[data-current-group="models"]');
-    expect(group.text()).not.toContain('仅三维');
+    const station = wrapper.get('[data-current-row="model:station"]');
+    expect(station.classes().join(' ')).not.toMatch(/dimmed/);
+    expect(station.find('[data-row-hint]').exists()).toBe(false);
     const locate = vi.spyOn(models, 'locate');
 
     await wrapper.get('[data-current-row="model:station"]').trigger('click');
@@ -495,14 +523,16 @@ describe('CurrentMapLayerPanel', () => {
     expect(locate).toHaveBeenCalledExactlyOnceWith('station');
   });
 
-  it('上下方向键跨组换选中：二维图层的最后一行往下是第一个模型', async () => {
+  it('上下方向键在资源和模型之间换选中：一个列表，到头时不动', async () => {
     const { wrapper, models } = await mountPanel();
     models.add(['white']);
     await nextTick();
     await row(wrapper, 'bgdc_dltb').trigger('click');
-    await row(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'ArrowDown' });
+    await row(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'ArrowUp' });
     expect(selectedRow(wrapper)).toBe('model:white');
     await wrapper.get('[data-current-row="model:white"]').trigger('keydown', { key: 'ArrowUp' });
+    expect(selectedRow(wrapper)).toBe('model:white');
+    await wrapper.get('[data-current-row="model:white"]').trigger('keydown', { key: 'ArrowDown' });
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
   });
 
@@ -548,8 +578,8 @@ describe('CurrentMapLayerPanel', () => {
     expect(owner.state.value.displays.get('bgdc_dltb')?.year).toBe(2024);
   });
 
-  it('键盘的 Delete 移除以后焦点到新选中的行；选中的行在收起的组里时 Tab 落到第一行（2026-11-14 审查发现）', async () => {
-    const { wrapper, owner, models } = await mountPanel();
+  it('键盘的 Delete 移除以后焦点到新选中的行；选中的行被筛掉时没有选中，Tab 落到看得见的第一行（2026-11-14 审查发现）', async () => {
+    const { wrapper, owner, models, map } = await mountPanel();
     owner.add(['bgdc_cjdcq']);
     models.add(['white']);
     await nextTick();
@@ -560,10 +590,13 @@ describe('CurrentMapLayerPanel', () => {
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
     expect(document.activeElement).toBe(row(wrapper, 'bgdc_dltb').element);
 
-    // 选中的模型所在的组收起：二维图层的第一行能用 Tab 进入
+    // 选中的模型被筛掉：没有选中，二维资源的第一行能用 Tab 进入
+    map.setDimension('3d');
+    await nextTick();
     await wrapper.get('[data-current-row="model:white"]').trigger('click');
-    await wrapper.get('[data-current-group="models"] button[aria-expanded]').trigger('click');
+    await showLayers(wrapper, 'resources');
     expect(wrapper.find('[data-current-row="model:white"]').exists()).toBe(false);
+    expect(selectedRow(wrapper)).toBeNull();
     expect(row(wrapper, 'bgdc_dltb').attributes('tabindex')).toBe('0');
   });
 
@@ -580,19 +613,146 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()).toBeNull();
   });
 
-  it('只有二维图层或只有三维模型时不显示组标题，行照常显示；两组都有时才有标题（用户 2026-11-15）', async () => {
-    const { wrapper, owner, models } = await mountPanel();
-    expect(wrapper.find('[data-current-group="layers"] button[aria-expanded]').exists()).toBe(false);
-    expect(wrapper.find('[data-current-row="resource:bgdc_dltb"]').exists()).toBe(true);
-
+  it('三维里图层标题下面有"全部、二维资源、三维模型"的标签，带数量，默认"全部"；二维里没有，切换维度回到"全部"（ADR 0161）', async () => {
+    const { wrapper, models, map } = await mountPanel();
     models.add(['white']);
     await nextTick();
-    expect(wrapper.findAll('[data-current-group] > button[aria-expanded]')).toHaveLength(2);
+    expect(layerTabs(wrapper)).toStrictEqual([]);
 
-    owner.remove(['bgdc_dltb']);
+    map.setDimension('3d');
     await nextTick();
-    expect(wrapper.find('[data-current-group="models"] > button[aria-expanded]').exists()).toBe(false);
-    expect(wrapper.find('[data-current-row="model:white"]').exists()).toBe(true);
+    expect(layerTabs(wrapper)).toStrictEqual(['全部 2 项', '二维资源 1 项', '三维模型 1 项']);
+    expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
+    expect(wrapper.get('[data-panel-section="current"] [role="tablist"]').attributes('aria-label')).toBe('图层显示的内容');
+
+    await showLayers(wrapper, 'models');
+    expect(rowKeys(wrapper)).toStrictEqual(['model:white']);
+    await showLayers(wrapper, 'resources');
+    expect(rowKeys(wrapper)).toStrictEqual(['resource:bgdc_dltb']);
+
+    // 筛掉了全部的行：说明这一类没有
+    models.remove(['white']);
+    await showLayers(wrapper, 'models');
+    expect(wrapper.get('[data-panel-section="current"]').text()).toContain('图层里没有三维模型');
+
+    map.setDimension('2d');
+    await nextTick();
+    expect(layerTabs(wrapper)).toStrictEqual([]);
+    map.setDimension('3d');
+    await nextTick();
+    expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
+  });
+
+  it('筛选时也能排序：按看得见的行算，上移放到越过的那一行正上方，被筛掉的行原地不动（ADR 0161）', async () => {
+    const { wrapper, owner, current, map } = await mountPanel();
+    owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    current.add(['model:white']);
+    map.setDimension('3d');
+    await nextTick();
+    // 地类图斑挪到最上面：[地类图斑, 白膜, 村级调查区, 水域线层]
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    expect(rowKeys(wrapper)).toStrictEqual([
+      'resource:bgdc_dltb',
+      'model:white',
+      'resource:bgdc_cjdcq',
+      'resource:csxhjctb_hydl'
+    ]);
+
+    // 只看二维资源：水域线层上移一行，放到村级调查区的正上方，模型不动（按全部的行算会越过模型）
+    await showLayers(wrapper, 'resources');
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    expect(tool(wrapper, 'move-down').attributes('aria-disabled')).toBe('true');
+    await tool(wrapper, 'move-up').trigger('click');
+    expect(rowKeys(wrapper)).toStrictEqual(['resource:bgdc_dltb', 'resource:csxhjctb_hydl', 'resource:bgdc_cjdcq']);
+    await showLayers(wrapper, 'all');
+    expect(rowKeys(wrapper)).toStrictEqual([
+      'resource:bgdc_dltb',
+      'model:white',
+      'resource:csxhjctb_hydl',
+      'resource:bgdc_cjdcq'
+    ]);
+
+    // Alt 加下移同样按看得见的行：地类图斑下移一行，放到水域线层的正下方，越过了模型
+    await showLayers(wrapper, 'resources');
+    await row(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'ArrowDown', altKey: true });
+    await showLayers(wrapper, 'all');
+    expect(rowKeys(wrapper)).toStrictEqual([
+      'model:white',
+      'resource:csxhjctb_hydl',
+      'resource:bgdc_dltb',
+      'resource:bgdc_cjdcq'
+    ]);
+    // 资源的拥有者里也是这个先后
+    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
+  });
+
+  it('筛选着加入会被筛掉的行、在目录里定位筛掉的行：回到"全部"再选中（ADR 0161）', async () => {
+    const { wrapper, models, map } = await mountPanel();
+    map.setDimension('3d');
+    await nextTick();
+    await showLayers(wrapper, 'models');
+    await showView(wrapper, 'resources');
+    await tool(wrapper, 'expand-all').trigger('click');
+    await node(wrapper, 'bgdc_cjdcq').trigger('click');
+    await tool(wrapper, 'add').trigger('click');
+    expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
+    expect(selectedRow(wrapper)).toBe('bgdc_cjdcq');
+
+    models.add(['white']);
+    await showLayers(wrapper, 'models');
+    await node(wrapper, 'bgdc_dltb').trigger('dblclick');
+    expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+  });
+
+  it('三维里画在模型上面、接近不透明的面，名称后面写"盖住模型"，悬停说明调低透明度（S4，ADR 0161）', async () => {
+    const { wrapper, owner, models, map } = await mountPanel();
+    owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    models.add(['white']);
+    await nextTick();
+    // [白膜, 村级调查区, 水域线层, 地类图斑]：都在模型下面
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    expect(rowKeys(wrapper)).toStrictEqual([
+      'resource:bgdc_cjdcq',
+      'resource:csxhjctb_hydl',
+      'resource:bgdc_dltb',
+      'model:white'
+    ]);
+    // 二维里不提示
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(false);
+
+    map.setDimension('3d');
+    await nextTick();
+    // 地类图斑不透明：提示；线不算；村级调查区还没到最小显示级别（8 级）
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(true);
+    expect(row(wrapper, 'bgdc_dltb').get('[data-row-cover]').text()).toBe('盖住模型');
+    expect(coverOf(wrapper, 'csxhjctb_hydl')).toBe(false);
+    expect(coverOf(wrapper, 'bgdc_cjdcq')).toBe(false);
+
+    // 有效不透明度低于 0.8、隐藏、模型都隐藏着、挪到模型下面时不提示
+    owner.setOpacity('bgdc_dltb', 0.7);
+    await nextTick();
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(false);
+    owner.setOpacity('bgdc_dltb', 0.8);
+    await nextTick();
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(true);
+    models.setVisible('white', false);
+    await nextTick();
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(false);
+    models.setVisible('white', true);
+    owner.setVisible('bgdc_dltb', false);
+    await nextTick();
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(false);
+    owner.setVisible('bgdc_dltb', true);
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-bottom').trigger('click');
+    expect(coverOf(wrapper, 'bgdc_dltb')).toBe(false);
   });
 
   it('目录里右键分类：菜单作用于它下面的项，没有定位；分类不能选中（用户 2026-11-15）', async () => {
@@ -616,19 +776,18 @@ describe('CurrentMapLayerPanel', () => {
     expect(owner.state.value.displays.get('bgdc_cjdcq')?.added).toBe(true);
   });
 
-  it('二维里只有三维模型时不显示组标题，"仅三维"和说明单独一行；三维里没有这一行（2026-11-15 审查发现）', async () => {
+  it('二维里图层只剩三维模型时，列表上面一行说明；有二维资源、三维里没有这一行（2026-11-15 审查发现，2026-11-16 改成平铺）', async () => {
     const { wrapper, owner, models, map } = await mountPanel();
-    owner.remove(['bgdc_dltb']);
     models.add(['white']);
     await nextTick();
-    expect(wrapper.find('[data-current-group="models"] > button[aria-expanded]').exists()).toBe(false);
-    expect(wrapper.find('[data-current-group="models"] [data-group-note]').exists()).toBe(true);
-    const note = wrapper.get('[data-current-group="models"] [data-group-note]');
-    expect(note.text()).toBe('仅三维切换到三维后可以定位、漫游');
+    expect(wrapper.find('[data-list-note]').exists()).toBe(false);
+    owner.remove(['bgdc_dltb']);
+    await nextTick();
+    expect(wrapper.get('[data-list-note]').text()).toBe('三维模型切换到三维后显示，可以定位、漫游');
 
     map.setDimension('3d');
     await nextTick();
-    expect(wrapper.find('[data-group-note]').exists()).toBe(false);
+    expect(wrapper.find('[data-list-note]').exists()).toBe(false);
   });
 
   it('右键菜单里不能用的定位写出原因：二维里的模型"切换到三维后可用"，到了可见级别的二维图层"已在可见级别"（2026-11-15 审查发现）', async () => {
@@ -740,17 +899,19 @@ describe('CurrentMapLayerPanel', () => {
     expect(roamItem().textContent).toBe('漫游显示后可用');
   });
 
-  it('选中的行所在的组收起时，浮层的箭头对着组的标题（2026-11-15 审查发现）', async () => {
-    const { wrapper, models } = await mountPanel();
+  it('浮层的箭头对着选中的行；选中的行被筛掉时没有选中，浮层关闭', async () => {
+    const { wrapper, models, map } = await mountPanel();
     models.add(['white']);
+    map.setDimension('3d');
     await nextTick();
     await row(wrapper, 'bgdc_dltb').trigger('click');
     await tool(wrapper, 'legend').trigger('click');
     const anchor = () => wrapper.getComponent(LayerPopover).props('anchor')();
     expect(anchor()).toBe(row(wrapper, 'bgdc_dltb').element);
 
-    await wrapper.get('[data-current-group="layers"] > button[aria-expanded]').trigger('click');
-    expect(anchor()).toBe(wrapper.get('[data-current-group="layers"] > button[aria-expanded]').element);
+    await showLayers(wrapper, 'models');
+    expect(selectedRow(wrapper)).toBeNull();
+    expect(popover()).toBeNull();
   });
 
   it('图例浮层里正在编辑一类时点标题上的样式设置：换成整层的配置，再点一次回到浏览（2026-11-14 审查发现）', async () => {
@@ -893,22 +1054,14 @@ describe('CurrentMapLayerPanel', () => {
       expect(document.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('图层的菜单');
     });
 
-    it('图层里三维模型组在上，方向键先走模型；回到二维换回来', async () => {
+    it('图层的顺序就是叠放，不随维度变：二维、三维里一样（ADR 0161 取代方案乙的"模型组在上"）', async () => {
       const { wrapper, models, map } = await mountPanel();
       models.add(['white']);
+      await nextTick();
+      expect(rowKeys(wrapper)).toStrictEqual(['model:white', 'resource:bgdc_dltb']);
       map.setDimension('3d');
       await nextTick();
-      const groups = () => wrapper.findAll('[data-current-group]').map(group => group.attributes('data-current-group'));
-      expect(groups()).toStrictEqual(['models', 'layers']);
-      await wrapper.get('[data-current-row="model:white"]').trigger('click');
-      await wrapper.get('[data-current-row="model:white"]').trigger('keydown', { key: 'ArrowDown' });
-      expect(selectedRow(wrapper)).toBe('bgdc_dltb');
-      await row(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'ArrowUp' });
-      expect(selectedRow(wrapper)).toBe('model:white');
-
-      map.setDimension('2d');
-      await nextTick();
-      expect(groups()).toStrictEqual(['layers', 'models']);
+      expect(rowKeys(wrapper)).toStrictEqual(['model:white', 'resource:bgdc_dltb']);
     });
 
     it('模型清单读不到时，"三维模型""全部"里提示失败，只看资源时不提示；"全部""三维模型"不写数量', async () => {

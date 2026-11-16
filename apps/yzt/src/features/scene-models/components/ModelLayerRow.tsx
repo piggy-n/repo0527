@@ -69,6 +69,20 @@ export const ModelLayerRow = defineComponent({
       return null;
     };
 
+    // 名称：悬停看全称、所在的市和类型；二维里模型行变淡、留在原位，悬停说明"切换到三维后显示"（用户 2026-11-16，ADR 0161）
+    const renderName = (name: string, title: string) =>
+      props.scene ? (
+        <span class={rowStyles.name} title={title} data-row-text data-row-dim>
+          {name}
+        </span>
+      ) : (
+        <ElTooltip {...MAP_TOOLTIP_PROPS} content="切换到三维后显示" placement="top">
+          <span class={rowStyles.name} data-row-text data-row-dim data-row-hint="切换到三维后显示">
+            {name}
+          </span>
+        </ElTooltip>
+      );
+
     const renderTrail = () => {
       const current = model.value;
       if (!current) {
@@ -125,14 +139,7 @@ export const ModelLayerRow = defineComponent({
         <span class={rowStyles.symbol} data-row-symbol data-row-dim>
           <SvgIcon name="model-3d" size={16} />
         </span>,
-        <span
-          class={rowStyles.name}
-          title={`${name} · ${current.cityName} · ${MODEL_KIND_LABELS[current.kind]}`}
-          data-row-text
-          data-row-dim
-        >
-          {name}
-        </span>,
+        renderName(name, `${name} · ${current.cityName} · ${MODEL_KIND_LABELS[current.kind]}`),
         <span class={rowStyles.status}>{renderStatus(name)}</span>,
         <span class={rowStyles.fill} />,
         renderTrail(),

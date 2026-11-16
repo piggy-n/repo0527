@@ -211,7 +211,13 @@ function once<T>(compute: () => T): () => T {
   return () => (cached ??= { value: compute() }).value;
 }
 
-// 一种几何类型（容差由它决定）在一次点选里的范围：同类型的资源共用，求交、整理只算一次
+// 点选围着的屏幕点，以及判断它在不在区划里用的拾取结果
+interface ClickAnchor {
+  readonly at: ScreenPoint;
+  readonly located: PickResult;
+}
+
+// 一种几何类型（容差由它决定）在一次点选里的范围：同一个锚点、同类型的资源共用，求交、整理只算一次
 interface ClickArea {
   /** 和区划求交的范围；没有区划范围时为 null */
   readonly area: RegionScope | null;
@@ -232,8 +238,9 @@ const groundPicker =
  * 地图移动不影响结果。资源从上到下，遇到渲染要素的结果或范围太复杂时停下（下面的资源不会用到，同框选）；
  * 既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
  * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交。
- * 三维里点到模型上时查模型脚下（ADR 0157 的规则甲）：命中点正下方的地面投影回屏幕，渲染要素、容差框都围着这一点，
- * 四角只打地面；模型本身永远不是结果
+ * 三维里点到模型上时（ADR 0157 的规则甲）：画在模型下面的资源查模型脚下，命中点正下方的地面投影回屏幕，渲染要素、容差框都围着
+ * 这一点；画在模型上面的资源（ADR 0161）按鼠标下的地面识别，围着点击位置、区划按只打地面的拾取判断。四角都只打地面；
+ * 模型本身永远不是结果
  */
 export function planIdentify(
   targets: readonly PickResource[],
@@ -247,7 +254,8 @@ export function planIdentify(
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null,
-  markOf?: (target: PickResource) => PointMarkOf | null
+  markOf?: (target: PickResource) => PointMarkOf | null,
+  overModels?: (target: PickResource) => boolean
 ): IdentifyTask[] | null;
 export function planIdentify(
   targets: readonly PickResource[],
@@ -255,39 +263,57 @@ export function planIdentify(
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null = null,
-  markOf: (target: PickResource) => PointMarkOf | null = () => null
+  markOf: (target: PickResource) => PointMarkOf | null = () => null,
+  overModels: (target: PickResource) => boolean = () => false
 ): IdentifyTask[] | null {
   const pick = groundPicker(view);
   const clicked = view.pick(point);
-  if (scope && (clicked.kind !== 'hit' || !scopeContains(scope, clicked.lngLat))) {
+  const onModel = clicked.kind === 'hit' && clicked.surface === 'model';
+  // 两种锚点：模型脚下的地面（投影不到时，如在相机背后，仍用点击位置）和鼠标下的地面；没点到模型时是同一个
+  const foot: ClickAnchor = { at: (onModel && view.project(clicked.lngLat)) || point, located: clicked };
+  const ground: ClickAnchor = onModel ? { at: point, located: pick(point) } : foot;
+  const anchorOf = (target: PickResource) => (overModels(target) ? ground : foot);
+  const inScope = ({ located }: ClickAnchor) =>
+    !scope || (located.kind === 'hit' && scopeContains(scope, located.lngLat));
+  // 点击位置不在区划里（遮罩上）：用到的锚点都在区划外时不识别；没有资源时按模型脚下
+  const anchors = new Set(targets.length > 0 ? targets.map(anchorOf) : [foot]);
+  if (![...anchors].some(inScope)) {
     return null;
   }
-  // 识别围着的屏幕点：点到模型时是模型脚下的地面，投影不到时（相机背后）仍用点击位置
-  const anchor = (clicked.kind === 'hit' && clicked.surface === 'model' && view.project(clicked.lngLat)) || point;
-  const pixelSize = once(() => pixelSizeAt(anchor, pick));
-  const areas = new Map<ResourceGeometry, ClickArea>();
-  const areaOf = (type: ResourceGeometry): ClickArea => {
-    const cached = areas.get(type);
+  // 同一个锚点、同一种几何类型（容差由它决定）的资源共用范围，求交、整理只算一次
+  const areas = new Map<ClickAnchor, Map<ResourceGeometry, ClickArea>>();
+  const pixelSizes = new Map<ClickAnchor, () => ReturnType<typeof pixelSizeAt>>();
+  const areaOf = (anchor: ClickAnchor, type: ResourceGeometry): ClickArea => {
+    const byType = areas.get(anchor) ?? new Map<ResourceGeometry, ClickArea>();
+    areas.set(anchor, byType);
+    const cached = byType.get(type);
     if (cached) {
       return cached;
     }
+    const pixelSize = pixelSizes.get(anchor) ?? once(() => pixelSizeAt(anchor.at, pick));
+    pixelSizes.set(anchor, pixelSize);
     const tolerance = PICK_TOLERANCES[type];
     // 求交范围：面只取包含点击位置的，点击位置在区划里，用整个区划过滤；线、点用容差框和区划的交集
-    const square = tolerance > 0 ? screenBoxPolygon(toleranceBox(anchor, tolerance), pick) : null;
+    const square = tolerance > 0 ? screenBoxPolygon(toleranceBox(anchor.at, tolerance), pick) : null;
     const area = scope && (tolerance === 0 ? scope : square && clipToScope(square, scope));
     const created: ClickArea = {
       area,
-      geometry: once(() => identifyGeometry(type, anchor, pick)),
+      geometry: once(() => identifyGeometry(type, anchor.at, pick)),
       prepared: area && once(() => queryGeometry(area, pixelSize()))
     };
-    areas.set(type, created);
+    byType.set(type, created);
     return created;
   };
   const tasks: IdentifyTask[] = [];
   for (const target of targets) {
     const { geometry: type, code } = target.resource;
     const tolerance = PICK_TOLERANCES[type];
-    const { area, geometry, prepared } = areaOf(type);
+    const anchorPoint = anchorOf(target);
+    if (!inScope(anchorPoint)) {
+      continue;
+    }
+    const anchor = anchorPoint.at;
+    const { area, geometry, prepared } = areaOf(anchorPoint, type);
     if (scope && !area) {
       continue;
     }

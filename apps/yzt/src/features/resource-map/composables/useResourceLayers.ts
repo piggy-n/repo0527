@@ -19,6 +19,7 @@ import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
   isDrawn,
+  lowestLayerOf,
   mergeDisplayState,
   withAdded,
   withMoved,
@@ -52,10 +53,10 @@ export interface ResourceLayers {
   readonly minzoomOf: (code: string) => number | undefined;
   /** 以下操作遇到目录里没有的资源都抛错 */
   /**
-   * 加入当前地图（ADR 0157）：没加入的按给出的先后放到最前面并显示，已加入的不动；只替换一次状态。
-   * 调用方按目录的先后给出，一次加多个时整批在最前
+   * 加入当前地图（ADR 0157、0161）：没加入的按给出的先后整批插到已加入的资源里的第 at 位（默认最前）并显示，已加入的不动；
+   * 只替换一次状态。调用方按目录的先后给出
    */
-  readonly add: (codes: readonly string[]) => void;
+  readonly add: (codes: readonly string[], at?: number) => void;
   /** 移出当前地图，透明度、年份等设置保留，再加入时沿用；没加入的忽略 */
   readonly remove: (codes: readonly string[]) => void;
   /** 当前图层里的显示、隐藏：只对已加入的资源起作用 */
@@ -94,6 +95,11 @@ export interface ResourceLayers {
    */
   readonly pointMark: (code: string, zoom: number) => PointMarkOf | null;
   readonly deriveGroup: () => StyleGroup;
+  /**
+   * 三维模型层的插槽（ADR 0161）：给出的资源（从上到下）里画在地图上的、最下面那个的最下面一层；都没画、三维里不显示资源图层时
+   * 为 undefined。页面交给 bindSceneSlot，也用它判断有没有二维图层画在模型上面
+   */
+  readonly sceneSlot: (codes: readonly string[]) => string | undefined;
 }
 
 export interface ResourceLayersOptions {
@@ -196,8 +202,8 @@ export function useResourceLayers(
     }
   };
 
-  const add = (codes: readonly string[]) => {
-    state.value = withAdded(state.value, codes);
+  const add = (codes: readonly string[], at?: number) => {
+    state.value = withAdded(state.value, codes, at);
   };
 
   const remove = (codes: readonly string[]) => {
@@ -284,6 +290,10 @@ export function useResourceLayers(
             invalid: configErrors.value,
             tileBase,
             overrideOf: options.symbols?.overrideOf
-          })
+          }),
+    sceneSlot: codes =>
+      hiddenInScene.value
+        ? undefined
+        : lowestLayerOf(state.value, configErrors.value, codes, options.symbols?.overrideOf)
   };
 }
