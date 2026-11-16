@@ -66,7 +66,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 真实引擎的测试 | 依赖真实 MapLibre 或真实布局的少量用例用 Vitest 浏览器模式，只用本地数据 | 0040 | [vite-config.md](../config/vite-config.md) |
 | 相机操作与异步 | 用户发起的定位是一次操作，用信号判断是否作废；操作对象的 `run` 负责等待与再确认；可替换操作只认最新（`LatestController`）；revision / operation / version 各有一个意思 | 0038（第 1、3 条由 0039 修正）、0039 | [map-vue.md](map-vue.md)"相机操作"、[utils.md](utils.md) |
 | 点/框选的交互 | 十字光标、跟随提示；关掉拖动平移的工具声明 `panModifier`，按住 Ctrl / ⌘ 临时拖动地图；工具要接管按在手柄上的拖动时声明 `capturesPress` | 0056、0122 | [shared-map.md](shared-map.md)、[map-core.md](map-core.md) |
-| 现状底图的界面 | 功能标签与独立详情同列排布、底图 Popover、紧凑图例与编辑视图、面板标题、指北针、状态栏在左下角和右边的请求状态、资源图层面板（上段"资源"、下段"图层"）；以设计文档"已确认的界面细节"为准 | 0057～0060、0066～0074、0094～0096、0102、0116、0157、0158、0159 | [current-map-reference.md](../design/current-map-reference.md) |
+| 现状底图的界面 | 功能标签与独立详情同列排布、底图 Popover、紧凑图例与编辑视图、面板标题、指北针、状态栏在左下角和右边的请求状态、资源图层面板（上段"资源"、下段"图层"，图层平铺成一个列表、三维里有筛选标签、"盖住模型"和斜着看时的提示）、标注浮层；以设计文档"已确认的界面细节"为准 | 0057～0060、0066～0074、0094～0096、0102、0116、0157、0158、0159、0160、0161 | [current-map-reference.md](../design/current-map-reference.md) |
 | 控制栏与边界入口 | 不支持三维的地图不显示 2D/3D；底图入口是 `BasemapCard`；除现状底图外的地图页在控制栏放行政区边界入口 | 0111、0128 | [shared-map.md](shared-map.md) |
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
 | 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），默认关；陆地全省一种颜色；地名和资源标注一样不写 glyphs、用普惠体在本地画 | 0133、0134、0146、0160 | [shared-map.md](shared-map.md) |

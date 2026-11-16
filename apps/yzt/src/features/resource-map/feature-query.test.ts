@@ -615,6 +615,29 @@ describe('planIdentify', () => {
     expect(planIdentify([DLTB], { x: 50, y: 20 }, 12, view, scope, () => null, over)).toStrictEqual([]);
   });
 
+  it('点到模型、鼠标下的地面在区划外时，遮罩上的标注文字也不识别（标注在遮罩下面，ADR 0160、0161）', () => {
+    // 文字所属的要素在区划里，只靠"先看鼠标下的地面、再查文字"的先后挡住
+    const { view, queries } = sceneView([
+      onPointLayer('resource-labels-csxhjctb_gyssp', 'a', { type: 'Point', coordinates: [0.5, 0.6] })
+    ]);
+    const scope = rect(0.4, 0.5, 0.7, 0.7);
+
+    expect(planIdentify([POINTS], { x: 50, y: 20 }, 16, view, scope, CIRCLE_MARK, () => false, () => true)).toBeNull();
+    expect(queries).toStrictEqual([]);
+  });
+
+  it('点到模型时标注文字在点击位置查，不在模型脚下查（文字画在模型上面，ADR 0160、0161）', () => {
+    const { view, queries } = sceneView([
+      onPointLayer('resource-labels-csxhjctb_gyssp', 'a', { type: 'Point', coordinates: [0.5, 0.2] })
+    ]);
+
+    const tasks = planIdentify([POINTS], { x: 50, y: 20 }, 16, view, null, CIRCLE_MARK, () => false, () => true);
+
+    expect(queries[0]?.[0]).toStrictEqual({ x: 50, y: 20 });
+    expect(kindsOf(tasks ?? [])).toStrictEqual([['csxhjctb_gyssp', 'rendered']]);
+    expect(candidateSummary(tasks?.[0])).toStrictEqual([['a', 0]]);
+  });
+
   it('三维里点在地面上照常围着点击位置；容差框的角落在模型上时取模型后面的地面', () => {
     const { view, queries } = sceneView([]);
 
