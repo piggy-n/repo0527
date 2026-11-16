@@ -245,14 +245,14 @@ describe('资源的标注（ADR 0160）', () => {
     };
     const click = aboveFirstSchool(ctx.toolView);
 
-    const [withLabels] = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, () => true) ?? [];
+    const [withLabels] = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, undefined, () => true) ?? [];
     const picked = withLabels?.kind === 'rendered' ? withLabels.candidates.map(({ guid }) => guid) : [];
     expect(picked).toStrictEqual([guidOf(1)]);
 
     const cleared = nextIdle(ctx.map, '去掉标注后渲染完成');
     ctx.session.style.setGroup('resource-labels', { sources: {}, layers: [] });
     await cleared;
-    expect(planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, () => true)).toStrictEqual([]);
+    expect(planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, undefined, () => true)).toStrictEqual([]);
   });
 
   it('面板里地类图斑在学校上面时，点学校名称的文字照样选中学校：文字画在所有资源上面', async () => {
@@ -265,7 +265,7 @@ describe('资源的标注（ADR 0160）', () => {
     };
     const click = aboveFirstSchool(ctx.toolView);
 
-    const tasks = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, () => true) ?? [];
+    const tasks = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, undefined, () => true) ?? [];
     const summary = tasks.map(task => [
       task.target.resource.code,
       task.kind === 'rendered' ? task.candidates.map(({ guid }) => guid) : []
