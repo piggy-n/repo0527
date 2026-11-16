@@ -141,6 +141,8 @@ describe('SymbolEditor', () => {
       const { wrapper, symbols } = mountEditor(code);
       const button = customButton(wrapper);
       expect(button.text()).toBe('自定义');
+      // 主题的变体：项目字体，按下时半粗
+      expect(button.classes()).toContain('button-inline');
       expect(button.attributes('aria-label')).toBe(name);
       expect(button.element.closest('[role="radiogroup"]')).toBeNull();
       expect(button.attributes('aria-pressed')).toBe('false');
