@@ -487,6 +487,49 @@ describe('planIdentify', () => {
     expect(picks.slice(1).every(options => options?.ground === true)).toBe(true);
   });
 
+  it('画在模型上面的资源按鼠标下的地面识别（ADR 0161），画在下面的照旧查模型脚下：同一次点选分别取锚点', () => {
+    const { view, queries } = sceneView([]);
+    const over = (target: PickResource) => target === LCTL || target === HYDL;
+
+    const tasks = planIdentify([LCTL, HYDL, DLTB], { x: 50, y: 20 }, 16, view, null, () => null, over);
+
+    // 鼠标下的容差框、模型脚下的点
+    const square = { from: { x: 42, y: 12 }, to: { x: 58, y: 28 } };
+    expect(queries).toStrictEqual([
+      [square, { sources: [LCTL.sourceId], withGeometry: true }],
+      [square, { sources: [HYDL.sourceId], withGeometry: true }],
+      [{ x: 50, y: 60 }, { sources: [DLTB.sourceId], withGeometry: false }]
+    ]);
+    expect(tasks).toStrictEqual([
+      { kind: 'server', target: HYDL, geometry: groundBox(square) },
+      { kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0.5, 0.6] } }
+    ]);
+  });
+
+  it('鼠标下的地面在区划外时点在遮罩上（遮罩一直盖在模型上面，ADR 0161）：整次不识别，模型脚下在区划里也一样', () => {
+    const { view, queries } = sceneView([]);
+    const over = (target: PickResource) => target === HYDL;
+    // 区划里有模型脚下 (0.5, 0.6)，没有鼠标下的地面 (0.5, 0.2)
+    const scope = rect(0.4, 0.5, 0.7, 0.7);
+
+    expect(planIdentify([HYDL, DLTB], { x: 50, y: 20 }, 12, view, scope, () => null, over)).toBeNull();
+    expect(planIdentify([DLTB], { x: 50, y: 20 }, 12, view, scope, () => null, over)).toBeNull();
+    expect(planIdentify([], { x: 50, y: 20 }, 12, view, scope, () => null, over)).toBeNull();
+    expect(queries).toStrictEqual([]);
+  });
+
+  it('鼠标下的地面在区划里、模型脚下在区划外时（区划外的楼伸进来）：只跳过画在模型下面的资源', () => {
+    const { view } = sceneView([]);
+    const over = (target: PickResource) => target === HYDL;
+    // 区划里有鼠标下的地面 (0.5, 0.2)，没有模型脚下 (0.5, 0.6)
+    const scope = rect(0.4, 0.1, 0.7, 0.3);
+
+    expect(kindsOf(planIdentify([DLTB, HYDL], { x: 50, y: 20 }, 12, view, scope, () => null, over) ?? [])).toStrictEqual([
+      ['csxhjctb_hydl', 'server']
+    ]);
+    expect(planIdentify([DLTB], { x: 50, y: 20 }, 12, view, scope, () => null, over)).toStrictEqual([]);
+  });
+
   it('三维里点在地面上照常围着点击位置；容差框的角落在模型上时取模型后面的地面', () => {
     const { view, queries } = sceneView([]);
 

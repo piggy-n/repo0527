@@ -4,6 +4,9 @@ import { ratioForCheckedHeight, splitLists } from './panel-split';
 
 // 可用 500，两边的内容都很多
 const overflowing = (ratio: number) => splitLists({ available: 500, tree: 2000, checked: 2000, ratio });
+// 同上，图层标题下面多一行 32 高的标签（三维里的筛选）
+const withTabs = (ratio: number) =>
+  splitLists({ available: 500, tree: 2000, checked: 2000, ratio, checkedExtra: 32 });
 
 describe('splitLists', () => {
   it('图层收起只保留入口，不按分割线比例占用资源的空间', () => {
@@ -54,6 +57,17 @@ describe('splitLists', () => {
     });
   });
 
+  it('图层标题下面多一行标签（三维里的筛选，ADR 0161）时，图层的最小高度加上这一行，拖到最小仍放得下 2 行', () => {
+    expect(withTabs(0.05)).toStrictEqual({ tree: 356, checked: 144, adjustable: true });
+    expect(withTabs(0.95)).toStrictEqual({ tree: 208, checked: 292, adjustable: true });
+    // 两边的最小高度加起来 352：可用 340 时只按比例
+    expect(splitLists({ available: 340, tree: 1000, checked: 1000, ratio: 0.5, checkedExtra: 32 })).toStrictEqual({
+      tree: 170,
+      checked: 170,
+      adjustable: true
+    });
+  });
+
   it('放不下两边的最小高度时只按比例', () => {
     expect(splitLists({ available: 150, tree: 1000, checked: 1000, ratio: 0.4 })).toStrictEqual({
       tree: 90,
@@ -75,5 +89,10 @@ describe('ratioForCheckedHeight', () => {
     expect(ratioForCheckedHeight(500, 490)).toBe(292 / 500);
     expect(ratioForCheckedHeight(150, 60)).toBe(0.4);
     expect(ratioForCheckedHeight(0, 60)).toBeNull();
+  });
+
+  it('图层多一行标签时最小高度跟着加（ADR 0161）', () => {
+    expect(ratioForCheckedHeight(500, 20, 32)).toBe(144 / 500);
+    expect(ratioForCheckedHeight(500, 490, 32)).toBe(292 / 500);
   });
 });

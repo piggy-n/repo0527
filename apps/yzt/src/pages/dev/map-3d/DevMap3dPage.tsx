@@ -28,6 +28,7 @@ import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { RouteName } from '@/shared/router/route-names';
 import layout from '../../current-map/CurrentMapPage.module.scss';
 import { CurrentMapLayerPanel } from '../../current-map/layer-panel/CurrentMapLayerPanel';
+import { useCurrentLayers } from '../../current-map/layer-panel/useCurrentLayers';
 import { mapPageLayout } from '../../current-map/map-page-layout';
 import { SAMPLE_CATALOG, SAMPLE_THUMBNAILS } from '../map-ui/samples';
 import { MinimapSketch } from './MinimapSketch';
@@ -97,6 +98,7 @@ const MapPrototype = defineComponent({
     const resources = useResourceLayers(map, { catalog, symbols });
     // 这个原型的模型由 useModelDemo 模拟，二维的资源图层面板里不列模型
     const models = useSceneModels(map, []);
+    const layerList = useCurrentLayers(resources, models);
     const panelLayout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const modelsCollapsed = ref(false);
@@ -230,6 +232,7 @@ const MapPrototype = defineComponent({
       return (
         <CurrentMapLayerPanel
           resources={resources}
+          current={layerList}
           symbols={symbols}
           layout={panelLayout}
           models={models}

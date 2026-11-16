@@ -51,6 +51,15 @@ button.symbol {
   font-size: var(--font-size-xs);
 }
 
+// 三维里会把模型盖住的面（ADR 0161）：名称后面的橙色小字，只有文字
+.cover {
+  flex: none;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: default;
+}
+
 // 行尾的年份、效果、漫游：同一个框，宽 56、高 24，边框常显（用户 2026-11-14：三个的样式和宽度统一；11-15：再窄一些）
 .trail {
   flex: none;

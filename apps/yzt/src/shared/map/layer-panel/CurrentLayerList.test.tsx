@@ -1,23 +1,24 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
-import { CurrentLayerGroup } from './CurrentLayerGroup';
+import { CurrentLayerList } from './CurrentLayerList';
 
-// 行的内容像各 feature 一样放在插槽里：名称和一个按钮
-function mountGroup() {
+// 行的内容像各 feature 一样放在插槽里：名称和一个按钮；c 是变淡的行（像二维里的模型）
+function mountList(note?: string) {
   const selected = ref<string | null>('b');
   const visible = ref<ReadonlySet<string>>(new Set(['a', 'b']));
   const events: unknown[][] = [];
   const wrapper = mount(
     defineComponent(() => () => (
-      <CurrentLayerGroup
-        group="layers"
-        title="二维图层"
+      <CurrentLayerList
+        label="图层"
         keys={['a', 'b', 'c']}
         selected={selected.value}
         tabbable={selected.value}
         visibleOf={key => visible.value.has(key)}
         nameOf={key => key.toUpperCase()}
+        dimmedOf={key => key === 'c'}
+        note={note}
         dragTip="拖动调整叠放顺序"
         onSelect={(key: string) => {
           selected.value = key;
@@ -31,22 +32,24 @@ function mountGroup() {
       >
         {{
           row: ({ key }: { key: string }) => [
-            <span data-row-text>{key}</span>,
+            <span data-row-text data-row-dim>
+              {key}
+            </span>,
             <button type="button" data-inner={key}>
               内部按钮
             </button>
           ]
         }}
-      </CurrentLayerGroup>
+      </CurrentLayerList>
     ))
   );
   const row = (key: string) => wrapper.get(`[data-current-row="${key}"]`);
   return { wrapper, events, row };
 }
 
-describe('CurrentLayerGroup', () => {
-  it('点行选中，点行里的按钮不改选中；双击是定位；隐藏的行标出来', async () => {
-    const { events, row } = mountGroup();
+describe('CurrentLayerList', () => {
+  it('点行选中，点行里的按钮不改选中；双击是定位；隐藏的行、变淡的行标出来', async () => {
+    const { events, row } = mountList();
 
     await row('a').get('[data-row-text]').trigger('click');
     await row('c').get('[data-inner]').trigger('click');
@@ -55,10 +58,12 @@ describe('CurrentLayerGroup', () => {
     expect(events).toStrictEqual([['select', 'a'], ['activate', 'c']]);
     expect(row('a').attributes('aria-selected')).toBe('true');
     expect(row('c').classes().some(name => name.includes('off'))).toBe(true);
+    expect(row('c').classes().some(name => name.includes('dimmed'))).toBe(true);
+    expect(row('a').classes().some(name => name.includes('dimmed'))).toBe(false);
   });
 
-  it('键盘：上下换行交给页面，Alt 加上下在本组里移动，空格切换显隐，回车定位，Delete 移除', async () => {
-    const { events, row } = mountGroup();
+  it('键盘：上下换行交给页面，Alt 加上下移动，空格切换显隐，回车定位，Delete 移除', async () => {
+    const { events, row } = mountList();
 
     await row('b').trigger('keydown', { key: 'ArrowDown' });
     await row('b').trigger('keydown', { key: 'ArrowUp', altKey: true });
@@ -77,22 +82,26 @@ describe('CurrentLayerGroup', () => {
     ]);
   });
 
-  it('手柄上按上下方向键：选中这一行并在本组里移动一位，到头时不动', async () => {
-    const { events, row } = mountGroup();
+  it('手柄上按上下方向键：选中这一行并移动一位，到头时不动', async () => {
+    const { events, row } = mountList();
 
-    await row('c').get('[data-drag-handle="layers"]').trigger('keydown', { key: 'ArrowUp' });
-    await row('c').get('[data-drag-handle="layers"]').trigger('keydown', { key: 'ArrowDown' });
+    await row('c').get('[data-drag-handle]').trigger('keydown', { key: 'ArrowUp' });
+    await row('c').get('[data-drag-handle]').trigger('keydown', { key: 'ArrowDown' });
 
     expect(events).toStrictEqual([['select', 'c'], ['move', 'c', 1]]);
+  });
+
+  it('列表上面的一行说明只在给了时出现', () => {
+    expect(mountList().wrapper.find('[data-list-note]').exists()).toBe(false);
+    expect(mountList('切换到三维后显示').wrapper.get('[data-list-note]').text()).toBe('切换到三维后显示');
   });
 
   it('Alt 加上下移动以后焦点还在这一行，可以接着移动（2026-11-14 审查发现）', async () => {
     const keys = ref(['a', 'b', 'c']);
     const wrapper = mount(
       defineComponent(() => () => (
-        <CurrentLayerGroup
-          group="layers"
-          title="二维图层"
+        <CurrentLayerList
+          label="图层"
           keys={keys.value}
           selected="c"
           tabbable="c"
@@ -104,7 +113,7 @@ describe('CurrentLayerGroup', () => {
           }}
         >
           {{ row: ({ key }: { key: string }) => [<span data-row-text>{key}</span>] }}
-        </CurrentLayerGroup>
+        </CurrentLayerList>
       )),
       { attachTo: document.body }
     );

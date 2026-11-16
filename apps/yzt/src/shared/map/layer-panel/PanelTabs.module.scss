@@ -1,0 +1,60 @@
+// 一行带数量的标签（用户 2026-11-16 选的丁，原型 current-map-panel-v4）：很轻，24 高、没有边框；下边距放在量高度的这一层里，
+// 一行共 32。320、294 宽一行放得下；更窄时换到下一行，不横向滚动。"资源"和"图层"两处同一个样子（ADR 0161）
+.tabs {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 var(--space-lg) var(--space-sm);
+}
+
+.tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text-regular);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-neutral-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.count {
+  color: var(--color-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+// 选中的：浅蓝底、主色、加粗
+.selected {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+
+  .count {
+    color: var(--color-primary);
+  }
+}
+
+// 没有一项（搜索没有匹配、这一类还没有）的变灰，仍可以点
+.empty:not(.selected) {
+  color: var(--color-text-placeholder);
+}

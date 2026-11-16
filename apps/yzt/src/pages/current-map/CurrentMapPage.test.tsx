@@ -81,6 +81,8 @@ class FakeMap implements MapLike {
   readonly fitBoundsCalls: [number, number, number, number][] = [];
   readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
   camera: { lng: number; lat: number; zoom: number };
+  // 俯仰角：只有 tilt 改它，别的移动保持
+  #pitch = 0;
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
@@ -153,7 +155,7 @@ class FakeMap implements MapLike {
     return 0;
   }
   getPitch(): number {
-    return 0;
+    return this.#pitch;
   }
 
   jumpTo(camera: { center: [number, number]; zoom: number }, eventData: CameraEventData): void {
@@ -167,8 +169,9 @@ class FakeMap implements MapLike {
     return undefined;
   }
 
-  flyTo(camera: { center?: [number, number]; zoom?: number }, eventData: CameraEventData): void {
+  flyTo(camera: { center?: [number, number]; zoom?: number; pitch?: number }, eventData: CameraEventData): void {
     this.flyToCalls.push(camera);
+    this.#pitch = camera.pitch ?? this.#pitch;
     this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
   }
 
@@ -273,6 +276,12 @@ class FakeMap implements MapLike {
     this.fire(type, { point: { x, y }, originalEvent: new MouseEvent(type, { detail, button: 0 }) });
   }
 
+  /** 模拟用户把地图斜过来 */
+  tilt(pitch: number): void {
+    this.#pitch = pitch;
+    this.moveTo([this.camera.lng, this.camera.lat], this.camera.zoom, { originalEvent: new MouseEvent('mousemove') });
+  }
+
   // 立即到位的移动：和 jumpTo 一样先发 movestart 再发 move
   moveTo([lng, lat]: [number, number], zoom: number, event: FakeEvent): void {
     this.camera = { lng, lat, zoom };
@@ -292,11 +301,13 @@ const TILESET_JSON = {
 };
 
 /**
- * 三维渲染器的替身（真实的是 @mx/map-three）：瓦片集等用例调用 ready 才就绪；拾取、投影都落空。
- * 三维视图第一次切到三维时创建它
+ * 三维渲染器的替身（真实的是 @mx/map-three）：瓦片集等用例调用 ready 才就绪；拾取只打到用例用 hitModel 放的模型，
+ * 投影落空。三维视图第一次切到三维时创建它
  */
 function fakeRenderer() {
   const pending = new Map<string, (sphere: TilesetSphere) => void>();
+  // 屏幕上的点 "x,y" 打到的模型
+  const hits = new Map<string, NonNullable<ReturnType<SceneRenderer['pick']>>>();
   const renderer: SceneRenderer = {
     attach: () => undefined,
     detach: () => undefined,
@@ -314,7 +325,7 @@ function fakeRenderer() {
     addSplat: () => new Promise(() => undefined),
     updateSplat: () => undefined,
     removeSplat: () => undefined,
-    pick: () => null,
+    pick: ({ x, y }) => hits.get(`${x},${y}`) ?? null,
     project: () => null,
     setLift: () => undefined,
     lowestHeight: () => null,
@@ -325,7 +336,10 @@ function fakeRenderer() {
   };
   /** 让还在加载的瓦片集就绪；还没交给渲染器时抛错 */
   const ready = (id: string) => required(pending.get(id), `瓦片集 ${id} 没有在加载`)(MODEL_SPHERE);
-  return { renderer, ready };
+  /** 屏幕上这一点打到模型，命中点在 lngLat、高 30 米 */
+  const hitModel = ({ x, y }: { x: number; y: number }, lngLat: [number, number]) =>
+    void hits.set(`${x},${y}`, { lngLat, height: 30 });
+  return { renderer, ready, hitModel };
 }
 
 interface PageModules {
@@ -745,6 +759,7 @@ function sceneOf(page: ReturnType<typeof mountPage>) {
   const renderer = required(page.renderers[0], '没有创建三维渲染器');
   return {
     session,
+    hitModel: renderer.hitModel,
     ready: async (id: string) => {
       await vi.waitFor(() => renderer.ready(id));
       await settle();
@@ -1565,16 +1580,16 @@ describe('CurrentMapPage', () => {
       // oxlint-disable-next-line no-await-in-loop -- 每次相机变化后让 Vue 完成更新，不能合并成一帧
       await nextTick();
     }
-    expect(updates.get('CurrentLayerGroup') ?? 0).toBe(0);
+    expect(updates.get('CurrentLayerList') ?? 0).toBe(0);
     map.moveTo([119, 32], 9 - 1e-7, {});
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').find('[data-status="minzoom"]').exists()).toBe(true);
-    expect(updates.get('CurrentLayerGroup') ?? 0).toBe(0);
+    expect(updates.get('CurrentLayerList') ?? 0).toBe(0);
 
     map.moveTo([119, 32], 9, {});
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').find('[data-status="minzoom"]').exists()).toBe(false);
-    expect(updates.get('CurrentLayerGroup')).toBe(1);
+    expect(updates.get('CurrentLayerList')).toBe(1);
   });
 
   it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
@@ -1871,17 +1886,83 @@ describe('CurrentMapPage', () => {
       expect(requests()).toBe(1);
     });
 
-    it('二维里加入的模型只进列表："三维模型"组标"仅三维"、不交给三维视图；切到三维才加载', async () => {
+    it('二维里加入的模型只进列表：行变淡、悬停说明"切换到三维后显示"，不交给三维视图；切到三维才加载', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper } = page;
       await addModel(wrapper, 'sz-station');
-      const group = wrapper.get('[data-current-group="models"]');
-      expect(group.text()).toContain('仅三维');
+      const station = () => wrapper.get('[data-current-row="model:sz-station"]');
+      expect(station().classes().join(' ')).toMatch(/dimmed/);
+      expect(station().find('[data-row-hint="切换到三维后显示"]').exists()).toBe(true);
 
       await switchTo(wrapper, '三维');
-      expect(wrapper.get('[data-current-group="models"]').text()).not.toContain('仅三维');
+      expect(station().classes().join(' ')).not.toMatch(/dimmed/);
       expect(sceneOf(page).session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
+    });
+
+    it('图层里排在最上面那个模型上面的资源画在模型上面：模型层插在它下面，点到模型上按鼠标下的地面识别；斜着看时提示，"俯视"回到俯视（ADR 0161）', async () => {
+      mockManifest();
+      const page = await readyPage();
+      const { wrapper, map } = page;
+      await switchTo(wrapper, '三维');
+      await addModel(wrapper, 'sz-station');
+      const { session } = sceneOf(page);
+      // 新加入的模型在最上面：模型层在资源的最后、高亮及以上的下面
+      expect(wrapper.findAll('[data-current-row]').map(item => item.attributes('data-current-row'))).toStrictEqual([
+        'model:sz-station',
+        'resource:bgdc_dltb'
+      ]);
+      expect(session.style.sceneBefore?.startsWith('resources-')).toBe(false);
+      map.tilt(40);
+      await settle();
+      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
+
+      // 地类图斑挪到模型上面：模型层插在它的图层下面，斜着看时提示
+      await layerRow(wrapper, 'bgdc_dltb').trigger('click');
+      await wrapper.get('[data-tool="move-top"]').trigger('click');
+      await settle();
+      expect(session.style.sceneBefore).toBe('resources-bgdc_dltb');
+      expect(wrapper.get('[data-tilt-hint]').text()).toContain('倾斜时二维图层和模型会错开');
+
+      await wrapper.get('[data-tilt-hint] button').trigger('click');
+      await settle();
+      expect(map.flyToCalls.at(-1)).toMatchObject({ pitch: 0 });
+      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
+
+      // 模型隐藏了：没有可以错开的模型，不提示；模型层的位置照旧
+      map.tilt(40);
+      await settle();
+      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(true);
+      await wrapper.get('[data-current-row="model:sz-station"] input[type="checkbox"]').setValue(false);
+      await settle();
+      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
+      expect(session.style.sceneBefore).toBe('resources-bgdc_dltb');
+
+      // 点到模型上：画在模型上面的地类图斑按鼠标下的地面查后端，不查模型脚下（ADR 0161 第 9 节）
+      await wrapper.get('[data-current-row="model:sz-station"] input[type="checkbox"]').setValue(true);
+      const geometries: unknown[] = [];
+      server.use(
+        mock.get('/backend/api/query/scope/geojson/page', ({ request }) => {
+          geometries.push(JSON.parse(new URL(request.url).searchParams.get('geometry') ?? 'null'));
+          return HttpResponse.json({ total: 0, list: [], pageNum: 1, pages: 0 });
+        })
+      );
+      const ground = map.unproject([200, 150]);
+      sceneOf(page).hitModel({ x: 200, y: 150 }, [ground.lng + 1, ground.lat - 1]);
+      await button(wrapper, '点/框选').trigger('click');
+      map.mouse('click', 200, 150);
+      await vi.waitFor(() => expect(geometries).toHaveLength(1));
+      expect(geometries[0]).toStrictEqual({
+        type: 'Point',
+        coordinates: [expect.closeTo(ground.lng, 6), expect.closeTo(ground.lat, 6)]
+      });
+      await button(wrapper, '移动').trigger('click');
+
+      // 回到二维不提示
+      await switchTo(wrapper, '二维');
+      map.tilt(40);
+      await settle();
+      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
     });
 
     it('加入的模型交给三维视图；定位地下的模型只飞过去，没有单独的钻地（ADR 0097 第 5 节）', async () => {
@@ -1926,6 +2007,10 @@ describe('CurrentMapPage', () => {
       await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
+      // 区划遮罩一直画在模型上面（ADR 0161）：没有资源画在模型上面、没有选中时，模型层就在遮罩下面
+      const masked = () => scene.session.style.current.layers.some(({ id }) => id === 'region-clip-mask');
+      await vi.waitFor(() => expect(masked()).toBe(true));
+      expect(scene.session.style.sceneBefore).toBe('region-clip-mask');
       await button(wrapper, '测距').trigger('click');
       expect(scene.session.tool.active).toBe('measure-distance');
       expect(shownPanels(wrapper)).toStrictEqual(['legend']);
@@ -1944,9 +2029,12 @@ describe('CurrentMapPage', () => {
       expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
       expect(wrapper.get('[data-panel-group]').isVisible()).toBe(false);
       expect(optionsPopoverVisible('basemap')).toBe(false);
+      // 漫游时区划不适用：遮罩撤掉，不盖住漫游的画面（ADR 0161 第 7 节），区划的选择还在
+      expect(masked()).toBe(false);
 
       await button(wrapper, '退出漫游').trigger('click');
       await settle();
+      expect(masked()).toBe(true);
       expect(scene.session.scene.current.underground).toBeNull();
       expect(button(wrapper, '移动').attributes('aria-pressed')).toBe('true');
       expect(labels()).toEqual(expect.arrayContaining(['默认视角', '放大', '缩小', '二维', '三维']));

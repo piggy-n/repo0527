@@ -117,6 +117,18 @@ function toolView(features: readonly RenderedFeature[], kind: ViewKind): ToolVie
   };
 }
 
+// 三维里 (100, 100) 点在一栋楼上：命中点的经纬度是楼脚下的 (118.2, 32.8)，投影回屏幕在 (200, 200)；只打地面时穿过楼
+function modelView(): ToolView {
+  const ground = toolView([], '3d');
+  return {
+    ...ground,
+    pick: (point, options) =>
+      point.x === 100 && point.y === 100 && !options?.ground
+        ? { kind: 'hit', surface: 'model', lngLat: [118.2, 32.8], height: 30 }
+        : ground.pick(point, options)
+  };
+}
+
 function click(x = 100, y = 100, clickCount = 1): MapPointerEvent {
   const modifiers = { shift: false, ctrl: false, alt: false, meta: false };
   return { type: 'click', point: { x, y }, button: 0, clickCount, modifiers };
@@ -196,7 +208,9 @@ function setup(
   initialScope: RegionScope | null = null,
   onIdentifyStart = vi.fn<() => void>(),
   // 三维引擎的能力：默认同 app 注入的（三项都是 true，ADR 0157）
-  sceneCapabilities: SceneCapabilities = { styleLayers: true, identify: true, splats: true }
+  sceneCapabilities: SceneCapabilities = { styleLayers: true, identify: true, splats: true },
+  // 画在模型上面的资源（ADR 0161）：不给时不传这个选项
+  overModels?: (code: string) => boolean
 ) {
   const fake = fakeCamera(zoom);
   // 区划裁剪的范围，可以由用例中途改变
@@ -223,7 +237,11 @@ function setup(
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
     setup() {
-      owner = useFeaturePick(map, resources, { scope: () => scope.value, onIdentifyStart });
+      owner = useFeaturePick(map, resources, {
+        scope: () => scope.value,
+        onIdentifyStart,
+        ...(overModels ? { overModels } : {})
+      });
       return () => null;
     }
   });
@@ -391,6 +409,19 @@ describe('useFeaturePick：识别', () => {
     expect(onIdentifyStart).toHaveBeenCalledOnce();
     // 14 级以上的二维只用渲染要素、不发请求；三维仍查后端（ADR 0048），最上面的资源有结果就停下
     expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022']);
+  });
+
+  it('三维里点到模型上：页面给出的画在模型上面的资源按鼠标下的地面查，没给的照旧查模型脚下（ADR 0161）', async () => {
+    const requests = mockIdentify(() => page(1, [{ guid: guid(1) }]));
+    const over = setup(16, STATE, new Map(), null, vi.fn(), undefined, code => code === 'bgdc_czcdyd');
+    over.pick.handleInput?.(click(), modelView());
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]).toMatchObject({ layerCode: 'bgdc_czcdyd_2022', geometry: { type: 'Point', coordinates: [118.1, 32.9] } });
+
+    const under = setup(16);
+    under.pick.handleInput?.(click(), modelView());
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[1]).toMatchObject({ layerCode: 'bgdc_czcdyd_2022', geometry: { type: 'Point', coordinates: [118.2, 32.8] } });
   });
 
   it('引擎不能在三维里识别（identify 为 false）时三维期间不识别：单击、框选都不发请求、不通知页面，二维的结果不变（ADR 0080 第 5 节）', async () => {

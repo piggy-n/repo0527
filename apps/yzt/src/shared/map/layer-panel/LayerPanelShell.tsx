@@ -5,15 +5,10 @@ import { ElButton } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { type ListSplit, ratioForCheckedHeight, splitLists } from './panel-split';
+import { type PanelTab, PanelTabs } from './PanelTabs';
 import styles from './LayerPanelShell.module.scss';
 
-/** 搜索行下面的一个标签：资源显示什么（用户 2026-11-16 选的丁） */
-export interface PanelTab {
-  readonly id: string;
-  readonly label: string;
-  /** 这一项显示的项数（搜索时是匹配的项数）；null 或不给时只有名称（数据还没到或读不到） */
-  readonly count?: number | null;
-}
+export type { PanelTab } from './PanelTabs';
 
 /** 交给浮层插槽的元素：浮层贴着面板、箭头对着图层里的行 */
 export interface PanelFloatingContext {
@@ -52,13 +47,17 @@ export const LayerPanelShell = defineComponent({
     /** 搜索行下面带数量的标签（资源显示什么，ADR 0157；用户 2026-11-16 选的丁）；空的时候没有这一行 */
     views: { type: Array as PropType<readonly PanelTab[]>, default: () => [] },
     /** 选中的那个标签的 id */
-    view: { type: String, default: '' }
+    view: { type: String, default: '' },
+    /** "图层"标题下面带数量的标签（看哪一类，ADR 0161），同上段的样子；空的时候没有这一行 */
+    currentViews: { type: Array as PropType<readonly PanelTab[]>, default: () => [] },
+    currentView: { type: String, default: '' }
   },
   emits: {
     retry: () => true,
     'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean',
     'update:ratio': (ratio: number) => ratio >= 0 && ratio <= 1,
-    'update:view': (view: string) => typeof view === 'string'
+    'update:view': (view: string) => typeof view === 'string',
+    'update:currentView': (view: string) => typeof view === 'string'
   },
   slots: Object as SlotsType<{
     catalogTools: () => VNode[];
@@ -96,17 +95,21 @@ export const LayerPanelShell = defineComponent({
     const viewsRow = ref<HTMLElement>();
     const catalogInner = ref<HTMLElement>();
     const currentHead = ref<HTMLElement>();
+    const currentViewsRow = ref<HTMLElement>();
     const currentInner = ref<HTMLElement>();
     const { height: catalogHeadHeight } = useShownElementSize(catalogHead, undefined, box);
     const { height: filterHeight } = useShownElementSize(filter, undefined, box);
     const { height: viewsHeight } = useShownElementSize(viewsRow, undefined, box);
     const { height: catalogInnerHeight } = useShownElementSize(catalogInner, undefined, box);
     const { height: currentHeadHeight } = useShownElementSize(currentHead, undefined, box);
+    const { height: currentViewsHeight } = useShownElementSize(currentViewsRow, undefined, box);
     const { height: currentInnerHeight } = useShownElementSize(currentInner, undefined, box);
     const catalogHeight = computed(
       () => catalogHeadHeight.value + filterHeight.value + viewsHeight.value + catalogInnerHeight.value
     );
-    const currentHeight = computed(() => currentHeadHeight.value + currentInnerHeight.value);
+    const currentHeight = computed(
+      () => currentHeadHeight.value + currentViewsHeight.value + currentInnerHeight.value
+    );
     // 都量到之前不设高度，按内容排
     const split = computed(() =>
       columnHeight.value > 0 && chrome.value > 0
@@ -114,7 +117,8 @@ export const LayerPanelShell = defineComponent({
             available: available.value,
             tree: catalogHeight.value,
             checked: currentHeight.value,
-            ratio: props.ratio
+            ratio: props.ratio,
+            checkedExtra: currentViewsHeight.value
           })
         : null
     );
@@ -122,7 +126,7 @@ export const LayerPanelShell = defineComponent({
     // 拖动改变不了两段时分割线不响应，也不显示成能拖的样子
     const adjustable = computed(() => split.value?.adjustable ?? false);
     const setCurrentHeight = (height: number) => {
-      const ratio = ratioForCheckedHeight(available.value, height);
+      const ratio = ratioForCheckedHeight(available.value, height, currentViewsHeight.value);
       if (ratio !== null) {
         emit('update:ratio', ratio);
       }
@@ -207,26 +211,27 @@ export const LayerPanelShell = defineComponent({
 
     // 搜索行下面一行带数量的标签：读屏名称带上数量；数量为 0 的变灰，没有数量的只有名称
     const renderViews = () => (
-      <div ref={viewsRow} class={styles.views} role="tablist" aria-label="资源显示的内容">
-        {props.views.map(item => {
-          const selected = props.view === item.id;
-          const count = item.count ?? null;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              class={[styles.view, selected && styles.currentView, count === 0 && styles.emptyView]}
-              aria-selected={selected}
-              aria-label={count === null ? item.label : `${item.label} ${count} 项`}
-              data-catalog-view={item.id}
-              onClick={() => emit('update:view', item.id)}
-            >
-              {item.label}
-              {count !== null && <span class={styles.viewCount}>{count}</span>}
-            </button>
-          );
-        })}
+      <div ref={viewsRow}>
+        <PanelTabs
+          tabs={props.views}
+          value={props.view}
+          label="资源显示的内容"
+          kind="catalog"
+          onUpdate:value={(id: string) => emit('update:view', id)}
+        />
+      </div>
+    );
+
+    // "图层"标题下面的标签，同上段（ADR 0161）
+    const renderCurrentViews = () => (
+      <div ref={currentViewsRow}>
+        <PanelTabs
+          tabs={props.currentViews}
+          value={props.currentView}
+          label="图层显示的内容"
+          kind="current"
+          onUpdate:value={(id: string) => emit('update:currentView', id)}
+        />
       </div>
     );
 
@@ -277,6 +282,7 @@ export const LayerPanelShell = defineComponent({
             {renderSectionTitle('图层')}
             {slots.currentTools()}
           </div>
+          {props.currentViews.length > 0 && renderCurrentViews()}
           <div ref={list} class={styles.scroll} data-current-list>
             <div ref={currentInner} class={styles.current}>
               {slots.current()}

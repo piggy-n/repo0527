@@ -69,6 +69,40 @@ function setup() {
   };
 }
 
+// 资源两层、高亮一层；模型层的上限是 highlight
+function slotSetup() {
+  const style = new StyleModel<Groups>({ groups: GROUPS, sceneBelow: 'highlight' });
+  const errors: Error[] = [];
+  const binder = new StyleBinder(style, error => errors.push(error as Error));
+  const setSceneSlot = vi.spyOn(style, 'setSceneSlot');
+  return {
+    style,
+    binder,
+    errors,
+    setSceneSlot,
+    [Symbol.dispose]() {
+      binder[Symbol.dispose]();
+      style[Symbol.dispose]();
+    }
+  };
+}
+
+function twoLayers(): StyleGroup {
+  return {
+    sources: { 'resources-a': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+    layers: [
+      { id: 'resources-low', type: 'line', source: 'resources-a' },
+      { id: 'resources-high', type: 'line', source: 'resources-a' }
+    ]
+  };
+}
+
+// 高亮用自己的数据源，和资源怎么变无关
+const ownHighlight: StyleGroup = {
+  sources: { 'highlight-picked': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+  layers: [{ id: 'highlight-line', type: 'line', source: 'highlight-picked' }]
+};
+
 describe('StyleBinder', () => {
   it('start 时把所有绑定的初始值一次提交', () => {
     using env = setup();
@@ -246,5 +280,88 @@ describe('StyleBinder', () => {
 
     expect(env.setGroups).toHaveBeenCalledTimes(1);
     expect(env.style.current.layers.map(layer => layer.id)).toEqual(['measure-line']);
+  });
+
+  describe('三维模型层的插槽（ADR 0161）', () => {
+    it('start 时和分组一起提交，同一轮里插槽和它指向的图层一起生效', async () => {
+      using env = slotSetup();
+      const shown = ref(false);
+      const slot = ref<string | undefined>(undefined);
+      env.binder.bind({
+        resources: () => (shown.value ? twoLayers() : resourcesByYear(2022)),
+        highlight: () => ownHighlight
+      });
+      env.binder.bindSlot(() => slot.value);
+      env.binder.start();
+      expect(env.style.sceneBefore).toBe('highlight-line');
+      // 初始提交的通知在微任务里发出
+      await Promise.resolve();
+
+      // 图层和插槽同一轮变化：通知里只有一次，位置已经是新的
+      const changes: (string | undefined)[] = [];
+      env.style.on('change', change => changes.push(change.sceneBefore));
+      shown.value = true;
+      slot.value = 'resources-high';
+      await nextTick();
+      await Promise.resolve();
+
+      expect(env.style.sceneBefore).toBe('resources-high');
+      expect(changes).toStrictEqual(['resources-high']);
+    });
+
+    it('只有插槽变化时只提交插槽；值没变时不提交', async () => {
+      using env = slotSetup();
+      const slot = ref<string | undefined>('resources-low');
+      env.binder.bind({ resources: () => twoLayers(), highlight: () => ownHighlight });
+      env.binder.bindSlot(() => slot.value);
+      env.binder.start();
+      expect(env.style.sceneBefore).toBe('resources-low');
+      env.setSceneSlot.mockClear();
+
+      slot.value = 'resources-high';
+      await nextTick();
+      expect(env.setSceneSlot).toHaveBeenCalledTimes(1);
+      expect(env.style.sceneBefore).toBe('resources-high');
+
+      slot.value = undefined;
+      await nextTick();
+      expect(env.style.sceneBefore).toBe('highlight-line');
+      expect(env.setSceneSlot).toHaveBeenCalledTimes(2);
+    });
+
+    it('插槽的推导失败时整批不提交、报告一次，恢复后连同分组一起提交', async () => {
+      using env = slotSetup();
+      const broken = ref(false);
+      const year = ref(2022);
+      env.binder.bind({ resources: () => resourcesByYear(year.value), highlight: () => highlightByYear(year.value) });
+      env.binder.bindSlot(() => {
+        if (broken.value) {
+          throw new Error('算不出插槽');
+        }
+        return 'resources-fill';
+      });
+      env.binder.start();
+      expect(env.style.sceneBefore).toBe('resources-fill');
+
+      broken.value = true;
+      year.value = 2023;
+      await nextTick();
+      expect(tileOf(env.style, 'resources-2022')).toBeDefined();
+      expect(env.errors.map(error => error.message)).toStrictEqual(['三维模型层的插槽推导出错，本轮样式不提交']);
+
+      broken.value = false;
+      await nextTick();
+      expect(tileOf(env.style, 'resources-2023')).toBeDefined();
+      expect(env.style.sceneBefore).toBe('resources-fill');
+      expect(env.errors).toHaveLength(1);
+    });
+
+    it('插槽只能在 start 之前绑定一次', () => {
+      using env = slotSetup();
+      env.binder.bindSlot(() => undefined);
+      expect(() => env.binder.bindSlot(() => undefined)).toThrow('三维模型层的插槽已经绑定过');
+      env.binder.start();
+      expect(() => env.binder.bindSlot(() => undefined)).toThrow('只能在 provideMap');
+    });
   });
 });

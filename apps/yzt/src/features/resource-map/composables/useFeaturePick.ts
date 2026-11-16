@@ -165,6 +165,8 @@ export interface FeaturePickOptions {
   readonly scope?: () => RegionScope | null;
   /** 用户的单击、框选开始了一次识别（规划出结果或失败时，在点击的当下调用）；页面据此切到资源详情（ADR 0053 第 4 节） */
   readonly onIdentifyStart?: () => void;
+  /** 三维里画在模型上面的资源（ADR 0161）：点到模型时按鼠标下的地面识别；不传时都按模型脚下（规则甲） */
+  readonly overModels?: (code: string) => boolean;
 }
 
 /** 后端识别还有没加载的页 */
@@ -227,6 +229,7 @@ export function useFeaturePick(
   }
   const camera = map.useCamera();
   const scope = options.scope ?? (() => null);
+  const overModels = options.overModels ?? (() => false);
   // 页面的回调抛错不能打断识别（.claude/rules/map.md"接收外部回调的模块"）
   const notifyStart = () => {
     try {
@@ -482,8 +485,14 @@ export function useFeaturePick(
     start((targets, zoom, area) => {
       const hit = view.pick(point);
       const how: Identification = { mode: 'pick', anchor: hit.kind === 'hit' ? hit.lngLat : null };
-      const tasks = planIdentify(targets, point, zoom, view, area, target =>
-        resources.pointMark(target.resource.code, zoom)
+      const tasks = planIdentify(
+        targets,
+        point,
+        zoom,
+        view,
+        area,
+        target => resources.pointMark(target.resource.code, zoom),
+        target => overModels(target.resource.code)
       );
       return tasks && { tasks, how };
     });
@@ -635,7 +644,8 @@ export function useFeaturePick(
     }
   );
 
-  // 三维里照常识别（ADR 0157）：登记的数据集查后端（identifyStep），点到模型上时查模型脚下（planIdentify）
+  // 三维里照常识别（ADR 0157）：登记的数据集查后端（identifyStep），点到模型上时画在模型下面的查模型脚下、
+  // 画在上面的按鼠标下的地面（planIdentify，ADR 0161）
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
     // 引擎不能在三维里识别（能力 identify 为 false）时三维期间单击、框选什么也不做，Esc 照样清除二维的结果（ADR 0080 第 5 节）；
     // app 注入的引擎是 true（ADR 0157），这个分支留给别的引擎

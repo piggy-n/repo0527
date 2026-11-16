@@ -1,7 +1,35 @@
 import { buildCatalog } from '@/features/resource-map/catalog';
+import { sceneManifestSchema } from '@/features/scene-models/api';
+import { buildModelCatalog } from '@/features/scene-models/catalog';
 import { type BasemapId, type BasemapThumbnail, basemapThumbnails } from '@/shared/map/basemap/basemap-style';
 import imagery from './sample-imagery.svg?url';
 import vector from './sample-vector.svg?url';
+
+/** 两个三维模型（ADR 0161 的平铺列表）：只进面板，样例没有地图，不加载 */
+export const SAMPLE_MODELS = buildModelCatalog(
+  sceneManifestSchema.parse({
+    models: [
+      {
+        id: 'sample-station',
+        name: '星海广场站',
+        cityCode: '320500',
+        kind: 'indoor',
+        underground: true,
+        tileset: 'station/tileset.json',
+        routes: [{ id: 'enter', name: '进站', path: [[120.666, 31.3175, -5.1], [120.667, 31.3175, -5.1]] }]
+      },
+      {
+        id: 'sample-white',
+        name: '星海广场站周边建筑白模',
+        cityCode: '320500',
+        kind: 'white',
+        underground: false,
+        effects: [{ id: 'plain', label: '无纹理', tileset: 'white/plain.json' }]
+      }
+    ]
+  }),
+  'http://localhost/3dt/manifest.json'
+);
 
 /** 固定目录：涵盖单年份、多年份、点线面及两种复杂图例，不读取后台 */
 export const SAMPLE_CATALOG = buildCatalog([{

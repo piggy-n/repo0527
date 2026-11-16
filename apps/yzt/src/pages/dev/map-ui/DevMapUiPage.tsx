@@ -21,9 +21,11 @@ import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { RouteName } from '@/shared/router/route-names';
+import { modelKey } from '@/features/scene-models/layer-panel';
 import { CurrentMapLayerPanel } from '../../current-map/layer-panel/CurrentMapLayerPanel';
+import { useCurrentLayers } from '../../current-map/layer-panel/useCurrentLayers';
 import styles from './DevMapUiPage.module.scss';
-import { SAMPLE_CATALOG, SAMPLE_THUMBNAILS } from './samples';
+import { SAMPLE_CATALOG, SAMPLE_MODELS, SAMPLE_THUMBNAILS } from './samples';
 
 // 示例只装配现有组件；不挂载地图引擎、不绑定瓦片、不传入偏好范围
 const MapUiSamples = defineComponent({
@@ -40,8 +42,9 @@ const MapUiSamples = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols });
-    // 样例只看资源：模型的目录是空的
-    const models = useSceneModels(map, []);
+    // 模型只进面板：没有画布，三维里也不加载（行上一直转圈）
+    const models = useSceneModels(map, SAMPLE_MODELS);
+    const layerList = useCurrentLayers(layers, models);
     const layout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const basemap = { ...useBasemap(), thumbnails: SAMPLE_THUMBNAILS };
@@ -54,9 +57,16 @@ const MapUiSamples = defineComponent({
     const basemapOpen = ref(false);
     // 切换样例只改加入当前地图的资源，年份与样式继续由真实拥有者维护
     const codes = [...SAMPLE_CATALOG.resources.keys()];
+    const modelKeys = SAMPLE_MODELS.map(model => modelKey(model.id));
     const selectCount = (count: number) => {
+      layerList.remove(modelKeys);
       layers.remove(codes);
       layers.add(codes.slice(0, count));
+    };
+    // 平铺列表（ADR 0161）：模型在最上面，资源在它下面
+    const withModels = () => {
+      selectCount(codes.length);
+      layerList.add(modelKeys);
     };
     const open = (id: 'legend' | 'boundaries') => {
       panels.toggle(id, !collapsed.value);
@@ -78,6 +88,16 @@ const MapUiSamples = defineComponent({
           <ElButton size="small" onClick={() => selectCount(0)}>无资源</ElButton>
           <ElButton size="small" onClick={() => selectCount(1)}>单个资源</ElButton>
           <ElButton size="small" onClick={() => selectCount(codes.length)}>多个资源</ElButton>
+          <ElButton size="small" onClick={withModels}>资源和模型</ElButton>
+          <span>维度</span>
+          <ElRadioGroup
+            modelValue={map.dimension.value}
+            onUpdate:modelValue={value => map.setDimension(value === '3d' ? '3d' : '2d')}
+            size="small"
+          >
+            <ElRadioButton value="2d">二维</ElRadioButton>
+            <ElRadioButton value="3d">三维</ElRadioButton>
+          </ElRadioGroup>
         </div>
         <div class={styles.grid}>
           <section class={styles.sample}>
@@ -87,6 +107,7 @@ const MapUiSamples = defineComponent({
               <div class={styles.resourceColumn}>
                 <CurrentMapLayerPanel
                   resources={layers}
+                  current={layerList}
                   symbols={symbols}
                   layout={layout}
                   models={models}
@@ -238,7 +259,7 @@ export const DevMapUiPage = defineComponent({
             onUpdate:modelValue={value => (width.value = Number(value))}
             size="small"
           >
-            {[320, 280, 240].map(value => (
+            {[320, 294, 280, 240].map(value => (
               <ElRadioButton key={value} value={value}>
                 {value}px
               </ElRadioButton>

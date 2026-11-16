@@ -12,8 +12,9 @@ import { LegendPreview } from './LegendPreview';
 import { ResourceStatusIcon } from './ResourceStatusIcon';
 
 /**
- * 当前图层里一个资源的行内容（ADR 0157），放在通用分组的手柄、复选框后面：符号（点了选中并打开图例）、名称、
- * 紧跟名称的状态（瓦片加载超过 0.4 秒时转圈，ADR 0158；状态图标，ADR 0059）、年份（多年份是不带箭头的小下拉）、移除。
+ * 当前图层里一个资源的行内容（ADR 0157），放在图层列表的手柄、复选框后面：符号（点了选中并打开图例）、名称、
+ * 紧跟名称的状态（会把模型盖住时橙色小字"盖住模型"，ADR 0161；瓦片加载超过 0.4 秒时转圈，ADR 0158；状态图标，ADR 0059）、
+ * 年份（多年份是不带箭头的小下拉）、移除。
  * 拥有者里没有这个资源时不显示
  */
 export const ResourceLayerRow = defineComponent({
@@ -25,7 +26,9 @@ export const ResourceLayerRow = defineComponent({
     /** 当前的缩放级别（整数），判断是否到了最小显示级别 */
     level: { type: Number, required: true },
     /** 瓦片在加载、已经超过 0.4 秒：和状态栏的请求状态用同一份（ADR 0158） */
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    /** 三维里画在模型上面、接近不透明的面：名称后面提示"盖住模型"（ADR 0161），由页面判断 */
+    covering: { type: Boolean, default: false }
   },
   emits: {
     legend: () => true,
@@ -66,6 +69,13 @@ export const ResourceLayerRow = defineComponent({
           {name}
         </span>,
         <span class={rowStyles.status}>
+          {props.covering && (
+            <ElTooltip {...MAP_TOOLTIP_PROPS} content="调低透明度可以透出模型" placement="top">
+              <span class={rowStyles.cover} data-row-cover>
+                盖住模型
+              </span>
+            </ElTooltip>
+          )}
           {props.loading && (
             <ElIcon class={['is-loading', rowStyles.spinner]} aria-label="加载中">
               <Loading />

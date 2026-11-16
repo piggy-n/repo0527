@@ -66,7 +66,10 @@ export interface ResourceLayersState {
   /** 目录还没加载时为 null */
   readonly catalog: ResourceCatalog | null;
   readonly displays: ReadonlyMap<string, ResourceDisplay>;
-  /** 叠放顺序，包括没加入的：已加入的按它从上到下画在地图上，新加入的移到最前；和目录树的顺序无关（ADR 0157，取代 ADR 0118） */
+  /**
+   * 叠放顺序，包括没加入的：已加入的按它从上到下画在地图上，新加入的插到给出的位置（默认最前，ADR 0161）；和目录树的顺序无关
+   * （ADR 0157，取代 ADR 0118）
+   */
   readonly order: readonly string[];
 }
 
@@ -106,11 +109,14 @@ function assertKnown(state: ResourceLayersState, codes: readonly string[]): void
 }
 
 /**
- * 加入当前地图（ADR 0157）：没加入的按给出的先后移到最前面并显示，一次加多个时整批在最前、批内保持给出的先后；
- * 已加入的不动，不重复。没有要加入的时返回原来的状态对象；有目录里没有的资源时抛错
+ * 加入当前地图（ADR 0157、0161）：没加入的按给出的先后整批插到已加入的资源里的第 at 位（默认最前，超出时接在最后）并显示，
+ * 批内保持给出的先后；已加入的不动，不重复。没有要加入的时返回原来的状态对象；有目录里没有的资源、at 不是非负整数时抛错
  */
-export function withAdded(state: ResourceLayersState, codes: readonly string[]): ResourceLayersState {
+export function withAdded(state: ResourceLayersState, codes: readonly string[], at = 0): ResourceLayersState {
   assertKnown(state, codes);
+  if (!(Number.isInteger(at) && at >= 0)) {
+    throw new RangeError(`位置应是非负整数，收到 ${at}`);
+  }
   const fresh = [...new Set(codes)].filter(code => state.displays.get(code)?.added === false);
   if (fresh.length === 0) {
     return state;
@@ -123,7 +129,9 @@ export function withAdded(state: ResourceLayersState, codes: readonly string[]):
     }
   }
   const moved = new Set(fresh);
-  return { ...state, displays, order: [...fresh, ...state.order.filter(code => !moved.has(code))] };
+  const added = addedCodes(state);
+  const rest = state.order.filter(code => !moved.has(code) && state.displays.get(code)?.added !== true);
+  return { ...state, displays, order: [...added.toSpliced(at, 0, ...fresh), ...rest] };
 }
 
 /**
@@ -254,6 +262,9 @@ interface ResourceEntry {
 // 共用的部分：数据源、瓦片图层名、最小级别
 type LayerCommon = Pick<LayerSpecification & { type: 'fill' }, 'source' | 'source-layer' | 'minzoom'>;
 
+// 一个图层的 ID：主图层同数据源，拆出的图层加后缀
+const partLayerId = (id: string, part: ResourceLayerPart) => (part.suffix ? `${id}-${part.suffix}` : id);
+
 // 一个图层：ID 按后缀区分，按线型拆开的图层在几何过滤之外再按要素的线型过滤，透明度乘在各几何类型的不透明度上
 function layerOf(
   part: ResourceLayerPart,
@@ -262,7 +273,7 @@ function layerOf(
   geometryFilter: ExpressionSpecification,
   opacity: number
 ): LayerSpecification {
-  const layerId = part.suffix ? `${id}-${part.suffix}` : id;
+  const layerId = partLayerId(id, part);
   const filter: ExpressionSpecification = part.filter ? ['all', geometryFilter, part.filter] : geometryFilter;
   const shared = { ...common, id: layerId, filter };
   if (part.type === 'fill') {
@@ -368,4 +379,23 @@ export function resourcesGroup({
     }
   }
   return Object.keys(images).length > 0 ? { sources, layers, images } : { sources, layers };
+}
+
+/**
+ * 三维模型层的插槽（ADR 0161）：给出的资源（从上到下）里画在地图上（已加入、显示、校验通过）的、最下面那个资源的最下面一层，
+ * ID 同 resourcesGroup；都没画时为 undefined
+ */
+export function lowestLayerOf(
+  state: ResourceLayersState,
+  invalid: ReadonlyMap<string, unknown>,
+  codes: readonly string[],
+  overrideOf: SymbolOverrideOf = noSymbolOverride
+): string | undefined {
+  const code = codes.findLast(item => isDrawn(state.displays.get(item)) && !invalid.has(item));
+  const resource = code === undefined ? undefined : state.catalog?.resources.get(code);
+  if (code === undefined || !resource) {
+    return undefined;
+  }
+  const [part] = resourceStyleLayers(resource, resourceStyle(code), overrideOf(code)).parts;
+  return part && partLayerId(resourceSourceId(code), part);
 }

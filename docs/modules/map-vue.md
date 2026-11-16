@@ -46,6 +46,7 @@ map.bindStyle({
 - "不显示"用推导结果返回空分组（`{ sources: {}, layers: [] }`）表达，不靠组件卸载
 - 推导只依赖拥有者自己的状态，不依赖相机：相机每帧都变，依赖它就会每帧重新推导、提交
 - 三维独有的内容（瓦片集、钻地）用 `map.bindScene(() => SceneContent)` 绑定，同样只在这个组件的 setup 里、只能绑定一次；推导出错或内容不合法时报告并跳过这一轮，同一个失败只报告一次（ADR 0081）
+- 三维模型层的插槽用 `map.bindSceneSlot(() => layerId | undefined)` 绑定（ADR 0161），只在这个组件的 setup 里、只能绑定一次：模型层插在推导出的图层下面，不在样式里、在 `sceneBelow` 及以上时按 `sceneBelow` 放。它进提交器同一个侦听，分组提交成功以后紧跟着 `setSceneSlot`，同一轮只通知一次；推导出错时整批不提交，同一个失败只报告一次
 
 ```tsx
 // 页面的渲染：画布和悬浮面板都放在 provideMap 所在的组件下面
@@ -72,7 +73,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 |---|---|
 | setup 中 `bindStyle` | 登记推导函数，每个包进提交器自己的 `computed` |
 | `onBeforeMount` | 关闭登记；所有绑定的初始值用一次 `setGroups` 提交；开始侦听 |
-| 之后每一轮变化 | 读取所有绑定的结果（`flush: 'pre'`），变化的分组用一次 `setGroups` 提交 |
+| 之后每一轮变化 | 读取所有绑定的结果（`flush: 'pre'`），变化的分组用一次 `setGroups` 提交，插槽变了再 `setSceneSlot` |
 | `onBeforeUnmount` | 停止侦听和提交，不逐组清空 |
 | `onUnmounted` | 释放会话 |
 
