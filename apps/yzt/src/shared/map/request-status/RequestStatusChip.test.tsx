@@ -75,6 +75,9 @@ describe('RequestStatusChip', () => {
       'resource:b 的名称10 张'
     ]);
 
+    // 能选的行悬停时说明点了做什么（面板下段叫"图层"，用户 2026-11-16）
+    expect(popover.get('[data-request-row="resource:a"]').attributes('title')).toBe('在图层列表中选中');
+    expect(popover.get('[data-request-row="basemap"]').attributes('title')).toBeUndefined();
     await popover.get('[data-request-row="resource:a"]').trigger('click');
     await popover.get('[data-request-row="basemap"]').trigger('click');
     await popover.get('button[aria-label="重新加载：model:m 的名称"]').trigger('click');

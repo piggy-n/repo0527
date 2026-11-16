@@ -38,7 +38,7 @@ interface PopoverSetup {
   readonly height: number;
   /** 目录的行数 */
   readonly catalog: Ref<number>;
-  /** 当前图层的行，选中的是 a */
+  /** 图层的行，选中的是 a */
   readonly order: Ref<readonly string[]>;
   /** 手机宽度：盖在面板下段上 */
   readonly sheet?: boolean;
@@ -47,8 +47,8 @@ interface PopoverSetup {
 }
 
 /**
- * 面板在 height 高的列里：目录 catalog 行，当前图层按 order 的顺序排，每行 32 高；选中 order 里的 a，浮层的箭头对着它。
- * 箭头对着的元素和页面一样读当前图层的顺序（CurrentMapLayerPanel 的 popoverAnchor）
+ * 面板在 height 高的列里：目录 catalog 行，图层按 order 的顺序排，每行 32 高；选中 order 里的 a，浮层的箭头对着它。
+ * 箭头对着的元素和页面一样读图层的顺序（CurrentMapLayerPanel 的 popoverAnchor）
  */
 function setup({ height, catalog, order, sheet = false, content = 80 }: PopoverSetup) {
   const host = document.body.appendChild(document.createElement('div'));
@@ -146,7 +146,7 @@ function frames(count: number): Promise<void> {
 }
 
 describe('LayerPopover（真实的布局）', () => {
-  it('放不下时在分割线上按方向键：当前图层整段上移，箭头仍对着选中的行', async () => {
+  it('放不下时在分割线上按方向键：图层整段上移，箭头仍对着选中的行', async () => {
     const order = ref(Array.from({ length: 20 }, (_, index) => (index === 0 ? 'a' : `r${index}`)));
     using ctx = setup({ height: 600, catalog: ref(30), order });
     await frames(4);
@@ -160,7 +160,7 @@ describe('LayerPopover（真实的布局）', () => {
     expect(ctx.loopErrors).toStrictEqual([]);
   });
 
-  it('都放得下时目录变矮（搜索、收起分类）：当前图层跟着上移，箭头仍对着选中的行', async () => {
+  it('都放得下时目录变矮（搜索、收起分类）：图层跟着上移，箭头仍对着选中的行', async () => {
     const catalog = ref(4);
     using ctx = setup({ height: 700, catalog, order: ref(['a', 'b']) });
     await frames(4);
@@ -186,7 +186,7 @@ describe('LayerPopover（真实的布局）', () => {
     expect(Math.abs(ctx.offset())).toBeLessThanOrEqual(1);
   });
 
-  it('手机宽度、内容比下段高：目录变矮、当前图层多一行时跟着盖住新的下段，不报 ResizeObserver loop', async () => {
+  it('手机宽度、内容比下段高：目录变矮、图层多一行时跟着盖住新的下段，不报 ResizeObserver loop', async () => {
     const catalog = ref(4);
     const order = ref<readonly string[]>(['a', 'b']);
     using ctx = setup({ height: 700, catalog, order, sheet: true, content: 2000 });

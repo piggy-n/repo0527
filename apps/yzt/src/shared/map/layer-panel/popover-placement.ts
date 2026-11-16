@@ -1,4 +1,4 @@
-// 当前图层浮层的位置（ADR 0157）：在面板右边，箭头对着选中的行；都是视口坐标，纯函数
+// 图层浮层的位置（ADR 0157）：在面板右边，箭头对着选中的行；都是视口坐标，纯函数
 
 /** 视口里的一个矩形 */
 export interface ViewportBox {
@@ -13,7 +13,7 @@ export interface PopoverPlacementInput {
   readonly panel: ViewportBox;
   /** 选中的行；所在的组收起时是组的标题 */
   readonly anchor: ViewportBox;
-  /** 当前图层的滚动区：行滚出去时箭头停在它的边上 */
+  /** 图层的滚动区：行滚出去时箭头停在它的边上 */
   readonly list: ViewportBox;
   readonly viewport: { readonly width: number; readonly height: number };
   /** 浮层内容本来的高度 */
@@ -44,7 +44,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 /**
  * 浮层的位置：左边离面板右边 10；箭头平时对着标题行，整体上移让箭头对准选中行的中线，放不下时贴着视口的上下边、箭头跟着行走；
- * 行滚出当前图层的滚动区时，箭头停在滚动区边上
+ * 行滚出图层的滚动区时，箭头停在滚动区边上
  */
 export function layerPopoverPlacement(input: PopoverPlacementInput): PopoverPlacement {
   const { panel, anchor, list, viewport, height } = input;

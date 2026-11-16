@@ -14,14 +14,14 @@ import styles from './RequestStatusChip.module.scss';
 
 /**
  * 状态栏右边的请求状态（ADR 0158，原型 `/design.local/current-map-layers/`）：空闲时不显示；点开是"数据加载"的明细，
- * 分加载中、有失败、已完成三组。点一行交给页面在当前图层里选中，模型失败的可以重试；点外面、Esc、再点条目关闭。
+ * 分加载中、有失败、已完成三组。点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点条目关闭。
  * 时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
  */
 export const RequestStatusChip = defineComponent({
   name: 'RequestStatusChip',
   props: {
     status: { type: Object as PropType<RequestStatus>, required: true },
-    /** 能在当前图层里选中的项 */
+    /** 能在面板的图层列表里选中的项 */
     selectable: { type: Function as PropType<(key: string) => boolean>, default: () => false }
   },
   emits: {
@@ -105,7 +105,7 @@ export const RequestStatusChip = defineComponent({
         <li
           key={item.key}
           class={[styles.row, selectable && styles.selectable]}
-          title={selectable ? '在当前图层中选中' : undefined}
+          title={selectable ? '在图层列表中选中' : undefined}
           data-request-row={item.key}
           onClick={(event: MouseEvent) => {
             // 点在行的空白处也选中；名称、重试是按钮，自己处理

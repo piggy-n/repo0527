@@ -43,7 +43,7 @@ import {
 } from '@/shared/map/layer-panel/catalog-tree';
 import { CatalogTree, type MenuPoint } from '@/shared/map/layer-panel/CatalogTree';
 import { CurrentLayerGroup, type RowAnimation } from '@/shared/map/layer-panel/CurrentLayerGroup';
-import { LayerPanelShell, type PanelFloatingContext } from '@/shared/map/layer-panel/LayerPanelShell';
+import { LayerPanelShell, type PanelFloatingContext, type PanelTab } from '@/shared/map/layer-panel/LayerPanelShell';
 import { LayerPopover } from '@/shared/map/layer-panel/LayerPopover';
 import { type PanelMenuEntry, PanelMenu } from '@/shared/map/layer-panel/PanelMenu';
 import { type PanelToolItem, PanelToolbar } from '@/shared/map/layer-panel/PanelToolbar';
@@ -57,14 +57,15 @@ import styles from './CurrentMapLayerPanel.module.scss';
 const ENTER_MS = 900;
 const FLASH_MS = 1400;
 
-/** 资源目录显示的内容（用户 2026-11-15）：全部、只有二维资源、只有三维模型 */
+/** 上段"资源"显示的内容（用户 2026-11-15）：全部、只有二维资源、只有三维模型 */
 type CatalogView = 'all' | 'resources' | 'models';
 
-// 标题后面的页签：顺序固定（资源在模型前面，用户 2026-11-15 确认），默认项随维度变；标题行只放得下两个字
+// 搜索行下面的标签：顺序固定（资源在模型前面，用户 2026-11-15 确认），默认项随维度变；
+// 叫法用全称（用户 2026-11-16 选的丁：标签另起一行，放得下）
 const CATALOG_VIEWS: readonly { readonly id: CatalogView; readonly label: string }[] = [
   { id: 'all', label: '全部' },
-  { id: 'resources', label: '资源' },
-  { id: 'models', label: '模型' }
+  { id: 'resources', label: '二维资源' },
+  { id: 'models', label: '三维模型' }
 ];
 
 const catalogViewOf = (id: string): CatalogView | undefined => CATALOG_VIEWS.find(item => item.id === id)?.id;
@@ -72,7 +73,7 @@ const catalogViewOf = (id: string): CatalogView | undefined => CATALOG_VIEWS.fin
 /** 浮层：透明度或图例（用户 2026-11-14：两个分开，没有页签） */
 type PopoverKind = 'opacity' | 'legend';
 
-/** 开着的右键菜单：在目录还是当前图层上，右键的是哪一项，在哪里打开 */
+/** 开着的右键菜单：在资源还是图层上，右键的是哪一项，在哪里打开 */
 interface PanelMenuState {
   readonly source: 'catalog' | 'current';
   readonly key: string;
@@ -89,11 +90,11 @@ interface LocateInfo {
 type LoadStatus = 'ready' | 'loading' | 'failed';
 
 /**
- * 现状底图的资源图层面板（ADR 0157），二三维共用：上段"资源目录"找资源和三维模型、加入和移出，下段"当前图层"分"二维图层"
- * "三维模型"两组管地图上的内容，共用工具栏操作选中的一行。把 resource-map、scene-models 的目录、行、图例和 shared 的面板部件
- * 拼在一起；选中、浮层、菜单这些界面状态在这里，图层和模型的状态在各自的拥有者里。二维里模型组变淡、标"仅三维"，模型不能定位、
- * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）。三维里先体现模型（用户 2026-11-15 选的方案乙，分页按方案一做成
- * 标题后面的"全部、资源、模型"）：进入三维时目录只显示模型，当前图层里模型组在上
+ * 现状底图的资源图层面板（ADR 0157），二三维共用：上段"资源"找资源和三维模型、加入和移出，下段"图层"分"二维图层"
+ * "三维模型"两组管地图上的内容，共用工具栏操作选中的一行（两段的叫法用户 2026-11-16 定）。把 resource-map、scene-models 的目录、
+ * 行、图例和 shared 的面板部件拼在一起；选中、浮层、菜单这些界面状态在这里，图层和模型的状态在各自的拥有者里。二维里模型组变淡、
+ * 标"仅三维"，模型不能定位、不能漫游，其余操作照常（用户 2026-11-14 交给会话定）。三维里先体现模型（用户 2026-11-15 选的方案乙；
+ * 切换是搜索行下面带数量的"全部、二维资源、三维模型"，用户 2026-11-16 选的丁）：进入三维时只显示模型，图层里模型组在上
  */
 export const CurrentMapLayerPanel = defineComponent({
   name: 'CurrentMapLayerPanel',
@@ -111,7 +112,7 @@ export const CurrentMapLayerPanel = defineComponent({
     sheet: { type: Boolean, default: false },
     /** 地图数据的请求状态（ADR 0158）：二维图层加载超过 0.4 秒时行内转圈 */
     requests: { type: Object as PropType<RequestStatus>, default: undefined },
-    /** 在当前图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
+    /** 在图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
     reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null },
     /** 右侧"图例"页正在编辑的资源：图例浮层开着同一个资源时关掉，后打开编辑的一方为准（ADR 0157） */
     legendYield: { type: String as PropType<string | null>, default: null }
@@ -132,10 +133,10 @@ export const CurrentMapLayerPanel = defineComponent({
     const scene = computed(() => map.dimension.value === '3d');
     const modelOf = (id: string) => props.models.models.value.find(model => model.id === id);
 
-    // ---------- 资源目录
+    // ---------- 资源（上段）
     const keyword = ref('');
     const searching = computed(() => keyword.value.trim() !== '');
-    // 目录显示的内容、"模型"时的类型筛选：界面状态，不持久化；进入三维是"模型"，进入二维是"全部"（同以前的二维目录）
+    // 显示的内容、"三维模型"时的类型筛选：界面状态，不持久化；进入三维是"三维模型"，进入二维是"全部"（同以前的二维目录）
     const view = ref<CatalogView>(scene.value ? 'models' : 'all');
     const modelKind = ref<string | null>(null);
     watch(scene, value => (view.value = value ? 'models' : 'all'));
@@ -147,7 +148,7 @@ export const CurrentMapLayerPanel = defineComponent({
     const modelRootNodes = computed(() =>
       modelCatalogNodes(props.models.models.value, props.models.added.value, keyword.value)
     );
-    // "模型"直接按市分组；"全部"里三维模型是一个分类，三维里在最上面、二维里在最后
+    // "三维模型"直接按市分组；"全部"里三维模型是一个分类，三维里在最上面、二维里在最后
     const viewNodes = (which: CatalogView) => {
       if (which === 'models') {
         return cityNodes.value;
@@ -160,15 +161,20 @@ export const CurrentMapLayerPanel = defineComponent({
         : [...resourceNodes.value, ...modelRootNodes.value];
     };
     const nodes = computed(() => viewNodes(view.value));
-    // "模型""资源"只搜这一项；另一项也有匹配时在列表下面提示，点了切过去
-    const otherView = computed((): CatalogView | null =>
-      view.value === 'models' ? 'resources' : view.value === 'resources' ? 'models' : null
-    );
-    const otherMatches = computed(() =>
-      otherView.value !== null && searching.value ? viewNodes(otherView.value).flatMap(leavesOf).length : 0
-    );
+    // 标签上的数量：这一项显示的资源和模型（不算分类），搜索时是匹配的项数，"三维模型"里也按类型筛选；代替以前列表下面
+    // "还有 N 项匹配"的提示（用户 2026-11-16）。资源目录、模型清单还没到或读不到时，用到它的项不写数量
+    const views = computed((): PanelTab[] => {
+      const resourcesReady = props.status === 'ready';
+      const modelsReady = props.modelsStatus === 'ready';
+      const readyOf = { all: resourcesReady && modelsReady, resources: resourcesReady, models: modelsReady };
+      return CATALOG_VIEWS.map(({ id, label }) => ({
+        id,
+        label,
+        count: readyOf[id] ? viewNodes(id).flatMap(leavesOf).length : null
+      }));
+    });
     const expanded = ref<ReadonlySet<string>>(new Set());
-    // 第一次显示"模型"时展开各市，模型一眼能看到；之后不改用户的展开
+    // 第一次显示"三维模型"时展开各市，模型一眼能看到；之后不改用户的展开
     let citiesOpened = false;
     watch(
       () => (modelsView.value ? branchKeys(cityNodes.value) : []),
@@ -195,7 +201,7 @@ export const CurrentMapLayerPanel = defineComponent({
     watch(nodes, list => (selection.value = prunedSelection(selection.value, new Set(allKeys(list)))));
     const cover = computed(() => catalogCover(nodes.value, selection.value.keys));
 
-    // ---------- 当前图层
+    // ---------- 图层（下段）
     const layers = computed(() => currentLayers(state.value));
     const layerKeys = computed(() => layers.value.map(layer => resourceKey(layer.code)));
     // 拥有者的目录里还有的模型（清单刷新后没有了的不显示）
@@ -221,10 +227,10 @@ export const CurrentMapLayerPanel = defineComponent({
     const selectedCode = computed(() => (selected.value === null ? null : resourceCodeOfKey(selected.value)));
     const popover = ref<{ readonly kind: PopoverKind; readonly configuring: boolean } | null>(null);
     const menu = ref<PanelMenuState | null>(null);
-    // 面板和当前图层滚动区的元素：外壳渲染浮层插槽时交出来，事件处理里找行用；不需要响应
+    // 面板和图层滚动区的元素：外壳渲染浮层插槽时交出来，事件处理里找行用；不需要响应
     let floating: PanelFloatingContext | null = null;
 
-    // 选中的行不在当前图层里了（别处移出、目录刷新）：没有选中，浮层关闭
+    // 选中的行不在图层里了（别处移出、目录刷新）：没有选中，浮层关闭
     watch(currentKeys, keys => {
       if (selected.value !== null && !keys.includes(selected.value)) {
         selected.value = null;
@@ -342,7 +348,7 @@ export const CurrentMapLayerPanel = defineComponent({
       }
     };
 
-    // 目录里的定位：在当前图层里选中、滚到中间、闪两下（用户 2026-11-14：双击改为定位）
+    // 目录里的定位：在图层里选中、滚到中间、闪两下（用户 2026-11-14：双击改为定位）
     const locateInList = (key: string) => {
       if (!currentKeys.value.includes(key)) {
         return;
@@ -366,7 +372,7 @@ export const CurrentMapLayerPanel = defineComponent({
       }
     );
 
-    // 请求状态的明细里点了一行：在当前图层里选中、滚到、闪
+    // 请求状态的明细里点了一行：在图层里选中、滚到、闪
     watch(
       () => props.reveal,
       request => {
@@ -796,7 +802,8 @@ export const CurrentMapLayerPanel = defineComponent({
       return [<div class={styles.empty}>{props.modelsStatus === 'loading' ? '三维模型清单加载中' : '没有找到模型'}</div>];
     };
 
-    // 资源目录还没到或读不到："全部"里在资源的位置说明、可以重试，模型照常列出；"资源"由外壳整段说明
+    // 资源目录还没到或读不到："全部"里在资源的位置说明、可以重试，模型照常列出；"二维资源"由外壳整段说明。
+    // 文字跟着上段叫"资源"（用户 2026-11-16）
     const renderResourcesStatus = (): VNode[] => {
       if (view.value !== 'all' || props.status === 'ready') {
         return [];
@@ -805,12 +812,12 @@ export const CurrentMapLayerPanel = defineComponent({
         <div class={styles.notice} data-resources-status>
           {props.status === 'failed'
             ? [
-                <span>资源目录加载失败</span>,
+                <span>资源加载失败</span>,
                 <ElButton class="button-inline" link type="primary" size="small" onClick={() => emit('retry')}>
                   重试
                 </ElButton>
               ]
-            : [<span>正在加载资源目录…</span>]}
+            : [<span>正在加载资源…</span>]}
         </div>
       ];
     };
@@ -821,7 +828,7 @@ export const CurrentMapLayerPanel = defineComponent({
         expanded={expanded.value}
         selection={selection.value}
         searching={searching.value}
-        label="资源目录"
+        label="资源"
         onUpdate:selection={(next: CatalogSelection) => (selection.value = next)}
         onUpdate:expanded={(next: ReadonlySet<string>) => (expanded.value = next)}
         onAdd={addKeys}
@@ -843,21 +850,7 @@ export const CurrentMapLayerPanel = defineComponent({
       return scene.value ? [...body, ...resourcesStatus] : [...resourcesStatus, ...body];
     };
 
-    const renderOtherMatches = (): VNode[] =>
-      otherMatches.value > 0
-        ? [
-            <button
-              type="button"
-              class={styles.otherView}
-              data-other-view
-              onClick={() => (view.value = otherView.value ?? view.value)}
-            >
-              {`${otherView.value === 'models' ? '三维模型' : '二维资源'}里还有 ${otherMatches.value} 项匹配`}
-            </button>
-          ]
-        : [];
-
-    // 模型清单读不到时目录里没有三维模型：在目录最后提示，可以重试（只看资源时不提示）
+    // 模型清单读不到时目录里没有三维模型：在目录最后提示，可以重试（只看二维资源时不提示）
     const renderModelsFailed = (): VNode[] =>
       props.modelsStatus === 'failed' && view.value !== 'resources'
         ? [
@@ -958,12 +951,12 @@ export const CurrentMapLayerPanel = defineComponent({
         onRetry={() => emit('retry')}
         onUpdate:collapsed={(collapsed: boolean) => emit('update:collapsed', collapsed)}
         onUpdate:ratio={(ratio: number) => props.layout.setCheckedRatio(ratio)}
-        views={CATALOG_VIEWS}
+        views={views.value}
         view={view.value}
         onUpdate:view={(id: string) => (view.value = catalogViewOf(id) ?? view.value)}
       >
         {{
-          catalogTools: () => [<PanelToolbar items={catalogTools.value} label="资源目录的操作" onAction={onCatalogTool} />],
+          catalogTools: () => [<PanelToolbar items={catalogTools.value} label="资源的操作" onAction={onCatalogTool} />],
           catalogFilter: () => [
             <ElInput
               class={styles.search}
@@ -984,8 +977,8 @@ export const CurrentMapLayerPanel = defineComponent({
               <BatchYearSelect layers={props.resources} />
             )
           ],
-          catalog: () => [...renderCatalog(), ...renderOtherMatches(), ...renderModelsFailed()],
-          currentTools: () => [<PanelToolbar items={currentTools.value} label="当前图层的操作" onAction={onCurrentTool} />],
+          catalog: () => [...renderCatalog(), ...renderModelsFailed()],
+          currentTools: () => [<PanelToolbar items={currentTools.value} label="图层的操作" onAction={onCurrentTool} />],
           current: () => renderCurrent(),
           floating: (context: PanelFloatingContext) => {
             floating = context;
@@ -1000,7 +993,7 @@ export const CurrentMapLayerPanel = defineComponent({
                   open
                   point={menu.value.point}
                   items={menuItems.value}
-                  label={menu.value.source === 'catalog' ? '资源目录的菜单' : '当前图层的菜单'}
+                  label={menu.value.source === 'catalog' ? '资源的菜单' : '图层的菜单'}
                   returnFocus={menuReturn(menu.value)}
                   onSelect={onMenuSelect}
                   onClose={() => (menu.value = null)}

@@ -29,8 +29,15 @@ const TOKENS = {
 // n 行、每行 32 高的内容
 const rows = (n: number) => Array.from({ length: n }, (_, index) => h('div', { key: index, style: { height: '32px' } }));
 
+// 搜索行下面带数量的标签（用户 2026-11-16 选的丁），数量取真实目录的量级
+const VIEWS = [
+  { id: 'all', label: '全部', count: 46 },
+  { id: 'resources', label: '二维资源', count: 40 },
+  { id: 'models', label: '三维模型', count: 6 }
+];
+
 /**
- * 和面板所在的地图页一样：一个纵向 flex 的列，列的高度就是面板最高能到的高度。目录 catalog 行、当前图层 current 行；
+ * 和面板所在的地图页一样：一个纵向 flex 的列，列的高度就是面板最高能到的高度。资源 catalog 行、图层 current 行；
  * 分割线的位置由页面持有，按面板发出的事件改。给出 shown 时放在 KeepAlive 里，为 false 时停用
  */
 function setup(height: number, catalog: number, current: number, shown?: Ref<boolean>) {
@@ -56,6 +63,8 @@ function setup(height: number, catalog: number, current: number, shown?: Ref<boo
           <LayerPanelShell
             title="资源图层"
             ratio={ratio.value}
+            views={VIEWS}
+            view="all"
             onUpdate:ratio={(value: number) => (ratio.value = value)}
           >
             {{
@@ -92,7 +101,7 @@ function setup(height: number, catalog: number, current: number, shown?: Ref<boo
   };
 }
 
-// 现状底图两段标题右边的工具栏（ADR 0157）：目录 4 个按钮，当前图层 7 个按钮，都带分隔线
+// 现状底图两段标题右边的工具栏（ADR 0157）：目录 4 个按钮，图层 7 个按钮，都带分隔线
 const CATALOG_TOOLS: PanelToolItem[] = [
   { key: 'add', icon: 'layer-add', label: '添加' },
   { key: 'remove', icon: 'layer-remove', label: '移除' },
@@ -112,7 +121,7 @@ const CURRENT_TOOLS: PanelToolItem[] = [
   { key: 'remove-layer', icon: 'layer-remove', label: '移除' }
 ];
 
-/** 面板放在 width 宽的列里，标题行用真实的工具栏，目录标题后面是"全部 资源 模型" */
+/** 面板放在 width 宽的列里，标题行用真实的工具栏，搜索行下面是"全部 二维资源 三维模型"和数量 */
 function setupHeads(width: number) {
   const host = document.body.appendChild(document.createElement('div'));
   const Page = defineComponent({
@@ -121,21 +130,12 @@ function setupHeads(width: number) {
       provideMap({ groups: [], camera: CAMERA });
       return () => (
         <div data-column style={{ display: 'flex', flexDirection: 'column', width: `${width}px`, height: '600px', ...TOKENS }}>
-          <LayerPanelShell
-            title="资源图层"
-            ratio={0.4}
-            views={[
-              { id: 'all', label: '全部' },
-              { id: 'resources', label: '资源' },
-              { id: 'models', label: '模型' }
-            ]}
-            view="all"
-          >
+          <LayerPanelShell title="资源图层" ratio={0.4} views={VIEWS} view="all">
             {{
-              catalogTools: () => [<PanelToolbar items={CATALOG_TOOLS} label="资源目录的操作" />],
+              catalogTools: () => [<PanelToolbar items={CATALOG_TOOLS} label="资源的操作" />],
               catalogFilter: () => [h('div', { style: { height: '32px' } })],
               catalog: () => rows(10),
-              currentTools: () => [<PanelToolbar items={CURRENT_TOOLS} label="当前图层的操作" />],
+              currentTools: () => [<PanelToolbar items={CURRENT_TOOLS} label="图层的操作" />],
               current: () => rows(5),
               floating: () => []
             }}
@@ -154,12 +154,15 @@ function setupHeads(width: number) {
   };
 }
 
-// 面板在 width 宽的列里：两段工具栏最右的按钮是否整个在面板里（面板裁掉外面的），目录的页签是否在自己的区域里滚动
+// 面板在 width 宽的列里：两段工具栏最右的按钮是否整个在面板里（面板裁掉外面的）；标签行是否一行（24 高的标签加 8 间距），
+// 最右的标签是否在面板的内边距以内，有没有横向溢出
 async function headsAt(width: number) {
   using ctx = setupHeads(width);
   await frames(2);
+  const sectionRect = (section: string) =>
+    ctx.wrapper.get(`[data-panel-section="${section}"]`).element.getBoundingClientRect();
   const inside = (section: string, label: string) => {
-    const panel = ctx.wrapper.get(`[data-panel-section="${section}"]`).element.getBoundingClientRect();
+    const panel = sectionRect(section);
     const last = ctx.wrapper
       .get(`[role="toolbar"][aria-label="${label}"]`)
       .findAll('button')
@@ -167,16 +170,23 @@ async function headsAt(width: number) {
       ?.element.getBoundingClientRect();
     return last !== undefined && last.right <= panel.right && last.left >= panel.left;
   };
-  const views = ctx.wrapper.get('[role="tablist"][aria-label="资源目录显示的内容"]').element;
+  const views = ctx.wrapper.get('[role="tablist"][aria-label="资源显示的内容"]').element;
+  const tabs = [...views.querySelectorAll('[role="tab"]')].map(tab => tab.getBoundingClientRect());
+  const catalog = sectionRect('catalog');
   return {
-    catalogInside: inside('catalog', '资源目录的操作'),
-    currentInside: inside('current', '当前图层的操作'),
-    viewsScroll: views.scrollWidth > views.clientWidth,
-    // 页签离滚动区的上边、左边至少 3：焦点框（2 宽、离开 1）不被滚动区裁掉（2026-11-15 核对发现）
-    focusRoom: (() => {
-      const area = views.getBoundingClientRect();
-      const first = views.querySelector('[role="tab"]')?.getBoundingClientRect();
-      return first !== undefined && first.top - area.top >= 3 && first.left - area.left >= 3;
+    catalogInside: inside('catalog', '资源的操作'),
+    currentInside: inside('current', '图层的操作'),
+    viewsOneLine:
+      new Set(tabs.map(tab => tab.top)).size === 1 &&
+      tabs.every(tab => tab.height === 24) &&
+      views.getBoundingClientRect().height === 32,
+    // 左右各留 16（同搜索行），焦点框（2 宽、离开 1）在面板里
+    viewsInside:
+      views.scrollWidth <= views.clientWidth &&
+      tabs.every(tab => tab.left >= catalog.left + 16 && tab.right <= catalog.right - 16),
+    panelScroll: (() => {
+      const panel = ctx.wrapper.get('[data-layer-panel]').element;
+      return panel.scrollWidth > panel.clientWidth;
     })()
   };
 }
@@ -196,7 +206,7 @@ function overflows(section: Element): boolean {
   return scroll instanceof HTMLElement && scroll.scrollHeight > scroll.clientHeight;
 }
 
-// 目录、分割线、当前图层三块的位置，面板的高度，两段的滚动区是否放不下
+// 目录、分割线、图层三块的位置，面板的高度，两段的滚动区是否放不下
 function areas(wrapper: VueWrapper) {
   const separator = wrapper.get('[role="separator"]').element;
   const catalog = wrapper.get('[data-panel-section="catalog"]').element;
@@ -267,18 +277,22 @@ describe('LayerPanelShell（真实的布局）', () => {
     expect(up.catalog + up.current).toBeCloseTo(before.catalog + before.current, 0);
     expect(ctx.ratio.value).toBeGreaterThan(0.4);
 
-    // 当前图层最少一个标题加两行，目录最少标题、搜索行加三行（panel-split.ts）
+    // 图层最少一个标题加两行，资源最少标题、搜索行、标签行（24 高加 8 间距）加三行（panel-split.ts）
     drag(up.separator, 1000);
     await frames(3);
     expect(areas(ctx.wrapper).current).toBeCloseTo(40 + 2 * 36, 0);
     drag(up.separator, -1000);
     await frames(3);
-    expect(areas(ctx.wrapper).catalog).toBeCloseTo(40 + 40 + 3 * 32, 0);
+    const narrowest = areas(ctx.wrapper);
+    expect(narrowest.catalog).toBeCloseTo(40 + 40 + 32 + 3 * 32, 0);
+    // 拖到最小时目录的滚动区正好放下 3 行
+    const scroll = ctx.wrapper.get('[data-panel-section="catalog"]').element.lastElementChild;
+    expect(scroll?.getBoundingClientRect().height).toBeCloseTo(3 * 32, 0);
     expect(areas(ctx.wrapper).panel).toBeCloseTo(600, 0);
     expect(ctx.loopErrors).toStrictEqual([]);
   });
 
-  it('分割线上按方向键：往上一步当前图层高可用高度的 5%', async () => {
+  it('分割线上按方向键：往上一步图层高可用高度的 5%', async () => {
     using ctx = setup(600, 30, 20);
     await frames(4);
     const before = areas(ctx.wrapper);
@@ -324,14 +338,18 @@ describe('LayerPanelShell（真实的布局）', () => {
     }
   );
 
-  it('手机宽度（294 宽的面板）：两段标题行的工具栏都在面板里，最右的按钮完整可见；目录的页签收缩、横向滚动（2026-11-15 审查发现）', async () => {
-    expect(await headsAt(320)).toStrictEqual({
-      catalogInside: true,
-      currentInside: true,
-      viewsScroll: false,
-      focusRoom: true
-    });
-    expect(await headsAt(294)).toStrictEqual({ catalogInside: true, currentInside: true, viewsScroll: true, focusRoom: true });
+  it('320 宽和手机宽度（294 宽的面板）：两段标题行的工具栏都在面板里，最右的按钮完整可见（2026-11-15 审查发现）；搜索行下面的标签一行放得下，不横向溢出', async () => {
+    const fits = { catalogInside: true, currentInside: true, viewsOneLine: true, viewsInside: true, panelScroll: false };
+    expect(await headsAt(320)).toStrictEqual(fits);
+    expect(await headsAt(294)).toStrictEqual(fits);
+  });
+
+  it('360 宽的手机（264 宽的面板）：下段标题改成两个字"图层"以后，两段的工具栏也都在面板里（2026-11-16，原来最右的移除被裁掉约 13）', async () => {
+    expect(await headsAt(264)).toMatchObject({ catalogInside: true, currentInside: true, viewsInside: true, panelScroll: false });
+  });
+
+  it('更窄（240 宽）时标签换到下一行，不横向溢出', async () => {
+    expect(await headsAt(240)).toMatchObject({ viewsInside: true, panelScroll: false });
   });
 
   it('所在页面被缓存：停用期间量到的 0 不采用，再次激活的那一刻两段的高度和停用前一样（ADR 0063）', async () => {

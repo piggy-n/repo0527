@@ -26,7 +26,7 @@ function setup() {
   const errors: unknown[] = [];
   const wrapper = mount(
     defineComponent(() => () => (
-      <PanelMenu open={open.value} point={point.value} items={ITEMS} label="当前图层的菜单" returnFocus={() => origin} />
+      <PanelMenu open={open.value} point={point.value} items={ITEMS} label="图层的菜单" returnFocus={() => origin} />
     )),
     { attachTo: host, global: { config: { errorHandler: error => errors.push(error) } } }
   );
