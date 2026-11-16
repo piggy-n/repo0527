@@ -74,7 +74,6 @@ function setup({ height, catalog, order, sheet = false, content = 80 }: PopoverS
         <div style={{ display: 'flex', flexDirection: 'column', width: '320px', height: `${height}px`, ...TOKENS }}>
           <LayerPanelShell
             title="资源图层"
-            tabs={[{ id: 'core', label: '主节点' }]}
             ratio={ratio.value}
             onUpdate:ratio={(value: number) => (ratio.value = value)}
           >

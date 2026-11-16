@@ -324,6 +324,11 @@ $tree-node: '.el-tree > .el-tree-node';
   font-family: var(--font-family-base);
 }
 
+// 开关式的文字按钮按下时加粗（图例编辑里档位后面的"自定义"，用户 2026-11-15）；用法 <ElButton class="button-inline" link aria-pressed={…}>
+.el-button.button-inline[aria-pressed='true'] {
+  font-weight: var(--font-weight-semibold);
+}
+
 // 加大号按钮：48px 高、16px 半粗、8px 圆角，与 input-filled 搭配；用法 <ElButton class="button-xl">
 .el-button.button-xl {
   height: 48px;

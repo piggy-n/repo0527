@@ -53,25 +53,18 @@ import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus
 import { type MoveAction, moveIndex, selectionAfterRemoval, steppedKey } from './current-list';
 import styles from './CurrentMapLayerPanel.module.scss';
 
-// 头部的页签：统计报表、分节点资源先显示"暂无数据"（ADR 0053 第 6 节）
-const TABS = [
-  { id: 'core', label: '主节点' },
-  { id: 'report', label: '统计报表' },
-  { id: 'nodes', label: '分节点资源' }
-] as const;
-
 // 新加入的行滑入、定位到的行闪两下的时长，和样式里的动画一致
 const ENTER_MS = 900;
 const FLASH_MS = 1400;
 
-/** 资源目录显示的内容（用户 2026-11-15）：全部、只有三维模型、只有二维资源 */
-type CatalogView = 'all' | 'models' | 'resources';
+/** 资源目录显示的内容（用户 2026-11-15）：全部、只有二维资源、只有三维模型 */
+type CatalogView = 'all' | 'resources' | 'models';
 
-// 标题后面的页签：顺序固定，默认项随维度变；标题行只放得下两个字
+// 标题后面的页签：顺序固定（资源在模型前面，用户 2026-11-15 确认），默认项随维度变；标题行只放得下两个字
 const CATALOG_VIEWS: readonly { readonly id: CatalogView; readonly label: string }[] = [
   { id: 'all', label: '全部' },
-  { id: 'models', label: '模型' },
-  { id: 'resources', label: '资源' }
+  { id: 'resources', label: '资源' },
+  { id: 'models', label: '模型' }
 ];
 
 const catalogViewOf = (id: string): CatalogView | undefined => CATALOG_VIEWS.find(item => item.id === id)?.id;
@@ -100,7 +93,7 @@ type LoadStatus = 'ready' | 'loading' | 'failed';
  * "三维模型"两组管地图上的内容，共用工具栏操作选中的一行。把 resource-map、scene-models 的目录、行、图例和 shared 的面板部件
  * 拼在一起；选中、浮层、菜单这些界面状态在这里，图层和模型的状态在各自的拥有者里。二维里模型组变淡、标"仅三维"，模型不能定位、
  * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）。三维里先体现模型（用户 2026-11-15 选的方案乙，分页按方案一做成
- * 标题后面的"全部、模型、资源"）：进入三维时目录只显示模型，当前图层里模型组在上
+ * 标题后面的"全部、资源、模型"）：进入三维时目录只显示模型，当前图层里模型组在上
  */
 export const CurrentMapLayerPanel = defineComponent({
   name: 'CurrentMapLayerPanel',
@@ -373,13 +366,11 @@ export const CurrentMapLayerPanel = defineComponent({
       }
     );
 
-    // 请求状态的明细里点了一行：面板头部在"统计报表"这类页签上时先切回两段，再选中、滚到、闪
-    const showCore = ref(0);
+    // 请求状态的明细里点了一行：在当前图层里选中、滚到、闪
     watch(
       () => props.reveal,
       request => {
         if (request) {
-          showCore.value++;
           locateInList(request.key);
         }
       }
@@ -961,7 +952,6 @@ export const CurrentMapLayerPanel = defineComponent({
     return () => (
       <LayerPanelShell
         title="资源图层"
-        tabs={TABS}
         status={view.value === 'resources' ? props.status : 'ready'}
         collapsed={props.collapsed}
         ratio={props.layout.checkedRatio.value}
@@ -970,7 +960,6 @@ export const CurrentMapLayerPanel = defineComponent({
         onUpdate:ratio={(ratio: number) => props.layout.setCheckedRatio(ratio)}
         views={CATALOG_VIEWS}
         view={view.value}
-        showCore={showCore.value}
         onUpdate:view={(id: string) => (view.value = catalogViewOf(id) ?? view.value)}
       >
         {{

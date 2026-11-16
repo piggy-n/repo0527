@@ -55,7 +55,6 @@ function setup(height: number, catalog: number, current: number, shown?: Ref<boo
         >
           <LayerPanelShell
             title="资源图层"
-            tabs={[{ id: 'core', label: '主节点' }]}
             ratio={ratio.value}
             onUpdate:ratio={(value: number) => (ratio.value = value)}
           >
@@ -113,7 +112,7 @@ const CURRENT_TOOLS: PanelToolItem[] = [
   { key: 'remove-layer', icon: 'layer-remove', label: '移除' }
 ];
 
-/** 面板放在 width 宽的列里，标题行用真实的工具栏，目录标题后面是"全部 模型 资源" */
+/** 面板放在 width 宽的列里，标题行用真实的工具栏，目录标题后面是"全部 资源 模型" */
 function setupHeads(width: number) {
   const host = document.body.appendChild(document.createElement('div'));
   const Page = defineComponent({
@@ -124,12 +123,11 @@ function setupHeads(width: number) {
         <div data-column style={{ display: 'flex', flexDirection: 'column', width: `${width}px`, height: '600px', ...TOKENS }}>
           <LayerPanelShell
             title="资源图层"
-            tabs={[{ id: 'core', label: '主节点' }]}
             ratio={0.4}
             views={[
               { id: 'all', label: '全部' },
-              { id: 'models', label: '模型' },
-              { id: 'resources', label: '资源' }
+              { id: 'resources', label: '资源' },
+              { id: 'models', label: '模型' }
             ]}
             view="all"
           >

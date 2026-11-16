@@ -732,21 +732,6 @@ describe('CurrentMapLayerPanel', () => {
     expect(roamItem().textContent).toBe('漫游显示后可用');
   });
 
-  it('面板头部在"统计报表"这类页签上时，请求明细里点了一行：先切回两段，再在当前图层里选中（2026-11-15 核对发现）', async () => {
-    const { wrapper, reveal } = await mountPanel();
-    await required(
-      wrapper.findAll('[role="tab"]').find(tab => tab.text() === '统计报表'),
-      '统计报表'
-    ).trigger('click');
-    expect(wrapper.find('[data-panel-section="current"]').exists()).toBe(false);
-
-    reveal.value = { key: 'resource:bgdc_dltb' };
-    await nextTick();
-    await nextTick();
-    expect(wrapper.find('[data-panel-section="current"]').exists()).toBe(true);
-    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
-  });
-
   it('选中的行所在的组收起时，浮层的箭头对着组的标题（2026-11-15 审查发现）', async () => {
     const { wrapper, models } = await mountPanel();
     models.add(['white']);
@@ -801,10 +786,10 @@ describe('CurrentMapLayerPanel', () => {
     scope.stop();
   });
 
-  describe('三维里先体现三维模型（用户 2026-11-15 选的方案乙，标题后面的"全部、模型、资源"是方案一）', () => {
-    it('二维默认"全部"、模型在最后；进入三维是"模型"，各市展开、能按类型筛选；三维里的"全部"模型在最上面；回到二维又是"全部"', async () => {
+  describe('三维里先体现三维模型（用户 2026-11-15 选的方案乙，标题后面的"全部、资源、模型"是方案一）', () => {
+    it('页签依次是全部、资源、模型（用户 2026-11-15）；二维默认"全部"、模型在最后；进入三维是"模型"，各市展开、能按类型筛选；三维里的"全部"模型在最上面；回到二维又是"全部"', async () => {
       const { wrapper, map } = await mountPanel();
-      expect(wrapper.findAll('[data-catalog-view]').map(item => item.text())).toStrictEqual(['全部', '模型', '资源']);
+      expect(wrapper.findAll('[data-catalog-view]').map(item => item.text())).toStrictEqual(['全部', '资源', '模型']);
       expect(shownView(wrapper)).toBe('全部');
       expect(catalogKeys(wrapper).at(-1)).toBe('model-root');
 

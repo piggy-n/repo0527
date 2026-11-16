@@ -1,13 +1,13 @@
 import { useResizeObserver } from '@vueuse/core';
 import { useMapOverlay, usePageActive, useShownElementSize } from '@mx/map-vue';
-import { MxPanel, MxTitle } from '@mx/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { type ListSplit, ratioForCheckedHeight, splitLists } from './panel-split';
 import styles from './LayerPanelShell.module.scss';
 
-/** 标题后面的一个页签 */
+/** 资源目录标题后面的一个页签 */
 export interface PanelTab {
   readonly id: string;
   readonly label: string;
@@ -31,7 +31,7 @@ const renderSectionTitle = (title: string) => <span class={styles.sectionTitle}>
 const arrowStep = (event: KeyboardEvent) => ({ ArrowUp: -1, ArrowDown: 1 })[event.key] ?? 0;
 
 /**
- * 资源图层面板的外壳（ADR 0157，取代 0053 第 6 节的两区）：标题、页签、收起竖条，下面是"资源目录"和"当前图层"两段，
+ * 资源图层面板的外壳（ADR 0157，取代 0053 第 6 节的两区）：头部只有标题和收起，收起后是竖条，下面是"资源目录"和"当前图层"两段，
  * 中间的分割线可以拖动（高度的分法同 ADR 0060，panel-split.ts）。两段的内容、工具栏和浮层都由页面经插槽给出；
  * 分割线的位置由页面持有（记在偏好里），收起与否由页面给出。会挡住定位，登记为贴左边的悬浮元素
  */
@@ -39,8 +39,6 @@ export const LayerPanelShell = defineComponent({
   name: 'LayerPanelShell',
   props: {
     title: { type: String, required: true },
-    /** 第一个是主页签，显示两段；其余显示"暂无数据" */
-    tabs: { type: Array as PropType<readonly PanelTab[]>, required: true },
     /**
      * 资源目录这一段的状态：不是 ready 时目录换成加载中或失败和重试；搜索行、浮层照常（页面按目录当前显示的内容给，
      * 只看三维模型时资源目录没到也是 ready，ADR 0157）
@@ -52,9 +50,7 @@ export const LayerPanelShell = defineComponent({
     /** 资源目录标题后面的文字页签（目录显示什么，ADR 0157）；空的时候没有 */
     views: { type: Array as PropType<readonly PanelTab[]>, default: () => [] },
     /** 选中的那个页签的 id */
-    view: { type: String, default: '' },
-    /** 回到主页签的次数：每加一，从"统计报表"这类页签切回两段（在当前图层里选中一行之前，一次性命令写成计数） */
-    showCore: { type: Number, default: 0 }
+    view: { type: String, default: '' }
   },
   emits: {
     retry: () => true,
@@ -75,12 +71,6 @@ export const LayerPanelShell = defineComponent({
     useMapOverlay(element, 'left');
     const panel = ref<HTMLElement>();
     const list = ref<HTMLElement>();
-    const tab = ref(props.tabs[0]?.id ?? '');
-    const core = computed(() => tab.value === props.tabs[0]?.id);
-    watch(
-      () => props.showCore,
-      () => (tab.value = props.tabs[0]?.id ?? '')
-    );
 
     // 两段最多能用的高度：面板所在的列的高度，减去面板的标题和分割线。不用两段量到的高度：它又由分法决定，会来回重算
     const column = computed(() => element.value?.parentElement ?? null);
@@ -135,7 +125,7 @@ export const LayerPanelShell = defineComponent({
     // 拖动归面板所有：失去捕获、页面停用、面板隐藏或卸载时结束
     let stopSplitterDrag: (() => void) | undefined;
     watch(
-      () => pageActive.value && !props.collapsed && core.value && adjustable.value,
+      () => pageActive.value && !props.collapsed && adjustable.value,
       active => {
         if (!active) {
           stopSplitterDrag?.();
@@ -300,27 +290,8 @@ export const LayerPanelShell = defineComponent({
           </button>
         ) : (
           <div ref={panel} class={styles.panelBox}>
-            <MxPanel floating flush headerTone="muted" class={styles.panel}>
+            <MxPanel floating flush headerTone="muted" title={props.title} class={styles.panel}>
               {{
-                header: () => (
-                  <div class={styles.header}>
-                    <MxTitle level="panel">{props.title}</MxTitle>
-                    <nav class={styles.tabs} role="tablist">
-                      {props.tabs.map(item => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="tab"
-                          class={[styles.tab, tab.value === item.id && styles.currentTab]}
-                          aria-selected={tab.value === item.id}
-                          onClick={() => (tab.value = item.id)}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </nav>
-                  </div>
-                ),
                 actions: () => (
                   <button
                     type="button"
@@ -331,13 +302,12 @@ export const LayerPanelShell = defineComponent({
                     <SvgIcon name="panel-collapse" size={16} />
                   </button>
                 ),
-                default: () =>
-                  core.value ? renderCore() : <div class={[styles.status, styles.placeholder]}>暂无数据</div>
+                default: renderCore
               }}
             </MxPanel>
           </div>
         )}
-        {!props.collapsed && core.value && slots.floating(floating)}
+        {!props.collapsed && slots.floating(floating)}
       </div>
     );
   }
