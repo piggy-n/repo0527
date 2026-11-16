@@ -22,7 +22,6 @@ import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
-import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -88,8 +87,7 @@ export const CurrentMapPage = defineComponent({
     const map = provideMap({
       groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
       sceneBelow: 'basemap-labels',
-      camera: JIANGSU_CAMERA,
-      root: BASEMAP_STYLE_ROOT
+      camera: JIANGSU_CAMERA
     });
     // 登录后第一次进入时记下加载的耗时（docs/modules/perf.md）
     useMapLoadMarks(map);

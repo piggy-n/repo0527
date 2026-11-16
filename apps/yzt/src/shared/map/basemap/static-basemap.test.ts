@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { type Feature, featureFilter } from '@maplibre/maplibre-gl-style-spec';
+import { type Feature, featureFilter, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import cityFile from '../boundary/data/jiangsu-city.json?raw';
@@ -169,10 +169,13 @@ describe('地名数据', () => {
     expect(labelEntries('county')).toStrictEqual(new Map(districts.map(({ code, name }) => [code, name])));
   });
 
-  it('名称只有汉字：其他字符会向 glyphs 的地址请求字形，而这个地址不存在（ADR 0133）', () => {
-    const others = labels.features.map(({ properties }) => properties.name).filter(name => !/^\p{Script=Han}+$/u.test(name));
+  it('地名用页面已加载的普惠体在本地画，不写 glyphs，名称里有数字、字母也不请求字形（ADR 0160）', () => {
+    const { sources, layers } = staticLabelsGroup(1);
+    const fonts = layers.map(layer => (layer.type === 'symbol' ? layer.layout?.['text-font'] : null));
 
-    expect(others).toStrictEqual([]);
+    expect(fonts).toStrictEqual([['Alibaba PuHuiTi'], ['Alibaba PuHuiTi']]);
+    // MapLibre 6 的样式校验不再要求有 text-field 的样式写 glyphs（ADR 0133 第 3 节的前提不成立了）
+    expect(validateStyleMin({ version: 8, sources: { ...sources }, layers: [...layers] })).toStrictEqual([]);
   });
 
   it('每个地名都落在自己的行政区里面', () => {

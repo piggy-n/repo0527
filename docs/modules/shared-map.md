@@ -20,7 +20,8 @@
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
-| `basemap/static-basemap.ts` | 内网静态底图的两个分组和页面要传的 `BASEMAP_STYLE_ROOT`（ADR 0133） |
+| `basemap/static-basemap.ts` | 内网静态底图的两个分组（ADR 0133） |
+| `map-fonts.ts` | 地图文字的 `text-font`：普惠体常规、中粗两个栈，样式不写 glyphs（ADR 0160） |
 | `basemap/static-palette.ts` | 静态底图的配色，地图样式和缩略图共用 |
 | `basemap/data/jiangsu-labels.json`、`basemap/images/static-thumbnail.svg` | 静态底图的地名点和缩略图，由 `pnpm basemap:generate` 生成，不手改 |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择、透明度和标注的显隐，提供操作和两个推导函数 |
@@ -117,8 +118,8 @@ const { goToDefaultView } = useDefaultView(map);
 | 无底图 | 都有 | 背景 | 空 |
 
 ```ts
-// 页面 setup：拥有者的状态随页面，进入页面时重新开始；root 给静态底图的地名用（ADR 0133）
-const map = provideMap({ groups: ['basemap', 'basemap-labels'], camera: JIANGSU_CAMERA, root: BASEMAP_STYLE_ROOT });
+// 页面 setup：拥有者的状态随页面，进入页面时重新开始；样式不写 glyphs，地名用普惠体在本地画（ADR 0160）
+const map = provideMap({ groups: ['basemap', 'basemap-labels'], camera: JIANGSU_CAMERA });
 const basemap = useBasemap({ preferences: usePreferenceScope() });
 map.bindStyle({ basemap: basemap.deriveGroup, 'basemap-labels': basemap.deriveLabelsGroup });
 
@@ -155,7 +156,7 @@ basemap.setLabelsVisible(false);
 - 地名在页面上开关（ADR 0146），没有代码开关。陆地全省一种颜色 `STATIC_LAND_COLOR`（CREAM），不按市分色：ADR 0134 的分色开关用户 2026-11-11 决定取消，各市的配色一起删掉了，要找回看 git 历史
 - 陆地色是不透明的 HEX：原色 `#F7F3E6` 按 75% 叠在省外底色 `#E6EAF0` 上换算成 `#F3F1E9`（ADR 0134），原色写在 `static-palette.ts` 的注释里。没有透明度常量，`fill-opacity` 只有底图的透明度滑块
 - 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开标注时市名一直显示，区县从 8.5 级起显示，市名避让时优先
-- 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，地址不会被请求；打开标注后漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
+- 地名的 `text-font` 是普惠体常规（`map-fonts.ts`），样式不写 `glyphs`：MapLibre 按这个名字当 CSS 字体，用页面已经加载的普惠体在本地画汉字、数字和字母，不请求字形（ADR 0160，取代 ADR 0133 第 3 节的 `BASEMAP_STYLE_ROOT`；之前写的 `Noto Sans Regular` 其实画成了微软雅黑）。地名不再限于汉字；`pages/map-pages.test.ts` 检查地图页都不写 `glyphs`。`JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 保持真值，它的字体名只在 `text-font` 是默认栈时用到
 - 三维：和二维是同一个 MapLibre 视图，面、线和地名照常按样式画，被模型挡住还是画在模型上面见 [map-three.md](map-three.md)"叠放"。切换二三维时保持静态底图。ADR 0135 的细节上限（`overlayDetailMetadata`）和 ADR 0146 的"三维画成文字、不做避让"是 Cesium 镜像覆盖物时的做法，随 Cesium 移除（ADR 0153）
 - 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：MapLibre 画的时候都是 `Polygon`，按 GeoJSON 原来的类型求值（`featureFilter`）时南京是 `MultiPolygon`，只写 `Polygon` 会被滤掉
 - 改了配色或边界数据后运行 `basemap:generate`；缩略图和当前配色是否一致由测试检查

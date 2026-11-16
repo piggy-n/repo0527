@@ -9,7 +9,6 @@ import { PREVIEW_GROUP, RESULT_GROUP } from '@/features/data-query/result-layers
 import { QUERY_TOPICS, type QueryTopic, type TopicId } from '@/features/data-query/topics';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
-import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
@@ -31,8 +30,7 @@ const DataQueryView = defineComponent({
     // 预览压在注记下面，结果和画的范围在边界上面（同旧页面）
     const map = provideMap({
       groups: ['basemap', PREVIEW_GROUP, 'basemap-labels', 'boundaries', RESULT_GROUP, 'draw'],
-      camera: JIANGSU_CAMERA,
-      root: BASEMAP_STYLE_ROOT
+      camera: JIANGSU_CAMERA
     });
     const { goToDefaultView } = useDefaultView(map);
     // 底图的标注和其他地图页共用偏好，底图选择按开关记住（ADR 0146）；行政区边界不记偏好，默认只显示省界（同旧页面）
