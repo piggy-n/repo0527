@@ -27,7 +27,6 @@ import styles from './SymbolEditor.module.scss';
 
 // Element 的 predefine 要可变数组：模块里复制一份
 const PREDEFINE = [...COLOR_PRESETS];
-const CUSTOM = 'custom';
 const STROKE_WIDTHS: readonly number[] = POINT_STROKE_WIDTHS;
 
 type SizeKey = 'size' | 'width' | 'outlineWidth';
@@ -116,18 +115,18 @@ export const SymbolEditor = defineComponent({
 
     const selectSize = (value: string | number | boolean | undefined) => {
       const field = sizeField.value;
-      if (!field) {
-        return;
-      }
-      if (value === CUSTOM) {
-        customizing.value = true;
-        resetDraft();
-        return;
-      }
       const level = SIZE_LEVELS.find(item => item === value);
-      if (level) {
+      if (field && level) {
         customizing.value = false;
         set(sizePatch(field.key, level));
+      }
+    };
+
+    // 已经在自定义时不动：输入框里还没确认的值不冲掉
+    const customize = () => {
+      if (!customizing.value) {
+        customizing.value = true;
+        resetDraft();
       }
     };
 
@@ -161,21 +160,35 @@ export const SymbolEditor = defineComponent({
         return [];
       }
       const { min, max } = SIZE_REFERENCES[field.kind];
+      // "自定义"紧跟档位，是单选组外面的文字按钮（用户 2026-11-15）：放不下时整个换到下一行。
+      // 自定义时档位一项都不选中，没有选中项的单选组由浏览器让第一项能用 Tab 到达
       const rows = [
         <div key="size" class={styles.row}>
           <span class={styles.label}>{field.label}</span>
-          <ElRadioGroup
-            size="small"
-            modelValue={customizing.value ? CUSTOM : field.size}
-            onUpdate:modelValue={selectSize}
-          >
-            {SIZE_LEVELS.map(level => (
-              <ElRadioButton key={level} value={level}>
-                {level}
-              </ElRadioButton>
-            ))}
-            <ElRadioButton value={CUSTOM}>自定义</ElRadioButton>
-          </ElRadioGroup>
+          <div class={styles.levels} data-size-levels>
+            <ElRadioGroup
+              size="small"
+              modelValue={customizing.value ? undefined : field.size}
+              onUpdate:modelValue={selectSize}
+            >
+              {SIZE_LEVELS.map(level => (
+                <ElRadioButton key={level} value={level}>
+                  {level}
+                </ElRadioButton>
+              ))}
+            </ElRadioGroup>
+            <ElButton
+              class="button-inline"
+              link
+              type="primary"
+              size="small"
+              aria-label={`自定义${field.label}`}
+              aria-pressed={customizing.value}
+              onClick={customize}
+            >
+              自定义
+            </ElButton>
+          </div>
         </div>
       ];
       if (customizing.value) {

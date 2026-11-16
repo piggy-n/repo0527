@@ -188,6 +188,8 @@ export const DevThemePage = defineComponent({
     const symbolColor = ref('#2FA663');
     const date = ref('');
     const currentPage = ref(1);
+    // 开关式的 button-inline：按下时半粗
+    const inlinePressed = ref(true);
 
     // 显示浏览器实际解析到的值，确认令牌确实输出到了 :root
     onMounted(() => {
@@ -334,6 +336,19 @@ export const DevThemePage = defineComponent({
             <span>下载失败，请重试（状态行示例）</span>
             <ElButton class="button-inline" link type="primary" size="small" onClick={() => ElMessage.info('状态行按钮示例')}>
               重试
+            </ElButton>
+          </div>
+          <div class={[styles.row, styles.inlineAction]}>
+            <span>开关式，按下时半粗（图例编辑里档位后面的"自定义"），点击切换</span>
+            <ElButton
+              class="button-inline"
+              link
+              type="primary"
+              size="small"
+              aria-pressed={inlinePressed.value}
+              onClick={() => (inlinePressed.value = !inlinePressed.value)}
+            >
+              自定义
             </ElButton>
           </div>
           <div class={styles.row}>

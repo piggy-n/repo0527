@@ -7,11 +7,6 @@ import { LayerPanelShell } from './LayerPanelShell';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
-const TABS = [
-  { id: 'core', label: '主节点' },
-  { id: 'report', label: '统计报表' }
-];
-
 // 页面持有收起、目录的状态；插槽给出可以认出来的内容
 function mountShell(initial: 'ready' | 'loading' | 'failed' = 'ready') {
   const status = ref(initial);
@@ -24,7 +19,6 @@ function mountShell(initial: 'ready' | 'loading' | 'failed' = 'ready') {
         LayerPanelShell,
         {
           title: '资源图层',
-          tabs: TABS,
           status: status.value,
           collapsed: collapsed.value,
           ratio: 0.4,
@@ -69,13 +63,12 @@ describe('LayerPanelShell', () => {
     expect(retries.value).toBe(1);
   });
 
-  it('其余页签显示"暂无数据"，切回主页签照常；收起后是竖条，点它展开', async () => {
+  it('头部只有标题和收起，没有页签（用户 2026-11-15 删掉了主节点、统计报表、分节点资源）；收起后是竖条，点它展开', async () => {
     const { wrapper, collapsed } = mountShell();
-    await wrapper.findAll('[role="tab"]')[1]?.trigger('click');
-    expect(wrapper.text()).toContain('暂无数据');
-    expect(wrapper.find('[data-panel-section]').exists()).toBe(false);
-    await wrapper.findAll('[role="tab"]')[0]?.trigger('click');
-    expect(wrapper.find('[data-panel-section="current"]').exists()).toBe(true);
+    const header = wrapper.get('header');
+    expect(header.text()).toBe('资源图层');
+    expect(header.findAll('button').map(button => button.attributes('aria-label'))).toStrictEqual(['收起资源图层']);
+    expect(wrapper.find('[role="tab"]').exists()).toBe(false);
 
     await wrapper.get('button[aria-label="收起资源图层"]').trigger('click');
     expect(collapsed.value).toBe(true);

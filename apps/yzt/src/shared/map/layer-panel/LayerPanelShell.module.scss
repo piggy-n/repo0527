@@ -25,19 +25,8 @@
   }
 }
 
-// 标题后面紧跟页签；MxTitle 默认占满剩下的宽度，这里按内容
-.header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-
-  > :first-child {
-    flex: none;
-  }
-}
-
-// 放不下时（手机宽度）页签在自己的区域里横向滚动，收起按钮始终可见（设计稿 5D.8）
+// 资源目录标题后面的文字页签（用户 2026-11-15 选的方案一）：放不下时（手机宽度）在自己的区域里横向滚动，
+// 标题行右边的工具栏不被挤出去
 .tabs {
   display: flex;
   gap: 12px;
@@ -59,8 +48,7 @@
   cursor: pointer;
 }
 
-// 资源目录标题后面的页签（用户 2026-11-15 选的方案一）：同上面的页签，间距收到 8，320 宽的面板里标题行刚好放得下工具栏；
-// 更窄时（手机宽度）同上面的页签一样收缩、在自己的区域里横向滚动，工具栏不被挤出去。滚动区会裁掉里面的东西：
+// 间距 8，320 宽的面板里标题行刚好放得下工具栏；更窄时收缩、横向滚动。滚动区会裁掉里面的东西：
 // 四周留 3 给焦点框（2 宽、离开 1），外边距抵消，位置不变
 .views {
   gap: 8px;
@@ -244,13 +232,6 @@
   padding: 0 var(--space-sm) var(--space-lg);
   font-size: var(--font-size-xs);
   color: var(--color-text-regular);
-}
-
-.placeholder {
-  justify-content: center;
-  padding-top: var(--space-xl);
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
 }
 
 // 收起后是左上角的竖条（和分栏页面窄屏时的窄条一致）
