@@ -8,6 +8,7 @@ import { paletteColor, RESOURCE_PALETTE } from './palette';
 import {
   classDefaultSymbol,
   defaultSymbol,
+  pointMarkOf,
   resourceHighlightStyle,
   resourceStyle,
   resourceStyleLayers,
@@ -420,6 +421,21 @@ describe('默认样式', () => {
     const uniform = resourceHighlightStyle(school, '#f5222d', { mode: 'uniform', uniform: { shape: 'pin' } });
     expect(uniform?.layout).toMatchObject({ 'icon-image': 'resources-shape-pin' });
     expect(resourceHighlightStyle(resource('bgdc_dltb', 'fill'), '#f5222d')).toBeNull();
+  });
+
+  it('点画出的样子（ADR 0159）：按要素的属性找到取值，给出形状、这一级的 icon-size、描边；没命中的是兜底；不是点资源时没有', () => {
+    const school = resource('csxhjctb_xxp', 'circle', 3);
+    const override = { items: { '08H213': { shape: 'pin' as const, size: 'L' as const, strokeWidth: 2 } } };
+    const markOf = pointMarkOf(school, 12, override);
+
+    expect(markOf?.({ cc: '08H213' })).toStrictEqual({ shape: 'pin', iconSize: 1.6, strokeWidth: 2 });
+    expect(markOf?.({ cc: '08H212' })).toStrictEqual({ shape: 'circle', iconSize: 1, strokeWidth: 1 });
+    expect(markOf?.({ cc: '不认识' })).toStrictEqual({ shape: 'circle', iconSize: 1, strokeWidth: 1 });
+    expect(markOf?.({})).toStrictEqual({ shape: 'circle', iconSize: 1, strokeWidth: 1 });
+    // 统一样式时每个要素一样；级别在断点之间按图层的曲线插值
+    const uniform = pointMarkOf(school, 9, { mode: 'uniform', uniform: { shape: 'star' } });
+    expect(uniform?.({ cc: '08H213' })).toStrictEqual({ shape: 'star', iconSize: 0.75, strokeWidth: 1 });
+    expect(pointMarkOf(resource('bgdc_dltb', 'fill'), 12)).toBeNull();
   });
 
   it('覆盖叠加到默认符号上（ADR 0044）：线宽、线型、颜色都换成覆盖的值', () => {

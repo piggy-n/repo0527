@@ -22,7 +22,10 @@ import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import type { PickCandidate } from '../feature-query';
 import { type ResourceDisplay, type ResourceLayersState, withYearForAll } from '../resource-layers';
+import type { PointMark } from '../point-shapes';
 import type { PointHighlightOf } from '../selection-style';
+import type { PointMarkOf } from '../style-registry';
+import { type FeaturePick, hasMorePages, useFeaturePick } from './useFeaturePick';
 
 // 五角星的高亮样式，描边是给的颜色（ADR 0159）
 const STAR_HIGHLIGHT: PointHighlightOf = color => ({
@@ -30,7 +33,6 @@ const STAR_HIGHLIGHT: PointHighlightOf = color => ({
   layout: { 'icon-image': 'resources-shape-star' },
   paint: { 'icon-halo-color': color }
 });
-import { type FeaturePick, hasMorePages, useFeaturePick } from './useFeaturePick';
 
 const server = setupServer();
 
@@ -214,7 +216,9 @@ function setup(
     hidden,
     hiddenInScene: computed(() => hidden.value),
     // 点资源按形状高亮的样式（ADR 0159）：默认没有，用例换成给定的样式
-    pointHighlight: vi.fn<(code: string) => PointHighlightOf | null>(() => null)
+    pointHighlight: vi.fn<(code: string) => PointHighlightOf | null>(() => null),
+    // 点画出的样子：默认没有，点选照旧按到点的距离
+    pointMark: vi.fn<(code: string, zoom: number) => PointMarkOf | null>(() => null)
   };
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
@@ -1125,21 +1129,13 @@ describe('useFeaturePick：框选', () => {
     expect(layerIds(owner)).toHaveLength(3);
   });
 
-  it('点按资源的形状高亮（ADR 0159）：批量高亮按资源取样式，有样式时点是 symbol 图层', () => {
+  it('面、线的批量高亮不读点的高亮样式（ADR 0159）', () => {
     mockDetail();
     const { owner, send, resources } = setup(15);
-    resources.pointHighlight.mockImplementation(code => (code === 'bgdc_dltb' ? STAR_HIGHLIGHT : null));
     dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
 
-    const group = owner.deriveGroup();
-    expect(resources.pointHighlight).toHaveBeenCalledWith('bgdc_dltb');
-    expect(group.layers.at(-1)).toMatchObject({
-      id: 'selection-batch-point',
-      type: 'symbol',
-      source: DLTB,
-      layout: { 'icon-image': 'resources-shape-star' },
-      paint: { 'icon-halo-color': '#f5222d' }
-    });
+    expect(owner.deriveGroup().layers.at(-1)).toMatchObject({ id: 'selection-batch-circle' });
+    expect(resources.pointHighlight).not.toHaveBeenCalled();
   });
 
   it('批量高亮和资源用同一个最小显示级别，级别跟着目录走（ADR 0137）', () => {
@@ -1639,5 +1635,122 @@ describe('useFeaturePick：和其他操作的交错', () => {
 
     owner.retry();
     await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
+  });
+});
+
+// selection 分组的数据
+function dataOf(owner: Owner) {
+  const source = owner.deriveGroup().sources.selection;
+  return source?.type === 'geojson' ? source.data : undefined;
+}
+
+describe('useFeaturePick：点资源（ADR 0159）', () => {
+  // 公用设施点层放在最上面
+  const pointTree: ResourceTreeCategory[] = [
+    { code: null, name: '测试', children: [layer('csxhjctb_gyssp', 'Point', 2025), ...(tree[0]?.children ?? [])] }
+  ];
+  const POINT_STATE: ResourceLayersState = {
+    catalog: buildCatalog(pointTree),
+    displays: new Map([['csxhjctb_gyssp', display(2025)], ...STATE.displays]),
+    order: ['csxhjctb_gyssp', ...STATE.order]
+  };
+  const GYSSP = 'resources-csxhjctb_gyssp';
+  // 屏幕上 (x, y) 处的点，每像素 0.001 度（同 toolView）
+  const pointAt = (id: number, x: number, y: number, cc: string): RenderedFeature => ({
+    sourceId: GYSSP,
+    layerId: GYSSP,
+    properties: { guid: guid(id), cc },
+    geometry: { type: 'Point', coordinates: [118 + x / 1000, 33 - y / 1000] }
+  });
+
+  it('单个选中点资源的要素：按资源的形状高亮，数据带着点选时的属性', async () => {
+    mockDetail();
+    const { owner, send, resources } = setup(15, POINT_STATE);
+    resources.pointHighlight.mockImplementation(() => STAR_HIGHLIGHT);
+
+    send(click(), [pointAt(1, 100, 100, '080901')]);
+    await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
+    const group = owner.deriveGroup();
+
+    expect(resources.pointHighlight).toHaveBeenCalledWith('csxhjctb_gyssp');
+    expect(group.layers.at(-1)).toMatchObject({
+      id: 'selection-point',
+      type: 'symbol',
+      source: 'selection',
+      layout: { 'icon-image': 'resources-shape-star' },
+      paint: { 'icon-halo-color': '#f5222d' }
+    });
+    expect(dataOf(owner)).toMatchObject({ properties: { guid: guid(1), cc: '080901' }, geometry: POINT });
+  });
+
+  it('详情就绪后资源的状态、符号变了（拖透明度、预览颜色），selection 的数据还是同一个对象，数据源不重发', async () => {
+    mockDetail();
+    const { owner, send, resources } = setup(15, POINT_STATE);
+    resources.pointHighlight.mockImplementation(code => {
+      // 和真的拥有者一样读资源的状态
+      void resources.state.value;
+      return code === 'csxhjctb_gyssp' ? STAR_HIGHLIGHT : null;
+    });
+    send(click(), [pointAt(1, 100, 100, '080901')]);
+    await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
+    const before = dataOf(owner);
+
+    resources.state.value = withDisplay(resources.state.value, 'csxhjctb_gyssp', { opacity: 0.5 });
+
+    expect(before).toBeDefined();
+    expect(dataOf(owner)).toBe(before);
+  });
+
+  it('框选点资源：批量高亮按资源取样式，点是 symbol 图层，画在资源的瓦片上', () => {
+    mockDetail();
+    const { owner, send, resources } = setup(15, POINT_STATE);
+    resources.pointHighlight.mockImplementation(code => (code === 'csxhjctb_gyssp' ? STAR_HIGHLIGHT : null));
+    // 框是 (100, 100)～(200, 160)，点要在框里
+    dragBox(send, [pointAt(1, 120, 120, '080901'), pointAt(2, 150, 130, '080901')]);
+
+    expect(owner.deriveGroup().layers.at(-1)).toMatchObject({
+      id: 'selection-batch-point',
+      type: 'symbol',
+      source: GYSSP,
+      layout: { 'icon-image': 'resources-shape-star' },
+      paint: { 'icon-halo-color': '#f5222d' }
+    });
+    expect(resources.pointHighlight).toHaveBeenCalledWith('csxhjctb_gyssp');
+  });
+
+  it('面、线的单个选中不读点的高亮样式', async () => {
+    mockDetail();
+    const { owner, send, resources } = setup(15, POINT_STATE);
+
+    send(click(), [rendered(DLTB, 1)]);
+    await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
+    owner.deriveGroup();
+
+    expect(resources.pointHighlight).not.toHaveBeenCalled();
+  });
+
+  it('点选按画出的形状算距离：点在定位针的针头上时针排在前面；离画出的形状超过 10 像素的点不算', () => {
+    const { owner, send, resources } = setup(15, POINT_STATE);
+    // 080905 是 icon-size 2 的定位针，其他是 icon-size 1 的圆，描边都是 1
+    const pin: PointMark = { shape: 'pin', iconSize: 2, strokeWidth: 1 };
+    const circle: PointMark = { shape: 'circle', iconSize: 1, strokeWidth: 1 };
+    resources.pointMark.mockImplementation(code =>
+      code === 'csxhjctb_gyssp' ? properties => (properties.cc === '080905' ? pin : circle) : null
+    );
+
+    send(click(), [
+      // 针尖在点击处下方 12.8 像素，针头的中心正好在点击处
+      pointAt(1, 100, 112.8, '080905'),
+      // 圆心在右边 7 像素：到圆的边 2 像素
+      pointAt(2, 107, 100, '080901'),
+      // 圆心在下方 25 像素：到圆的边 20 像素，超过容差
+      pointAt(3, 100, 125, '080901')
+    ]);
+
+    expect(resources.pointMark).toHaveBeenCalledWith('csxhjctb_gyssp', 15);
+    const candidates = candidatesOf(owner);
+    expect(candidates.map(({ guid: id }) => id)).toStrictEqual([guid(1), guid(2)]);
+    expect(candidates[0]?.distance).toBe(0);
+    expect(candidates[1]?.distance).toBeCloseTo(2, 6);
   });
 });

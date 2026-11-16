@@ -37,7 +37,7 @@ import {
   toStoredResourceLayers
 } from '../resource-layers-preference';
 import type { PointHighlightOf } from '../selection-style';
-import { resourceHighlightStyle } from '../style-registry';
+import { type PointMarkOf, pointMarkOf, resourceHighlightStyle } from '../style-registry';
 import type { ResourceSymbols } from './useResourceSymbols';
 
 /** 资源图层的拥有者（ADR 0041 第 3 节）：页面把 deriveGroup 绑定到 resources 分组，面板通过 props 拿到它 */
@@ -88,6 +88,11 @@ export interface ResourceLayers {
    * 不是点资源、没画在地图上（包括三维里分组为空、配置不合法）时为 null，高亮退回红色圆点
    */
   readonly pointHighlight: (code: string) => PointHighlightOf | null;
+  /**
+   * 点资源的要素在这一级画出的样子（形状、icon-size、描边，ADR 0159 第 3 节），点选按到它的距离过滤和排序；
+   * 条件同 pointHighlight
+   */
+  readonly pointMark: (code: string, zoom: number) => PointMarkOf | null;
   readonly deriveGroup: () => StyleGroup;
 }
 
@@ -230,6 +235,18 @@ export function useResourceLayers(
 
   const hiddenInScene = computed(() => map.dimension.value === '3d' && !map.sceneCapabilities.styleLayers);
 
+  // 画在地图上的点资源：选中高亮引用它在资源分组里的图片，点选按它的符号算距离
+  const drawnPoint = (code: string): Resource | null => {
+    const current = state.value;
+    const resource = current.catalog?.resources.get(code);
+    const drawn =
+      resource?.geometry === 'circle' &&
+      !hiddenInScene.value &&
+      isDrawn(current.displays.get(code)) &&
+      !configErrors.value.has(code);
+    return drawn ? resource : null;
+  };
+
   return {
     state: shallowReadonly(state),
     configErrors,
@@ -248,19 +265,16 @@ export function useResourceLayers(
     setYearForAll,
     hiddenInScene,
     pointHighlight: code => {
-      const current = state.value;
-      const resource = current.catalog?.resources.get(code);
-      if (
-        !resource ||
-        resource.geometry !== 'circle' ||
-        hiddenInScene.value ||
-        !isDrawn(current.displays.get(code)) ||
-        configErrors.value.has(code)
-      ) {
+      const resource = drawnPoint(code);
+      if (!resource) {
         return null;
       }
       const override = options.symbols?.overrideOf(code);
       return color => resourceHighlightStyle(resource, color, override);
+    },
+    pointMark: (code, zoom) => {
+      const resource = drawnPoint(code);
+      return resource && pointMarkOf(resource, zoom, options.symbols?.overrideOf(code));
     },
     deriveGroup: () =>
       hiddenInScene.value

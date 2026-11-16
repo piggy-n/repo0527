@@ -1,5 +1,5 @@
 import type { ExpressionSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
-import type { Feature, Geometry } from 'geojson';
+import type { Feature } from 'geojson';
 import type { StyleGroup } from '@mx/map-core';
 import type { ResourceLayerStyle } from './symbols';
 
@@ -112,10 +112,11 @@ function batchLayers({ sourceId, sourceLayer, minzoom, guids, point }: BatchHigh
 
 /** 详情里选中的要素 */
 export interface SelectedHighlight {
-  /** 完整几何 */
-  readonly geometry: Geometry;
-  /** 要素的属性（点选时取自瓦片）：点按资源的分类取形状、大小，和资源的点图层用同一套表达式 */
-  readonly properties: Readonly<Record<string, unknown>>;
+  /**
+   * 完整几何和要素的属性（点选时取自瓦片：点按资源的分类取形状、大小，和资源的点图层用同一套表达式），原样交给数据源；
+   * 调用方只在选中的要素、详情变化时换新对象，拖透明度、预览颜色时数据源不重发（ADR 0022）
+   */
+  readonly feature: Feature;
   /** 点资源按它的形状高亮（ADR 0159） */
   readonly point: PointHighlightOf | null;
 }
@@ -133,8 +134,6 @@ export function selectionGroup(
   if (!selected) {
     return { sources: {}, layers: batched };
   }
-  // 几何直接引用查询结果，外面的要素每次换新对象（ADR 0022）
-  const data: Feature = { type: 'Feature', properties: { ...selected.properties }, geometry: selected.geometry };
   const highlight = detailLayers(flashing ? FLASH_COLOR : HIGHLIGHT_COLOR, selected.point);
-  return { sources: { [SOURCE]: { type: 'geojson', data } }, layers: [...batched, ...highlight] };
+  return { sources: { [SOURCE]: { type: 'geojson', data: selected.feature } }, layers: [...batched, ...highlight] };
 }

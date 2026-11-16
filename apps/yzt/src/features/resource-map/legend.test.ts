@@ -11,7 +11,6 @@ import {
   legendEntries,
   SUMMARY_LIMITS,
   summaryItems,
-  SWATCH_LIMITS,
   swatchOf
 } from './legend';
 import { RESOURCE_PALETTE } from './palette';
@@ -161,10 +160,10 @@ describe('legendEntries', () => {
     });
   });
 
-  it('预览的线宽、点的半径、面的描边按参考级别的像素，超过上限按上限；线型以线宽为单位（设计稿 5D.5）', () => {
+  it('预览的线宽、点的半径、面的描边是参考级别的实际像素，预览框放不下的由画的组件限制；线型以线宽为单位（设计稿 5D.5）', () => {
     const line = { geometry: 'line', color: '#000', width: 'XL', dash: 'dashed' } as const;
     expect(swatchOf(line)).toStrictEqual({ geometry: 'line', color: '#000', width: 4.32, dash: [3, 2] });
-    expect(swatchOf({ ...line, width: 12, dash: 'dotted' })).toMatchObject({ width: SWATCH_LIMITS.line, dash: [1, 2] });
+    expect(swatchOf({ ...line, width: 12, dash: 'dotted' })).toMatchObject({ width: 12, dash: [1, 2] });
 
     // 描边画在半径外面，两者加起来不超过上限
     const point = {
@@ -183,7 +182,7 @@ describe('legendEntries', () => {
       radius: 4,
       strokeWidth: 1
     });
-    expect(swatchOf({ ...point, size: 20, strokeWidth: 3 })).toMatchObject({ radius: SWATCH_LIMITS.circle - 3 });
+    expect(swatchOf({ ...point, size: 20, strokeWidth: 3 })).toMatchObject({ radius: 20, strokeWidth: 3 });
 
     const fill = {
       geometry: 'fill',
@@ -201,7 +200,7 @@ describe('legendEntries', () => {
       outlineWidth: 1.6,
       outlineDash: [4, 2, 1, 2]
     });
-    expect(swatchOf({ ...fill, outlineWidth: 8 })).toMatchObject({ outlineWidth: SWATCH_LIMITS.outline });
+    expect(swatchOf({ ...fill, outlineWidth: 8 })).toMatchObject({ outlineWidth: 8 });
     expect(swatchOf({ ...fill, outlineWidth: 0 })).toMatchObject({ outlineWidth: 0 });
   });
 

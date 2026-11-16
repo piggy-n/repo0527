@@ -13,6 +13,7 @@ import {
   normalizeColor,
   normalizeSize,
   parseSize,
+  pointIconSize,
   type ResourceSymbol,
   resolveSymbol,
   sizeCurve,
@@ -51,6 +52,16 @@ const partOf = (layers: ResourceStyleLayers, suffix: 'pattern' | 'outline') =>
 const mainOf = (symbol: ResourceSymbol) => main(symbolLayers(symbol));
 // 颜色按 MapLibre 求值后的形式，便于和图层上的值比较
 const color = (value: string) => paintValueOf('fill', 'fill-color', value, {});
+// 点图层的描边宽度：表达式本身
+const halo = (part: ResourceLayerPart | undefined) =>
+  part?.type === 'symbol' ? part.paint['icon-halo-width'] : undefined;
+// 按要素求值的同一个数
+const perTile = (value: number) => ['case', ['has', '$'], value, value];
+// 点图层的描边宽度在 6、12、16 级的值
+const haloAt = (part: ResourceLayerPart | undefined) =>
+  [6, 12, 16].map(zoom =>
+    part?.type === 'symbol' ? paintValueOf('symbol', 'icon-halo-width', part.paint['icon-halo-width'], {}, zoom) : null
+  );
 
 describe('规范化', () => {
   it('颜色统一成 rgba(r, g, b, a)：同一个颜色的不同写法结果相同，透明度保留两位小数', () => {
@@ -122,6 +133,14 @@ describe('大小', () => {
     expect(sizeCurve('line', 'S')).toStrictEqual(['interpolate', ['linear'], ['zoom'], 6, 0.36, 10, 0.6, 14, 1.08, 17, 1.8]);
   });
 
+  it('点在某一级的 icon-size（ADR 0159）：同图层的曲线（半径 / 4），断点之间线性插值，两头取端点', () => {
+    expect([3, 6, 9, 12, 14, 16, 20].map(zoom => pointIconSize('M', zoom))).toStrictEqual([
+      0.5, 0.5, 0.75, 1, 1.25, 1.5, 1.5
+    ]);
+    expect(pointIconSize('XL', 16)).toBeCloseTo(3.6, 6);
+    expect(pointIconSize(8, 12)).toBe(2);
+  });
+
   it('自定义像素按参考级别换成倍率：点在 12 级、线在 14 级正好是这个像素', () => {
     expect(sizeCurve('circle', 8)).toStrictEqual(['interpolate', ['linear'], ['zoom'], 6, 4, 12, 8, 16, 12]);
     expect(sizeCurve('line', 3.6)[8]).toBe(3.6);
@@ -182,6 +201,7 @@ describe('symbolLayers', () => {
           layout: {
             'icon-image': 'resources-shape-circle',
             'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 1, 16, 1.5],
+            'icon-offset': ['literal', [0, 0]],
             'icon-allow-overlap': true,
             'icon-ignore-placement': true
           },
@@ -199,16 +219,37 @@ describe('symbolLayers', () => {
 
   it('点的描边在每个断点按 icon-size 限制在 6 × icon-size − 1.09 以内，超出会露出图片的方框', () => {
     // S 档的 icon-size 是 0.3、0.6、0.9
-    expect(mainOf({ ...POINT, size: 'S', strokeWidth: 3 })).toMatchObject({
-      paint: { 'icon-halo-width': ['interpolate', ['linear'], ['zoom'], 6, 0.71, 12, 2.51, 16, 3] }
-    });
+    expect(haloAt(mainOf({ ...POINT, size: 'S', strokeWidth: 3 }))).toStrictEqual([0.71, 2.51, 3]);
   });
 
-  it('定位针往上偏移，针尖落在要素的位置；其他形状不设偏移', () => {
+  it('描边随级别变化时按要素求值（每个要素一样），MapLibre 按瓦片的级别求值，和 icon-size 对得上；不变时是常量', () => {
+    expect(halo(mainOf({ ...POINT, size: 'S', strokeWidth: 3 }))).toStrictEqual([
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      6,
+      perTile(0.71),
+      12,
+      perTile(2.51),
+      16,
+      perTile(3)
+    ]);
+    expect(halo(mainOf(POINT))).toBe(1);
+    // 各取值不同时本来就是按要素的 match，不再包一层
+    const classified = main(
+      classifiedLayers(CLASSES, bySymbol({ 河流: { ...POINT, size: 'S', strokeWidth: 3 } }, POINT))
+    );
+    expect(JSON.stringify(halo(classified))).not.toContain('"has"');
+  });
+
+  it('定位针往上偏移，针尖落在要素的位置；其他形状的偏移是 [0, 0]，也要写上：写了 icon-offset 的图层倾斜时不按透视缩小', () => {
     expect(mainOf({ ...POINT, shape: 'pin' })).toMatchObject({
       layout: { 'icon-image': 'resources-shape-pin', 'icon-offset': ['literal', [0, -4.8]] }
     });
-    expect(mainOf({ ...POINT, shape: 'star' })).not.toHaveProperty(['layout', 'icon-offset']);
+    expect(mainOf({ ...POINT, shape: 'star' })).toMatchObject({ layout: { 'icon-offset': ['literal', [0, 0]] } });
+    expect(main(symbolLayers({ ...POINT, shape: 'star' }, '#f5222d'))).toMatchObject({
+      layout: { 'icon-offset': ['literal', [0, 0]] }
+    });
   });
 
   it('选中高亮：同样的形状和大小，描边换成高亮色、比符号宽 2 像素，同样受 icon-size 限制', () => {
@@ -219,12 +260,9 @@ describe('symbolLayers', () => {
         'icon-image': 'resources-shape-circle',
         'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.3, 12, 0.6, 16, 0.9]
       },
-      paint: {
-        'icon-color': '#D9433F',
-        'icon-halo-color': '#f5222d',
-        'icon-halo-width': ['interpolate', ['linear'], ['zoom'], 6, 0.71, 12, 2, 16, 2]
-      }
+      paint: { 'icon-color': '#D9433F', 'icon-halo-color': '#f5222d' }
     });
+    expect(haloAt(main(highlight))).toStrictEqual([0.71, 2, 2]);
     // 面和线不受影响
     expect(symbolLayers(FILL, '#f5222d')).toStrictEqual(symbolLayers(FILL));
   });

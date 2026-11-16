@@ -15,8 +15,9 @@ import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
+import { markDistance } from './point-shapes';
 import { isDrawn, isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
-import { resourceStyle, tilesetOf } from './style-registry';
+import { type PointMarkOf, resourceStyle, tilesetOf } from './style-registry';
 
 // 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
 
@@ -108,15 +109,16 @@ function candidate(
 export function renderedCandidates(
   target: PickResource,
   features: readonly RenderedFeature[],
-  distanceOf: (geometry: Geometry | undefined) => number
+  distanceOf: (feature: RenderedFeature) => number
 ): PickCandidate[] {
   const nearest = new Map<string, PickCandidate>();
-  for (const { sourceId, properties, geometry } of features) {
+  for (const feature of features) {
+    const { sourceId, properties } = feature;
     const { guid } = properties;
     if (sourceId !== target.sourceId || !isFeatureGuid(guid)) {
       continue;
     }
-    const distance = distanceOf(geometry);
+    const distance = distanceOf(feature);
     const previous = nearest.get(guid);
     if (!previous || distance < previous.distance) {
       nearest.set(guid, candidate(target, guid, properties, 'rendered', distance));
@@ -244,14 +246,16 @@ export function planIdentify(
   point: ScreenPoint,
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
-  scope: RegionScope | null
+  scope: RegionScope | null,
+  markOf?: (target: PickResource) => PointMarkOf | null
 ): IdentifyTask[] | null;
 export function planIdentify(
   targets: readonly PickResource[],
   point: ScreenPoint,
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
-  scope: RegionScope | null = null
+  scope: RegionScope | null = null,
+  markOf: (target: PickResource) => PointMarkOf | null = () => null
 ): IdentifyTask[] | null {
   const pick = groundPicker(view);
   const clicked = view.pick(point);
@@ -292,9 +296,13 @@ export function planIdentify(
       sources: [target.sourceId],
       withGeometry: tolerance > 0 || area !== null
     });
-    const rendered = renderedCandidates(target, withinScope(features, area), shape =>
-      screenDistance(shape, anchor, lngLat => view.project(lngLat))
+    const project = (lngLat: LngLat) => view.project(lngLat);
+    // 点按到画出的形状的距离过滤和排序，容差同改版前的圆点（ADR 0159 第 3 节）：symbol 图层查到的是整张图标图片
+    const mark = type === 'circle' ? markOf(target) : null;
+    const candidates = renderedCandidates(target, withinScope(features, area), feature =>
+      mark ? markScreenDistance(feature, mark, anchor, project) : screenDistance(feature.geometry, anchor, project)
     );
+    const rendered = mark ? candidates.filter(({ distance }) => distance <= tolerance) : candidates;
     const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
     if (server) {
       const task = serverTask(target, server, prepared);
@@ -470,6 +478,27 @@ function segmentDistance(point: ScreenPoint, a: ScreenPoint, b: ScreenPoint): nu
   const length = dx * dx + dy * dy;
   const ratio = length === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length));
   return Math.hypot(point.x - a.x - ratio * dx, point.y - a.y - ratio * dy);
+}
+
+/**
+ * 点要素到点击位置的屏幕距离，按它画出的形状算（ADR 0159 第 3 节）：形状由属性定（mark），定位针取到针尖和针头里近的一个；
+ * 不是点、投影不到时为无穷大
+ */
+export function markScreenDistance(
+  { geometry, properties }: RenderedFeature,
+  markOf: PointMarkOf,
+  point: ScreenPoint,
+  project: (lngLat: LngLat) => ScreenPoint | null
+): number {
+  const mark = markOf(properties);
+  const toPosition = ([lng, lat]: Position) => {
+    const projected = lng === undefined || lat === undefined ? null : project([lng, lat]);
+    return projected ? markDistance(mark, point.x - projected.x, point.y - projected.y) : Infinity;
+  };
+  if (geometry?.type === 'Point') {
+    return toPosition(geometry.coordinates);
+  }
+  return geometry?.type === 'MultiPoint' ? Math.min(Infinity, ...geometry.coordinates.map(toPosition)) : Infinity;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useEventListener } from '@vueuse/core';
-import type { Geometry } from 'geojson';
+import type { Feature, Geometry } from 'geojson';
 import type {
   CameraState,
   FitBoundsOptions,
@@ -219,7 +219,7 @@ export function useFeaturePick(
     MapContext,
     'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer' | 'sceneCapabilities'
   >,
-  resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene' | 'pointHighlight'>,
+  resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene' | 'pointHighlight' | 'pointMark'>,
   options: FeaturePickOptions = {}
 ): FeaturePick {
   if (!getCurrentScope()) {
@@ -311,6 +311,17 @@ export function useFeaturePick(
       return { kind: 'ready', detail: entry.detail };
     }
     return query.isError.value ? { kind: 'failed', error: query.error.value } : { kind: 'loading' };
+  });
+
+  // 选中要素的高亮数据：完整几何加点选时的属性（点按属性取形状，ADR 0159），只随详情和选中的候选换新对象，
+  // 拖透明度、预览颜色时 selection 的数据源不重发
+  const selectedFeature = computed((): Feature | null => {
+    const status = detail.value;
+    const candidate = selected.value;
+    if (status?.kind !== 'ready' || !candidate) {
+      return null;
+    }
+    return { type: 'Feature', properties: { ...candidate.properties }, geometry: status.detail.geometry };
   });
 
   // 会话只存选中要素的身份（ADR 0047 第 4 节）：详情里的那一个，或框选列表里已取到的全部（ADR 0049 第 3 节）
@@ -471,7 +482,9 @@ export function useFeaturePick(
     start((targets, zoom, area) => {
       const hit = view.pick(point);
       const how: Identification = { mode: 'pick', anchor: hit.kind === 'hit' ? hit.lngLat : null };
-      const tasks = planIdentify(targets, point, zoom, view, area);
+      const tasks = planIdentify(targets, point, zoom, view, area, target =>
+        resources.pointMark(target.resource.code, zoom)
+      );
       return tasks && { tasks, how };
     });
   };
@@ -714,7 +727,7 @@ export function useFeaturePick(
       sourceLayer: sourceLayerOf(code, target.year),
       minzoom: target.resource.minzoom,
       guids: candidates.map(({ guid }) => guid),
-      point: resources.pointHighlight(code)
+      point: target.resource.geometry === 'circle' ? resources.pointHighlight(code) : null
     };
   };
 
@@ -745,17 +758,14 @@ export function useFeaturePick(
     locate,
     close,
     deriveGroup: () => {
-      const status = detail.value;
+      const feature = selectedFeature.value;
       const candidate = selected.value;
-      const highlight =
-        status?.kind === 'ready' && candidate
-          ? {
-              geometry: status.detail.geometry,
-              properties: candidate.properties,
-              point: resources.pointHighlight(candidate.target.resource.code)
-            }
+      // 只有点资源的高亮读资源的状态和符号：面、线的高亮不随透明度、取色预览重新推导
+      const point =
+        feature && candidate?.target.resource.geometry === 'circle'
+          ? resources.pointHighlight(candidate.target.resource.code)
           : null;
-      return selectionGroup(highlight, flashing.value, batchHighlight());
+      return selectionGroup(feature && { feature, point }, flashing.value, batchHighlight());
     }
   };
 }

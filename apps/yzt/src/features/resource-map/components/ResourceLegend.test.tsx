@@ -368,7 +368,9 @@ describe('ResourceLegend', () => {
     await nextTick();
 
     const canal = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').find(item => item.text() === '水渠');
-    expect(canal && swatchColors(canal.get('[data-swatch]'))).toContain('rgba(255, 0, 0, 0.5)');
+    // 半透明的线整组设透明度，线用不透明的颜色（ADR 0159）
+    expect(canal?.get('[data-swatch] g').attributes('opacity')).toBe('0.5');
+    expect(canal && swatchColors(canal.get('[data-swatch]'))).toContain('rgba(255,0,0,1)');
     await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('0201K');
     expect(swatchColors(wrapper.get('[data-landuse="0201K"] [data-swatch]'))).toContain('rgba(0, 0, 255, 0.5)');
   });

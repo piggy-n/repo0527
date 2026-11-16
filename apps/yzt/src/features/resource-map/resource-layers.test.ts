@@ -309,6 +309,19 @@ describe('resourcesGroup', () => {
     expect(layerOf(group, 'csxhjctb_gyssp')).toMatchObject({ type: 'symbol', paint: { 'icon-opacity': 0.7 } });
   });
 
+  it('点的透明度不低于 10%（ADR 0159）：SDF 符号的着色器在不透明度低于 0.1 时整个不画；0 照样是 0', () => {
+    const opacityOf = (opacity: number) => {
+      const group = derive(withDisplay(checkAll(initial), 'csxhjctb_gyssp', { opacity }));
+      const point = layerOf(group, 'csxhjctb_gyssp');
+      return point.type === 'symbol' ? point.paint?.['icon-opacity'] : undefined;
+    };
+
+    expect([0, 0.01, 0.05, 0.1, 0.5].map(opacityOf)).toStrictEqual([0, 0.1, 0.1, 0.1, 0.5]);
+    // 面、线照原样
+    const group = derive(withDisplay(checkAll(initial), 'bgdc_cjdcq', { opacity: 0.05 }));
+    expect(layerOf(group, 'bgdc_cjdcq').paint).toMatchObject({ 'fill-opacity': 0.05 });
+  });
+
   it('面按需拆层（ADR 0045）：纹理图层、描边图层的 ID 加后缀，共用数据源、过滤和最小级别，透明度乘在每个图层上', () => {
     const code = 'bgdc_yjjbnttb';
     const state = withDisplay(checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(YJJBNTTB))), code, { opacity: 0.4 });

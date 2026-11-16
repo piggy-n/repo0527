@@ -32,6 +32,12 @@ const colorsOf = (wrapper: ReturnType<typeof mount>) =>
     .findAll('[data-piece]')
     .map(piece => (piece.element.tagName === 'polyline' ? piece.attributes('stroke') : piece.attributes('fill')));
 
+// 折线一段的长度：polyline 的两个端点
+function lengthOf(points: string | undefined): number {
+  const [from = [0, 0], to = [0, 0]] = (points ?? '').split(' ').map(pair => pair.split(',').map(Number));
+  return Math.hypot((to[0] ?? 0) - (from[0] ?? 0), (to[1] ?? 0) - (from[1] ?? 0));
+}
+
 // 画出的圆点的半径：圆的路径从最左边的点开始
 function radiusOf(swatch: LegendSwatch, size: SwatchSize) {
   const d = draw(swatch, size).findAll('path').at(-1)?.attributes('d') ?? '';
@@ -94,11 +100,12 @@ describe('LegendSwatchIcon：一个符号（ADR 0159）', () => {
     expect(wrapper.get('pattern image').attributes('href')).toMatch(/^data:image\/svg\+xml,/);
   });
 
-  it('线是一条三段的折线：实线用圆线帽；线宽按预览框限制（20 × 14 里 1.2～2.4）', () => {
+  it('实线是一条三段的折线：一个 polyline，圆线帽、圆拐角；线宽按预览框限制（20 × 14 里 1.2～2.4）', () => {
     const segments = draw(line('#f00'), 'small').findAll('polyline');
 
-    expect(segments).toHaveLength(3);
-    expect(segments.map(segment => segment.attributes('stroke-linecap'))).toStrictEqual(['round', 'round', 'round']);
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.attributes('points')?.split(' ')).toHaveLength(4);
+    expect(segments[0]?.attributes()).toMatchObject({ 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
     expect(segments[0]?.attributes()).not.toHaveProperty('stroke-dasharray');
     expect(draw({ ...line('#f00'), width: 6 }, 'small').get('polyline').attributes('stroke-width')).toBe('2.4');
     expect(draw({ ...line('#f00'), width: 0.5 }, 'small').get('polyline').attributes('stroke-width')).toBe('1.2');
@@ -112,6 +119,45 @@ describe('LegendSwatchIcon：一个符号（ADR 0159）', () => {
     expect(first?.attributes('stroke-dasharray')).toMatch(/^[\d.]+ [\d.]+$/);
     // 每段两个圆头
     expect(dashed.findAll('circle')).toHaveLength(6);
+  });
+
+  it.each(['summary', 'item', 'small'] as const)(
+    '%s：虚线、点线、点划线每段的线型都缩放到这一段的长度，两端是实的，单位不超过线宽',
+    size => {
+      for (const dash of [
+        [3, 2],
+        [1, 2],
+        [4, 2, 1, 2]
+      ]) {
+        const segments = draw(line('#f00', dash), size).findAll('polyline');
+        expect(segments).toHaveLength(3);
+        for (const segment of segments) {
+          const [first = 0, ...rest] = (segment.attributes('stroke-dasharray') ?? '').split(' ').map(Number);
+          const unit = first / (dash[0] ?? 1);
+          const period = dash.reduce((sum, value) => sum + value, 0) * unit;
+          // 长度 = 整数个周期 + 第一段（四舍五入到两位小数，误差按周期数放大）
+          const periods = (lengthOf(segment.attributes('points')) - first) / period;
+          expect(Math.abs(periods - Math.round(periods))).toBeLessThan(0.05);
+          expect(Math.round(periods)).toBeGreaterThanOrEqual(1);
+          expect(unit).toBeLessThanOrEqual(Number(segment.attributes('stroke-width')));
+          expect(rest).toHaveLength(dash.length - 1);
+        }
+      }
+    }
+  );
+
+  it('半透明的线：整组设透明度，线段、圆头用不透明的颜色，重叠的地方不会更深', () => {
+    const solid = draw(line('rgba(255, 0, 0, 0.5)'));
+    expect(solid.get('g').attributes('opacity')).toBe('0.5');
+    expect(solid.get('polyline').attributes('stroke')).toBe('rgba(255,0,0,1)');
+
+    const dashed = draw(line('rgba(255, 0, 0, 0.5)', [3, 2]));
+    expect(dashed.findAll('g')).toHaveLength(1);
+    expect(dashed.get('g').attributes('opacity')).toBe('0.5');
+    const colors = dashed.findAll('polyline, circle').map(item => item.attributes('stroke') ?? item.attributes('fill'));
+    expect(new Set(colors)).toStrictEqual(new Set(['rgba(255,0,0,1)']));
+    // 不透明的线不设
+    expect(draw(line('#f00')).get('g').attributes()).not.toHaveProperty('opacity');
   });
 
   it('点：按形状画，描边在形状外面，最外面一圈浅灰；没有描边时只有填充和浅灰的一圈', () => {
@@ -143,9 +189,23 @@ describe('LegendSummaryIcon：按属性配色的摘要（ADR 0159）', () => {
     expect(summary(['#a00', '#0a0', '#00a'].map(fill)).findAll('[data-piece]')).toHaveLength(3);
   });
 
-  it('线是三段折线，各段依次用代表取值的线；两类时第三段回到第一类', () => {
+  it('无填充的类别用描边色画那一块（同改版前的规则），不留空白', () => {
+    const none: LegendSwatch = {
+      geometry: 'fill',
+      fill: 'rgba(0, 0, 0, 0)',
+      outline: '#0a0',
+      outlineWidth: 1,
+      outlineDash: null
+    };
+
+    expect(colorsOf(summary([fill('#a00'), none]))).toStrictEqual(['#a00', '#0a0']);
+  });
+
+  it('线是三段折线，各段依次用代表取值的线；两类时第三段回到第一类；半透明的段各自成组', () => {
     expect(colorsOf(summary([line('#a00'), line('#0a0'), line('#00a')]))).toStrictEqual(['#a00', '#0a0', '#00a']);
     expect(colorsOf(summary([line('#a00'), line('#0a0')]))).toStrictEqual(['#a00', '#0a0', '#a00']);
+    const translucent = summary([line('rgba(255, 0, 0, 0.5)'), line('#0a0')]);
+    expect(translucent.findAll('g').map(group => group.attributes('opacity'))).toStrictEqual(['0.5', undefined, '0.5']);
   });
 
   it('点排成三角，各用自己的形状；两类时斜对角', () => {

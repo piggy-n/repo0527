@@ -1,3 +1,4 @@
+import { createExpression, type StylePropertySpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Resource, ResourceGeometry } from './catalog';
 import {
   BASIN_TYPES,
@@ -38,9 +39,18 @@ import {
   WELFARE_TYPES,
   WETLAND_LANDUSE
 } from './class-dictionaries';
-import { type ClassEntry, type ClassItem, type ColorRule, symbolClasses } from './classification';
+import {
+  type ClassEntry,
+  classExpression,
+  type ClassItem,
+  classItems,
+  type ColorRule,
+  OTHER_ITEM,
+  symbolClasses
+} from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor } from './palette';
+import type { PointMark } from './point-shapes';
 import shippedSymbols from './resource-symbol-defaults.json';
 import {
   CODE_DEFAULT_MODE,
@@ -53,6 +63,7 @@ import {
 import {
   classifiedLayers,
   darkenColor,
+  pointIconSize,
   type ResourceLayerStyle,
   type ResourceStyleLayers,
   type ResourceSymbol,
@@ -306,4 +317,51 @@ export function resourceHighlightStyle(
       : classifiedLayers(symbolClasses(rule), item => classSymbol(resource, item, override, style), color);
   const [part] = parts;
   return part?.type === 'symbol' ? { type: 'symbol', layout: part.layout, paint: part.paint } : null;
+}
+
+/** 按要素的属性给出它在地图上画出的样子 */
+export type PointMarkOf = (properties: Readonly<Record<string, unknown>>) => PointMark;
+
+// 取值的键按 MapLibre 的语义求值：和图层的 match 是同一个表达式（map.md：地图以外的求值一律用 style-spec）
+const CLASS_KEY_SPEC = {
+  type: 'string',
+  'property-type': 'data-driven',
+  expression: { interpolated: false, parameters: ['zoom', 'feature'] },
+  transition: false
+} as const satisfies StylePropertySpecification;
+
+/**
+ * 点资源的要素在这一级画出的样子（ADR 0159 第 3 节）：按属性找到它的取值和符号，给出形状、icon-size 和描边宽度，
+ * 点选按到它的距离过滤和排序；icon-size 同图层的曲线。不是点资源时为 null
+ */
+export function pointMarkOf(
+  resource: Resource,
+  zoom: number,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): PointMarkOf | null {
+  if (resource.geometry !== 'circle') {
+    return null;
+  }
+  const markOf = (symbol: ResourceSymbol): PointMark =>
+    symbol.geometry === 'circle'
+      ? { shape: symbol.shape, iconSize: pointIconSize(symbol.size, zoom), strokeWidth: symbol.strokeWidth }
+      : { shape: 'circle', iconSize: 0, strokeWidth: 0 };
+  const rule = style.color;
+  if (!rule || symbolModeOf(style, override) === 'uniform') {
+    const mark = markOf(uniformSymbol(resource, override, style));
+    return () => mark;
+  }
+  const items = classItems(rule);
+  const marks = new Map(items.map(item => [item.key, markOf(classSymbol(resource, item, override, style))]));
+  const parsed = createExpression(classExpression(rule, item => item.key), 'class-key', CLASS_KEY_SPEC);
+  if (parsed.result !== 'success') {
+    throw new Error(parsed.value.map(({ message }) => message).join('；'));
+  }
+  const fallback = marks.get(OTHER_ITEM) ?? markOf(uniformSymbol(resource, override, style));
+  const expression = parsed.value;
+  return properties => {
+    const key: unknown = expression.evaluate({ zoom }, { type: 'Point', properties: { ...properties } });
+    return marks.get(String(key)) ?? fallback;
+  };
 }

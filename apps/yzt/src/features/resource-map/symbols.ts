@@ -509,7 +509,24 @@ type PointSymbol = Extract<ResourceSymbol, { geometry: 'circle' }>;
 const iconSizes = (symbol: PointSymbol): number[] =>
   sizeStops('circle', symbol.size).map(([, pixels]) => Number((pixels / SHAPE_BASE_RADIUS).toFixed(4)));
 
+/** 点在某一级的 icon-size：同图层的曲线，断点之间线性插值，两头取端点的值（点选按它算画出的大小） */
+export function pointIconSize(size: SymbolSize, zoom: number): number {
+  const stops = sizeStops('circle', size);
+  const index = stops.findIndex(([stopZoom]) => stopZoom >= zoom);
+  const after = stops[index === -1 ? stops.length - 1 : index];
+  const before = stops[Math.max(0, index - 1)];
+  if (!after || !before || index <= 0) {
+    return (after?.[1] ?? 0) / SHAPE_BASE_RADIUS;
+  }
+  const ratio = (zoom - before[0]) / (after[0] - before[0]);
+  return (before[1] + (after[1] - before[1]) * ratio) / SHAPE_BASE_RADIUS;
+}
+
 const POINT_ZOOMS = sizeStops('circle', 'M').map(([zoom]) => zoom);
+
+// 数值写成按要素求值的表达式（每个要素都一样）；本来就按要素的表达式原样
+const perFeature = (output: number | ExpressionSpecification): number | ExpressionSpecification =>
+  typeof output === 'number' ? ['case', ['has', '$'], output, output] : output;
 
 /**
  * 点的 symbol 图层（ADR 0159）：SDF 形状图片按取值 match，填充是 icon-color，描边是 icon-halo；
@@ -532,6 +549,17 @@ function pointLayers(
     }
     return interpolateZoom(POINT_ZOOMS.map((zoom, index) => [zoom, outputs[index] ?? 0]));
   };
+  // 描边宽度随级别变化时写成按要素求值的表达式（每个要素的值都一样）：MapLibre 只随级别变化的 paint 属性按地图的级别求值，
+  // icon-size 却按瓦片覆盖的级别求值，倾斜时远处是低级别的瓦片、图标小，描边按地图的级别算就超出距离场、露出方框（实测 85°）；
+  // 按要素求值的 paint 属性也按瓦片的级别求值，和 icon-size 对得上（ADR 0159 第 2 节）
+  const haloCurve = (at: (item: ClassItem, index: number) => number) => {
+    const outputs = POINT_ZOOMS.map((_, index) => value(item => at(item, index)));
+    const [first] = outputs;
+    if (first !== undefined && same(outputs)) {
+      return first;
+    }
+    return interpolateZoom(POINT_ZOOMS.map((zoom, index) => [zoom, perFeature(outputs[index] ?? 0)]));
+  };
   const extra = highlight === undefined ? 0 : HIGHLIGHT_HALO_EXTRA;
   const haloWidth = (item: ClassItem, index: number) => {
     const size = iconSizes(point(item))[index] ?? 0;
@@ -543,20 +571,19 @@ function pointLayers(
     }
     return point(item).strokeWidth === 0 ? TRANSPARENT : point(item).strokeColor;
   };
-  const offsets = items.some(item => shapeOf(item) === 'pin')
-    ? { 'icon-offset': value((item): ExpressionSpecification => ['literal', [...shapeOffset(shapeOf(item))]]) }
-    : {};
   const layout: NonNullable<SymbolLayerSpecification['layout']> = {
     'icon-image': value(item => shapeImageId(shapeOf(item))),
     'icon-size': zoomCurve((item, index) => iconSizes(point(item))[index] ?? 0),
-    ...offsets,
+    // 不是定位针的也写上 [0, 0]：写了 icon-offset 的图层，MapLibre 6.12 倾斜时不按透视缩小图标（draw_symbol 的 isOffset），
+    // 描边按平视算的上限在任何倾斜下都成立，远处的点和近处一样大（ADR 0159 第 2 节）
+    'icon-offset': value((item): ExpressionSpecification => ['literal', [...shapeOffset(shapeOf(item))]]),
     'icon-allow-overlap': true,
     'icon-ignore-placement': true
   };
   const paint = {
     'icon-color': value(item => point(item).fillColor),
     'icon-halo-color': value(haloColor),
-    'icon-halo-width': zoomCurve(haloWidth)
+    'icon-halo-width': haloCurve(haloWidth)
   };
   return { parts: [{ type: 'symbol', layout, paint }], images: shapeImages(items.map(shapeOf)) };
 }

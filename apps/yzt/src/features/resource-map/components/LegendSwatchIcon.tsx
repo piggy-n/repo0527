@@ -1,7 +1,9 @@
+import { Color } from '@maplibre/maplibre-gl-style-spec';
 import { defineComponent, type PropType, useId, type VNode } from 'vue';
 import { patternPreviewSvg } from '../fill-patterns';
 import type { LegendSwatch } from '../legend';
 import { shapeSvgPath } from '../point-shapes';
+import { withAlpha } from '../symbols';
 import styles from './LegendSwatchIcon.module.scss';
 
 // 图例符号的画法（ADR 0159，用户 2026-11-16 确认的 A 画法）：按目标尺寸直接画，不整体缩放；
@@ -67,17 +69,29 @@ function zigzag(width: number, height: number): Point[] {
   ];
 }
 
-// 一段线：实线用圆线帽（同地图）；有线型时用平线帽画虚实，两端补上圆头
-function renderSegment(from: Point, to: Point, swatch: LineSwatch, height: number): VNode[] {
+const pointsText = (points: readonly Point[]) => points.map(([x, y]) => `${round(x)},${round(y)}`).join(' ');
+
+// 颜色拆成不透明的颜色和透明度：半透明的线整组设透明度，线段、拐角和圆头重叠的地方不会叠出更深的斑点
+function splitAlpha(color: string): readonly [opaque: string, alpha: number] {
+  const alpha = Color.parse(color)?.a ?? 1;
+  return alpha < 1 ? [withAlpha(color, 1), round(alpha)] : [color, 1];
+}
+
+// 一组线：不透明时不设透明度
+function renderGroup(alpha: number, children: VNode[]): VNode {
+  return <g opacity={alpha < 1 ? alpha : undefined}>{children}</g>;
+}
+
+// 一段线：有线型时用平线帽画虚实，两端补上圆头；color 是不透明的颜色
+function renderSegment(from: Point, to: Point, swatch: LineSwatch, color: string, height: number): VNode[] {
   const width = lineWidthOf(swatch, height);
-  const points = `${round(from[0])},${round(from[1])} ${round(to[0])},${round(to[1])}`;
   const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
   const dash = fittedDash(swatch.dash, width, length);
   const line = (
     <polyline
-      points={points}
+      points={pointsText([from, to])}
       fill="none"
-      stroke={swatch.color}
+      stroke={color}
       stroke-width={round(width)}
       stroke-linecap={dash ? 'butt' : 'round'}
       stroke-dasharray={dash}
@@ -87,17 +101,45 @@ function renderSegment(from: Point, to: Point, swatch: LineSwatch, height: numbe
   if (!dash) {
     return [line];
   }
-  const cap = (at: Point) => <circle cx={round(at[0])} cy={round(at[1])} r={round(width / 2)} fill={swatch.color} />;
+  const cap = (at: Point) => <circle cx={round(at[0])} cy={round(at[1])} r={round(width / 2)} fill={color} />;
   return [line, cap(from), cap(to)];
 }
 
-// 折线的三段依次用这些线的符号
+// 一种线：实线是一条折线（圆线帽、圆拐角，同地图）；有线型时每段各自缩放线型
+function renderLine(points: readonly Point[], swatch: LineSwatch, height: number): VNode {
+  const [color, alpha] = splitAlpha(swatch.color);
+  if (swatch.dash) {
+    const segments = points.slice(1).flatMap((to, index) => {
+      const from = points[index];
+      return from ? renderSegment(from, to, swatch, color, height) : [];
+    });
+    return renderGroup(alpha, segments);
+  }
+  const line = (
+    <polyline
+      points={pointsText(points)}
+      fill="none"
+      stroke={color}
+      stroke-width={round(lineWidthOf(swatch, height))}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      data-piece
+    />
+  );
+  return renderGroup(alpha, [line]);
+}
+
+// 折线的三段依次用这些线的符号，一种线时画成整条
 function renderZigzag(swatches: readonly LineSwatch[], width: number, height: number): VNode[] {
   const points = zigzag(width, height);
+  const [only] = swatches;
+  if (swatches.length === 1 && only) {
+    return [renderLine(points, only, height)];
+  }
   return points.slice(1).flatMap((to, index) => {
     const from = points[index] ?? to;
     const swatch = swatches[index % swatches.length];
-    return swatch ? renderSegment(from, to, swatch, height) : [];
+    return swatch ? [renderLine([from, to], swatch, height)] : [];
   });
 }
 
@@ -321,9 +363,11 @@ export const LegendSummaryIcon = defineComponent({
         }
         const d = `M${points.map(([x, y]) => `${round(x * width)} ${round(y * height)}`).join('L')}Z`;
         const pattern = renderPatternDef(`${id}-${index}`, swatch);
+        // 无填充的类别用描边色（同改版前的规则），不留一块空白
+        const color = isTransparent(swatch.fill) ? swatch.outline : swatch.fill;
         return [
           pattern && <defs>{pattern}</defs>,
-          !isTransparent(swatch.fill) && <path d={d} fill={swatch.fill} data-piece />,
+          <path d={d} fill={color} data-piece />,
           pattern && <path d={d} fill={`url(#${id}-${index})`} />,
           <path class={styles.separator} d={d} />
         ];

@@ -154,7 +154,7 @@ function rendered(sourceId: string, properties: Record<string, unknown>, distanc
   return { sourceId, layerId: sourceId, properties, geometry };
 }
 
-const distanceOf = (geometry: Geometry | undefined) =>
+const distanceOf = ({ geometry }: { readonly geometry?: Geometry | undefined }) =>
   geometry?.type === 'Point' ? (geometry.coordinates[0] ?? Infinity) : Infinity;
 
 const summaryOf = (candidates: readonly PickCandidate[]) =>

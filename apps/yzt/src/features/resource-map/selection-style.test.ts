@@ -20,7 +20,7 @@ const SQUARE: Geometry = {
 };
 
 // 选中的面，没有点的样式
-const SELECTED: SelectedHighlight = { geometry: SQUARE, properties: {}, point: null };
+const SELECTED: SelectedHighlight = { feature: { type: 'Feature', properties: {}, geometry: SQUARE }, point: null };
 
 // 按 MapLibre 的语义求值过滤条件：这种几何类型的要素会被哪些图层画出
 function drawnBy(group: StyleGroup, type: 'Polygon' | 'MultiPolygon' | 'LineString' | 'MultiLineString' | 'Point') {
@@ -45,16 +45,15 @@ describe('selectionGroup', () => {
     expect(selectionGroup(null, true)).toStrictEqual({ sources: {}, layers: [] });
   });
 
-  it('几何放进 selection 数据源，直接引用；外面的要素每次换新对象', () => {
+  it('要素原样放进 selection 数据源：调用方给的是同一个对象时数据源不重发，要素变了由调用方换新对象（ADR 0022）', () => {
     const first = selectionGroup(SELECTED, false);
-    const second = selectionGroup(SELECTED, false);
+    const second = selectionGroup(SELECTED, true);
 
     expect(first.sources).toStrictEqual({
       selection: { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: SQUARE } }
     });
-    const data = dataOf(first);
-    expect(data).not.toBe(dataOf(second));
-    expect(data?.type === 'Feature' && data.geometry).toBe(SQUARE);
+    expect(dataOf(first)).toBe(SELECTED.feature);
+    expect(dataOf(second)).toBe(SELECTED.feature);
   });
 
   it('面画填充和描边，线只画线，点画圆；多部件的同样处理', () => {
@@ -130,8 +129,11 @@ const POINT_HIGHLIGHT: PointHighlightOf = color => {
 describe('selectionGroup：点按资源的形状高亮（ADR 0159）', () => {
   it('有点的样式时点是 symbol 图层：同资源的形状和大小，描边是高亮色，闪烁时换成浅红；要素带着瓦片里的属性', () => {
     const point: SelectedHighlight = {
-      geometry: { type: 'Point', coordinates: [119, 33] },
-      properties: { cc: '08H213', guid: 'a'.repeat(32) },
+      feature: {
+        type: 'Feature',
+        properties: { cc: '08H213', guid: 'a'.repeat(32) },
+        geometry: { type: 'Point', coordinates: [119, 33] }
+      },
       point: POINT_HIGHLIGHT
     };
     const group = selectionGroup(point, false);

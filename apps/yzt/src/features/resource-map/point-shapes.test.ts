@@ -2,6 +2,7 @@
 import type { StyleImage } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import {
+  markDistance,
   maxHaloWidth,
   POINT_SHAPE_NAMES,
   type PointShape,
@@ -121,6 +122,30 @@ describe('形状的 SDF 图片', () => {
     expect(fieldAt(pin, pixelOf(pin, 0), pixelOf(pin, -0.4))).toBeLessThan(0.75);
     // 针尾在边缘以内
     expect(fieldAt(pin, pixelOf(pin, 0), pixelOf(pin, 0.8))).toBeGreaterThan(0.75);
+  });
+});
+
+describe('点选的距离（ADR 0159）', () => {
+  it('到画出的形状：按半径的圆加描边，在里面为 0，随 icon-size 缩放', () => {
+    const circle = { shape: 'circle', iconSize: 1, strokeWidth: 1 } as const;
+
+    expect(markDistance(circle, 3, 0)).toBe(0);
+    expect(markDistance(circle, 10, 0)).toBe(5);
+    expect(markDistance(circle, 0, -15)).toBe(10);
+    expect(markDistance({ ...circle, iconSize: 2, strokeWidth: 0 }, 10, 0)).toBe(2);
+    expect(markDistance({ ...circle, shape: 'star' }, 10, 0)).toBe(5);
+  });
+
+  it('定位针：针尖在要素的位置，针头在上面 1.6 个半径；取到针尖和到针头里近的一个', () => {
+    const pin = { shape: 'pin', iconSize: 1, strokeWidth: 1 } as const;
+
+    // 针头中心在要素上方 6.4 像素，半径 3.2 加描边 1
+    expect(markDistance(pin, 0, -6.4)).toBe(0);
+    expect(markDistance(pin, 5, -6.4)).toBeCloseTo(0.8, 6);
+    expect(markDistance(pin, 0, -12)).toBeCloseTo(1.4, 6);
+    // 针尖下面按到针尖算
+    expect(markDistance(pin, 0, 5)).toBe(4);
+    expect(markDistance({ ...pin, iconSize: 2 }, 0, -12.8)).toBe(0);
   });
 });
 

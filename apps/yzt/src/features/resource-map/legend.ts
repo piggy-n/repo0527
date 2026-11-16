@@ -18,7 +18,8 @@ import { isFillPattern, LINE_DASHES, type LineDash, type ResourceSymbol, sizePix
 
 /**
  * 一个符号的预览：面是填充加描边（有花纹时叠上花纹），线是一段线，点是带描边的形状。
- * 宽度和半径是预览里的像素（按参考级别的实际像素，超过上限按上限）；线型以线宽为单位，同 MapLibre 的 line-dasharray
+ * 宽度和半径是参考级别下的实际像素，画的时候按预览框的高度限制（LegendSwatchIcon，ADR 0159）；
+ * 线型以线宽为单位，同 MapLibre 的 line-dasharray
  */
 export type LegendSwatch =
   | {
@@ -46,8 +47,6 @@ export type LegendSwatch =
       readonly strokeWidth: number;
     };
 
-/** 预览的上限（像素，设计稿 5D.5）：预览框 28 × 20 放得下；点的上限是半径加描边 */
-export const SWATCH_LIMITS = { line: 6, circle: 9, outline: 4 } as const;
 
 // 无填充的面：预览里填充透明
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
@@ -118,7 +117,7 @@ export type LegendEntry =
 
 const dashOf = (dash: LineDash): readonly number[] | null => LINE_DASHES[dash].dasharray;
 
-/** 符号的预览：线宽、点的半径按参考级别（线 14 级、点 12 级）的像素，面的描边按它自己的像素；超过 SWATCH_LIMITS 的按上限 */
+/** 符号的预览：线宽、点的半径按参考级别（线 14 级、点 12 级）的像素，面的描边按它自己的像素；预览框放不下的由画的组件限制 */
 export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   if (symbol.geometry === 'fill') {
     const fill = symbol.fillStyle === 'none' ? TRANSPARENT : symbol.fillColor;
@@ -128,20 +127,17 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
       geometry: 'fill',
       fill,
       outline: symbol.outlineColor,
-      outlineWidth: Math.min(sizePixels('outline', symbol.outlineWidth), SWATCH_LIMITS.outline),
+      outlineWidth: sizePixels('outline', symbol.outlineWidth),
       outlineDash: dashOf(symbol.outlineDash),
       ...pattern
     };
   }
   if (symbol.geometry === 'line') {
-    const width = Math.min(sizePixels('line', symbol.width), SWATCH_LIMITS.line);
+    const width = sizePixels('line', symbol.width);
     return { geometry: 'line', color: symbol.color, width, dash: dashOf(symbol.dash) };
   }
-  // 描边在半径外面，两者加起来不超过上限：超过时半径让出位置
-  const { strokeWidth } = symbol;
-  const radius = Math.min(sizePixels('circle', symbol.size), SWATCH_LIMITS.circle - strokeWidth);
-  const { shape, fillColor: fill, strokeColor: stroke } = symbol;
-  return { geometry: 'circle', shape, fill, stroke, radius, strokeWidth };
+  const { shape, fillColor: fill, strokeColor: stroke, strokeWidth } = symbol;
+  return { geometry: 'circle', shape, fill, stroke, radius: sizePixels('circle', symbol.size), strokeWidth };
 }
 
 /** 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code */

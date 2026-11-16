@@ -173,6 +173,27 @@ export function shapeOffset(shape: PointShape): readonly [number, number] {
   return shape === 'pin' ? [0, -PIN.tipY * SHAPE_BASE_RADIUS] : [0, 0];
 }
 
+/** 一个点在屏幕上画出的样子：形状、当前级别的 icon-size、描边宽度（像素） */
+export interface PointMark {
+  readonly shape: PointShape;
+  readonly iconSize: number;
+  readonly strokeWidth: number;
+}
+
+/**
+ * 屏幕上相对要素位置 (dx, dy)（像素，y 向下）的一点到画出的点的距离，在里面为 0（ADR 0159 第 3 节）：
+ * 形状按半径的圆算，定位针取到针尖和到针头里近的一个（针尖在要素的位置，同 shapeOffset），都算上描边
+ */
+export function markDistance({ shape, iconSize, strokeWidth }: PointMark, dx: number, dy: number): number {
+  const radius = SHAPE_BASE_RADIUS * iconSize;
+  const outside = (x: number, y: number, extent: number) => Math.max(0, Math.hypot(dx - x, dy - y) - extent);
+  if (shape !== 'pin') {
+    return outside(0, 0, radius + strokeWidth);
+  }
+  const head = outside(0, (PIN.cy - PIN.tipY) * radius, PIN.r * radius + strokeWidth);
+  return Math.min(outside(0, 0, strokeWidth), head);
+}
+
 // ID 以分组名为前缀（ADR 0027、0045），resources 分组的推导用到；选中高亮的分组也引用这些图片
 const PREFIX = 'resources-shape-';
 

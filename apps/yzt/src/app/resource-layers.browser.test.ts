@@ -1,5 +1,5 @@
 import type { GeoJSONSourceSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { type CameraState, MapLibreView, MapSession, type StyleGroup } from '@mx/map-core';
+import { type CameraState, type MapLibreMapOptions, MapLibreView, MapSession, type StyleGroup } from '@mx/map-core';
 import type { Feature, FeatureCollection } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
@@ -95,10 +95,22 @@ const POINTS: FeatureCollection = {
 // 正中间那个点
 const CENTER_POINT = 12;
 
+// 倾斜视角用的学校点：(121.5, 33) 以北几排，越远的排离得越开、每排左右错开，倾斜到 85° 时靠近地平线的点也不挤在一起；
+// 和上面的点离得远，平视的用例看不到
+const FAR_START: [number, number] = [121.5, 33];
+const FAR_ROWS = [0.03, 0.08, 0.15, 0.3, 0.6];
+const FAR_POINTS: readonly Feature[] = FAR_ROWS.flatMap((north, row) =>
+  Array.from({ length: 7 }, (_, column): Feature => ({
+    type: 'Feature',
+    properties: { cc: '08H213', guid: pointGuid(1000 + row * 10 + column) },
+    geometry: { type: 'Point', coordinates: [FAR_START[0] + (column - 3) * 0.1 + row * 0.03, FAR_START[1] + north] }
+  }))
+);
+
 const DATA: ReadonlyMap<string, FeatureCollection> = new Map([
   [`resources-${HYDL}`, LINES],
   [`resources-${DLTB}`, AREAS],
-  [`resources-${XXP}`, POINTS]
+  [`resources-${XXP}`, { type: 'FeatureCollection', features: [...POINTS.features, ...FAR_POINTS] }]
 ]);
 
 function dataOf(sourceId: string): GeoJSONSourceSpecification {
@@ -170,7 +182,10 @@ function nextRender(map: MapLibreMap, label: string): Promise<void> {
   });
 }
 
-function setup(camera: CameraState = { center: [118.8, 32.08], zoom: 9, bearing: 0, pitch: 0 }) {
+function setup(
+  camera: CameraState = { center: [118.8, 32.08], zoom: 9, bearing: 0, pitch: 0 },
+  mapOptions?: Omit<MapLibreMapOptions, 'container' | 'style' | 'center' | 'zoom' | 'bearing' | 'pitch'>
+) {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.width = '800px';
   container.style.height = '600px';
@@ -188,6 +203,7 @@ function setup(camera: CameraState = { center: [118.8, 32.08], zoom: 9, bearing:
   const view = new MapLibreView({
     session,
     container,
+    ...(mapOptions ? { mapOptions } : {}),
     createMap: options => (created = new MapLibreMap(options)),
     onError: error => errors.push(error)
   });
@@ -365,6 +381,10 @@ function pixelsAt(map: MapLibreMap, x: number, y: number, half: number): Promise
   return withTimeout(read, '读出像素');
 }
 
+// 两个像素各通道相差最多多少
+const difference = (a: readonly number[], b: readonly number[]) =>
+  Math.max(...a.map((value, index) => Math.abs(value - (b[index] ?? 0))));
+
 // 接近高亮色（#f5222d）的像素数
 function reddish(pixels: Uint8Array): number {
   let count = 0;
@@ -432,35 +452,89 @@ describe('点的形状（ADR 0159）', () => {
     if (!resource) {
       throw new Error('目录里没有学校点层');
     }
+    // 08H212 类是定位针，08H213 类照旧是圆
     const override: ResourceSymbolOverride = { items: { '08H212': { shape: 'pin' } } };
-    const feature = POINTS.features[CENTER_POINT];
-    if (feature?.geometry.type !== 'Point') {
-      throw new Error('没有正中间的点');
-    }
-    const first = nextRender(map, '首次渲染完成');
-    session.style.setGroups({
-      resources: groupOf({ [XXP]: override }),
-      selection: selectionGroup(
-        {
-          geometry: feature.geometry,
-          properties: feature.properties ?? {},
-          point: color => resourceHighlightStyle(resource, color, override)
-        },
-        false
-      )
-    });
-    await first;
+    const select = async (index: number) => {
+      const feature = POINTS.features[index];
+      if (!feature) {
+        throw new Error(`没有第 ${index} 个点`);
+      }
+      const rendered = nextRender(map, `选中第 ${index} 个点`);
+      session.style.setGroups({
+        resources: groupOf({ [XXP]: override }),
+        selection: selectionGroup({ feature, point: color => resourceHighlightStyle(resource, color, override) }, false)
+      });
+      await rendered;
+      const [lng = 0, lat = 0] = feature.geometry.type === 'Point' ? feature.geometry.coordinates : [];
+      const at = map.project([lng, lat]);
+      // 要素位置上方 4～14 像素、下方 4～14 像素里的红色：定位针的针头在上面，针尖就在要素的位置
+      return {
+        above: reddish(await pixelsAt(map, at.x, at.y - 9, 5)),
+        below: reddish(await pixelsAt(map, at.x, at.y + 9, 5))
+      };
+    };
 
+    // 正中间的点是 08H212 类，画成定位针：红色描边只在上面
+    const pin = await select(CENTER_POINT);
     expect(ctx.errors).toStrictEqual([]);
     expect(map.queryRenderedFeatures({ layers: ['selection-point'] })).toHaveLength(1);
-    expect(map.getLayoutProperty('selection-point', 'icon-image')).toStrictEqual(
-      map.getLayoutProperty(`resources-${XXP}`, 'icon-image')
-    );
-    // 正中间的点是 08H212 类，画成定位针；高亮的红色描边在它周围
-    const center = map.project(POINT_CENTER);
-    expect(reddish(await pixelsAt(map, center.x, center.y, 10))).toBeGreaterThan(20);
+    expect(pin.above).toBeGreaterThan(10);
+    expect(pin.below).toBe(0);
     // 别的点没有高亮
     const other = map.project([POINT_CENTER[0] + POINT_SPACING, POINT_CENTER[1]]);
     expect(reddish(await pixelsAt(map, other.x, other.y, 10))).toBe(0);
+    // 右边一个是 08H213 类，画成圆：上下都有红色描边
+    const circle = await select(CENTER_POINT + 1);
+    expect(circle.above).toBeGreaterThan(0);
+    expect(circle.below).toBeGreaterThan(0);
   });
+
+  it.each([60, 85])(
+    '倾斜 %i° 时画面上方远处的点只画出形状和描边，图片的方框不露出来（写了 icon-offset 不按透视缩小，描边按瓦片的级别求值）',
+    async pitch => {
+      using ctx = setup({ center: FAR_START, zoom: 12, bearing: 0, pitch: 0 }, { maxPitch: 85 });
+      const { map, session } = ctx;
+      await nextRender(map, '首次渲染完成');
+      // S 档、描边 3、红色：12 级的 icon-size 是 0.6，描边按平视的上限是 2.51，倾斜时最容易露出方框
+      const rendered = nextRender(map, `倾斜 ${pitch}° 渲染完成`);
+      session.style.setGroup(
+        'resources',
+        groupOf({ [XXP]: { mode: 'uniform', uniform: { size: 'S', strokeWidth: 3, strokeColor: '#FF0000' } } })
+      );
+      map.jumpTo({ pitch });
+      await rendered;
+      expect(map.getPitch()).toBe(pitch);
+
+      // 画面上半部能看到、离别的点至少 24 像素的点里最远的一个
+      const projected = FAR_POINTS.flatMap(({ geometry }) =>
+        geometry.type === 'Point' ? [map.project([geometry.coordinates[0] ?? 0, geometry.coordinates[1] ?? 0])] : []
+      );
+      const apart = projected.filter(
+        point =>
+          point.x > 30 &&
+          point.x < 770 &&
+          point.y > 30 &&
+          point.y < 300 &&
+          projected.every(other => other === point || Math.hypot(other.x - point.x, other.y - point.y) >= 24)
+      );
+      const far = apart.toSorted((a, b) => a.y - b.y)[0];
+      if (!far) {
+        throw new Error('画面上方没有隔开的点');
+      }
+      // 图片的半边（icon-size 0.6，不按透视缩小）是 7.1 像素；斜着 4.3 像素处在形状和描边（4.9）外面、图片里面。
+      // 靠近地平线时底色有雾的颜色：和同一行、点的左右 14 像素（图片外面）的底色比，差别不超过抗锯齿的余量（3 / 255）；
+      // 露出方框时差几十
+      const pixel = async (x: number, y: number) => [...(await pixelsAt(map, x, y, 0.5))];
+      const corners = [-4.3, 4.3].flatMap(dy => [-4.3, 4.3].map(dx => [dx, dy] as const));
+      const differences = await Promise.all(
+        corners.map(async ([dx, dy]) =>
+          difference(await pixel(far.x + dx, far.y + dy), await pixel(far.x + Math.sign(dx) * 14, far.y + dy))
+        )
+      );
+
+      expect(difference(await pixel(far.x, far.y), await pixel(far.x + 14, far.y))).toBeGreaterThan(20);
+      expect(Math.max(...differences)).toBeLessThanOrEqual(3);
+      expect(ctx.errors).toStrictEqual([]);
+    }
+  );
 });
