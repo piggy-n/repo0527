@@ -40,7 +40,7 @@
 | 字段 | 说明 |
 |---|---|
 | `tileset` | `oblique`、`indoor`：`tileset.json` 的地址，相对清单，按段编码（见"目录层级"） |
-| `effects` | `white`：`[{ id, label, tileset }]`，第一种是默认效果；`label` 显示在当前图层行尾 56 宽的框里，写短名（如"无纹理""效果1"），超过四个字会省略 |
+| `effects` | `white`：`[{ id, label, tileset }]`，第一种是默认效果；`label` 显示在面板"图层"一段行尾 56 宽的框里，写短名（如"无纹理""效果1"），超过四个字会省略 |
 | `maximumScreenSpaceError` | 可选，屏幕误差上限（正数）；不写用默认值 8，只给放不下的模型写，放不下的写 16（怎么判断见"新增一个模型"的瓦片集第 4 步；[map-three.md](../modules/map-three.md)"渲染"的瓦片） |
 | `spawn` | 可选，步行的出生点 `{ lng, lat, height, heading }`：脚下地板的椭球高，朝向是正北为 0、顺时针的度数。写了就能步行，瓦片集里只给 `indoor` 写（见"新增一个模型"） |
 | `routes` | 可选，预置的漫游路线 `[{ id, name, path }]`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`，至少两个点；头顶低的地方可以多一个值，是视点在地板以上的米数（大于 0、不超过 1.6，不写是 1.6，ADR 0156 第 3 节） |
@@ -157,7 +157,7 @@ LCC2 各行的数字都能重跑：`pnpm --filter yzt lcc2:register "<清单里 
 |---|---|---|---|---|
 | 1 放数据 | 按"目录层级"放到 `local/3dt/<市>/3dtiles/<模型名>/`；只在服务器上的设 `YZT_3DT_PROXY`（[local-files.md](local-files.md)） | 模型目录 | 根 `tileset.json` 在，目录名等于清单的 `name` | 开发者；服务器上的目录由用户上传 |
 | 2 写清单 | 加一项：`kind`、`cityCode`、`underground`、`tileset`（白膜写 `effects`），路径按段编码 | 清单的一项 | `pnpm --filter yzt test:unit src/features/scene-models` 通过（断言先按"检查清单"改） | 开发者 |
-| 3 在页面上看 | `pnpm --filter yzt dev`，现状底图切到三维，从资源目录加入、定位 | 无 | 能加载，定位落在模型上，高度和底图对得上，11～17 级俯视和倾斜都没有空洞 | 开发者看对不对；观感由用户在显卡机器上看 |
+| 3 在页面上看 | `pnpm --filter yzt dev`，现状底图切到三维，从面板的"资源"里加入、定位 | 无 | 能加载，定位落在模型上，高度和底图对得上，11～17 级俯视和倾斜都没有空洞 | 开发者看对不对；观感由用户在显卡机器上看 |
 | 4 屏幕误差 | 在 `tools/measure-3d/scenes.ts` 加场景，`pnpm --filter yzt measure:3d --only <场景>`（[commands.md](../commands.md)） | `local/measure-3d/<时间>/report.md` | 默认 8 下放得下、静止时不再加载和卸载；放不下的写 `maximumScreenSpaceError: 16` | 用户在显卡机器上跑；没跑之前记在 backlog |
 | 5 取出生点和路线 | 没有工具，见表下 | 清单的 `spawn`、`routes` | 高度是椭球高；出生点 30 米内有能站的地板 | 位置和路线段由用户定，开发者取点 |
 | 6 核对（只对 `indoor`） | 开发服务器的 `/dev/nav-grid`：选模型、构建，"平面图"里打开"预置路线"，再切到"步行地图预览" | 无 | 路线落在能站的区域里、不穿墙；高度写错层的一段在那一层上不画；预览里人落在出生点：读数的朝向等于清单的 `heading`，楼层是 `spawn` 那一层 | 开发者 |

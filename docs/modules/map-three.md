@@ -471,7 +471,7 @@ MapLibre 丢失上下文时销毁样式和自定义层，恢复后重新加载�
 
 ## 高斯泼溅（L.1，ADR 0149）
 
-会话三维内容的 `splats`（`SplatLayer`：索引地址、配准后的摆放、显示、重试次数）由 map-core 的 `SceneSplatSync` 增删改，状态和瓦片集的合在一份 `sceneStatus` 里（ID 不重复）。渲染器实现 `addSplat`、`updateSplat`、`removeSplat`，数据块失败、库不会再重试时报告 `splatfailed`：库自己会重试的（HTTP 408、425、429、5xx，网络错误，Worker 被终止，同库的 `streamRetryAt`，`splat-errors.ts`）不报告，否则一次临时失败就让模型一直显示加载失败、不能定位，重试又整个重新下载。读索引时同一个 ID 先中止、紧接着重新加（同步换摆放、重试），上一份已中止、还没来得及清理的直接释放，新的照常加载。能力声明 `splats` 为 false 时现状底图的资源目录不列出这类模型；现在的引擎总是 true（ADR 0153）。步行、路线漫游用碰撞网格建导航网格（ADR 0156，下面"漫游"）。
+会话三维内容的 `splats`（`SplatLayer`：索引地址、配准后的摆放、显示、重试次数）由 map-core 的 `SceneSplatSync` 增删改，状态和瓦片集的合在一份 `sceneStatus` 里（ID 不重复）。渲染器实现 `addSplat`、`updateSplat`、`removeSplat`，数据块失败、库不会再重试时报告 `splatfailed`：库自己会重试的（HTTP 408、425、429、5xx，网络错误，Worker 被终止，同库的 `streamRetryAt`，`splat-errors.ts`）不报告，否则一次临时失败就让模型一直显示加载失败、不能定位，重试又整个重新下载。读索引时同一个 ID 先中止、紧接着重新加（同步换摆放、重试），上一份已中止、还没来得及清理的直接释放，新的照常加载。能力声明 `splats` 为 false 时现状底图面板的"资源"里不列出这类模型；现在的引擎总是 true（ADR 0153）。步行、路线漫游用碰撞网格建导航网格（ADR 0156，下面"漫游"）。
 
 - **一份泼溅一个 `SplatEntry`**：和瓦片集一样有自己的场景、相机和局部系，局部系锚在摆放的原点（`lng`、`lat`，椭球面上）。库的 `Lcc2StreamScheduler` 的组放进场景，组的矩阵就是摆放：LCC2 的东、北、上先绕竖直轴转 `heading`（逆时针），再换成局部系的东、上、南，抬到 `height`（`placementMatrix`）。数据带的 `offset` 不用，库本来也不应用它。
 - **库单独分块**：渲染器第一次加泼溅时才 `import('gaussian-splat-lite')`，下载失败下次重新下载。产物里是 `gaussian-splat-lite.module-*.js`，2.57 MB（gzip 889 KB），只看瓦片集的页面不下载；冒烟检查勾选泼溅以前没有请求它。
