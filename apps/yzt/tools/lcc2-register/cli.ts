@@ -10,7 +10,7 @@ import { gridProjection } from './projection.ts';
 import { writePlan } from './plan-file.ts';
 import { type PlanInput, planSvg } from './plan-svg.ts';
 import { manifestPath, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
-import { cornerLine, cornerSummary } from './roam-report.ts';
+import { cornerLine, cornerSummary, toleranceLabel } from './roam-report.ts';
 import { routeWithCorners, spawnOf, STRAIGHT_HORIZONTAL, trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
@@ -64,7 +64,8 @@ function printRoam(
       tolerance,
       stretches: options.stretches
     });
-    console.log(`路线 ${span.id}（容差 ${tolerance} 米）：${cornerSummary(corners, tolerance)}`);
+    const label = toleranceLabel(span, tolerance, options.stretches);
+    console.log(`路线 ${span.id}（${label}）：${cornerSummary(corners)}`);
     if (options.diagnose) {
       corners.forEach((corner) => console.log(cornerLine(corner)));
     }
