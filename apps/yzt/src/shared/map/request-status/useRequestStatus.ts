@@ -21,7 +21,6 @@ export interface RequestStatus {
   readonly loadingKeys: ComputedRef<ReadonlySet<string>>;
 }
 
-
 /**
  * 地图数据的请求状态（ADR 0158）：把页面给出的来源整理成明细的各项，模型按读索引的状态变化记下开始、结束的时间，
  * 读完以后接上渲染器统计的这一轮（modelRequestItem，ADR 0162）；需要时让时钟走，状态栏的条目、明细、行内的转圈都按它判断
