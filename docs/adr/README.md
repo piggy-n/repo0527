@@ -17,7 +17,7 @@
 | [0003](0003-typescript-7-toolchain.md) | TypeScript 7 与工具链 | 已接受（`incremental` 一条已被 0009 取代） |
 | [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受（拆包由 0143 落地） |
 | [0005](0005-dependency-maintenance-and-ci.md) | 依赖维护与持续集成 | 已接受 |
-| [0006](0006-lint-rules-and-boundaries.md) | lint 规则与依赖方向检查 | 已接受 |
+| [0006](0006-lint-rules-and-boundaries.md) | lint 规则与依赖方向检查 | 已接受（three 的导入位置从 `features/city-dashboard` 换成 `shared/dashboard/map` 由 0163 补充） |
 | [0007](0007-vue-router-5-and-history-mode.md) | 路由使用 Vue Router 5 与 history 模式 | 已接受 |
 | [0008](0008-same-origin-api-proxy.md) | 接口走同源的 /backend 代理 | 已接受 |
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
@@ -88,7 +88,7 @@
 | [0074](0074-legend-browse-and-edit-views.md) | 图例浏览与编辑视图分离 | 已接受（修正 0043、0066；父级摘要的画法由 0159 取代，尺寸不变） |
 | [0075](0075-file-transfer-and-preview.md) | 公共文件传输与文件管理预览 | 已接受 |
 | [0076](0076-muted-panel-header.md) | 按需复用浅灰底面板标题栏 | 已接受 |
-| [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受 |
+| [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受（两个驾驶舱共用的部分移到 `shared/dashboard` 由 0163 补充） |
 | [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受（第 1 节三维里不显示资源图层只适用于 Cesium 引擎，由 0147 修改；三维里的资源图层和点/框选由 0157 打开） |
 | [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本；第 2、8 节由 0147 扩展到两种引擎；Cesium 的运行时和三维画布随 0153 移除） |
 | [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别，由 0157 恢复，第 5 节的提示和图例说明随之不再出现；第 1 节的只改坐标、等画好由 0082 修正；symbol 的文字由 0146 补上；第 1 节的镜像随 Cesium 由 0153 移除） |
@@ -173,6 +173,7 @@
 | [0160](0160-map-text-font-and-resource-labels.md) | 地图文字用页面的普惠体在本地画，资源图层加标注 | 已接受（取代 0133 第 3 节的 glyphs 和 `BASEMAP_STYLE_ROOT`、0041 第 2 节的标注设想；补上 0041 的"标注的时机"、0157 第 6 节；补充 0042、0044、0047、0050、0154；默认都从 15 级起、字段下拉不写有值的比例，用户 2026-11-16 调整，见设计文档；点的放置"上方"换成"下方"并作默认，"自动"改成先右、左、再下、上，键 `top` 保留、存下的按默认画，用户 2026-11-16 调整，见设计文档） |
 | [0161](0161-flat-layer-list-and-2d-over-models.md) | 图层平铺成一个列表，顺序就是叠放：二维可以画在三维模型上面 | 已接受（取代 0157 的两组、方案乙和"模型的移动只改列表先后"、0147 第 2 节模型层的静态位置；修改 0157 第 2、4 节；补充 0054、0048、0051；第 8 节斜着看时的提示用户 2026-11-16 去掉，第 5 节只剩模型时的说明改成"三维模型切换到三维模式后显示"，第 6 节的"盖住模型"文字改成图标加悬停提示，见设计文档） |
 | [0162](0162-scene-model-load-activity.md) | 三维模型读完索引以后的加载：渲染器按模型统计这一轮，视图接口给出 `sceneActivity` | 已接受（补充 0158、0147 第 5 节、0024、0157 第 6 节） |
+| [0163](0163-shared-dashboard.md) | 驾驶舱的公共能力上移到 `shared/dashboard`，three 的 lint 例外移到 `shared/dashboard/map` | 已接受（补充 0077、0006） |
 
 ## 模板
 

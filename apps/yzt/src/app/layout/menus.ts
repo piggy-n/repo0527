@@ -66,7 +66,8 @@ export const navItems: readonly NavItem[] = [
         links: [
           { label: '城市国土空间监测基本统计', route: RouteName.spaceMonitoringBasicStatistics },
           { label: '城市国土空间监测指标', route: RouteName.spaceMonitoringIndicators },
-          { label: '城市国土空间监测驾驶舱', route: RouteName.cityDashboard, newTab: true }
+          { label: '城市国土空间监测驾驶舱', route: RouteName.cityDashboard, newTab: true },
+          { label: '城市国土空间监测综合分析驾驶舱', route: RouteName.landSpaceDashboard, newTab: true }
         ]
       }
     ]

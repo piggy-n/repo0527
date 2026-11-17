@@ -1,5 +1,7 @@
 # 城市体检驾驶舱迁移
 
+> 2026-11-16 起，两个驾驶舱共用的外壳与入场、筛选控件、图表、立体地图、提示、导出和三张背景移到了 `shared/dashboard`（ADR 0163），用法、目录和入场选择器约定见 [dashboard](dashboard.md)。`features/city-dashboard` 只留指标目录与数据、`useDashboard`、卡片配色分组、翻卡导航和组合它们的 `DashboardView`、`DashboardFilters`、`DashboardCharts`。下文是迁移和调优时的记录，提到的 `features/city-dashboard/...` 下的计算、图表、地图、动画、素材文件现在在 `shared/dashboard` 的同名位置（如 `charts/warm-up.ts`、`animation/decode-images.ts`、`map/`、`assets/`），`DashboardView.module.scss` 现在是 `shared/dashboard/shell/DashboardShell.module.scss`，`DashboardFilters.module.scss` 现在是 `shared/dashboard/filters/filters.module.scss`。
+
 ## 当前阶段与基线
 
 2026-10-22：D3 视觉修正版获用户认可后，原验收会话已完成独立代码审查、真实页面检查及完整回归，前端迁移验收通过，按用户授权合入 main。修复部署缺字体时导出失败，复用公共下载能力，并稳定浏览器测试的预构建与执行方式。以下各阶段记录保留当时状态；最终检查和未验证项见[独立验收报告](../archive/stages/city-dashboard-acceptance.md)，不将模拟数据验收表述为真实统计业务验收。

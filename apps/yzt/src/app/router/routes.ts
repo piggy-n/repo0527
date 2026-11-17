@@ -273,6 +273,15 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: '城市国土空间监测驾驶舱' }
   },
   {
+    path: '/land-space-analysis',
+    name: RouteName.landSpaceDashboard,
+    component: () =>
+      import('@/pages/land-space-dashboard/LandSpaceDashboardPage').then(
+        ({ LandSpaceDashboardPage }) => LandSpaceDashboardPage
+      ),
+    meta: { title: '城市国土空间监测综合分析' }
+  },
+  {
     path: '/login',
     name: RouteName.login,
     component: () => import('@/pages/login/LoginPage').then(({ LoginPage }) => LoginPage),

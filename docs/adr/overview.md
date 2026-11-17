@@ -58,7 +58,7 @@
 | 数据查询 | 四个页面一个组件；高级查询暂时隐藏；地图控制和底图卡在右上角，结果横跨整页；通用绘制工具在 `@mx/map-tools` | 0104、0112、0119、0145 | [data-query](../modules/data-query.md) |
 | 指标 AI 计算 | 确定性数据、规则解析不接大模型；流程图为核心、结果并入同一布局；按计算规则的参数，没有目标值；自定义范围与先对话后补充；步行时长可调 | 0105～0109、0120、0121、0125、0129、0131 | [indicator-simulation](../modules/indicator-simulation.md) |
 | 城市指标 | 32 项来自 2026 年监测成果简报，其余模拟；统一从 `indicatorValue` 取 | 0130 | [city-indicators](../modules/city-indicators.md) |
-| 驾驶舱 | 独立路由、自身的 Three.js 渲染；"查询统计 → 专项统计"进入，新标签页打开 | 0077、0110 | [city-dashboard](../modules/city-dashboard.md) |
+| 驾驶舱 | 独立路由、自身的 Three.js 渲染；"查询统计 → 专项统计"进入，新标签页打开；两个驾驶舱共用的外壳、筛选、图表、地图、导出在 `shared/dashboard`，各自的数据、状态和组合留在 feature，three 的 lint 例外从 `features/city-dashboard` 换成 `shared/dashboard/map`，驾驶舱的 feature 都不能导入 three | 0077、0110、0163 | [city-dashboard](../modules/city-dashboard.md)、[land-space-dashboard](../modules/land-space-dashboard.md)、[dashboard](../modules/dashboard.md) |
 
 ## 维护
 

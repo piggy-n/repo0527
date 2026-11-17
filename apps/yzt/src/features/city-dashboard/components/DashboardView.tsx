@@ -1,20 +1,16 @@
-import { defineComponent, onScopeDispose, ref } from 'vue';
-import { useDocumentVisibility, useResizeObserver } from '@vueuse/core';
-import { decodeImages } from '../animation/decode-images';
-import pageBackground from '../assets/bg.webp';
-import headerSkyline from '../assets/header-skyline.webp';
-import mapBackground from '../assets/mapbg.webp';
+import { computed, defineComponent, ref } from 'vue';
+import { useDocumentVisibility } from '@vueuse/core';
+import { withUnit } from '@/shared/dashboard/format';
+import { DashboardMap } from '@/shared/dashboard/map/DashboardMap';
+import { DashboardShell, type DashboardShellScope } from '@/shared/dashboard/shell/DashboardShell';
+import { TooltipLayer } from '@/shared/dashboard/tooltip/TooltipLayer';
+import { useDashboardTooltip } from '@/shared/dashboard/tooltip/useDashboardTooltip';
+import { CITIES } from '../catalog';
+import { yearColor } from '../charts/colors';
 import { createMockData } from '../data/mock-data';
 import { useDashboard } from '../composables/useDashboard';
-import { useDashboardEntrance } from '../composables/useDashboardEntrance';
-import { useDashboardTooltip } from '../composables/useDashboardTooltip';
 import { DashboardFilters } from './DashboardFilters';
 import { DashboardCharts, type DashboardChartsHandle } from './DashboardCharts';
-import { DashboardMap } from './DashboardMap';
-import { TooltipTable } from './TooltipTable';
-import { DashboardAtmosphere } from './DashboardAtmosphere';
-import fonts from './DashboardFonts.module.scss';
-import styles from './DashboardView.module.scss';
 
 /** 驾驶舱装配只在该 feature 内共享状态，不与现状底图会话耦合 */
 export const DashboardView = defineComponent({
@@ -27,21 +23,17 @@ export const DashboardView = defineComponent({
   },
   setup(props) {
     const model = useDashboard(createMockData(new Date().getFullYear()));
-    const shell = ref<HTMLElement>();
-    const entrance = useDashboardEntrance(shell, () => props.reducedMotion);
     const charts = ref<DashboardChartsHandle>();
-    const density = ref(1);
     const visibility = useDocumentVisibility();
-    const tooltip = useDashboardTooltip(model, visibility);
-    // 标题和背景在面板入场时才第一次显示，趁地图入场先解码
-    const decoding = decodeImages([headerSkyline, pageBackground, mapBackground]);
-    onScopeDispose(() => decoding[Symbol.dispose]());
-
-    useResizeObserver(shell, entries => {
-      const size = entries[0]?.contentRect;
-      if (size) {
-        density.value = Math.max(0.9, Math.min(1.8, size.width / 1920, size.height / 1080));
-      }
+    const tooltip = useDashboardTooltip({ reset: model.state, visibility });
+    const tooltipIndicator = computed(
+      () => model.category.value.indicators.find(item => item.id === tooltip.context.value?.indicatorId)
+    );
+    const tooltipCity = computed(() => CITIES.find(item => item.code === tooltip.context.value?.cityCode));
+    const mapTitle = computed(() => {
+      const { activeYear } = model.state.value;
+      const { name, unit } = model.indicator.value;
+      return activeYear === null ? '请选择年份' : `${activeYear}年江苏省${withUnit(`${name}分布图`, unit)}`;
     });
 
     /** 地图和侧栏共用详情入口，打开前关闭悬停提示 */
@@ -54,81 +46,71 @@ export const DashboardView = defineComponent({
       tooltip.show('map', cityCode ? { indicatorId: model.indicator.value.id, cityCode } : null);
     }
 
-    function onKeydown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        tooltip.close();
-      }
-    }
-
     function renderTooltip() {
-      const { indicator, city } = tooltip;
-      if (!tooltip.context.value || !indicator.value || !city.value) {
+      const indicator = tooltipIndicator.value;
+      const city = tooltipCity.value;
+      if (!tooltip.context.value || !indicator || !city) {
         return null;
       }
-      const preference = model.preference(indicator.value);
       return (
-        <div
-          class={styles.tooltip}
-          data-dashboard-tooltip
-          onPointerenter={tooltip.keepOpen}
-          onPointerleave={tooltip.leave}
-        >
-          <TooltipTable
-            indicator={indicator.value}
-            city={city.value}
-            cities={model.cities.value}
-            comparison={model.comparisons.value.get(indicator.value.id) ?? []}
-            activeYear={model.state.value.activeYear}
-            legend={preference.legend}
-          />
-        </div>
+        <TooltipLayer
+          indicator={indicator}
+          color={year => yearColor(year, indicator.id)}
+          city={city}
+          cities={model.cities.value}
+          comparison={model.comparisons.value.get(indicator.id) ?? []}
+          activeYear={model.state.value.activeYear}
+          legend={model.preference(indicator).legend}
+          onKeepOpen={tooltip.keepOpen}
+          onLeave={tooltip.leave}
+        />
       );
     }
 
+    // 三栏：筛选、地图、图表；入场状态和缩放由外壳给出
+    function renderPanels({ entrance, density }: DashboardShellScope) {
+      const ready = entrance.phase.value === 'ready';
+      return [
+        <DashboardFilters model={model} active={ready} onLocate={id => charts.value?.locateIndicator(id)} />,
+        <DashboardMap
+          indicator={model.indicator.value}
+          title={mapTitle.value}
+          values={model.mapValues.value}
+          classification={model.classification.value}
+          years={model.comparisonYears.value}
+          activeYear={model.state.value.activeYear}
+          forceFallback={props.forceFallback}
+          reducedMotion={entrance.reduced.value}
+          active={ready}
+          valuesVisible={entrance.valuesVisible.value}
+          onSettled={() => void entrance.mapSettled()}
+          onHover={hoverMap}
+          onDetail={openMapDetail}
+          onYear={model.setActiveYear}
+        >
+          {renderTooltip}
+        </DashboardMap>,
+        <DashboardCharts
+          ref={charts}
+          model={model}
+          density={density}
+          active={ready}
+          revealedCount={entrance.revealedCharts.value}
+          reducedMotion={entrance.reduced.value}
+          onHover={context => tooltip.show('chart', context)}
+        />
+      ];
+    }
+
     return () => (
-      <main
-        ref={shell}
-        class={[fonts.scope, styles.dashboard]}
-        style={{ '--ui-scale': density.value }}
-        data-dashboard-phase={entrance.phase.value}
-        aria-busy={entrance.phase.value !== 'ready'}
-        data-suspended={visibility.value !== 'visible'}
-        data-reduced={entrance.reduced.value}
-        onKeydown={onKeydown}
+      <DashboardShell
+        title="江苏省城市国土空间监测驾驶舱"
+        traceName="city-dashboard"
+        reducedMotion={props.reducedMotion}
+        onEscape={tooltip.close}
       >
-        <DashboardAtmosphere entering={entrance.phase.value !== 'ready'} reduced={entrance.reduced.value} />
-        <header class={styles.heading} data-enter="title">
-          <h1 data-enter="title-text">江苏省城市国土空间监测驾驶舱</h1>
-        </header>
-        <div class={styles.content}>
-          <DashboardFilters
-            model={model}
-            active={entrance.phase.value === 'ready'}
-            onLocate={id => charts.value?.locateIndicator(id)}
-          />
-          <DashboardMap
-            model={model}
-            forceFallback={props.forceFallback}
-            reducedMotion={entrance.reduced.value}
-            active={entrance.phase.value === 'ready'}
-            valuesVisible={entrance.valuesVisible.value}
-            onSettled={() => void entrance.mapSettled()}
-            onHover={hoverMap}
-            onDetail={openMapDetail}
-          >
-            {renderTooltip}
-          </DashboardMap>
-          <DashboardCharts
-            ref={charts}
-            model={model}
-            density={density.value}
-            active={entrance.phase.value === 'ready'}
-            revealedCount={entrance.revealedCharts.value}
-            reducedMotion={entrance.reduced.value}
-            onHover={context => tooltip.show('chart', context)}
-          />
-        </div>
-      </main>
+        {{ default: renderPanels }}
+      </DashboardShell>
     );
   }
 });

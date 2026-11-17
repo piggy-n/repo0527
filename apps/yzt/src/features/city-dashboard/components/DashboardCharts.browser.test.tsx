@@ -9,6 +9,13 @@ import { DashboardFilters } from './DashboardFilters';
 
 const hosts: HTMLElement[] = [];
 
+function averageButton(root: ParentNode, label: string): HTMLButtonElement {
+  return required(
+    [...root.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === label),
+    `"${label}"按钮`
+  );
+}
+
 afterEach(() => {
   hosts.splice(0).forEach(host => host.remove());
 });
@@ -89,5 +96,31 @@ describe('驾驶舱真实列表布局', () => {
     expect(list.style.scrollSnapType).toBe('');
     wrapper.unmount();
     expect(host.querySelectorAll('canvas')).toHaveLength(0);
+  });
+
+  it('堆叠柱图停用均值线按钮，读屏文字仍按偏好写"隐藏均值线"', async () => {
+    const host = document.createElement('div');
+    host.style.cssText = 'width:420px;height:600px;position:relative';
+    document.body.append(host);
+    hosts.push(host);
+    const model = useDashboard(createMockData(2026));
+    model.selectCategory('happiness');
+    model.setYears([2023, 2024, 2025, 2026]);
+    const indicator = required(
+      model.category.value.indicators.find(item => model.preference(item).type === 'bar'),
+      '默认是柱状图的指标'
+    );
+    const wrapper = mount(DashboardCharts, { attachTo: host, props: { model }, attrs: { style: 'height:600px' } });
+    await nextTick();
+    const card = required(host.querySelector(`[data-chart-id="${indicator.id}"]`), '柱状图卡片');
+    const cardButton = averageButton(card, `${indicator.name}隐藏均值线`);
+    expect(cardButton.disabled).toBe(true);
+    expect(cardButton.getAttribute('aria-pressed')).toBe('false');
+    (wrapper.vm as unknown as DashboardChartsHandle).openDetail({ indicatorId: indicator.id });
+    await vi.waitFor(() => averageButton(document.body, '详情图隐藏均值线'));
+    const detailButton = averageButton(document.body, '详情图隐藏均值线');
+    expect(detailButton.disabled).toBe(true);
+    expect(detailButton.getAttribute('aria-pressed')).toBe('false');
+    wrapper.unmount();
   });
 });

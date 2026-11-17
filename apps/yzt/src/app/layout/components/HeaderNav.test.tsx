@@ -66,7 +66,7 @@ describe('HeaderNav', () => {
     expect(panel?.closest('.el-popper')?.querySelector('[class*="_groups_"]')).toBeNull();
   });
 
-  it('专项统计里的驾驶舱是新标签页打开的链接', async () => {
+  it('专项统计里的两个驾驶舱是新标签页打开的链接', async () => {
     const wrapper = await mountNav(Role.user, '/current-map');
 
     const query = wrapper.findAll('button').find(button => button.text() === '查询统计');
@@ -78,11 +78,10 @@ describe('HeaderNav', () => {
     special?.dispatchEvent(new MouseEvent('mouseenter'));
     await vi.waitFor(() => expect(document.querySelector('a[href="/city-dashboard"]')).not.toBeNull());
 
-    const dashboard = document.querySelector('a[href="/city-dashboard"]');
-    expect([dashboard?.textContent, dashboard?.getAttribute('target'), dashboard?.getAttribute('rel')]).toEqual([
-      '城市国土空间监测驾驶舱',
-      '_blank',
-      'noopener'
+    const dashboards = [...document.querySelectorAll('a[target="_blank"]')];
+    expect(dashboards.map(link => [link.textContent, link.getAttribute('href'), link.getAttribute('rel')])).toEqual([
+      ['城市国土空间监测驾驶舱', '/city-dashboard', 'noopener'],
+      ['城市国土空间监测综合分析驾驶舱', '/land-space-analysis', 'noopener']
     ]);
   });
 

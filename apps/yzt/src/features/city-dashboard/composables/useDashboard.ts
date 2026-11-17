@@ -1,7 +1,7 @@
 import { computed, shallowRef } from 'vue';
+import { compareIndicator } from '@/shared/dashboard/calculations';
+import { createMapClassification } from '@/shared/dashboard/map-classification';
 import { CATEGORIES, CITIES, DASHBOARD_YEARS } from '../catalog';
-import { compareIndicator } from '../calculations';
-import { createMapClassification } from '../map-classification';
 import { getDefaultChartType } from '../charts/presentation';
 import type { CategoryId, ChartPreference, DashboardData, Indicator } from '../model';
 

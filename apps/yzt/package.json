@@ -25,6 +25,7 @@
     "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
     "scope-files:generate": "node tools/scope-test-files/cli.ts",
     "symbols:import": "node tools/symbol-defaults/cli.ts",
+    "land-space:data": "node tools/land-space-data/convert.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {

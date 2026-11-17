@@ -1,0 +1,62 @@
+// 指北针和比例尺：放在 DashboardMap 的角上，只用驾驶舱已有的色值
+
+// 填满所在的方块（DashboardMap 的右上角）
+.compass {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(14, 72, 148, 0.18);
+
+  // 旋转写在 svg 的行内样式上（SvgIcon 的 rotate），外层留给入场动画
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.scaleBar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  // 左端"0"的一半伸到比例尺外面
+  padding-left: 0.5ch;
+  color: #0e4894;
+  font-size: max(12px, calc(14px * var(--ui-scale, 1)));
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+.scaleLabels {
+  display: flex;
+}
+
+.scaleTicks {
+  position: relative;
+  height: 1.4em;
+
+  span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+  }
+}
+
+.scaleTrack {
+  display: flex;
+  height: 6px;
+  border: 1px solid #0e4894;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(14, 72, 148, 0.18);
+
+  i {
+    flex: 1;
+  }
+
+  i:nth-child(odd) {
+    background: #0e4894;
+  }
+}

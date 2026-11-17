@@ -1,0 +1,93 @@
+// 右栏和卡片的基础样式在 shared/dashboard/charts（.column、.cardList、.card），这里只改三张卡的分配和三级的下拉；
+// 色值取驾驶舱已有的（docs/modules/dashboard.md 的"边界"）
+
+// 三张卡等分高度；矮屏（如 1366×768）放不下各卡的最小高度时列表滚动
+.list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+// 两个类压过 shared 的 .card：按剩余高度等分；最小高度让绘图区约 130 像素（和原驾驶舱卡片的最小高度相当），
+// 再矮柱子和雷达都看不清，雷达最上面的城市名会碰到图例
+.list > .card {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 216px;
+}
+
+// 有分项栏的三级卡多出分项栏的高度，绘图区不因分项栏变小
+.list > .withParts {
+  min-height: 248px;
+}
+
+// 下拉占满标题行的剩余宽度；Element 的根元素自带字号、颜色和行高，改回继承卡片标题
+.picker:global(.el-dropdown) {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+// 字体、字号、省略号的规则在 charts.module.scss 的 .heading .title，长名称在文字上省略、箭头留在末尾
+.pickerButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  color: inherit;
+
+  > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  svg {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    color: #3892df;
+    transition: transform 0.2s;
+  }
+
+  &:hover svg {
+    color: #438efb;
+  }
+}
+
+// 菜单传送到 body，用专属类隔离大屏外观，贴近年份下拉（filters.module.scss 的 yearPopper）；长名称换行完整显示
+.pickerPopper {
+  font-family: var(--font-family-base);
+  border-color: #b2d5fd !important;
+  border-radius: 10px !important;
+  background: #f3faff !important;
+  overflow: hidden;
+
+  :global(.el-dropdown-menu) {
+    padding: 6px 0;
+    background: transparent;
+  }
+
+  :global(.el-dropdown-menu__item) {
+    max-width: min(440px, 86vw);
+    padding: 8px 16px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #0e4894;
+    white-space: normal;
+  }
+
+  :global(.el-dropdown-menu__item:not(.is-disabled):hover),
+  :global(.el-dropdown-menu__item:not(.is-disabled):focus) {
+    color: #0f4fa6;
+    background: #ecf6fe;
+  }
+
+  // 和上面悬停、焦点的选择器一样具体，写在后面，当前项悬停时仍是当前项的样子
+  :global(.el-dropdown-menu__item:not(.is-disabled)).current {
+    color: #0f4fa6;
+    background: #d3e7ff;
+    font-weight: 600;
+  }
+}

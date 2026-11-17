@@ -1,0 +1,5 @@
+// 窄屏时右栏所在行的高度（外壳的 --dashboard-charts-row）：三张卡上下排开都放得下，每张约 285 像素；
+// ≤1180px 时筛选和右栏同一行，六个一级也放得下
+.shell {
+  --dashboard-charts-row: 880px;
+}

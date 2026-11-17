@@ -1,0 +1,71 @@
+// 分项栏：在三级卡的标题行下面，色值取驾驶舱已有的（docs/modules/dashboard.md 的"边界"）
+.parts {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: calc(8px * var(--ui-scale, 1));
+}
+
+.step {
+  width: calc(24px * var(--ui-scale, 1));
+  height: calc(24px * var(--ui-scale, 1));
+  min-width: 24px;
+  min-height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+
+  svg {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+// 横向滚动、不显示滚动条；offsetLeft 按它算，所以是定位容器
+.scroller {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.tab {
+  flex-shrink: 0;
+  padding: 1px calc(12px * var(--ui-scale, 1));
+  border: 1px solid #b2d5fd;
+  border-radius: 999px;
+  background: #ecf6fe;
+  color: #0e4894;
+  font-size: max(12px, calc(14px * var(--ui-scale, 1)));
+  line-height: 1.6;
+  white-space: nowrap;
+
+  &:hover:not([aria-selected='true']) {
+    border-color: #51b2fd;
+    background: #fff;
+  }
+
+  &[aria-selected='true'] {
+    border-color: #438efb;
+    background: linear-gradient(#438efb, #4facfd);
+    color: #fff;
+  }
+}
+
+// 滚动区会裁掉向外的焦点框，改画在按钮里面
+.scroller .tab:focus-visible {
+  outline-offset: -3px;
+}
+
+// 选中项是蓝底，焦点框用白色
+.scroller .tab[aria-selected='true']:focus-visible {
+  outline-color: #fff;
+}
