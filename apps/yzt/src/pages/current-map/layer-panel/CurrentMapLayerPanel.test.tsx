@@ -205,6 +205,18 @@ async function press(target: Pick<DOMWrapper<Element>, 'element' | 'trigger'>) {
   }
   await target.trigger('click');
 }
+// 鼠标点行里能聚焦的图标，再对有焦点的元素按 Delete：选中的行、焦点是否在这一行上、这一行是否被移除
+async function pressRowIcon(wrapper: VueWrapper, key: string, icon: string) {
+  const target = wrapper.get(`[data-current-row="${key}"]`);
+  await press(target.get(icon));
+  const selected = wrapper.get('[data-current-row][aria-selected="true"]').attributes('data-current-row');
+  const focused = document.activeElement === target.element;
+  required(document.activeElement, '有焦点的元素').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })
+  );
+  await nextTick();
+  return { selected, focused, removed: !rowKeys(wrapper).includes(key) };
+}
 
 afterEach(() => {
   // Element 的提示挂在 body 下，不归组件管
@@ -822,26 +834,53 @@ describe('CurrentMapLayerPanel', () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain('盖住模型：调低透明度可以透出模型'));
   });
 
-  it('鼠标点"盖住模型"的图标：焦点落在这一行，行的键盘操作照常（图标只在 Tab 进来时得到焦点）', async () => {
-    const { wrapper, models, map } = await mountPanel();
-    models.add(['white']);
-    await nextTick();
-    await row(wrapper, 'bgdc_dltb').trigger('click');
-    await tool(wrapper, 'move-top').trigger('click');
-    map.setDimension('3d');
-    await nextTick();
-    await wrapper.get('[data-current-row="model:white"]').trigger('click');
+  // 行里能聚焦的图标只在 Tab 进来时得到焦点：鼠标点了以后这一行被选中、焦点在行上，行的键盘操作照常（按 Delete 移除）
+  describe('鼠标点行里能聚焦的图标，焦点落在这一行', () => {
+    it('"盖住模型"的图标', async () => {
+      const { wrapper, models, map } = await mountPanel();
+      models.add(['white']);
+      await nextTick();
+      await row(wrapper, 'bgdc_dltb').trigger('click');
+      await tool(wrapper, 'move-top').trigger('click');
+      map.setDimension('3d');
+      await nextTick();
+      await wrapper.get('[data-current-row="model:white"]').trigger('click');
 
-    await press(row(wrapper, 'bgdc_dltb').get('[data-row-cover]'));
-    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
-    expect(document.activeElement).toBe(row(wrapper, 'bgdc_dltb').element);
+      expect(await pressRowIcon(wrapper, 'resource:bgdc_dltb', '[data-row-cover]')).toStrictEqual({
+        selected: 'resource:bgdc_dltb',
+        focused: true,
+        removed: true
+      });
+    });
 
-    // 按键发给有焦点的元素
-    required(document.activeElement, '有焦点的元素').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })
-    );
-    await nextTick();
-    expect(rowKeys(wrapper)).toStrictEqual(['model:white']);
+    it('状态图标（没到最小显示级别的放大镜）', async () => {
+      const { wrapper, owner } = await mountPanel();
+      // 村级调查区 8 级起，面板在 7 级
+      owner.add(['bgdc_cjdcq']);
+      await nextTick();
+      await row(wrapper, 'bgdc_dltb').trigger('click');
+
+      expect(await pressRowIcon(wrapper, 'resource:bgdc_cjdcq', '[data-status="minzoom"]')).toStrictEqual({
+        selected: 'resource:bgdc_cjdcq',
+        focused: true,
+        removed: true
+      });
+    });
+
+    it('模型加载失败的图标', async () => {
+      const { wrapper, models, map, sceneStatus } = await mountPanel();
+      models.add(['white']);
+      map.setDimension('3d');
+      sceneStatus.value = new Map([['white/plain', { state: 'failed', error: new Error('404') }]]);
+      await nextTick();
+      await row(wrapper, 'bgdc_dltb').trigger('click');
+
+      expect(await pressRowIcon(wrapper, 'model:white', 'span[aria-label="加载失败"]')).toStrictEqual({
+        selected: 'model:white',
+        focused: true,
+        removed: true
+      });
+    });
   });
 
   it('目录里右键分类：菜单作用于它下面的项，没有定位；分类不能选中（用户 2026-11-15）', async () => {

@@ -15,6 +15,20 @@ const arrowStep = (event: KeyboardEvent) => ({ ArrowUp: -1, ArrowDown: 1 })[even
 const isControl = (target: EventTarget | null) =>
   target instanceof Element && target.closest('button, input, select, .el-select, .el-checkbox') !== null;
 
+// 鼠标按在行里能聚焦的图标上（状态、盖住模型、加载失败）时焦点交给行：停在图标上时行的键盘操作都不响应。
+// 只管鼠标，Tab 进来时照样停在图标上、显示提示；控件自己处理
+const onRowMousedown = (event: MouseEvent) => {
+  const row = event.currentTarget;
+  const { target } = event;
+  if (event.button !== 0 || isControl(target) || !(row instanceof HTMLElement) || !(target instanceof Element)) {
+    return;
+  }
+  if (target.closest('[tabindex]') !== row) {
+    event.preventDefault();
+    row.focus();
+  }
+};
+
 /**
  * 图层的列表（ADR 0157、0161）：二维资源和三维模型平铺在一起，每行是手柄、复选框和各 feature 自己的内容（插槽 row）。
  * 只能单选；按住手柄拖动或在手柄上按上下方向键排序（ADR 0054），一个拖动实例；筛选时只给看得见的行，位置按它们算。
@@ -144,6 +158,7 @@ export const CurrentLayerList = defineComponent({
           aria-selected={selected}
           tabindex={key === props.tabbable ? 0 : -1}
           data-current-row={key}
+          onMousedown={onRowMousedown}
           onClick={(event: MouseEvent) => {
             if (!isControl(event.target)) {
               emit('select', key);
