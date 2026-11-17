@@ -67,7 +67,7 @@ packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @m
 - `pages/dev/<名称>/`：开发页面，和业务页面分开放，只注册在 `devRoutes`，生产构建不包含，业务代码不导入
 - `apps/yzt/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
 - `apps/yzt/public/fonts/`：唯一的字体目录，不入库
-- `local/`（仓库根目录，不入库）：模型、原型、探查结果、实测数据和手动测试文件，环境变量 `YZT_LOCAL_DIR` 可以指到别处（worktree 指回主目录）；开发服务器把 `/3dt/*`、`/design.local/*` 映射到这里，地址不变；`public/` 只放要发布的文件，字体是构建输入、留在原处（ADR 0141，见 `docs/config/local-files.md`）
+- `local/`（仓库根目录，不入库）：模型、服务器底图、原型、探查结果、实测数据和手动测试文件，环境变量 `YZT_LOCAL_DIR` 可以指到别处（worktree 指回主目录）；开发服务器把 `/3dt/*`、`/basemap/*`、`/design.local/*` 映射到这里，地址不变（ADR 0165）；`public/` 只放要发布的文件，字体是构建输入、留在原处（ADR 0141，见 `docs/config/local-files.md`）
 
 ## 依赖方向
 

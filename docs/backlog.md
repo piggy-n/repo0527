@@ -39,6 +39,7 @@
 - 地类图斑 2025（`bgdc_dltb_2025`）的瓦片 z5、z8、z12 都返回 200 加 JSON "系统异常"（2026-11-11），MapLibre 报 `Unable to parse the tile`，勾选时控制台每块瓦片一条；问后端有没有这个瓦片集
 - 资源树的年份里列着、瓦片却返回 200 加 JSON "系统异常"的还有（2026-11-10，南京处 z6～z14，没带 token）：水域面层 `csxhjctb_hyda_2026`，行政区界线 `bgdc_xzqjx` 的 2019、2021、2023、2024、2025，永久基本农田图斑 `bgdc_yjjbnttb_2025`，生态保护红线 `bgdc_stbhhx_2021`，永久基本农田 `gtkjgh_yjjbntbhtb_2026`；和上一条一起问后端
 - 资源树的年份里列着、瓦片是空的（2026-11-10，南京 118.8, 32.05 处 z6、z8、z10、z12、z14 都是 0 字节，同一处别的年份有数据）：地类图斑 2023、2024（2022 年 z14 有），水域面层 2021、2022、2023（2024、2025 有）；问后端是没切片还是没有数据
+- 服务器底图（ADR 0165）没有 7 级以下的瓦片（L19、L20 是空目录）：地图级别低于 5.5（最小 5）、三维斜着看时靠近地平线的一带只有背景色，`conf.cdi` 的范围外也是；不伪造低级别，数据方补了 5、6 级时只改 `server-basemap-options.ts` 的 `minzoom`（[shared-map](modules/shared-map.md)"服务器底图"）
 - 最小显示级别表和瓦片大小对不上（2026-11-10，开关打开前要重测，`probe:resource-classes --tile-cost`）：水域面层不在表里，2024 年南京处 z6 一张 23.8 MB、z8 18.8 MB、z9 2.6 MB，按 6 MB 的规则应该是 9 级；永久基本农田图斑定的是 8 级，2022 年 z10 的 851/416、854/413、854/414 三张有 6.5～8.5 MB
 
 ## 未完成的功能
@@ -70,6 +71,8 @@
 - 批量年份以后可能改成后端的查询条件，到时另写 ADR（ADR 0116 第 3 节）
 - `QueryForm`：同一行动态增删条件时按钮行宽度不更新；180 放不下的控件（日期范围）没有加宽的写法
 - 小改进：小地图的档位、楼层名是否进偏好或清单；资源树还有 3 个名称被省略
+- `site:check` 不核对服务器底图：`/basemap/` 的 4 个前缀现在按 [deployment](deployment.md)"服务器底图单独部署"的 curl 手工验收；要加时读每个前缀的 `conf.xml`（第一代紧凑缓存、`PacketSize` 128、256 像素、Web 墨卡托）和南京那块 z10 的 `.bundlx`、`.bundle` 的 Range（ADR 0165）
+- 开发页看不到服务器底图：`/dev/map-ui`、`/dev/map-3d` 不经过 `withMapRuntime`、没有提供 `SERVER_BASEMAPS`，只有公网三张或内网两张；六张、置灰的标注开关只能在内网的地图页（`YZT_BASEMAP_PROXY`）或 `BasemapCard.browser.test.tsx` 里看
 - 状态未核实：瓦片 404、边界数据下载失败是否要提示用户（2026-10 时只打印到控制台）；窄屏菜单按钮、分组箭头、退出登录、默认头像的可选图标
 
 ## 代码里的问题
@@ -83,6 +86,10 @@
 - 三维状态回调不隔离监听方的异常：`SceneTilesetSync`、`SceneSplatSync`、`MapLibreScene` 的 `onStatus`，以及视图发出的 `scenestatuschange`、`roamstatuschange`；生产里唯一的监听方是 map-vue 上下文的 `shallowRef` 赋值，业务页面没有触发路径；另有 measure-3d 的 bench 页（`tools/measure-3d/page/bench.ts`）监听场景状态，就绪时在回调里调用 `flyTo`。要处理时在视图的事件发射处统一隔离，不只包 `SceneSplatSync`（2026-11-14 审查）
 - 请求状态的底图合成项：正在加载时较早一段的失败也算进 loaded + failed，进度会超过 100%（影像源上一轮失败 3 张，之后只打开地名 6 张：明细一开始是"3/6 张"，到 5 张时"8/6 张"，状态栏可能 133%）。位置在 `shared/map/request-status/request-status.ts` 的 `mergedActivity`（failed 对全部数据源求和）、`requestRowText`、`requestSummary`；修法：加载中的进度只用最近一段的失败数，较早的失败只用来标"有失败"和结束后的张数（ADR 0158）
 - 同时加入几个大的瓦片集会"加载失败"（2026-11-17 用户在 192.168.15.111 上同时勾新吴区01、02、03、06，都没加载出来，一个一个勾可以，没复现）：`prepareTileset` 在加入前把外部索引全部读完，同一层用 `Promise.all` 一起发，不限并发，没有超时和重试（`map-core/src/scene/prepare-tileset.ts`、`maplibre/maplibre-view.ts` 的 `fetchJson`）。四个模型的 top 文件直接引用的块索引实测 1140 + 980 + 961 + 711 = 3792 个，连子索引估计约 5700 个；单个模型同时挂着的请求最多 700～1300 个。推断四个加起来超过了 Chromium 每个渲染进程未完成请求的上限（源码里是 2700，Edge 的版本没核实），多出的请求以 `net::ERR_INSUFFICIENT_RESOURCES` 失败。一个索引失败，整个模型就记为失败，它其余的请求不中止，继续占着 HTTP/1.1 的 6 条连接（`scene/tileset-sync.ts` 的 `#prepareAndAdd`）；一次加几个时只飞向第一个（`useSceneModels.ts` 的 `add`）。粗略模拟是 1～2 个失败、其余排队很久，和"四个都没成功"还没对上。确认：在显卡机器的 Edge 开发者工具里，Network 筛 json，同时勾四个，看有没有这个错误、四行各显示"加载失败"还是一直转圈；两个同时勾（03 + 06）应该能成；失败的逐个点"重试"应该能成。方向（没做）：整理索引改用所有瓦片集共用的限量队列，或者几个瓦片集依次整理；单个索引失败时退避重试，模型失败时中止它其余的请求；长期改为按需加载外部索引（要重新核对 ADR 0148）；服务器给 `.json` 开 gzip
+
+- `measure:map-load` 按天地图的地址（`tools/measure-map-load/report.ts` 的 `TILE_HOST`）数底图瓦片，服务器底图数出 0 张；进入地图页多等的探测（算在 `runtime` 一步里，最多 3 秒）也没实测过。要改成也数 `/basemap/` 的 `.bundle` Range（一块瓦片一个，`.bundlx` 另计），再在 15.111 上用内网构建测一次（ADR 0165 后果）
+- 服务器底图的探测和地图各用一个读取器：探测读过的南京那块 z10 的 `.bundlx`，地图的第一块 z10 瓦片还要再取一次（浏览器缓存里有，按 `no-cache` 向服务器确认）；影像的缩略图 data URL 约 223 KB（那块是 167 KB 的 PNG），整个文档一直留着（ADR 0165 第 4 节）
+- 标准、黑色、极夜蓝的标注开关置灰（ADR 0165 第 7 节）：`ElSwitch` 的 `disabled` 让开关 Tab 不到，旁边的说明是普通文字、没和开关关联（`ElSwitch` 只把 `aria-label` 交给里面的开关），只用键盘或读屏的用户不知道为什么开不了；没用真实的读屏软件试过（[current-map-reference](design/current-map-reference.md)）
 
 ## 临时处理（联调或重构时清理）
 
@@ -105,6 +112,7 @@
 - 经开区2（JKQ2）2026-11-11 移出了清单，数据留在服务器的 `wuxi/3dtiles/经开区2/`，等数据方换成带顶层的数据再加回来：现在没有顶层，块根平均 8 MB，远看（z15 俯视 364 个、倾斜 461 个块根）要 2.9～3.7 GB，2 GB 的预算放下 260 个，远处缺 26%～44% 的块。要让 CesiumLab 重新导出时生成顶层（和 JKQ 一样）或缩小块根贴图，不为它再改预算（标签 `cesium-engine-2026-11` 里的 `docs/modules/map-cesium.md`"根节点以下"）
 - 瓦片集的屏幕误差上限统一成默认 8（用户 2026-11-09 看过 JKQ 的显卡复测后决定，见标签 `cesium-engine-2026-11` 里的 `docs/modules/map-cesium.md`"瓦片集的显存预算"）：JKQ 在 16 级以上每个姿态都顶在 2 GB、一半细一半粗，要整级清楚得让每个瓦片的贴图小下来（现在不论哪一级都约 7.7 MB 一个）。数据侧能重新导出时让 CesiumLab 开纹理压缩（KTX2）或把贴图缩到 512～1024 像素（用户 2026-11-11：数据方暂时不能重新导出），再用 `measure:3d --only jkq` 跑 8，看 z16.5、z17 俯视放不放得下、停下后是不是整级（那时的诊断页 `/dev/tileset-probe` 读的是 Cesium，随 ADR 0153 删了）。新模型怎么定见 [3dt-manifest](config/3dt-manifest.md)"新增一个模型"的瓦片集第 4 步；JKQ2 和彭城广场在 8 下还没有跑过。JKQ 在 z16 显示的是块根，想保留 512 像素的 `top/` 单元要改 `prepareTileset` 的误差规则（ADR 0148），还没定
 - JKQ 的诊断报告里少数瓦片的包围球大得离谱（清晰度列曾全是 0）：拿到经开区的 `tileset.json`（服务器上的 `wuxi/3dtiles/经开区/`）、`top/0.json`、一个 `top/0-xxxx.json` 和一个 `Tile_xxx/Tile_xxx.json` 后查是哪一级、是不是 `prepareTileset` 合并 `transform` 的问题；只影响报告的清晰度读数，不影响显示
+- 服务器底图（ADR 0165）只在软件 WebGL、冒烟合成的瓦片和读取器对 15.111 的读数上验证过：在 15.111 的真实页面上看二维默认标准、切三维选影像、切回标准，4 套的缩略图和瓦片；显卡机器上看三维影像的清晰度、帧率和斜着看时地平线一带的背景色；业务图层的配色是按浅色底图定的，在黑色、极夜蓝上看不看得清没有核对
 - 地图署名与审图号：用天地图上线公网前按其版权要求处理；本地边界数据要不要标来源和审图号，向主管部门确认
 - 第三方许可：产物现在只随附带 NOTICE 的包（echarts、gaussian-splat-lite）的文件，其余依赖的许可没有随产物提供，包括没有 NOTICE 的 Apache-2.0 包（3d-tiles-renderer、idb-keyval、docx-preview 等）的 LICENSE，以及 MIT、BSD 包的版权声明。分发前要定提供哪些、怎么提供（[vite-config](config/vite-config.md)"第三方许可"）
 - 旧前端公开了登录用的 SM2 私钥，建议后端更换密钥对，换后只改 `.env`
@@ -123,6 +131,7 @@
 ## 待用户决定
 
 - `tools/smoke` 里资源管理、文件管理、驾驶舱的业务用例超出 ADR 0065 的"最小冒烟"：写新 ADR 认可，或移到端到端测试；决定前不整理写法（27 处非空断言随之处理）
+- 底图标注开关置灰时旁边的说明暂定"地名印在底图上"（ADR 0165 第 7 节），用户之后再定叫法：只改 `BasemapPanel.tsx` 的 `BAKED_LABELS_HINT`，浏览器测试量的是一行放得下，变长了再看 248 宽
 - 驾驶舱的单数字号（17、15、11px 和 ECharts 标签）：改成双数会改变已验收的大屏视觉
 - 综合分析驾驶舱的二级卡有六个按钮，右栏 300 像素宽时长的二级名称只剩几个字（1280×720 下"教育便…"，悬停和地图标题有全名）：保留规格定的三个互斥类型按钮，还是收成一个切换、让标题换行（[land-space-dashboard](modules/land-space-dashboard.md)"尺寸"）
 - 驾驶舱的卡片在 1366×768、1280×720 下绘图区约 128 像素：柱图斜排的城市名互相叠着，综合分析的雷达半径约 40 像素（1920×1080 下约 70），已经顶满绘图区的高度；改 `shared/dashboard` 的图表配置会改变原驾驶舱已验收的样子，要不要只给综合分析换排法（[land-space-dashboard](modules/land-space-dashboard.md)"尺寸"）

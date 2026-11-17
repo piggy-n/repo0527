@@ -9,11 +9,11 @@
 | 环境 | 命令 | 区别 |
 |---|---|---|
 | 能访问公网 | `pnpm build` | 地图使用天地图底图 |
-| 内网（不能访问公网） | `pnpm build:intranet` | 不向天地图发任何请求，底图是"静态底图"（默认，数据随产物发布，ADR 0133）和"无底图" |
+| 内网（不能访问公网） | `pnpm build:intranet` | 不向天地图发任何请求，底图是"静态底图"（数据随产物发布，ADR 0133）和"无底图"，加上这台服务器 nginx 配了的服务器底图：标准、影像、黑色、极夜蓝（数据不进产物，见下面"服务器底图单独部署"，ADR 0165）。二维默认有标准时是标准，没有时是静态 |
 
 两条命令输出到同一个目录，后一次覆盖前一次；nginx 配置相同。
 
-两种构建都检查产物里没有原型和模型数据（`public/` 只放要发布的文件，见 [config/local-files.md](config/local-files.md)）、开发页没有进入产物、MapLibre 没有成为入口的静态依赖；内网构建还检查天地图 key 已清空且未残留在文本产物中。检查失败时不能使用该次产物部署，规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
+两种构建都检查产物里没有原型、模型数据和服务器底图的缓存（`basemap/` 目录、`.bundle`、`.bundlx` 文件；`public/` 只放要发布的文件，见 [config/local-files.md](config/local-files.md)）、开发页没有进入产物、MapLibre 没有成为入口的静态依赖；内网构建还检查天地图 key 已清空且未残留在文本产物中。检查失败时不能使用该次产物部署，规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
 
 ### 第三方许可
 
@@ -63,7 +63,7 @@
 
 - 地址不变：页面请求同源的 `/3dt/manifest.json`，清单里的 `tileset` 写相对清单的路径，每一段按 URL 编码（如 `xuzhou/3dtiles/%E5%BD%AD%E5%9F%8E%E5%B9%BF%E5%9C%BA/tileset.json`，即 `xuzhou/3dtiles/彭城广场/tileset.json`），不写服务器地址，开发和各台服务器用同一套地址；发布的清单是入库的全集按部署站点去掉这台服务器缺的模型（见下面"每台服务器各构建一次"）
 - 清单从 `dist` 取、模型数据从模型目录取（nginx 配置见下）：清单的格式由代码里的 zod 校验，跟着代码一起发布
-- 内网 Windows 服务器 `192.168.15.111`（2026-11-17 加入，数据齐全）：nginx 1.24（Windows 版），5173 端口提供前端 `D:/01Project/front/dist/`、把 `/backend/` 转到 `192.168.15.111:18010`，`/3dt/` 的 alias 是模型根目录 `D:/02Data/3dtiles/models/`，加了 `Cache-Control: no-cache`。模型数据原来是数据方的目录名，2026-11-17 用户用 `rename-15-111.ps1`（`local/server-setup/`，不入库，改完在服务器上留了撤销脚本）按这个层级改了名（`SZ_3DT` → `星海广场站`、`JKQ` → `经开区`、`XWQ02` → `新吴区02` 等，`城下城` 挪进 `城下城（测试）\lcc2-sog-result\`），新接入的宿迁、徐州模型又按用户定的名称用 `rename-15-111-names.ps1` 改了一轮（`sq01` → `宿豫区01`、`1` → `模型一` 等）；`wuxi\无锡优化` 用户定不用，没有清单引用它。8080 端口另有 `/tiles/` 指向 `D:/02Data/map/bingmaps_satellite/`，应用没有用它。Windows 版 nginx 的配置文件存成 UTF-8 不带 BOM，路径写 `/`，在 nginx 的目录里运行 `.\nginx.exe -t`、`.\nginx.exe -s reload`；中文路径上线前按下面"验收"的 curl 确认
+- 内网 Windows 服务器 `192.168.15.111`（2026-11-17 加入，数据齐全）：nginx 1.24（Windows 版），5173 端口提供前端 `D:/01Project/front/dist/`、把 `/backend/` 转到 `192.168.15.111:18010`，`/3dt/` 的 alias 是模型根目录 `D:/02Data/3dtiles/models/`，加了 `Cache-Control: no-cache`；`/basemap/` 下 4 个前缀的 alias 是 `D:/02Data/3dtiles/天地图3857/` 里 4 套底图缓存的 `Layers/`（2026-11-17 配好并验收，见下面"服务器底图单独部署"）。模型数据原来是数据方的目录名，2026-11-17 用户用 `rename-15-111.ps1`（`local/server-setup/`，不入库，改完在服务器上留了撤销脚本）按这个层级改了名（`SZ_3DT` → `星海广场站`、`JKQ` → `经开区`、`XWQ02` → `新吴区02` 等，`城下城` 挪进 `城下城（测试）\lcc2-sog-result\`），新接入的宿迁、徐州模型又按用户定的名称用 `rename-15-111-names.ps1` 改了一轮（`sq01` → `宿豫区01`、`1` → `模型一` 等）；`wuxi\无锡优化` 用户定不用，没有清单引用它。8080 端口另有 `/tiles/` 指向 `D:/02Data/map/bingmaps_satellite/`，应用没有用它。Windows 版 nginx 的配置文件存成 UTF-8 不带 BOM，路径写 `/`，在 nginx 的目录里运行 `.\nginx.exe -t`、`.\nginx.exe -s reload`；中文路径上线前按下面"验收"的 curl 确认
 - 另两台服务器（2026-11-11）：内网 `192.168.153.194` 已按这个层级整理，前端在 `/opt/front/dcjcxzt/`，模型在 `/opt/front/3dt/`，5173 端口的 nginx 把 `/3dt/` alias 到模型目录、不开 gzip，那里的清单要换成 2026-11-11 以后入库的版本，旧清单的路径对不上新的目录；测试服务器 `192.168.1.180` 还是原来平铺的目录（`SZ_3DT/`、`XZ_GC_3DT/`、`楚王山1号/` 等），给它发布 2026-11-11 以后的前端之前，先按这个层级挪好目录，否则模型都加载失败
 - 每台服务器各构建一次（ADR 0164）：部署站点在 `apps/yzt/tools/site/sites.json`，只记这台缺哪些模型（[config/3dt-manifest.md](config/3dt-manifest.md)"按站点发布"）。PowerShell 里 `$env:YZT_SITE = '15-111'; pnpm build:intranet; Remove-Item Env:YZT_SITE`，看构建日志里 `[site]` 那一行的站点和模型数；不设时发布全集。发布后在开发机上运行 `pnpm --filter yzt site:check 15-111` 核对：服务器上的清单是这个站点的组合，每个模型的入口都在，LCC2 的 Range 合格
 - 新增模型：先把目录上传到模型目录，再改清单（数据不在某台服务器上时写进那个站点的 `missing`）、按站点构建、发布前端；LCC2 模型重新上传时，转发上有缓存的先清空缓存（见下面"重新上传以后"）。清单里有、服务器上没有的模型，加入以后在面板的图层列表里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值见 [config/3dt-manifest.md](config/3dt-manifest.md)
@@ -120,6 +120,63 @@ curl -s -o /dev/null -D - -r 2097152-2101247 "http://<主机>/3dt/xuzhou/lcc2/%E
 
 - 本机实测（2026-11-10）：开发服务器（Vite + sirv 提供 `local/3dt/`）对楚王山1号的 `0_0.sog` 返回 `206 Partial Content`、`Content-Range: bytes 0-4095/4297496`、`Content-Length: 4096`，没有压缩；开发服务器不发 `ETag`（`Cache-Control: no-store`）
 - 真实的 nginx 本机没有，上面的配置**未实测**，首次部署时按上面的命令确认
+
+### 服务器底图单独部署
+
+内网服务器可以随服务器提供底图（ADR 0165）：数据方给的 ArcGIS 切片缓存，页面用 Range 直接读，不在服务器上转换。数据不入库（数据方的数据，仓库在 GitHub 上），也不进产物（见上面的产物检查）。nginx 给每套一个英文前缀，`alias` 指到缓存的 `Layers/`：
+
+| 前缀 | 底图 | 地名 | 192.168.15.111 上的目录（`D:/02Data/3dtiles/天地图3857/` 下） |
+|---|---|---|---|
+| `standard` | 标准 | 印在图上，标注开关置灰 | `江苏省2026年标准版3857L7_18/Layers/` |
+| `imagery` | 影像（2025 年 0.5 米，脱密后切图） | 叠静态底图的市、区县地名，跟着标注开关 | `江苏省2025年0_5米影像脱密后切图3857L7_18/Layers/` |
+| `black` | 黑色 | 印在图上 | `江苏省2026年黑色版3857L7_18/Layers/` |
+| `night-blue` | 极夜蓝 | 印在图上 | `江苏省2026年极夜蓝版3857L7_18/Layers/` |
+
+- 前缀写在代码里（`apps/yzt/src/shared/config/server-basemap-options.ts`，所有部署一样），中文目录名和年份只出现在 nginx 的 `alias` 里：数据方换了目录只改 nginx，不用重新构建
+- 每台服务器有哪几套不写进部署站点（`sites.json`），也不用重新构建：进入地图页前，页面读每套南京那块 10 级瓦片（`_alllayers/L10/R0180C0300.bundlx`，再 Range 读同名的 `.bundle`），读到图片的才出现在底图面板里。漏配的只是少一张卡片；一套都没配时只有"静态底图""无底图"，和以前一样
+- 二维默认有标准时是标准、没有时是静态；切到三维时有影像就选影像，切回二维选二维默认（ADR 0165 第 1 节）
+- 服务器挂住时进入地图页最多多等 3 秒，这次浏览没有服务器底图，浏览器控制台有一条 `[basemap]` 开头的警告，刷新重试；404 和回落成 `index.html` 不警告，没有这些底图的服务器本来就这样
+- 只支持第一代紧凑缓存、Web 墨卡托、256 像素的瓦片。数据方换数据时先看缓存的 `Layers/conf.xml`（可以在浏览器里打开 `/basemap/<前缀>/conf.xml`）：`StorageFormat` 是 `esriMapCacheStorageModeCompact`（不是 `…CompactV2`）、`PacketSize` 128、`TileCols` 和 `TileRows` 256、`WKID` 102100 或 3857、`TileOrigin` 是 (-20037508.34, 20037508.34)；有不一样的要改代码（ADR 0165 第 2 节），范围（`conf.cdi`）或级别变了要改那个表
+- 数据方更新时可以原地替换：`.bundlx` 带 `no-cache` 和 `ETag`，换了文件浏览器会重新取；`.bundle` 页面一律不缓存（Windows 上的 Chrome、Edge 用缓存回答 Range 有过返回全零的故障），读到的和索引对不上时重读一次索引。代价是刷新页面或拖回早先看过的地方时瓦片要重新下载，局域网里每屏约 1～3 MB
+- 不要对 `.bundle`、`.bundlx` 开 gzip：它们不在 `mime.types` 里，按 `default_type`（通常是 `application/octet-stream`）发送，不要把它或 `*` 加进 `gzip_types`。压缩以后不能 Range，页面读不到瓦片（返回 200 时立刻取消，不会下载整个文件）
+- 只有 7～18 级：地图级别低于 5.5、三维斜着看时靠近地平线的一带只有背景色（[backlog](backlog.md)）
+
+nginx 写在前端那个 `server` 里（完整的位置见下面"nginx 需要的配置"），`alias` 的两端都以 `/` 结尾；Windows 版 nginx 的配置文件存成 UTF-8 不带 BOM，路径写 `/`：
+
+```nginx
+# 没配的前缀回 404，不回落到 index.html；下面更长的前缀优先匹配
+location /basemap/ {
+    return 404;
+}
+location /basemap/standard/ {
+    alias D:/02Data/3dtiles/天地图3857/江苏省2026年标准版3857L7_18/Layers/;
+    add_header Cache-Control "no-cache";
+}
+location /basemap/imagery/ {
+    alias D:/02Data/3dtiles/天地图3857/江苏省2025年0_5米影像脱密后切图3857L7_18/Layers/;
+    add_header Cache-Control "no-cache";
+}
+location /basemap/black/ {
+    alias D:/02Data/3dtiles/天地图3857/江苏省2026年黑色版3857L7_18/Layers/;
+    add_header Cache-Control "no-cache";
+}
+location /basemap/night-blue/ {
+    alias D:/02Data/3dtiles/天地图3857/江苏省2026年极夜蓝版3857L7_18/Layers/;
+    add_header Cache-Control "no-cache";
+}
+```
+
+**验收**：每个前缀都测，应当得到：`.bundlx` 200、`Content-Length: 81952`；`.bundle` 的 Range 206、`Content-Range: bytes 65596-65611/<文件大小>`，没有 `Content-Encoding`；缺的文件 404；没配的前缀和 `/basemap/` 本身 404（不是 200 的网页）。
+
+```bash
+curl -s -o /dev/null -D - "http://<主机>/basemap/standard/_alllayers/L10/R0180C0300.bundlx"
+curl -s -o /dev/null -D - -r 65596-65611 "http://<主机>/basemap/standard/_alllayers/L10/R0180C0300.bundle"
+curl -s -o /dev/null -w "%{http_code}\n" "http://<主机>/basemap/standard/_alllayers/L10/R0000C0000.bundlx"
+curl -s -o /dev/null -w "%{http_code}\n" "http://<主机>/basemap/nothing/conf.xml"
+```
+
+- 192.168.15.111（2026-11-17）：4 个前缀都按上面配好，4 套都通过这几项（`.bundlx` 带 `ETag` 和 `Cache-Control: no-cache`，`Content-Type: application/octet-stream`）；中文出现在 `alias` 的磁盘路径里也正常
+- 页面上看：登录后打开底图面板，有标准时第一行是标准、影像、静态，第二行是黑色、极夜蓝、无底图，没配的不占位；地图默认是标准底图。开发机上看某台服务器的底图用 `YZT_BASEMAP_PROXY`（[config/local-files.md](config/local-files.md)"服务器底图"）
 
 ### 调整资源的最小显示级别
 
@@ -187,6 +244,17 @@ server {
         alias /path/to/3dt/;
     }
 
+    # 可选：内网的服务器底图（ADR 0165），每套一个前缀，见上面"服务器底图单独部署"；
+    # 没配的前缀回 404，不回落到 index.html。不对 .bundle、.bundlx 开 gzip
+    location /basemap/ {
+        return 404;
+    }
+    location /basemap/imagery/ {
+        alias /path/to/影像缓存/Layers/;
+        add_header Cache-Control "no-cache";
+    }
+    # standard、black、night-blue 同样写
+
     # 可选：禁止下载只供构建工具使用的 TTF 字体（ADR 0013）
     # location ~ ^/fonts/.*\.ttf$ {
     #     return 404;
@@ -199,6 +267,8 @@ server {
 - 缺少 `try_files`：直接打开或刷新 `/current-map` 这类地址会返回 404
 - 缺少 `/backend/` 转发：所有接口请求都会失败
 - 缺少 `/3dt/` 的 `alias`：面板的"资源"里能列出模型，但加入后都加载失败（瓦片集的地址回退成 `index.html`）
+
+`/basemap/` 是可选的：没有它时页面没有服务器底图，底图只有"静态底图""无底图"，其他功能不受影响（地址回退成 `index.html` 也一样，探测把它当作没有，不警告）。配了的话没配的前缀要回 404。
 
 以上配置尚未在真实服务器上验证，首次部署时确认。
 

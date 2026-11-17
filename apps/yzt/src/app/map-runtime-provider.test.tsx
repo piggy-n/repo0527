@@ -11,6 +11,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject } from 'vue';
 import { reportMapError } from '@/shared/map/backend-request';
+import { NO_SERVER_BASEMAPS, SERVER_BASEMAPS, type ServerBasemaps } from '@/shared/map/basemap/server-basemaps';
 import { SCENE_TIER_NOTICE } from '@/shared/map/scene-tier/scene-tier';
 import { required } from '@/shared/testing/required';
 import { createSceneEngine, type PageSceneTier, scenePreloader, withRuntimeLoader } from './map-runtime-provider';
@@ -22,7 +23,7 @@ function injectedEngine(): SceneEngine {
     received.engine = inject(MAP_SCENE_ENGINE, null);
     return () => null;
   });
-  mount(withRuntimeLoader(Page, vi.fn<MapRuntimePreloader>()));
+  mount(withRuntimeLoader(Page, vi.fn<MapRuntimePreloader>(), NO_SERVER_BASEMAPS));
   return required(received.engine, '页面拿到的三维引擎');
 }
 
@@ -31,19 +32,28 @@ const settled = (promise: Promise<unknown>) =>
   Promise.race([promise.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 0))]);
 
 describe('withRuntimeLoader', () => {
-  it('页面里能取到预加载的函数、地图错误的报告器和降档的提示，路由给的参数照常传到页面', () => {
+  it('页面里能取到预加载的函数、地图错误的报告器、降档的提示和服务器底图，路由给的参数照常传到页面', () => {
     const preload = vi.fn<MapRuntimePreloader>();
-    const received: { preload?: MapRuntimePreloader | null; reporter?: unknown; notice?: unknown } = {};
+    const servers: ServerBasemaps = [
+      { id: 'standard', root: 'http://intranet.test/basemap/standard/', thumbnail: 'data:image/png;base64,' }
+    ];
+    const received: {
+      preload?: MapRuntimePreloader | null;
+      reporter?: unknown;
+      notice?: unknown;
+      servers?: ServerBasemaps | null;
+    } = {};
     const Page = defineComponent({
       props: { regionCode: { type: String, required: true } },
       setup(props) {
         received.preload = inject(MAP_RUNTIME_PRELOAD, null);
         received.reporter = inject(MAP_ERROR_REPORTER, null);
         received.notice = inject(SCENE_TIER_NOTICE, null);
+        received.servers = inject(SERVER_BASEMAPS, null);
         return () => <p>{props.regionCode}</p>;
       }
     });
-    const Wrapped = withRuntimeLoader(Page, preload);
+    const Wrapped = withRuntimeLoader(Page, preload, servers);
 
     const wrapper = mount(Wrapped, { attrs: { regionCode: '320100' } });
 
@@ -53,6 +63,7 @@ describe('withRuntimeLoader', () => {
     expect(received.reporter).toBe(reportMapError);
     expect(received.notice).toBeDefined();
     expect(received.notice).not.toBeNull();
+    expect(received.servers).toBe(servers);
     expect(wrapper.text()).toBe('320100');
   });
 

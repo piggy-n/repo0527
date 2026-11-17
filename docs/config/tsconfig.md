@@ -201,14 +201,14 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
     "types": ["geojson"]
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.worker.ts", "src/test-setup.browser.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.worker.ts", "src/test-setup.browser.ts", "src/testing"]
 }
 ```
 
 | 文件 | 检查范围 | 环境类型 |
 |---|---|---|
-| `tsconfig.lib.json` | `src/`（不含测试、Worker 入口、测试的 setup） | DOM，不加载 `vite/client`，没有 `paths`；用到 GeoJSON 的包加 `geojson` |
-| `tsconfig.test.json` | 测试和测试的 setup | 加载 `vite/client`，可以用 `?raw`、`?worker&url`、导入 CSS（`utils` 不需要，没有加载） |
+| `tsconfig.lib.json` | `src/`（不含测试、Worker 入口、测试的 setup 和只供测试的辅助 `src/testing/`） | DOM，不加载 `vite/client`，没有 `paths`；用到 GeoJSON 的包加 `geojson` |
+| `tsconfig.test.json` | 测试、测试的 setup 和 `src/testing/` | 加载 `vite/client`，可以用 `?raw`、`?worker&url`、导入 CSS（`utils` 不需要，没有加载） |
 | `tsconfig.worker.json` | `src/**/*.worker.ts`（只有 map-core 有） | `webworker`，不含 DOM |
 | `tsconfig.node.json` | `vitest.config.ts` | Node |
 

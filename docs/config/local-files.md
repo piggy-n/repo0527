@@ -1,6 +1,6 @@
 # 未入库的本地文件（local/）
 
-相关决策：ADR 0141（集中到 `local/`）、ADR 0013（字体）、ADR 0081（模型）
+相关决策：ADR 0141（集中到 `local/`）、ADR 0013（字体）、ADR 0081（模型）、ADR 0165（服务器底图）
 
 模型、原型、探查结果这些文件不入库，集中放在仓库根目录的 `local/`（`.gitignore` 的 `/local/`）。`apps/yzt/public/` 只放要发布的文件：构建时 Vite 会把它整个复制到产物。
 
@@ -9,6 +9,7 @@
 | 目录 | 内容 | 谁用 |
 |---|---|---|
 | `local/3dt/` | 三维模型数据，层级和服务器上相同：`<市>/3dtiles/<模型名>/`、`<市>/lcc2/<目录>/`（[3dt-manifest.md](3dt-manifest.md)"目录层级"），不含清单 | 开发服务器映射到 `/3dt/*`；线上由 nginx 提供（[deployment.md](../deployment.md)） |
+| `local/basemap/` | 服务器底图（ArcGIS 紧凑缓存）的一部分，层级和地址相同：`<前缀>/_alllayers/L<级别>/R<行>C<列>.bundle` 和同名的 `.bundlx`，`<前缀>/` 对应服务器上缓存的 `Layers/`（下文"服务器底图"） | 开发服务器映射到 `/basemap/*`，缺的文件回 404；线上由 nginx 提供 |
 | `local/design/` | 可以打开的交互原型，每个主题只留最新版 | 开发服务器映射到 `/design.local/*` |
 | `local/design-src/` | 原型的构建脚本和检查截图 | 手动运行、查看，开发服务器不提供 |
 | `local/probe/` | 后端探查结果：`resource-classes/` 是 `probe:resource-classes` 的默认输出，其他目录是用 `--out` 存下的某一轮 | [commands.md](../commands.md) |
@@ -39,7 +40,7 @@ $env:YZT_LOCAL_DIR = 'C:\work\repo0527\local'
 pnpm --filter yzt dev
 ```
 
-不设时 worktree 的 `local/` 是空的：`/3dt/manifest.json` 正常，加入的模型在三维里显示加载失败，原型地址回退到单页应用。
+不设时 worktree 的 `local/` 是空的：`/3dt/manifest.json` 正常，加入的模型在三维里显示加载失败，内网配置探测不到服务器底图（只有静态和无底图），原型地址回退到单页应用。
 
 工具脚本的默认输出同样跟着这个变量，所以 worktree 指回主目录后，实测和探查的结果也写进主目录。
 
@@ -70,17 +71,49 @@ pnpm --filter yzt dev:intranet
 
 用途是在有显卡的机器上看、测服务器上的模型。`measure:3d` 和配准工具 `lcc2:register` 用同一个变量，从 `<它>/3dt/` 读模型（[commands.md](../commands.md)）。原来的瓦片集诊断页 `/dev/tileset-probe` 读的是 Cesium 的读数，随引擎删掉（ADR 0153）。
 
+## 服务器底图
+
+内网服务器随服务器提供的 ArcGIS 紧凑缓存（ADR 0165）。线上由 nginx 给每套一个前缀 `/basemap/<前缀>/`，指到那套缓存的 `Layers/`；前缀是 `imagery`（影像）、`standard`（标准）、`black`（黑色）、`night-blue`（极夜蓝）。本机放在 `local/basemap/`，层级和地址一样：
+
+```
+local/basemap/
+└─ imagery/                        一套缓存的 Layers/，别的前缀同样
+   └─ _alllayers/
+      └─ L10/
+         ├─ R0180C0300.bundlx      索引，整份读
+         └─ R0180C0300.bundle      瓦片，按 Range 读
+```
+
+- 数据是数据方的，不入库、不放 `public/`，产物里出现就构建失败（下文"开发服务器"的最后一段）
+- 一套全部有 38～91 GB，本机只拷要看的：L07～L11 每套只有几个 bundle，可以整级拷；更深的级别只拷要看的地方。页面探测一套有没有，读的是南京那块 z10 瓦片所在的 `L10/R0180C0300`，没拷它的那套页面上不出现。`conf.xml`、`conf.cdi` 页面不读，可以不拷
+- 拷贝不用目录联接（junction）：删 worktree 时曾经顺着联接删掉主目录的模型
+- 缺的文件回 404，不回落到 `index.html`，和线上 nginx 一样：读取器靠 404 认"这一块没有"（MapLibre 改用上一级放大），探测靠它认"这台没有这套底图"
+- sirv 只认单段 Range，`bytes=0-0` 会回整个文件、`bytes=-n` 被当成 0～n；读取器的 Range 起点都在 bundle 的头和占位区之后，碰不到。开发时的响应是 `Cache-Control: no-store`、不带 ETag
+- 只有内网配置（`dev:intranet`）探测服务器底图，公网的 `dev` 不探测，放了文件也不显示
+
+本机不拷数据时，环境变量 `YZT_BASEMAP_PROXY` 让开发服务器把 `/basemap/` 整个代理到一台服务器，`local/basemap/` 这时不再映射。和 `YZT_3DT_PROXY` 一样只在进程的环境变量里设（[env.md](env.md)"不放进 `.env` 的变量"），两个常常一起设（PowerShell）：
+
+```powershell
+$env:YZT_BASEMAP_PROXY = 'http://192.168.15.111:5173'
+pnpm --filter yzt dev:intranet
+```
+
+- Range 请求头、206 和 `Content-Range` 原样转发，缺的文件和没配的前缀照样是服务器回的 404（2026-11-17 对 15.111 验证过，[vite-config.md](vite-config.md)"代理"）
+- 15.111 上 4 套都配了（ADR 0165 第 5 节）
+- `vite preview` 也沿用这条代理；没设时 preview 不映射 `local/basemap/`，`/basemap/*` 回落到 `index.html`，探测把它当成没有。冒烟用例不依赖这两种：公共夹具 `fixtures.ts` 让 `/basemap/` 一律回 404，`server-basemap.spec.ts` 自己 route `/basemap/**` 提供生成的缓存（ADR 0165 第 6 节）
+
 ## 开发服务器
 
-`tools/local-files/vite-plugin.ts` 的 `localFilesPlugin` 用 [sirv](https://github.com/lukeed/sirv) 提供静态文件，`vite.config.ts` 里写映射：`/3dt` → `local/3dt`，`/design.local` → `local/design`。
+`tools/local-files/vite-plugin.ts` 的 `localFilesPlugin` 用 [sirv](https://github.com/lukeed/sirv) 提供静态文件，`vite.config.ts` 里写映射：`/3dt` → `local/3dt`，`/basemap` → `local/basemap`，`/design.local` → `local/design`；设了 `YZT_3DT_PROXY`、`YZT_BASEMAP_PROXY` 时对应的那条不映射，改走代理。
 
 - 地址和线上一致，清单里的 `tileset` 仍然写相对路径（[deployment.md](../deployment.md)）
 - 排在 Vite 的中间件之前，原型的脚本和样式不经过转换，和放在 `public/` 时一样
 - 放进新文件不用重启；目录地址（`/design.local/<主题>/`）打开目录里的 `index.html`，不用写全
-- 目录里没有的文件交给后面的中间件，`/3dt/manifest.json` 就这样继续从 `public` 提供。所以 `local/3dt/` 里平时不放 `manifest.json`，否则会盖住入库的那份。例外是临时要看不入库的模型：复制入库的清单再加一项，开发服务器和 `measure:3d` 都读它（ADR 0149 L.3 的彭城广场 LCC2 样例原来这样做，2026-11-11 进了入库的清单）；用完删掉，入库的清单改了要重新生成
-- 只在开发服务器上生效：`vite preview` 没有模型（产物里也没有），测试不读这些目录
+- `/basemap` 写成 `{ directory, fallthrough: false }`：缺的文件由 sirv 直接回 404，不交给后面的中间件。交出去的话，Vite 的单页回落会把 `Accept` 带 `*/*` 的请求（`fetch` 默认就带）改写成 `index.html` 并回 200
+- 只写目录的映射（`/3dt`、`/design.local`）：目录里没有的文件交给后面的中间件，缺的模型文件、原型地址拿到的是单页应用的 `index.html`（200）。`/3dt/manifest.json` 就这样继续从 `public` 提供。所以 `local/3dt/` 里平时不放 `manifest.json`，否则会盖住入库的那份。例外是临时要看不入库的模型：复制入库的清单再加一项，开发服务器和 `measure:3d` 都读它（ADR 0149 L.3 的彭城广场 LCC2 样例原来这样做，2026-11-11 进了入库的清单）；用完删掉，入库的清单改了要重新生成
+- 目录映射只在开发服务器上生效：`vite preview` 不映射 `local/3dt`、`local/basemap`（产物里也没有），测试不读这些目录；设了 `YZT_3DT_PROXY`、`YZT_BASEMAP_PROXY` 时 preview 照样走代理（见上文"模型从服务器取""服务器底图"）
 
-构建由 `tools/build-output/vite-plugin.ts` 检查：产物里出现 `design.local` 或 `3dt/` 下清单以外的内容时构建失败（[vite-config.md](vite-config.md)"构建产物检查"）。
+构建由 `tools/build-output/vite-plugin.ts` 检查：产物里出现 `design.local`、`3dt/` 下清单以外的内容、顶层的 `basemap/` 目录或任何 `.bundle`、`.bundlx` 文件时构建失败（[vite-config.md](vite-config.md)"构建产物检查"）。
 
 ## 原型
 

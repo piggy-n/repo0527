@@ -42,4 +42,4 @@ paths:
 
 ## CI
 
-- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 公网、内网构建 → 生产产物冒烟（ADR 0005、0040、0065）；构建检查开发页、入口静态依赖和天地图 key，并拒绝 `public/` 里的开发原型和`3dt/` 下 `manifest.json` 以外的模型数据（只检查、不清理，放错构建失败，原型放 `local/design`、模型放 `local/3dt`；`3dt/manifest.json` 照常发布），见 docs/config/vite-config.md
+- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 公网、内网构建 → 生产产物冒烟（ADR 0005、0040、0065）；构建检查开发页、入口静态依赖和天地图 key，并拒绝 `public/` 里的开发原型、`3dt/` 下 `manifest.json` 以外的模型数据和服务器底图的缓存（顶层 `basemap/`、`.bundle`、`.bundlx`，ADR 0165；只检查、不清理，放错构建失败，原型放 `local/design`、模型放 `local/3dt`、底图放 `local/basemap`；`3dt/manifest.json` 照常发布），见 docs/config/vite-config.md

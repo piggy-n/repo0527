@@ -6,7 +6,7 @@
   gap: var(--space-md);
 }
 
-// 内网只有两张时也按三列的宽度，不拉伸
+// 总是三列，按拥有者给的顺序排：内网按探测结果两到六张，不满一行时不拉伸，六张时两行（ADR 0165 第 7 节）
 .options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -28,6 +28,8 @@
   border: 0;
   background: none;
   color: var(--color-text-regular);
+  // 不用浏览器给按钮的默认字体
+  font: inherit;
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tag);
   cursor: pointer;
@@ -160,6 +162,18 @@
 .labelsName {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+}
+
+// 地名印在底图上时的说明，放在中间一列，放不下时省略
+.labelsHint {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .labelsSwitch {

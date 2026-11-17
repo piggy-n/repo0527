@@ -117,7 +117,7 @@ const MapPrototype = defineComponent({
       rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value
     });
 
-    // 二维切三维默认影像，三维切二维默认矢量（ADR 0078 第 2 节）；没有这种底图时（内网）保持原样
+    // 二维切三维默认影像，三维切二维选二维的默认（ADR 0078 第 2 节、ADR 0165 第 1 节）；没有影像时（这个原型的内网）保持原样
     const switchDimension = (next: ViewKind) => {
       owner.exitRoam();
       dimension.value = next;

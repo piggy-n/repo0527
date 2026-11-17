@@ -14,6 +14,8 @@
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-md);
   color: var(--color-text-regular);
+  // 不用浏览器给按钮的默认字体
+  font: inherit;
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tag);
   cursor: pointer;

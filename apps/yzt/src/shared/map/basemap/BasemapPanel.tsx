@@ -3,10 +3,13 @@ import { defineComponent, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { OpacitySlider } from '../OpacitySlider';
 import { MAP_TOOLTIP_PROPS } from '../tooltip';
-import type { BasemapId } from './basemap-style';
+import { type BasemapId, basemapOption } from './basemap-style';
 import { BasemapThumbnail } from './BasemapThumbnail';
 import type { Basemap } from './useBasemap';
 import styles from './BasemapPanel.module.scss';
+
+/** 地名印在底图上（标准、黑色、极夜蓝）时标注开关旁的说明，暂定的叫法，用户之后再定（ADR 0165 第 7 节） */
+export const BAKED_LABELS_HINT = '地名印在底图上';
 
 /**
  * 底图的切换（ADR 0146）：默认只有缩略图，只写类型，选中的主色描边；点缩略图选中并交给使用方（picked）。
@@ -41,6 +44,8 @@ export const BasemapPanel = defineComponent({
 
     return () => {
       const { options, thumbnails, selected, opacity, labelsVisible } = props.basemap;
+      // 地名印在图上：开关显示为开、不能操作，全局的标注值不变，切回影像、静态时照旧（ADR 0165 第 7 节）
+      const baked = basemapOption(selected.value).labels === 'baked';
       return (
         <div class={styles.panel}>
           <div class={styles.options} role="group" aria-label="底图">
@@ -85,11 +90,14 @@ export const BasemapPanel = defineComponent({
                 <span class={styles.labelsName} aria-hidden="true">
                   标注
                 </span>
+                {/* 普通文字，不用 aria-describedby：ElSwitch 只把 aria-label 交给里面的开关 */}
+                {baked && <span class={styles.labelsHint}>{BAKED_LABELS_HINT}</span>}
                 <ElSwitch
                   class={styles.labelsSwitch}
                   size="small"
                   aria-label="底图标注"
-                  modelValue={labelsVisible.value}
+                  disabled={baked}
+                  modelValue={baked || labelsVisible.value}
                   onUpdate:modelValue={value => props.basemap.setLabelsVisible(value === true)}
                 />
               </div>

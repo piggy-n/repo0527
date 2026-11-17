@@ -54,11 +54,15 @@ export default defineConfig(({ mode }) => {
     ]
   });
 
-  // 模型和原型不入库、不进产物，开发时从 local/ 提供，地址和线上一致（ADR 0141）；
-  // 设了 YZT_3DT_PROXY 时模型改由那台服务器提供（在显卡机器上看只在服务器上的模型，见 docs/config/local-files.md）
+  // 模型、服务器底图和原型不入库、不进产物，开发时从 local/ 提供，地址和线上一致（ADR 0141）；
+  // 设了 YZT_3DT_PROXY 时模型改由那台服务器提供（在显卡机器上看只在服务器上的模型，见 docs/config/local-files.md），
+  // 设了 YZT_BASEMAP_PROXY 时服务器底图也一样（ADR 0165）
   const modelProxy = env.YZT_3DT_PROXY;
+  const basemapProxy = env.YZT_BASEMAP_PROXY;
   const localFiles = localFilesPlugin({
     ...(modelProxy ? {} : { '/3dt': localPath('3dt') }),
+    // 缺的文件回 404，不回落到 index.html：读取器靠 404 认缺瓦片，和线上的 nginx 一样
+    ...(basemapProxy ? {} : { '/basemap': { directory: localPath('basemap'), fallthrough: false } }),
     '/design.local': localPath('design')
   });
 
@@ -96,7 +100,9 @@ export default defineConfig(({ mode }) => {
           rewrite: path => path.slice(aiApiBaseUrl.length)
         },
         // 模型数据从那台服务器取，地址和部署后一样；清单也从它取，设了 YZT_SITE 时由 site 插件先回答
-        ...(modelProxy ? { '/3dt/': { target: modelProxy, changeOrigin: true } } : {})
+        ...(modelProxy ? { '/3dt/': { target: modelProxy, changeOrigin: true } } : {}),
+        // 服务器底图从那台服务器取，Range 请求和 206 原样转发（ADR 0165）
+        ...(basemapProxy ? { '/basemap/': { target: basemapProxy, changeOrigin: true } } : {})
       }
     },
     test: {

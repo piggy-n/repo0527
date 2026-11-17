@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/yzt/vite.config.ts`
-相关决策：ADR 0164（按部署站点发布三维模型清单）、ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0137（资源的最小显示级别）、ADR 0141（未入库的本地文件）、ADR 0149 第 8 节（gaussian-splat-lite 的 LICENSE、NOTICE）
+相关决策：ADR 0165 第 6 节（服务器底图的开发映射、代理和构建检查）、ADR 0164（按部署站点发布三维模型清单）、ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0137（资源的最小显示级别）、ADR 0141（未入库的本地文件）、ADR 0149 第 8 节（gaussian-splat-lite 的 LICENSE、NOTICE）
 
 ## 整体结构
 
@@ -13,11 +13,11 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`site`、`localFiles`、`thirdPartyNoticesPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 把资源的最小显示级别复制到产物，`site` 按部署站点发布三维模型清单，`localFiles` 只在开发服务器上提供未入库的模型和原型，`thirdPartyNoticesPlugin` 构建时随附第三方包的 LICENSE、NOTICE，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`site`、`localFiles`、`thirdPartyNoticesPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 把资源的最小显示级别复制到产物，`site` 按部署站点发布三维模型清单，`localFiles` 只在开发服务器上提供未入库的模型、服务器底图和原型，`thirdPartyNoticesPlugin` 构建时随附第三方包的 LICENSE、NOTICE，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `build.rolldownOptions.output.chunkFileNames` | 函数 | 包入口所在的分块按包名命名，见下文"分块的名字" |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
-| `server.proxy` | `/backend/` → `PROXY_TARGET`；`/ai-backend/` → `AI_PROXY_TARGET`；设了 `YZT_3DT_PROXY` 时 `/3dt/` → 它 | 同源代理，见下文 |
+| `server.proxy` | `/backend/` → `PROXY_TARGET`；`/ai-backend/` → `AI_PROXY_TARGET`；设了 `YZT_3DT_PROXY` 时 `/3dt/` → 它；设了 `YZT_BASEMAP_PROXY` 时 `/basemap/` → 它 | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
 
 ### 生成类插件（generators）
@@ -58,13 +58,17 @@ const staticFiles = viteStaticCopy({
 
 ```ts
 const modelProxy = env.YZT_3DT_PROXY;
+const basemapProxy = env.YZT_BASEMAP_PROXY;
 const localFiles = localFilesPlugin({
   ...(modelProxy ? {} : { '/3dt': localPath('3dt') }),
+  ...(basemapProxy ? {} : { '/basemap': { directory: localPath('basemap'), fallthrough: false } }),
   '/design.local': localPath('design')
 });
 ```
 
-模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。设了 `YZT_3DT_PROXY` 时 `/3dt/` 不映射到本地目录，改由 `server.proxy` 整个代理到那台服务器（清单也从它取），本机没有的模型也能在开发服务器上加载。
+模型、服务器底图和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这三个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。设了 `YZT_3DT_PROXY` 时 `/3dt/` 不映射到本地目录，改由 `server.proxy` 整个代理到那台服务器（清单也从它取），本机没有的模型也能在开发服务器上加载；`YZT_BASEMAP_PROXY` 对 `/basemap/` 同样（ADR 0165）。
+
+只写目录的映射，目录里没有的文件交给后面的中间件（`/3dt/manifest.json` 这样继续从 public 提供）。`/basemap` 写成 `fallthrough: false`：缺的文件由 sirv 直接回 404，不会被 Vite 的单页回落改写成 `index.html` 并回 200。读取器靠 404 认"这一块没有"，探测靠它认"这台没有这套底图"，和线上 nginx 的 `location /basemap/ { return 404; }` 一样（ADR 0165 第 5、6 节）。
 
 ### 按部署站点发布的清单
 
@@ -84,7 +88,7 @@ const site = sitePlugin(process.env.YZT_SITE);
 
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
-- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容。只检查、不清理：原型和模型数据不放在 `public/`（[local-files.md](local-files.md)），放错了构建失败，错误信息写明该放到哪里
+- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local`、`3dt/` 下清单以外的内容、顶层的 `basemap/` 目录和任何 `.bundle`、`.bundlx` 文件（服务器底图，ADR 0165）。只检查、不清理：原型、模型数据和服务器底图不放在 `public/`（[local-files.md](local-files.md)），放错了构建失败，错误信息写明该放到哪里
 - 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）和 Three.js（`three`、`3d-tiles-renderer`，驾驶舱和 `@mx/map-three` 都只能在动态分块里，ADR 0147 第 7 节）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页包的那一层（注入预加载三维模块的函数和三维引擎的能力）也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
@@ -234,6 +238,8 @@ proxy: {
 已验证：通过开发服务器请求 `/backend/system/upms/user/detail`，后端返回 `{"code":401,"msg":"用户未登录"}`；和接口同名的页面路径 `/resource-management` 仍然返回页面。
 
 AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-backend/` → `AI_PROXY_TARGET`，去掉 `/ai-backend` 前缀（变量见 [env.md](env.md)，模块见 [modules/ai-chat.md](../modules/ai-chat.md)）。2026-10-28 验收时把两个目标都指向本机的模拟接口，确认 `/ai-backend/api/sessions` 转到了 AI 的目标；真实的 AI 后端还没有联调。
+
+模型和服务器底图另有两条，只在设了变量时加：`YZT_3DT_PROXY` 时 `/3dt/` → 它，`YZT_BASEMAP_PROXY` 时 `/basemap/` → 它，都不改路径（地址和服务器上一样），`changeOrigin` 同上。Vite 8.3.5 内嵌的 http-proxy-3 原样转发 `Range` 请求头，206 和 `Content-Range` 原样写回。已验证（2026-11-17，用真实的 `vite.config.ts` 起开发服务器，代理到 `192.168.15.111:5173`）：`.bundlx` 200、81952 字节；`.bundle` 的 Range 回 206，`Content-Range` 的起点对；不存在的文件、没配的前缀和 `/basemap/` 本身回 404。两条在 `vite preview` 里同样生效。
 
 ### 开发服务器的端口
 

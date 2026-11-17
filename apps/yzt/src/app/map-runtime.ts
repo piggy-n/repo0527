@@ -1,5 +1,6 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { prewarm, setWorkerCount, setWorkerUrl } from 'maplibre-gl';
+import { COMPACT_TILE_PROTOCOL, createCompactTileProtocol, createCompactTileReader } from '@mx/map-core';
+import { addProtocol, prewarm, setWorkerCount, setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
 let configured = false;
@@ -18,6 +19,8 @@ export function setupMapRuntime(): void {
   setWorkerUrl(workerUrl);
   // 要在第一张地图创建 Worker 池之前设置；Chrome 下 MapLibre 默认只有 1 个
   setWorkerCount(workerCountFor(navigator.hardwareConcurrency));
+  // 服务器底图的紧凑缓存（ADR 0165 第 3 节）：协议对整个页面生效，不随地图销毁移除；索引的缓存所有地图共用
+  addProtocol(COMPACT_TILE_PROTOCOL, createCompactTileProtocol(createCompactTileReader()));
 }
 
 /**

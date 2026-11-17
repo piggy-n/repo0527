@@ -7,6 +7,12 @@ export {
 } from './camera/camera-model';
 export { distanceToZoom, MAPLIBRE_FOVY } from './camera/camera-distance';
 export type { Unsubscribe } from './events';
+export {
+  COMPACT_TILE_PROTOCOL,
+  compactTileTemplate,
+  type CompactTileProtocol,
+  createCompactTileProtocol
+} from './maplibre/compact-protocol';
 export type {
   CameraEventData,
   GestureHandlerLike,
@@ -183,6 +189,20 @@ export {
   type StyleModelOptions,
   type StyleRoot
 } from './style/style-model';
+export {
+  COMPACT_INDEX_BYTES,
+  type CompactFetch,
+  type CompactIndex,
+  type CompactTile,
+  compactTileLocation,
+  type CompactTileLocation,
+  type CompactTileReader,
+  type CompactTileReaderOptions,
+  createCompactTileReader,
+  parseCompactIndex,
+  tileImageType,
+  type TileImageType
+} from './tiles/arcgis-compact';
 export {
   BROWSE_TOOL,
   type Gestures,

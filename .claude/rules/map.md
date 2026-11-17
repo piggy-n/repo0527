@@ -19,7 +19,7 @@ paths:
 - 二维地图用 MapLibre GL JS 6，只用具名导入；`setWorkerUrl`、CSS 这类全局设置由 app 懒加载完成（登录页空闲时预加载，或首次进入地图时）；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002、0019、0023、0061）
 - 距离和面积用 geographiclib-geodesic 按椭球面计算，不另写公式（ADR 0035）；其他几何计算按需安装 turf v7 的单个包，不用 `@turf/turf` 全家桶（ADR 0037）
 - 地图内核的事件用 nanoevents；资源释放用标准的 `Disposable` / `DisposableStack`，运行时由 `app/main.ts` 全局引入的 core-js 补齐（ADR 0023）
-- 天地图只通过 `appConfig.tianditu`（`{ key } | null`）使用；为 `null` 时不发任何公网请求，界面上也不出现依赖天地图的选项（ADR 0031）；这时底图是"静态底图"（默认）和"无底图"（ADR 0133）
+- 天地图只通过 `appConfig.tianditu`（`{ key } | null`）使用；为 `null` 时不发任何公网请求，界面上也不出现依赖天地图的选项（ADR 0031）；这时底图是"静态底图""无底图"（ADR 0133），加上进入地图页前探测到的服务器底图（标准、影像、黑色、极夜蓝），二维默认有标准时是标准、没有时是静态（ADR 0165）
 
 ## 会话、样式与分层
 
@@ -66,6 +66,7 @@ paths:
 - 行政区边界的入口：现状底图在业务组，打开功能标签；其他地图页给 `MapViewControls` 传 `boundaries` 和 `boundariesOpen`，点开是底图同款的浮层，不另放工具栏，开关由页面持有（窄屏时计入 `useSideExclusion`）；默认级别由页面设置（ADR 0128）
 - 底图和行政区的浮层 `MapOptionsPopover` 没有操作栏：选了底图、再点入口、单击外部、按 Esc 都关闭，拖动和滚轮缩放地图不算点外部（`useLightDismiss`）；底图面板默认只有缩略图，当前缩略图角上的入口点开才有标注和透明度；标注是拥有者的 `labelsVisible`，全局一个，偏好单独一项 `basemap-labels`（ADR 0146）
 - 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；地名在页面上开关，默认关（ADR 0146）；陆地全省一种颜色（CREAM），不按市分色（用户 2026-11-11 取消了分色开关）；陆地色是换算好的不透明 HEX，不用透明度变量；改了配色或边界数据运行 `basemap:generate`（ADR 0133、0134）
+- 内网的服务器底图（ADR 0165）由浏览器直接读 ArcGIS 第一代紧凑缓存，不在服务器上转换：读取器和自定义协议在 map-core（`tiles/arcgis-compact.ts`、`maplibre/compact-protocol.ts`，不导入 maplibre-gl），协议由 `setupMapRuntime()` 注册一次；缺块抛 `status` 为 404 的 `Error`（MapLibre 改用上一级放大），不返回空数据。可能有的几套写在 `shared/config/server-basemap-options.ts`，每台服务器有哪几套由 `withMapRuntime` 探测、经 `SERVER_BASEMAPS` 注入拥有者，选项在拥有者创建时就确定；探测导入了 map-core，只能动态导入。标准、黑色、极夜蓝的地名印在图上，标注开关置灰、不改全局的值。瓦片和缩略图是数据方的数据，不入库、不进产物，测试只用临时生成的 bundle；7 级以下没有数据，不伪造低级别
 - 地图样式不写 `glyphs`，`text-font` 只用 `shared/map/map-fonts.ts` 的普惠体两个栈（中粗要带上第二个名字），MapLibre 用页面已经加载的普惠体在本地画，不下载字体或字形；`JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 保持真值（ADR 0160，取代 ADR 0133 第 3 节的 `BASEMAP_STYLE_ROOT`）
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
 - 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `@mx/map-tools` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）

@@ -35,12 +35,15 @@
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
 | `maplibre/roam/` | MapLibre 引擎的漫游（ADR 0147 第 4 节）：`MapLibreRoam` 接管地图、抬高、进出和报告进度，`RouteRoamer`、`WalkRoamer` 是从 map-cesium 移植的路线和步行（只用真实坐标，经 `RoamHost` 设相机、拾取、投影），`roam-camera.ts` 是真实视点和 MapLibre 相机的换算；见 [map-three.md](map-three.md)"漫游" |
+| `maplibre/compact-protocol.ts` | MapLibre 读 ArcGIS 紧凑缓存的自定义协议（ADR 0165 第 3 节）：`COMPACT_TILE_PROTOCOL`、`compactTileTemplate`（数据源的瓦片地址模板）、`createCompactTileProtocol`（把读取器包成 `addProtocol` 的处理函数）；不导入 maplibre-gl，结构上和 `AddProtocolAction` 兼容 |
+| `tiles/arcgis-compact.ts` | 第一代紧凑缓存的读取器（ADR 0165 第 3 节）：`compactTileLocation`（瓦片号到 bundle 和槽号）、`parseCompactIndex`、`tileImageType`、`createCompactTileReader`；不依赖框架和 MapLibre，`fetch` 由参数传入 |
+| `testing/compact-fixture.ts` | 只供测试（不进 `tsconfig.lib.json`）：在内存里拼 `.bundlx`、`.bundle`，像静态文件服务器一样回答整份 GET 和 Range；不从入口导出 |
 | `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），包里的漫游用，不从入口导出 |
 | `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，只在包里用，不从入口导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
 
-只有 `maplibre/` 目录能导入 maplibre-gl（lint 限制，见 [config/oxlintrc.md](../config/oxlintrc.md)），其余文件只用 `@maplibre/maplibre-gl-style-spec` 的类型和函数。
+只有 `maplibre/` 目录能导入 maplibre-gl（lint 限制，见 [config/oxlintrc.md](../config/oxlintrc.md)），其余文件只用 `@maplibre/maplibre-gl-style-spec` 的类型和函数。`maplibre/compact-protocol.ts` 放在这个目录是因为它遵守的是 MapLibre 的协议约定，本身不导入 maplibre-gl。
 
 ## 用法
 
@@ -329,9 +332,45 @@ store.clear();
 - `scene/scene-activity.ts` 的 `SceneActivity`：瓦片集、高斯泼溅读完索引以后、随相机流式加载的这一轮。瓦片集是 `{ kind: 'blocks', ...SourceActivity }`（块数）；高斯泼溅是 `{ kind: 'detail', progress, startedAt, finishedAt }`，库只给当前视角的细节到了多少，没有块数。键同 `SceneStatus`
 - 渲染器（`SceneRenderer`）给出 `activity` 和事件 `activitychange`，`MapLibreScene` 原样转出；`MapLibreView` 的 `sceneActivity`、`onSceneActivityChange` 只在显示三维时有内容，切换种类时通知一次。统计怎样做见 [map-three.md](map-three.md)"加载的统计"
 
+### 服务器底图的紧凑缓存（ADR 0165 第 3 节）
+
+内网服务器随数据提供的 ArcGIS 切片缓存（第一代紧凑缓存）由浏览器直接读，MapLibre 经自定义协议拿到瓦片。
+
+```ts
+// app 的 setupMapRuntime() 里注册一次，协议对整个页面生效，不随地图销毁移除
+const reader = createCompactTileReader();
+addProtocol(COMPACT_TILE_PROTOCOL, createCompactTileProtocol(reader));
+
+// 数据源：root 是缓存的 Layers/ 目录的绝对地址，以 / 结尾
+const source = {
+  type: 'raster',
+  tiles: [compactTileTemplate(new URL('/basemap/imagery/', location.href).href)],
+  tileSize: 256,
+  minzoom: 7,
+  maxzoom: 18,
+  bounds
+};
+
+// 探测和缩略图直接用读取器：读到图片才算有，null 是没有这块
+const tile = await reader.read('/basemap/imagery/', 10, 849, 415, signal);
+```
+
+- 地址模板是 `arcgis-compact://` 加缓存根目录的绝对地址加 `{z}/{x}/{y}`，处理函数去掉协议名、取最后三段作瓦片号，其余是根目录，所以一个处理函数（一个读取器）服务所有缓存
+- 文件名：级别目录 `L%02d`，bundle 名 `R%04xC%04x`（小写十六进制，行列取 128 的倍数，至少 4 位，z17 起会有 5 位），都在根目录的 `_alllayers/` 下；槽号按列存，`128 × (x mod 128) + (y mod 128)`。行号自上而下，同 XYZ 的 y，不翻转
+- `.bundlx` 整份 GET（照常用浏览器缓存）：要求 200、81952 字节、16 字节头 `03000000 10000000 00400000 05000000`；404 是整块没有，记下来以后不再请求；返回网页、别的长度、别的状态码是读取失败。偏移是 5 字节小端，按乘法拼（超过 32 位，不用位运算）
+- 偏移是 0 或小于 65596（bundle 头 60 字节加 16384 × 4 字节的占位区）是空槽，返回 null，不请求 `.bundle`
+- 一块瓦片一个 Range：从偏移读到下一个更大的有效偏移之前，最多 256 KiB，`cache: 'no-store'`（Windows 上的 Chromium 对同一文件的 Range 有过磁盘缓存返回全零的故障）；要求 206、`Content-Range` 的起点对。返回 200（Range 被忽略）时立刻取消响应体再报错，否则会下载整个 bundle。记录比读到的长时补读一次缺的部分
+- 有效偏移处长度是 0、长度超出文件、`.bundle` 是 404 或 416、数据开头不是 JPEG（`FF D8 FF`）或 PNG（`89 50 4E 47 0D 0A 1A 0A`）：认为文件被替换了，丢掉这个 bundle 的索引，用 `cache: 'no-cache'` 重读索引再试一次，还不对就报读取失败。长度 0 不当空瓦片，否则缓存故障会静默变成缺块
+- 索引按地址缓存，同一个地址的瓦片共用一个请求；这个请求不跟任何一块瓦片的 `signal` 走（一块取消不连累别的），有自己的超时（`indexTimeout`，默认 10 秒，索引请求挂住时等它的瓦片仍会结束）；失败的不留。`.bundle` 的 Range 只跟瓦片的 `signal` 走、没有超时，服务器接了连接却不回 Range 时地图到不了 idle，同普通 HTTP 瓦片。缓存有上限（`maxIndexes`，默认 32 个，"整块没有"也算一个），按最近用过的保留，每个索引最多约 256 KB
+- 每块瓦片跟着自己的 `signal`：中止时以它的原因（`AbortError`）结束，MapLibre 会吞掉
+- 处理函数：读取器给 null 时抛 `status` 为 404 的 `Error` 实例，MapLibre 6.12 对它不发 `error`，改用上一级的瓦片放大，适配器的请求状态把它算作到了（同 HTTP 404）；不能是普通对象，MapLibre 会重新包一层，`status` 就丢了。读取失败抛别的错误，显示为数据源错误。只返回 `{ data }`，不带 `cacheControl`、`expires`，免得 MapLibre 定时重新加载
+- 返回的是编码后的 JPEG 或 PNG 字节（`ArrayBuffer`），MapLibre 包成 `image/png` 的 Blob 解码，浏览器按内容认格式，两种都能显示（浏览器测试核对过）
+- 从哪里导入：app 从 `@mx/map-core` 的入口导入，只在动态加载的分块里用（`app/map-runtime.ts`、探测）。map-core 没有写 `sideEffects: false`，入口还导出了导入 maplibre-gl 的 `MapLibreView`，入口包里不要直接用这些值，构建产物检查会拦下进了入口包的 maplibre-gl；不另设子路径
+- 读取器只认第一代紧凑缓存、每个 bundle 128 × 128；缓存的切法（Web 墨卡托、256 像素、级别号就是 z）是使用方的前提，读取器不检查
+
 ### app 的地图运行时与开发页
 
-- `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl`、Worker 数量和 maplibre-gl 的 CSS，可以重复调用。Worker 数量是 `min(4, max(1, ⌊核数 / 2⌋))`（`workerCountFor`，ADR 0041 第 7 节）：Chrome 下 MapLibre 默认只有 1 个，5C.1b 实测 4 个时全选快约 40%，再多主线程更卡；要在第一张地图创建 Worker 池之前设置；路由用 `withMapRuntime(loadPage)` 包装地图页，先动态导入运行时再加载页面
+- `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl`、Worker 数量、maplibre-gl 的 CSS 和紧凑缓存的协议（`addProtocol`，ADR 0165），可以重复调用，只在第一次生效。Worker 数量是 `min(4, max(1, ⌊核数 / 2⌋))`（`workerCountFor`，ADR 0041 第 7 节）：Chrome 下 MapLibre 默认只有 1 个，5C.1b 实测 4 个时全选快约 40%，再多主线程更卡；要在第一张地图创建 Worker 池之前设置；路由用 `withMapRuntime(loadPage)` 包装地图页，同时加载运行时、页面和服务器底图的探测结果（ADR 0061、0165）
 - 生产产物不含开发页，入口的静态依赖不含 maplibre-gl，由构建产物检查保证；MapLibre 运行时通过动态导入加载，登录页空闲时会预加载（ADR 0061）
 - 开发页 `/dev/map`（`pages/dev/map`，只在开发环境）用本地 GeoJSON 验证过：颜色切换、加上和去掉 `minzoom`（去掉时走"删除再添加"，图层仍在描边下面）、高亮的增删和移动（`setGeoJSONSourceData`）、拖动（`user`）、`flyTo` 与 `fitBounds`（`program`）、暂停后模拟三维改相机再恢复（俯角 70° 收到 60° 按 `sync` 写回）。5A.2c 起开发页改用 map-vue（见 [map-vue.md](map-vue.md)"开发页验证"），页面拿不到视图的暂停、恢复和直接写相机，暂停与模拟三维的场景暂时去掉，由 `MapLibreView` 的单元测试覆盖，三维阶段加入框架切换后再回到开发页
 - `fitBounds` 带 padding 后，会话相机记的是画布几何中心：右侧留 360px 时偏东 1.35°，与按像素换算的 1.34° 吻合
@@ -406,6 +445,9 @@ store.clear();
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
 | `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图；声明了 Ctrl 的工具按住 Ctrl 拖动是平移、不旋转，右键拖动照常旋转（对照："移动"里按住 Ctrl 拖动是 MapLibre 的旋转） | Chromium 无界面版，软件渲染 |
 | `ModifierPan` | 截下按下、交出指针移动、结束的各种情况、吞掉的输入、光标的切换与通知、失焦、释放后不再监听 | 真实的 DOM 事件，jsdom |
+| 紧凑缓存的读取器（`arcgis-compact.test.ts`） | 文件名与按列存的槽号（含 5 位十六进制）、5 字节偏移、空槽不请求 `.bundle`、`.bundlx` 404 记下、返回网页和 500 报错、200 代替 206 时取消响应体、`Content-Range` 起点、补读（同样 `no-store`）、长度 0 和不是图片时重读索引再报错、文件被替换后读到新的、同一块的几块瓦片共用一次重读、共用的索引请求与一块瓦片的取消、索引超时（fetch 挂住、响应体挂住）、LRU、取消 | 测试里临时拼 bundle，注入 fetch 返回 `Response`，Node |
+| 协议（`compact-protocol.test.ts`） | 地址模板往返、404 是带 `status` 的 `Error`、只返回 `ArrayBuffer`、读取失败和地址不对不当作 404、和 `AddProtocolAction` 的类型兼容 | 假读取器，Node |
+| 协议（`compact-protocol.browser.test.ts`） | 真实的 MapLibre：JPEG、PNG 瓦片都画出来，缺的瓦片改用上一级的瓦片放大、不发 `error`，上一级也缺时只有背景 | Chromium 无界面版，读画布像素 |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 工具模型的输入事件（5D.3）：先发出 `input` 再交给当前工具、按键也发出；监听者抛错时工具照样收到输入，错误抛给调用方。改坏 2 处（不发出、去掉 `try/finally`），连同默认关掉版权控件 1 处，全部由断言发现
@@ -428,6 +470,7 @@ store.clear();
 - 浏览器用例改坏 7 处（加载失败不进入 `failed`、增量添加后仍整体重建、激活时按 `program` 写回、不转发 `resize`、拾取时经纬度写反、整体重建时让 MapLibre 自己 diff、`fitBounds` 不避开悬浮元素），全部发现；其中两处是等待和超时赛跑失败的，报错写明没等到什么
 - 数据源错误（5C.1e）改坏 10 处（不分出带 `sourceId` 的错误、每次都覆盖、移除数据源时不清、重建时不清、释放时不清、不发变化事件；map-vue 不订阅、挂上时不取初值、卸下时不清空、卸下时不取消订阅），全部由断言发现。浏览器用例用 `data:` 地址放一段不是 JSON 的内容，不发网络请求就能让真实的 MapLibre 报出带 `sourceId` 的错误；适配器读错字段时它和超时赛跑失败，报错写明没等到数据源错误
 - 假地图的 `rejectOn` 模拟"只发 `error` 不抛错"，`failOn` 模拟抛错，`sourceErrorOn` 模拟生效但同步报出数据源错误；整体加载的结果由测试手动触发 `style.load` 或 `error`
+- 紧凑缓存（ADR 0165）：测试用的 bundle 由 `testing/compact-fixture.ts` 另写一遍槽号和文件名，不用被测的 `compactTileLocation`，按行存时单元测试和浏览器测试都失败。读取器改坏 23 处（按行存、十六进制大写、偏移用位运算、空槽仍请求、404 不记下、200 不取消响应体、不检查 206、不检查 `Content-Range` 起点、长度 0 当空、不补读、不重试、不检查魔数、`.bundle` 照常缓存、重读不确认、没有超时、失败的索引留着、没有上限、命中不更新顺序、不跟瓦片的 `signal`、共用的索引请求跟着第一块瓦片的 `signal`、补读照常缓存、索引的计时器在读响应体以前清掉、重读时不看是不是别的瓦片刚换的索引），协议改坏 4 处（普通对象的 404、空数据代替 404、返回缓存头、不传 `signal`），全部由断言发现；"不检查 206"起初没被发现（后面的 `Content-Range` 检查也会拦下），把断言收紧到报错原因；最后三处是复核时补的用例
 - 开发页 `/dev/map` 的"提交不合法的图层"和"重新创建视图"在真实的 MapLibre 上验证了两条路径：运行中 `addLayer` 被拒绝 → 整体重建 → 整份样式校验失败 → `failed` → 去掉后自动恢复；用不合法的快照重新创建视图 → 首次加载失败 → 去掉后自动恢复；提交不合法的图层后、重建的那一帧到来之前提交修正 → 旧快照校验失败时直接改用最新快照加载，页面上始终没有出现 `failed`
 
 评估过但没做：开发环境下提交样式时用 `validateStyleMin` 校验。152 个图层校验一次约 14.8 ms，高频更新（测量的橡皮筋每秒 60 次）下即使只在开发环境也会明显拖慢；它的报错位置（如 `layers[150].paint.line-width`）与 MapLibre 6 的 `error` 事件一致，后者已经通过 `onError` 上报。

@@ -129,13 +129,13 @@ pnpm add -Dw -E some-tool
 - **开发服务器不做类型检查**。Vite 只把 TS 转成 JS，类型错误不会阻止页面运行。类型问题要看编辑器提示，或者运行 `pnpm typecheck`
 - 默认端口是 5173，被占用时 Vite 会自动换下一个端口，以终端输出的地址为准；设了 `PORT` 环境变量时用它，被占用时直接失败（供 Claude 桌面端的预览分配端口，见 [config/vite-config.md](config/vite-config.md)"开发服务器的端口"）
 - `--filter yzt` 指定在哪个包里运行；也可以 `cd apps/yzt` 后执行 `pnpm dev`
-- 模型（`/3dt/*`）和原型（`/design.local/*`）从未入库的 `local/` 提供；在 worktree 里运行时用 `YZT_LOCAL_DIR` 指回主目录，见 [config/local-files.md](config/local-files.md)
+- 模型（`/3dt/*`）、服务器底图（`/basemap/*`）和原型（`/design.local/*`）从未入库的 `local/` 提供；在 worktree 里运行时用 `YZT_LOCAL_DIR` 指回主目录，要从服务器取模型、底图时设 `YZT_3DT_PROXY`、`YZT_BASEMAP_PROXY`，见 [config/local-files.md](config/local-files.md)
 
 ### `pnpm --filter yzt dev:intranet`
 
 **作用**：用内网部署的配置启动开发服务器，地图不向天地图发任何请求。
 
-**什么时候用**：开发或检查内网环境下的行为，例如底图默认是"静态底图"、没有矢量和影像（ADR 0133）。
+**什么时候用**：开发或检查内网环境下的行为，例如没有天地图的矢量和影像，底图只有静态底图、无底图和探测到的服务器底图；`local/basemap` 或 `YZT_BASEMAP_PROXY` 提供了标准时默认标准，否则默认静态底图（ADR 0133、0165）。
 
 **执行了什么**：运行 `vite --mode intranet`，在 `.env` 之上加载 `.env.intranet`（ADR 0032）。
 
@@ -431,13 +431,13 @@ pnpm --filter yzt test:smoke
 
 ### `pnpm --filter yzt test:smoke`
 
-**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c、ADR 0147）检查二维稳定后预加载了 map-three、切到三维还是同一块画布、画面稳定，三维里画出静态底图、测距和坐标定位可用，加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面；再加载一份生成的高斯泼溅并画出来（ADR 0149），最后回到二维复用画布。
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c、ADR 0147）检查二维稳定后预加载了 map-three、切到三维还是同一块画布、画面稳定，三维里画出静态底图、测距和坐标定位可用，加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面；再加载一份生成的高斯泼溅并画出来（ADR 0149），最后回到二维复用画布。服务器底图（`server-basemap.spec.ts`，ADR 0165）用生成的紧凑缓存提供标准、影像两套，检查底图面板按顺序只出现探测到的、二维默认标准、三维换影像再切回标准，瓦片按 Range 读出来画在画布上。
 
 **什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter yzt test:smoke system-management`。
 
 **执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
 
-**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `local/smoke-results/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
+**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。服务器底图的瓦片也不入库：公共夹具让 `/basemap/` 一律回 404（同没配的 nginx，不用预览服务器的回落，也不受 `YZT_BASEMAP_PROXY` 影响），要用的用例自己 `page.route` 生成的 bundle。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `local/smoke-results/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
 构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。
 

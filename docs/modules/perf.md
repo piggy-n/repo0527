@@ -28,7 +28,7 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 |---|---|---|
 | 开始 `start` | 校验通过、发出登录请求之前（校验不通过的点击不算） | `useLoginForm` |
 | `session` | 登录接口成功返回；表单已经销毁时不记 | `useLoginForm` |
-| `runtime` | 运行时和地图页分块都加载完、运行时设置好、Worker 池开始预热（ADR 0061 第 2 节；5E.1 时只等运行时） | `app/map-framework.ts` 的 `withMapRuntime` |
+| `runtime` | 运行时和地图页分块都加载完、运行时设置好、Worker 池开始预热（ADR 0061 第 2 节；5E.1 时只等运行时）；内网还要等服务器底图的探测（ADR 0165 第 4 节，最多 3 秒，通常在登录页的预加载里已经探完） | `app/map-framework.ts` 的 `withMapRuntime` |
 | `page` | 地图页开始创建（setup），页面分块已经加载 | `useMapLoadMarks` |
 | `view-ready` | 视图就绪：样式加载完成（MapLibre 的 `style.load`），可以操作，瓦片可能还没到 | `useMapLoadMarks` |
 | `settled` | 第一次画面稳定：没有动画，视野里的瓦片和省界都已画出（MapLibre 的 `idle`） | `useMapLoadMarks` |
