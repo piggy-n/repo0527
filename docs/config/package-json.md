@@ -138,9 +138,11 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "measure:3d": "node tools/measure-3d/cli.ts",
     "lcc2:register": "node tools/lcc2-register/cli.ts",
+    "site:check": "node tools/site/cli.ts",
     "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
     "scope-files:generate": "node tools/scope-test-files/cli.ts",
     "symbols:import": "node tools/symbol-defaults/cli.ts",
+    "land-space:data": "node tools/land-space-data/convert.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {

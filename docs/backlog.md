@@ -114,7 +114,9 @@
 - 滚轮和触控板的缩放速率（滚轮 1/600、触控板 1/150）等用普通鼠标和触控板试过后再定
 - 环境限制：Mac 上按住 ⌘ 临时拖动（ADR 0056）、内网 http 下复制的 `execCommand` 退路都没有实测
 - 综合分析驾驶舱只在软件 WebGL 上看过：显卡机器上的入场流畅度、指北针跟着拖动转、地图和图表的导出图片待用户验收（[land-space-dashboard](modules/land-space-dashboard.md)"验证记录"）
-- 测试服务器 `192.168.1.180` 的 `/opt/front/3dt/` 还是平铺的旧目录（用户 2026-11-11 先不整理）：给它发布 2026-11-11 以后的前端之前，按 `<市>/<类型>/<模型目录>/` 挪好目录，否则三维模型都加载失败（[deployment](deployment.md)"3DT 模型数据单独部署"）
+- 测试服务器 `192.168.1.180` 的 `/opt/front/3dt/` 还是平铺的旧目录（用户 2026-11-11 先不整理）：给它发布 2026-11-11 以后的前端之前，按 `<市>/<类型>/<模型目录>/` 挪好目录，否则三维模型都加载失败（[deployment](deployment.md)"3DT 模型数据单独部署"）；挪好以后在 `tools/site/sites.json` 给它建站点，`site:check --suggest` 看它缺哪些（ADR 0164）
+- 内网 Windows 服务器 `192.168.15.111`（2026-11-17 接入）：彭城广场的倾斜摄影（`xz-gc`）用户还没拷过去，拷到 `xuzhou\3dtiles\彭城广场\` 以后 `site:check 15-111` 应当全部通过，在那之前它在这台上加载失败；同名模型和 153.194 上的是不是同一次导出没有核对过（LCC2 用 `YZT_3DT_PROXY` 重跑 `lcc2:register` 比 `placement`）
+- 15.111 上新接入的 17 个模型（`wx-xwq01`、`wx-xwq06`、`wx-white`、`sq-syq01`、`sq-syq02`、`sq-white`、`xz-m1`～`xz-m7`，名称用户 2026-11-17 看过以后定了）：屏幕误差 8 下放不放得下没测，没加 `measure:3d` 的场景；白膜的 glb 要求 `EXT_mesh_features`、`EXT_structural_metadata`，three 不认、属性用不上。还没接入的：`suzhou\3dtiles\suzhou_3DT`（没有根 `tileset.json`，371 个子目录）、北洞山楚王墓和楚王山4号的 LCC2（配准没通过，见上面"测试服务器上轨迹核对没通过"）；`地上_白模_苏州.gdb`、`地下_白模_苏州.gdb` 是 ESRI 地理数据库、不是 3D Tiles，用户定不接（[3dt-manifest](config/3dt-manifest.md)"现有模型的说明"）
 
 ## 待用户决定
 

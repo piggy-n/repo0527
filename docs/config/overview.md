@@ -47,7 +47,7 @@
 
 | 文件 | 发布位置 | 仓库里的来源 | 作用 | ADR |
 |---|---|---|---|---|
-| 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json` | 资源图层面板的目录里列出哪些三维模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149 |
+| 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json`（全集）；构建时设了部署站点 `YZT_SITE` 的，去掉 `apps/yzt/tools/site/sites.json` 里这台服务器缺的模型 | 资源图层面板的目录里列出哪些三维模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明和按站点发布见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149、0164 |
 | 三维的设备档位 | `dist/scene-tier.json` | `apps/yzt/public/scene-tier.json` | 瓦片缓存、每帧上传、泼溅预算用哪一档：`auto`、`low`、`standard`、`high`，读不到时按 `auto`；逐项说明见 [scene-tier.md](scene-tier.md) | 0155 |
 | 资源的最小显示级别 | `dist/resource-min-zooms.json` | `apps/yzt/src/features/resource-map/resource-min-zooms.json` | 每个资源放大到几级才显示；读不到或格式不对时用构建时带上的，`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不读 | 0132、0137 |
 
@@ -58,12 +58,13 @@
 | `PROXY_TARGET`、`AI_PROXY_TARGET` | `.env`（不带 `VITE_`，不进产物） | 开发服务器和 `vite preview` 的接口代理目标 |
 | `YZT_LOCAL_DIR` | 进程环境变量 | 未入库的本地文件放在哪里（ADR 0141） |
 | `YZT_3DT_PROXY` | 进程环境变量 | 开发服务器把 `/3dt/` 整个代理到别的服务器，用来看服务器上的大模型；`measure:3d`、`lcc2:register` 也改从 `<它>/3dt/` 读模型 |
+| `YZT_SITE` | 进程环境变量（`vite.config.ts` 用 `process.env` 读，写在 `.env` 里不生效） | 部署站点（ADR 0164）：构建时三维模型清单去掉这台服务器缺的模型，开发服务器的清单来自工作区的组合；会改变产物，但不是 `.env` 的变量：不同服务器只差"有没有这个模型"，站点的内容入库在 `tools/site/sites.json` |
 
 ## 新增一个开关时放哪
 
 按下面的顺序判断，第一个符合的就是它的类别：
 
-1. **不同部署环境要取不同的值**（地址、密钥、内网和公网的差异、某个部署要关掉的功能）：构建时的环境变量。写进 `.env`，内网的差异写进 `.env.intranet`；在 `app-config.ts` 读取和校验，在 `import-meta-env.ts` 声明类型，在 [env.md](env.md) 加一行。
+1. **不同部署环境要取不同的值**（地址、密钥、内网和公网的差异、某个部署要关掉的功能）：构建时的环境变量。写进 `.env`，内网的差异写进 `.env.intranet`；在 `app-config.ts` 读取和校验，在 `import-meta-env.ts` 声明类型，在 [env.md](env.md) 加一行。例外：只是各台服务器有没有某个三维模型的，不加 `.env` 文件或 Vite 模式，写进部署站点 `tools/site/sites.json`，构建时由进程环境变量 `YZT_SITE` 选（ADR 0164）。
 2. **所有部署都一样的产品决定，只是以后可能改**：代码里的产品开关。新建或扩充 `shared/config/<主题>-options.ts`，导出接口和常量，在本页登记一行。
 3. **部署以后要由运维调整、不想重新构建的数据**：运行时文件。写清楚格式、校验，以及读不到时退回什么（参照最小显示级别），写进 [deployment.md](../deployment.md) 和本页。
 4. **只影响本机开发或工具**：不带 `VITE_` 的变量或进程环境变量，写进 [env.md](env.md)"不放进 `.env` 的变量"。

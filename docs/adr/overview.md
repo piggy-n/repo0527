@@ -17,6 +17,7 @@
 | 本地验证 | 按影响范围和风险分四级，只跑相关测试；改坏验证只用于修 bug 和关键逻辑 | 0139 | `AGENTS.md`"验证分级" |
 | 测试 | Vitest + jsdom，依赖真实引擎或布局的用浏览器模式；接口用 MSW | 0010、0011、0040 | [vite-config](../config/vite-config.md) |
 | 公网与内网 | 两套构建模式，差异只写在 `.env.intranet`，代码只读 `appConfig` | 0032 | [env](../config/env.md) |
+| 部署站点 | 三维模型清单只有一份全集；每台服务器是一个站点，只记它缺哪些模型（`tools/site/sites.json`）；构建时用进程环境变量 `YZT_SITE` 选站点，去掉缺的模型写进产物，不设时发布全集；`site:check` 核对服务器 | 0164 | [3dt-manifest](../config/3dt-manifest.md)、[deployment](../deployment.md) |
 | 未入库的文件 | 集中到仓库根目录的 `local/`，worktree 用 `YZT_LOCAL_DIR` 指回主目录 | 0141 | [local-files](../config/local-files.md) |
 | 文档 | 规则分 `AGENTS.md` 和 `.claude/rules/`；过程记录归档；待办只有一份；难回退、跨模块的决定才写 ADR | 0142 | [docs/README](../README.md) |
 

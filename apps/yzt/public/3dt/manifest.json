@@ -939,6 +939,146 @@
       "underground": false,
       "lcc2": "xuzhou/lcc2/%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B.lcc2",
       "placement": { "lng": 117.2193888, "lat": 34.2458529, "height": 38.64, "heading": -0.123 }
+    },
+    {
+      "id": "wx-xwq01",
+      "name": "新吴区01",
+      "cityCode": "320200",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "wuxi/3dtiles/%E6%96%B0%E5%90%B4%E5%8C%BA01/tileset.json"
+    },
+    {
+      "id": "wx-xwq06",
+      "name": "新吴区06",
+      "cityCode": "320200",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "wuxi/3dtiles/%E6%96%B0%E5%90%B4%E5%8C%BA06/tileset.json"
+    },
+    {
+      "id": "wx-white",
+      "name": "白膜",
+      "cityCode": "320200",
+      "kind": "white",
+      "underground": false,
+      "effects": [
+        { "id": "default", "label": "默认", "tileset": "wuxi/3dtiles/%E7%99%BD%E8%86%9C/tileset.json" }
+      ]
+    },
+    {
+      "id": "sq-syq01",
+      "name": "宿豫区01",
+      "cityCode": "321300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "suqian/3dtiles/%E5%AE%BF%E8%B1%AB%E5%8C%BA01/tileset.json"
+    },
+    {
+      "id": "sq-syq02",
+      "name": "宿豫区02",
+      "cityCode": "321300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "suqian/3dtiles/%E5%AE%BF%E8%B1%AB%E5%8C%BA02/tileset.json"
+    },
+    {
+      "id": "sq-white",
+      "name": "白膜",
+      "cityCode": "321300",
+      "kind": "white",
+      "underground": false,
+      "effects": [
+        { "id": "default", "label": "默认", "tileset": "suqian/3dtiles/%E7%99%BD%E8%86%9C/tileset.json" }
+      ]
+    },
+    {
+      "id": "xz-m1",
+      "name": "模型一",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%B8%80/tileset.json"
+    },
+    {
+      "id": "xz-m2-1",
+      "name": "模型二-1",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%BA%8C-1/tileset.json"
+    },
+    {
+      "id": "xz-m2-2",
+      "name": "模型二-2",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%BA%8C-2/tileset.json"
+    },
+    {
+      "id": "xz-m3",
+      "name": "模型三",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%B8%89/tileset.json"
+    },
+    {
+      "id": "xz-m4",
+      "name": "模型四",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E5%9B%9B/tileset.json"
+    },
+    {
+      "id": "xz-m5-1",
+      "name": "模型五-1",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%BA%94-1/tileset.json"
+    },
+    {
+      "id": "xz-m5-2",
+      "name": "模型五-2",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%BA%94-2/tileset.json"
+    },
+    {
+      "id": "xz-m5-3",
+      "name": "模型五-3",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%BA%94-3/tileset.json"
+    },
+    {
+      "id": "xz-m6-1",
+      "name": "模型六-1",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E5%85%AD-1/tileset.json"
+    },
+    {
+      "id": "xz-m6-2",
+      "name": "模型六-2",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E5%85%AD-2/tileset.json"
+    },
+    {
+      "id": "xz-m7",
+      "name": "模型七",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "xuzhou/3dtiles/%E6%A8%A1%E5%9E%8B%E4%B8%83/tileset.json"
     }
   ]
 }

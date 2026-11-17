@@ -61,10 +61,12 @@
          └─ ……
 ```
 
-- 地址不变：页面请求同源的 `/3dt/manifest.json`，清单里的 `tileset` 写相对清单的路径，每一段按 URL 编码（如 `xuzhou/3dtiles/%E5%BD%AD%E5%9F%8E%E5%B9%BF%E5%9C%BA/tileset.json`，即 `xuzhou/3dtiles/彭城广场/tileset.json`），不写服务器地址，开发和部署用同一份清单
+- 地址不变：页面请求同源的 `/3dt/manifest.json`，清单里的 `tileset` 写相对清单的路径，每一段按 URL 编码（如 `xuzhou/3dtiles/%E5%BD%AD%E5%9F%8E%E5%B9%BF%E5%9C%BA/tileset.json`，即 `xuzhou/3dtiles/彭城广场/tileset.json`），不写服务器地址，开发和各台服务器用同一套地址；发布的清单是入库的全集按部署站点去掉这台服务器缺的模型（见下面"每台服务器各构建一次"）
 - 清单从 `dist` 取、模型数据从模型目录取（nginx 配置见下）：清单的格式由代码里的 zod 校验，跟着代码一起发布
-- 现有的两台服务器（2026-11-11）：内网 `192.168.153.194` 已按这个层级整理，前端在 `/opt/front/dcjcxzt/`，模型在 `/opt/front/3dt/`，5173 端口的 nginx 把 `/3dt/` alias 到模型目录、不开 gzip，那里的清单要换成 2026-11-11 以后入库的版本，旧清单的路径对不上新的目录；测试服务器 `192.168.1.180` 还是原来平铺的目录（`SZ_3DT/`、`XZ_GC_3DT/`、`楚王山1号/` 等），给它发布 2026-11-11 以后的前端之前，先按这个层级挪好目录，否则模型都加载失败
-- 新增模型：先把目录上传到模型目录，再改清单、发布前端；LCC2 模型重新上传时，转发上有缓存的先清空缓存（见下面"重新上传以后"）。清单里有、服务器上没有的模型，加入以后在面板的图层列表里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值见 [config/3dt-manifest.md](config/3dt-manifest.md)
+- 内网 Windows 服务器 `192.168.15.111`（2026-11-17 加入，数据齐全）：nginx 1.24（Windows 版），5173 端口提供前端 `D:/01Project/front/dist/`、把 `/backend/` 转到 `192.168.15.111:18010`，`/3dt/` 的 alias 是模型根目录 `D:/02Data/3dtiles/models/`，加了 `Cache-Control: no-cache`。模型数据原来是数据方的目录名，2026-11-17 用户用 `rename-15-111.ps1`（`local/server-setup/`，不入库，改完在服务器上留了撤销脚本）按这个层级改了名（`SZ_3DT` → `星海广场站`、`JKQ` → `经开区`、`XWQ02` → `新吴区02` 等，`城下城` 挪进 `城下城（测试）\lcc2-sog-result\`），新接入的宿迁、徐州模型又按用户定的名称用 `rename-15-111-names.ps1` 改了一轮（`sq01` → `宿豫区01`、`1` → `模型一` 等）；`wuxi\无锡优化` 用户定不用，没有清单引用它。8080 端口另有 `/tiles/` 指向 `D:/02Data/map/bingmaps_satellite/`，应用没有用它。Windows 版 nginx 的配置文件存成 UTF-8 不带 BOM，路径写 `/`，在 nginx 的目录里运行 `.\nginx.exe -t`、`.\nginx.exe -s reload`；中文路径上线前按下面"验收"的 curl 确认
+- 另两台服务器（2026-11-11）：内网 `192.168.153.194` 已按这个层级整理，前端在 `/opt/front/dcjcxzt/`，模型在 `/opt/front/3dt/`，5173 端口的 nginx 把 `/3dt/` alias 到模型目录、不开 gzip，那里的清单要换成 2026-11-11 以后入库的版本，旧清单的路径对不上新的目录；测试服务器 `192.168.1.180` 还是原来平铺的目录（`SZ_3DT/`、`XZ_GC_3DT/`、`楚王山1号/` 等），给它发布 2026-11-11 以后的前端之前，先按这个层级挪好目录，否则模型都加载失败
+- 每台服务器各构建一次（ADR 0164）：部署站点在 `apps/yzt/tools/site/sites.json`，只记这台缺哪些模型（[config/3dt-manifest.md](config/3dt-manifest.md)"按站点发布"）。PowerShell 里 `$env:YZT_SITE = '15-111'; pnpm build:intranet; Remove-Item Env:YZT_SITE`，看构建日志里 `[site]` 那一行的站点和模型数；不设时发布全集。发布后在开发机上运行 `pnpm --filter yzt site:check 15-111` 核对：服务器上的清单是这个站点的组合，每个模型的入口都在，LCC2 的 Range 合格
+- 新增模型：先把目录上传到模型目录，再改清单（数据不在某台服务器上时写进那个站点的 `missing`）、按站点构建、发布前端；LCC2 模型重新上传时，转发上有缓存的先清空缓存（见下面"重新上传以后"）。清单里有、服务器上没有的模型，加入以后在面板的图层列表里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值见 [config/3dt-manifest.md](config/3dt-manifest.md)
 - 模型的文件多（彭城广场的倾斜摄影有 1000 多个），打成压缩包上传后在服务器上解压；目录名有中文，打包用 `tar`，不用 `zip`（见下面"中文文件名"）
 
 ### LCC2（高斯泼溅）模型的转发

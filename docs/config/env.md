@@ -35,6 +35,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_AI_API_BASE_URL` | `/ai-backend` | `vite.config.ts`（代理前缀）、`appConfig.aiApiBaseUrl` | AI 对话后端的基础地址。AI 后端是另一个服务（Bearer 鉴权、没有信封），同样走同源代理，见 [modules/ai-chat.md](../modules/ai-chat.md) |
 | `AI_PROXY_TARGET` | `http://localhost:8090` | 只在 `vite.config.ts` | AI 后端的代理目标，沿用旧项目的本机开发地址，尚未联调 |
 | `YZT_3DT_PROXY` | 不设 | `vite.config.ts` 和工具脚本 | 设了（如 `http://192.168.153.194:5173`）时开发服务器把 `/3dt/` 整个代理到那台服务器，本地的 `local/3dt/` 不再映射；在显卡机器上测三维时用，`measure:3d`、`lcc2:register` 也从它取模型。这个示例地址是内网服务器，按新的目录层级放着清单里的全部模型；测试服务器 `192.168.1.180:5173` 还是原来平铺的目录（2026-11-11）。只在进程的环境变量里设，不写进 `.env`：工具脚本读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（[local-files.md](local-files.md)） |
+| `YZT_SITE` | 不设 | 只在 `vite.config.ts`（`process.env`） | 部署站点（ADR 0164），如 `15-111`：构建时三维模型清单去掉这台服务器缺的模型再写进产物，不设时发布全集。只认进程环境变量，见下文"不放进 `.env` 的变量" |
 | `VITE_PAGE_STATE_RESET` | `true` | `appConfig.pageStateReset`、`AppLayout` | 离开页面后是否重置（ADR 0114，提交的取值见 ADR 0138）。`false` 时现状底图、指标 AI 计算切走再回来保留上次的状态；`true` 时不缓存页面，每次进入都是初始状态。只管页面缓存，偏好是否恢复看下面的开关（ADR 0140） |
 | `VITE_PREFERENCES_ENABLED` | `true` | `appConfig.preferences`、`usePreference` | 偏好（IndexedDB）的总开关（ADR 0140）。`false` 时下面各项都不读不写，存下的数据保留，重新打开后还能恢复 |
 | `VITE_PREFERENCE_BASEMAP` | `false` | 同上 | 底图和透明度（`basemap`）。`false` 时每次进入都是默认底图 |
@@ -81,6 +82,8 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 ## 不放进 `.env` 的变量
 
 `YZT_LOCAL_DIR`（未入库的本地文件放在哪里）只从进程的环境变量读：工具脚本由 Node 直接运行，读不到 `.env`，写在 `.env.local` 里会只对开发服务器生效。见 [local-files.md](local-files.md)。
+
+`YZT_SITE`（部署站点，如 `15-111`，ADR 0164）只从进程的环境变量读，`vite.config.ts` 用 `process.env` 读、不经过 `loadEnv`，写在 `.env`、`.env.local` 里不生效：构建按它去掉这台服务器缺的模型、写进产物的 `3dt/manifest.json`，忘了删的本地文件不能把构建悄悄绑到某台服务器上。不设时发布全集。开发服务器设了它时清单来自工作区的组合（[local-files.md](local-files.md)"模型从服务器取"）。站点和用法见 [3dt-manifest.md](3dt-manifest.md)"按站点发布"。
 
 ## 修改时的检查清单
 
