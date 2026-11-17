@@ -1,4 +1,6 @@
 import { mount } from '@vue/test-utils';
+import type { MapSeriesOption } from 'echarts/charts';
+import { getInstanceByDom } from 'echarts/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INDICATORS, requireIndicator, type Indicator } from '../../city-indicators/catalog';
 import { indicatorValue } from '../../city-indicators/indicator-value';
@@ -9,7 +11,7 @@ import tooltipStyles from '../tooltip/TooltipLayer.module.scss';
 import { DashboardMap } from './DashboardMap';
 import { JiangsuMapScene } from './JiangsuMapScene';
 import { loadDashboardRegions } from './region-geometry';
-import type { SceneCallbacks } from './types';
+import type { MapView, SceneCallbacks } from './types';
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -135,6 +137,39 @@ describe('驾驶舱真实地图引擎', () => {
       scene.dispose();
     }
   }, 15000);
+
+  it('不显示数值时三维标签、二维降级都只写名称，状态提示和叠加插槽照常显示', async () => {
+    const wrapper = mount(DashboardMap, {
+      attachTo: host(),
+      props: { ...mapProps(requireIndicator('A-15')), reducedMotion: true, showValues: false, notice: '原报告未列指数值' },
+      attrs: { style: 'width:900px;height:700px' },
+      slots: { overlay: (view: MapView | null) => <div data-test="overlay">{view ? '有视图' : '没有视图'}</div> }
+    });
+    await vi.waitFor(() => expect(wrapper.findAll('button[aria-haspopup="dialog"]')).toHaveLength(13), {
+      timeout: 10000
+    });
+    expect(wrapper.findAll('button[aria-haspopup="dialog"] > span')).toHaveLength(0);
+    expect(wrapper.find('button[aria-label="南京市，查看详情"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('原报告未列指数值');
+    expect(wrapper.get('[data-test="overlay"]').text()).toBe('没有视图');
+    const canvas = wrapper.get('canvas').element as HTMLCanvasElement;
+    const context = required(canvas.getContext('webgl2'), 'WebGL2 上下文');
+    required(context.getExtension('WEBGL_lose_context'), 'WEBGL_lose_context 扩展').loseContext();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('地图采用简化显示'));
+    // 二维降级的标签由 ECharts 画在画布上，读它的格式化函数
+    const chart = required(getInstanceByDom(wrapper.get('[role="img"]').element as HTMLElement), '二维地图');
+    const label = (name: string) => {
+      const [series] = chart.getOption().series as MapSeriesOption[];
+      const formatter = series.label?.formatter;
+      if (typeof formatter !== 'function') {
+        throw new Error('二维地图的标签缺少格式化函数');
+      }
+      return formatter({ name } as never);
+    };
+    expect(label('南京市')).toBe('南京市');
+    await wrapper.setProps({ showValues: true });
+    expect(label('南京市')).toMatch(/^南京市\n\d/);
+  }, 20000);
 
   it('运行中失去 WebGL 自动降为二维，重复进入退出不遗留画布', async () => {
     const element = host();

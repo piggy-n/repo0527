@@ -442,6 +442,27 @@
   gap: 8px;
 }
 
+// 标题下方居中的状态提示；不用 transform 居中，入场动画会改写 transform
+.notice {
+  position: absolute;
+  z-index: 4;
+  top: calc(18px * var(--ui-scale, 1) + var(--map-heading-height, 50px) + 12px);
+  left: 0;
+  right: 0;
+  width: fit-content;
+  max-width: 90%;
+  margin: 0 auto;
+  padding: 6px 16px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 2px 8px rgba(14, 72, 148, 0.12);
+  color: #597a9e;
+  font-size: max(12px, calc(14px * var(--ui-scale, 1)));
+  text-align: center;
+  pointer-events: none;
+}
+
 .note {
   position: absolute;
   right: 12px;

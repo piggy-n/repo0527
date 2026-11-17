@@ -34,6 +34,14 @@ export interface SceneCallbacks {
 
 export type MapValues = Readonly<Record<string, number | null>>;
 
+/** 地图当前的朝向和比例，给指北针、比例尺用；二维降级时北朝正上方 */
+export interface MapView {
+  /** "北"相对屏幕上方的顺时针角度（度） */
+  readonly northDegrees: number;
+  /** 画布中心附近一个 CSS 像素代表的米数 */
+  readonly metersPerPixel: number;
+}
+
 /** 导出时冻结地图像素、标签位置与数值，字体等待期间不再读取活动场景 */
 export interface DashboardMapSnapshot {
   readonly canvas: HTMLCanvasElement;

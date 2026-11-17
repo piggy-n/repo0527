@@ -25,6 +25,8 @@ interface DashboardMapOptions {
   fallback: () => boolean;
   reducedMotion: () => boolean;
   valuesVisible: () => boolean;
+  /** 城市标签是否写数值；不写时二维降级只写名称，过渡中也不逐帧更新显示的数值 */
+  showValues: () => boolean;
   hover: (code: string | null) => void;
   choose: (code: string) => void;
 }
@@ -59,7 +61,7 @@ export function useDashboardMap(
   }
 
   function updateFallback(): void {
-    fallback?.update(displayValues.value, colors, source.indicator());
+    fallback?.update(displayValues.value, colors, source.indicator(), options.showValues());
   }
 
   /** 标签数值与城市颜色使用同一进度，简化地图按较低频率重绘 */
@@ -87,13 +89,15 @@ export function useDashboardMap(
       ease: MAP_YEAR_TRANSITION.ease,
       paused: visibility.value === 'hidden',
       onUpdate: () => {
-        displayValues.value = Object.fromEntries(CITIES.map(({ code }) => {
-          const initialValue = initialValues[code];
-          const targetValue = target[code];
-          const canInterpolate = targetValue !== null && initialValue !== null && initialValue !== undefined;
-          const value = canInterpolate ? initialValue + (targetValue - initialValue) * progress.value : targetValue;
-          return [code, value];
-        }));
+        if (options.showValues()) {
+          displayValues.value = Object.fromEntries(CITIES.map(({ code }) => {
+            const initialValue = initialValues[code];
+            const targetValue = target[code];
+            const canInterpolate = targetValue !== null && initialValue !== null && initialValue !== undefined;
+            const value = canInterpolate ? initialValue + (targetValue - initialValue) * progress.value : targetValue;
+            return [code, value];
+          }));
+        }
         colors = Object.fromEntries(CITIES.map(({ code }) => {
           const color = new Color(initialColors[code] ?? targetColors[code]);
           color.lerp(new Color(targetColors[code]), progress.value);
@@ -212,7 +216,7 @@ export function useDashboardMap(
       }
     }
   );
-  watch(fontRevision, updateFallback);
+  watch([fontRevision, options.showValues], updateFallback);
   watch(options.valuesVisible, value => {
     if (value && status.value === 'ready') {
       transition(reduced.value ? 0 : 0.85);

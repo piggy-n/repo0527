@@ -2,10 +2,11 @@ import { formatValue } from '../calculations';
 import type { DashboardMapSnapshot } from './types';
 import type { IndicatorMeta } from '../model';
 
-/** 将 DOM 城市标签绘入已冻结的地图像素，简化地图已自带标签 */
+/** 将 DOM 城市标签绘入已冻结的地图像素，简化地图已自带标签；不显示数值时名称画在标签中心 */
 export function drawMapLabels(
   snapshot: DashboardMapSnapshot,
-  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>,
+  showValues = true
 ): void {
   const context = snapshot.canvas.getContext('2d');
   if (!context) {
@@ -17,6 +18,9 @@ export function drawMapLabels(
   context.save();
   context.scale(2, 2);
   context.textAlign = 'center';
+  if (!showValues) {
+    context.textBaseline = 'middle';
+  }
   snapshot.labels.forEach(label => {
     // 窄屏避让后的引线一同导出，文字描边保证深色城市上可读
     if (label.connected) {
@@ -27,12 +31,16 @@ export function drawMapLabels(
       context.lineWidth = 0.8;
       context.stroke();
     }
+    const nameY = showValues ? label.y - 12 : label.y;
     context.font = `600 ${Math.max(14, 20 * snapshot.labelScale)}px "Alibaba PuHuiTi"`;
     context.fillStyle = '#0E4894';
     context.strokeStyle = '#FFFFFF';
     context.lineWidth = 1.5;
-    context.strokeText(label.name, label.x, label.y - 12);
-    context.fillText(label.name, label.x, label.y - 12);
+    context.strokeText(label.name, label.x, nameY);
+    context.fillText(label.name, label.x, nameY);
+    if (!showValues) {
+      return;
+    }
     context.font = `600 ${Math.max(12, 14 * snapshot.labelScale)}px "Alibaba PuHuiTi"`;
     context.fillStyle = '#8B6500';
     const value = snapshot.values[label.code];

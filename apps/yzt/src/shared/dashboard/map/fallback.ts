@@ -19,13 +19,14 @@ function cityCode(event: unknown): string | null {
   return DASHBOARD_CITIES.find(city => city.name === event.name)?.code ?? null;
 }
 
-// 简化地图上城市名称下面的数值；没有数值时只写名称
-function cityLabel(
+/** 简化地图上的城市标签：名称下面写数值；没有数值或不显示数值时只写名称 */
+export function fallbackLabel(
   name: string,
   value: number | null | undefined,
-  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>,
+  showValues = true
 ): string {
-  if (value === null || value === undefined) {
+  if (!showValues || value === null || value === undefined) {
     return name;
   }
   return `${name}\n${formatValue(value, indicator, indicator.unit.length <= 3)}`;
@@ -53,7 +54,8 @@ export function createFallback(
     update(
       values: MapValues,
       colors: Readonly<Record<string, string>>,
-      indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+      indicator: Pick<IndicatorMeta, 'unit' | 'precision'>,
+      showValues = true
     ): void {
       const series: MapSeriesOption = {
         type: 'map',
@@ -71,7 +73,7 @@ export function createFallback(
           textBorderWidth: 3,
           formatter: item => {
             const city = DASHBOARD_CITIES.find(current => current.name === item.name);
-            return cityLabel(item.name, city ? values[city.code] : null, indicator);
+            return fallbackLabel(item.name, city ? values[city.code] : null, indicator, showValues);
           }
         },
         // 悬停和选中的颜色沿用 ECharts 5 的默认值，6 的主题改成了浅黄

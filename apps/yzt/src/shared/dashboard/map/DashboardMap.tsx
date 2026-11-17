@@ -1,4 +1,4 @@
-import { computed, defineComponent, ref, watch, type PropType } from 'vue';
+import { computed, defineComponent, ref, watch, type PropType, type SlotsType, type VNode } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { formatValue } from '../calculations';
@@ -8,7 +8,7 @@ import { useImageExport } from '../export/useImageExport';
 import { imageWithTitle, saveImage } from '../export/image-export';
 import fonts from '../shell/DashboardFonts.module.scss';
 import chartStyles from '../charts/charts.module.scss';
-import type { MapLabel, MapValues } from './types';
+import type { MapLabel, MapValues, MapView } from './types';
 import { useDashboardMap } from './useDashboardMap';
 import { drawMapLabels } from './map-export';
 import { mapLegendLevels } from './config';
@@ -28,6 +28,10 @@ export const DashboardMap = defineComponent({
     /** 时间轴上的年份，从旧到新 */
     years: { type: Array as PropType<readonly number[]>, required: true },
     activeYear: { type: Number as PropType<number | null>, default: null },
+    /** 城市标签是否写数值；为 false 时三维标签、二维降级和导出图片都只写名称 */
+    showValues: { type: Boolean, default: true },
+    /** 标题下方居中的状态提示，如数据缺失的说明 */
+    notice: { type: String, default: undefined },
     forceFallback: { type: Boolean, default: false },
     reducedMotion: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
@@ -39,6 +43,12 @@ export const DashboardMap = defineComponent({
     settled: () => true,
     year: (_year: number) => true
   },
+  slots: Object as SlotsType<{
+    /** 悬停提示表格 */
+    default?: () => unknown;
+    /** 地图上的叠加元素（如指北针、比例尺），拿到地图当前的朝向和比例 */
+    overlay?: (view: MapView | null) => VNode;
+  }>,
   setup(props, { emit, slots }) {
     const canvas = ref<HTMLElement>();
     const heading = ref<HTMLElement>();
@@ -60,6 +70,7 @@ export const DashboardMap = defineComponent({
       fallback: () => props.forceFallback,
       reducedMotion: () => props.reducedMotion,
       valuesVisible: () => props.valuesVisible,
+      showValues: () => props.showValues,
       hover: code => emit('hover', code),
       choose: code => emit('detail', code)
     });
@@ -83,11 +94,12 @@ export const DashboardMap = defineComponent({
     async function download(): Promise<void> {
       const exportTitle = props.title;
       const indicator = props.indicator;
+      const showValues = props.showValues;
       const filename = `江苏省-${props.activeYear}-${indicator.name}`;
       const blob = await exporting.run('map', async signal => {
         const snapshot = map.capture();
         await exporting.waitForFonts(signal);
-        drawMapLabels(snapshot, indicator);
+        drawMapLabels(snapshot, indicator, showValues);
         return imageWithTitle(snapshot.canvas, exportTitle, '#D3EFFD');
       });
       if (blob) {
@@ -95,10 +107,11 @@ export const DashboardMap = defineComponent({
       }
     }
 
-    // 三维地图上的城市标签：名称和数值，点开详情；避让后离开锚点的画一条引线
+    // 三维地图上的城市标签：名称和数值（不显示数值时只有名称），点开详情；避让后离开锚点的画一条引线
     function renderLabel(label: MapLabel) {
       const value = props.values[label.code];
       const indicator = props.indicator;
+      const showValues = props.showValues;
       return (
         <button
           key={label.code}
@@ -106,7 +119,9 @@ export const DashboardMap = defineComponent({
           class={[styles.label, value === null && styles.empty, map.hovered.value === label.code && styles.hovered]}
           style={{ left: `${label.x}px`, top: `${label.y}px` }}
           aria-haspopup="dialog"
-          aria-label={`${label.name}，${formatValue(value, indicator)}，查看详情`}
+          aria-label={
+            showValues ? `${label.name}，${formatValue(value, indicator)}，查看详情` : `${label.name}，查看详情`
+          }
           onPointerenter={() => map.hover(label.code)}
           onPointerleave={() => map.hover(null)}
           onFocus={() => map.hover(label.code)}
@@ -117,7 +132,7 @@ export const DashboardMap = defineComponent({
           }}
         >
           <strong>{label.name}</strong>
-          {props.valuesVisible && value !== null && (
+          {showValues && props.valuesVisible && value !== null && (
             <span>{formatValue(map.displayValues.value[label.code], indicator, indicator.unit.length <= 3)}</span>
           )}
         </button>
@@ -194,6 +209,11 @@ export const DashboardMap = defineComponent({
               </div>
             )}
           </div>
+          {props.notice && (
+            <p class={styles.notice} role="status" data-enter="map-title">
+              {props.notice}
+            </p>
+          )}
           {map.simple.value && ready && <small class={styles.note}>地图采用简化显示</small>}
           {map.status.value === 'loading' && <div class={styles.failure} role="status">地图加载中…</div>}
           <div class={styles.legend} data-enter="legend" aria-label="地图数值分级">
@@ -213,6 +233,8 @@ export const DashboardMap = defineComponent({
               onChange={year => emit('year', year)}
             />
           </div>
+          {/* 朝向和比例在后续阶段由场景算出，目前先给 null */}
+          {slots.overlay?.(null)}
           {slots.default?.()}
           {exporting.error.value && <p class={styles.error} role="alert">{exporting.error.value}</p>}
         </section>
