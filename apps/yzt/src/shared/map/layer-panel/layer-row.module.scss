@@ -51,13 +51,22 @@ button.symbol {
   font-size: var(--font-size-xs);
 }
 
-// 三维里会把模型盖住的面（ADR 0161）：名称后面的橙色小字，只有文字
+// 三维里会把模型盖住的面（ADR 0161）：名称后面一个橙色的图标（划掉的模型），说明在提示里（用户 2026-11-16）
 .cover {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   color: var(--color-warning-text);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-  cursor: default;
+  cursor: help;
+
+  &:focus-visible {
+    border-radius: var(--radius-sm);
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
 }
 
 // 行尾的年份、效果、漫游：同一个框，宽 56、高 24，边框常显（用户 2026-11-14：三个的样式和宽度统一；11-15：再窄一些）

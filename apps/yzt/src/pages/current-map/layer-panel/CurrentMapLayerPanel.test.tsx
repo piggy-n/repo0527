@@ -743,7 +743,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
   });
 
-  it('三维里画在模型上面、接近不透明的面，名称后面写"盖住模型"，悬停说明调低透明度（S4，ADR 0161）', async () => {
+  it('三维里画在模型上面、接近不透明的面，名称后面一个"盖住模型"的图标，说明调低透明度（S4，ADR 0161）', async () => {
     const { wrapper, owner, models, map } = await mountPanel();
     owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
     models.add(['white']);
@@ -768,7 +768,11 @@ describe('CurrentMapLayerPanel', () => {
     await nextTick();
     // 地类图斑不透明：提示；线不算；村级调查区还没到最小显示级别（8 级）
     expect(coverOf(wrapper, 'bgdc_dltb')).toBe(true);
-    expect(row(wrapper, 'bgdc_dltb').get('[data-row-cover]').text()).toBe('盖住模型');
+    // 只有图标（用户 2026-11-16），说明是它的读屏名称和提示
+    const cover = row(wrapper, 'bgdc_dltb').get('[data-row-cover]');
+    expect(cover.text()).toBe('');
+    expect(cover.attributes('role')).toBe('img');
+    expect(cover.attributes('aria-label')).toBe('盖住模型：调低透明度可以透出模型');
     expect(coverOf(wrapper, 'csxhjctb_hydl')).toBe(false);
     expect(coverOf(wrapper, 'bgdc_cjdcq')).toBe(false);
 
@@ -790,6 +794,23 @@ describe('CurrentMapLayerPanel', () => {
     await row(wrapper, 'bgdc_dltb').trigger('click');
     await tool(wrapper, 'move-bottom').trigger('click');
     expect(coverOf(wrapper, 'bgdc_dltb')).toBe(false);
+  });
+
+  it('"盖住模型"的图标：键盘能聚焦，聚焦时显示说明（用户 2026-11-16）', async () => {
+    const { wrapper, models, map } = await mountPanel();
+    models.add(['white']);
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    map.setDimension('3d');
+    await nextTick();
+    expect(document.body.textContent).not.toContain('调低透明度可以透出模型');
+
+    const cover = row(wrapper, 'bgdc_dltb').get('[data-row-cover]');
+    expect(cover.attributes('tabindex')).toBe('0');
+    await cover.trigger('focus');
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('盖住模型：调低透明度可以透出模型'));
   });
 
   it('目录里右键分类：菜单作用于它下面的项，没有定位；分类不能选中（用户 2026-11-15）', async () => {
