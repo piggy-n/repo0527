@@ -1,20 +1,18 @@
-import { computed, defineComponent, onMounted, ref, shallowRef, watch, type PropType } from 'vue';
+import { computed, defineComponent, onMounted, ref, watch, type PropType } from 'vue';
 import { usePreferredReducedMotion } from '@vueuse/core';
 import { formatValue } from '@/shared/dashboard/calculations';
 import { ChartActions, type ChartActionPatch } from '@/shared/dashboard/charts/ChartActions';
 import { ChartCard } from '@/shared/dashboard/charts/ChartCard';
 import { ChartDetailDialog } from '@/shared/dashboard/charts/ChartDetailDialog';
-import { renderChartImage } from '@/shared/dashboard/charts/chart-export';
 import chartStyles from '@/shared/dashboard/charts/charts.module.scss';
 import { DashboardPlot } from '@/shared/dashboard/charts/DashboardPlot';
 import { createChartOption, isStacked } from '@/shared/dashboard/charts/options';
 import { TooltipTable } from '@/shared/dashboard/charts/TooltipTable';
+import { useChartDetail } from '@/shared/dashboard/charts/useChartDetail';
+import { cardPlotSize, useChartDownload } from '@/shared/dashboard/charts/useChartDownload';
 import { warmUpChart } from '@/shared/dashboard/charts/warm-up';
-import { imageWithTitle, saveImage } from '@/shared/dashboard/export/image-export';
-import { useImageExport } from '@/shared/dashboard/export/useImageExport';
 import { withUnit } from '@/shared/dashboard/format';
 import fonts from '@/shared/dashboard/shell/DashboardFonts.module.scss';
-import { CITIES } from '../catalog';
 import { yearColor } from '../charts/colors';
 import { useCardNavigation } from '../composables/useCardNavigation';
 import type { DashboardModel } from '../composables/useDashboard';
@@ -48,16 +46,14 @@ export const DashboardCharts = defineComponent({
       reduced: () => reduced.value,
       category: () => props.model.state.value.categoryId
     });
-    const detail = shallowRef<{ indicator: Indicator; cityCode: string | null } | null>(null);
-    const detailLegend = shallowRef<Readonly<Record<string, boolean>>>({});
-    const detailHover = ref<string | null>(null);
-    const detailVisible = ref(false);
-    const detailSize = shallowRef({ width: 780, height: 440 });
-    const exporting = useImageExport();
-    const focusedCity = computed(() => CITIES.find(city => city.code === detail.value?.cityCode));
-    const hoveredCity = computed(() => CITIES.find(city => city.code === detailHover.value));
-    // 从当前列表读取卡片，避免重渲染期间旧 ref 清理影响定位
-    const cardElements = () => [...list.value?.querySelectorAll<HTMLElement>('[data-chart-id]') ?? []];
+    // 切换指标类型时关闭详情
+    const detail = useChartDetail<Indicator>({
+      legend: indicator => props.model.preference(indicator).legend,
+      cities: () => props.model.cities.value,
+      reset: () => props.model.state.value,
+      closeOn: () => props.model.state.value.categoryId
+    });
+    const downloads = useChartDownload();
     // 悬停只更新提示，不重建整组图表配置，避免 setOption 与指示器事件互相触发
     const cards = computed(() => props.model.category.value.indicators.map(indicator => {
       const comparison = props.model.comparisons.value.get(indicator.id) ?? [];
@@ -77,20 +73,20 @@ export const DashboardCharts = defineComponent({
       };
     }));
     const detailOption = computed(() => {
-      const selected = detail.value;
+      const selected = detail.target.value;
       if (!selected) {
         return null;
       }
       return createChartOption({
-        indicator: selected.indicator,
-        color: year => yearColor(year, selected.indicator.id),
+        indicator: selected,
+        color: year => yearColor(year, selected.id),
         cities: props.model.cities.value,
-        comparison: props.model.comparisons.value.get(selected.indicator.id) ?? [],
-        preference: { ...props.model.preference(selected.indicator), legend: detailLegend.value },
+        comparison: props.model.comparisons.value.get(selected.id) ?? [],
+        preference: { ...props.model.preference(selected), legend: detail.legend.value },
         detail: true,
-        focusedCity: selected.cityCode,
+        focusedCity: detail.cityCode.value,
         activeYear: props.model.state.value.activeYear,
-        size: detailSize.value,
+        size: detail.size.value,
         reducedMotion: reduced.value
       });
     });
@@ -105,15 +101,7 @@ export const DashboardCharts = defineComponent({
         return;
       }
       emit('hover', null);
-      detail.value = { indicator, cityCode };
-      detailLegend.value = { ...props.model.preference(indicator).legend };
-      detailHover.value = null;
-      detailVisible.value = true;
-    }
-
-    function closeDetail(): void {
-      detailVisible.value = false;
-      detailHover.value = null;
+      detail.open(indicator, cityCode);
     }
 
     // 原驾驶舱只有柱状和折线，类型按钮不会给出雷达
@@ -125,14 +113,7 @@ export const DashboardCharts = defineComponent({
       }
     }
 
-    watch(
-      () => props.model.state.value,
-      () => {
-        emit('hover', null);
-        detailHover.value = null;
-      }
-    );
-    watch(() => props.model.state.value.categoryId, closeDetail);
+    watch(() => props.model.state.value, () => emit('hover', null));
 
     // 入场揭示图表之前预热一次：挂载时页面还没绘制、没有动画，第一次绘制的开销放在这里
     onMounted(() => {
@@ -152,87 +133,64 @@ export const DashboardCharts = defineComponent({
       const preference = model.preference(indicator);
       const comparison = model.comparisons.value.get(indicator.id) ?? [];
       const stacked = isStacked({ comparison, preference });
-      const exportKey = `${expanded ? 'detail' : 'card'}:${indicator.id}`;
-      const cannotDownload = !comparison.length || !model.cities.value.length || exporting.pending.value.has(exportKey);
+      const plotted = comparison.length > 0 && model.cities.value.length > 0;
       return (
         <ChartActions
           prefix={expanded ? '详情图' : indicator.name}
           preference={preference}
           averageDrawable={!stacked}
-          averageDisabled={stacked || !comparison.length || !model.cities.value.length}
+          averageDisabled={stacked || !plotted}
           averageTitle={stacked ? '堆叠模式只在提示表格显示逐年均值' : '显示或隐藏均值线'}
-          downloadDisabled={cannotDownload}
+          downloadDisabled={!plotted || downloads.pending(indicator.id, expanded)}
           expandLabel={expanded ? undefined : `放大${indicator.name}图表`}
           downloadLabel={`下载${expanded ? '详情' : indicator.name}图表`}
           onPreference={patch => setPreference(indicator, patch)}
           onExpand={() => openDetail({ indicatorId: indicator.id })}
-          onDownload={() => void download(indicator, expanded)}
+          onDownload={() => download(indicator, expanded)}
         />
       );
     }
 
-    async function download(indicator: Indicator, expanded: boolean): Promise<void> {
-      const option = expanded
-        ? detailOption.value
-        : cards.value.find(card => card.indicator.id === indicator.id)?.option;
-      if (!option) {
-        return;
-      }
-      const cardElement = cardElements().find(card => card.dataset.chartId === indicator.id);
-      const element = cardElement?.querySelector<HTMLElement>('[role="img"]');
-      const size = expanded ? detailSize.value : {
-        width: element?.clientWidth ?? 420,
-        height: element?.clientHeight ?? 240
-      };
-      const title = withUnit(indicator.name, indicator.unit);
-      const years = props.model.comparisonYears.value.join('-');
-      const blob = await exporting.run(`${expanded ? 'detail' : 'card'}:${indicator.id}`, async signal => {
-        await exporting.waitForFonts(signal);
-        return imageWithTitle(renderChartImage(option, Math.max(1, size.width), Math.max(1, size.height)), title);
+    // 卡片按屏幕上的绘图区尺寸，详情按弹窗的图表区尺寸
+    function download(indicator: Indicator, expanded: boolean): void {
+      void downloads.download({
+        indicator,
+        years: props.model.comparisonYears.value,
+        detail: expanded,
+        option: expanded ? detailOption.value : cards.value.find(card => card.indicator.id === indicator.id)?.option,
+        size: expanded ? detail.size.value : cardPlotSize(list.value, indicator.id)
       });
-      if (blob) {
-        saveImage(blob, `${years}-${indicator.name}${expanded ? '-详情' : ''}`);
-      }
-    }
-
-    // 详情里聚焦的城市；它不在当前的城市筛选里时也说明
-    function focusedCityText(): string {
-      const city = focusedCity.value;
-      if (!city) {
-        return '';
-      }
-      return props.model.cities.value.includes(city) ? `${city.name} · 当前查看城市` : `${city.name} · 未纳入当前城市筛选`;
     }
 
     function renderDetail() {
       const model = props.model;
-      const selected = detail.value?.indicator;
+      const selected = detail.target.value;
       const comparison = selected ? model.comparisons.value.get(selected.id) ?? [] : [];
       const plotted = comparison.length > 0 && model.cities.value.length > 0;
       return (
         <ChartDetailDialog
-          visible={detailVisible.value}
+          visible={detail.visible.value}
           title={selected ? withUnit(selected.name, selected.unit) : ''}
           description={`${selected?.name ?? ''}详情`}
-          focusText={focusedCityText()}
+          focusText={detail.focusText.value}
           option={() => (plotted ? detailOption.value : null)}
           cities={model.cities.value}
-          onClose={closeDetail}
-          onHover={code => (detailHover.value = code)}
-          onLegend={legend => (detailLegend.value = legend)}
-          onSize={size => (detailSize.value = size)}
+          onClose={detail.close}
+          onHover={detail.setHover}
+          onLegend={detail.setLegend}
+          onSize={detail.setSize}
         >
           {{
             actions: () => selected && renderActions(selected, true),
-            tooltip: () => selected && hoveredCity.value && (
+            tooltip: () => selected && detail.hoveredCity.value && (
               <TooltipTable
                 indicator={selected}
                 color={year => yearColor(year, selected.id)}
                 comparison={comparison}
                 cities={model.cities.value}
-                city={hoveredCity.value}
+                city={detail.hoveredCity.value}
                 activeYear={model.state.value.activeYear}
-                legend={detailLegend.value}
+                legend={detail.legend.value}
               />
             )
           }}
@@ -246,7 +204,7 @@ export const DashboardCharts = defineComponent({
       const state = model.state.value;
       return (
         <section class={[fonts.scope, chartStyles.column]} aria-label="当前指标类型的多年度图表" inert={!props.active}>
-          {exporting.error.value && <p role="alert">{exporting.error.value}</p>}
+          {downloads.error.value && <p role="alert">{downloads.error.value}</p>}
           <div
             ref={list}
             class={[chartStyles.cardList, styles.list]}

@@ -21,6 +21,7 @@ shared/dashboard/
 ├─ shell/                 DashboardShell、DashboardAtmosphere、DashboardFonts.module.scss、useDashboardEntrance
 ├─ filters/               FilterPanel、FilterSection、YearFilter、CityFilter、IconOptionList、OptionList（filters.module.scss）
 ├─ charts/                runtime、options、radar-options、axis-scale、palette、detail-labels、warm-up、chart-export、useChartFonts、
+│                         useChartDetail、useChartDownload、
 │                         DashboardPlot、ChartCard、ChartActions、ChartDetailDialog、TooltipTable（charts.module.scss）
 ├─ export/                image-export（加标题、保存）、useImageExport（防重复、等字体、取消）
 ├─ map/                   JiangsuMapScene（Three.js）、fallback（ECharts 二维降级）、DashboardMap、DashboardTimeline、useDashboardMap 等
@@ -101,6 +102,35 @@ shared/dashboard/
 
 标题都用 `withUnit(name, unit)`：原驾驶舱的单位都不为空，显示不变；新驾驶舱的指数没有单位，不出现空括号。
 
+### 详情和下载的状态
+
+两个驾驶舱共用，调用方只算图表配置、拼标题：
+
+```tsx
+const detail = useChartDetail<Indicator>({
+  legend: indicator => model.preference(indicator).legend,
+  cities: () => model.cities.value,
+  reset: () => model.state.value,
+  closeOn: () => model.state.value.categoryId
+});
+const downloads = useChartDownload();
+// 详情配置：detail.target、detail.cityCode（聚焦）、detail.legend、detail.size
+<ChartDetailDialog visible={detail.visible.value} focusText={detail.focusText.value} onClose={detail.close}
+  onHover={detail.setHover} onLegend={detail.setLegend} onSize={detail.setSize} ... />
+downloads.download({ indicator, years, detail: false, option, size: cardPlotSize(list.value, indicator.id) });
+```
+
+- `useChartDetail<T>(options)`：放大详情的状态。`T` 是打开的目标，原驾驶舱是指标（`Indicator`），新驾驶舱可以是卡位（一级、二级、三级），由调用方按它算详情配置（柱、折线用 `createChartOption`，雷达用 `createRadarOption` 并给弹窗 `hoverMode="none"`）
+  - `open(target, cityCode?)`：打开并聚焦城市（地图点城市时传，卡片的放大按钮不传）；把 `options.legend(target)` 复制一份作为详情的图例，之后 `setLegend` 只改这一份，卡片的图例不变，再次打开或换目标时重新复制
+  - `close()`：关闭并清掉悬停的城市；目标留着，弹窗淡出时内容不变
+  - 状态（只读）：`visible`、`target`、`cityCode`、`focusedCity`、`focusText`（"{城市} · 当前查看城市"，不在 `options.cities()` 里时是"{城市} · 未纳入当前城市筛选"）、`hoveredCity`（详情里悬停的城市，给提示表格）、`legend`、`size`（图表区的尺寸，弹窗量到之前是 `DEFAULT_DETAIL_SIZE` 780×440）；`setHover`、`setLegend`、`setSize` 接弹窗的 `hover`、`legend`、`size`
+  - `options.reset` 变化时清掉悬停的城市（筛选状态），`options.closeOn` 变化时关闭（原驾驶舱切换指标类型）；都可以不传
+- `useChartDownload()`：图表下载，内部用 `useImageExport`
+  - `download({ indicator, years, detail, option, size })`：等字体，用 `renderChartImage` 按点击时的配置另画一张（像素比 2），`imageWithTitle` 加标题 `withUnit(名称, 单位)`，保存为「{years 用 - 连接}-{名称}」，`detail` 为 true 时末尾加「-详情」；`option` 为空时什么也不做。原驾驶舱的 years 是比较年份（如 `2025-2026-…`），新驾驶舱固定 `[2025]`
+  - `size`：卡片用 `cardPlotSize(list, id)`（列表里 `data-chart-id` 为 id 的卡片中 `[role="img"]` 绘图区的尺寸，找不到时 420×240），详情用 `detail.size`
+  - `pending(id, detail)`：这张图正在下载，下载按钮据此停用；同一指标的卡片和详情分别计，进行中再点无效
+  - `error`：失败的原因（显示在 `role="alert"` 里），下次下载时清空；卸载后进行中的下载不再保存，也不报错
+
 ## 地图（map）
 
 ```tsx
@@ -131,13 +161,14 @@ shared/dashboard/
 | 左栏 | `YearFilter`、`CityFilter`、指标类型 `IconOptionList`、具体指标 `OptionList(fill)` | 年份只有 2025（不能清空）、`CityFilter`、一级指标 `IconOptionList`、二级指标 `OptionList(fill)` |
 | 地图 | 当前指标、写数值 | 当前二级指标、`showValues=false`、无指数值时 `notice`，`overlay` 放指北针和比例尺 |
 | 右栏 | 当前指标类型的全部卡片，翻卡导航、`.selected`、可点击标题、预热 | 固定三张 `ChartCard`（一级、二级、三级），二级默认雷达（`hoverMode="none"`），三级标题是下拉框、`toolbar` 放分项栏 |
+| 详情和下载 | `useChartDetail<Indicator>`（切换指标类型时关闭）、`useChartDownload`，文件名「{比较年份}-{指标名}[-详情]」 | `useChartDetail` 以卡位为目标，地图点城市打开二级卡的详情并聚焦该城市；文件名「2025-{指标名}[-详情]」 |
 | 提示 | `TooltipLayer` | 同 |
 
 原驾驶舱的 `DashboardView` 组合外壳和三栏，`DashboardFilters`、`DashboardCharts` 组合筛选单元和图表单元；翻卡导航（`useCardNavigation`）、`.selected`、卡片吸附只在原驾驶舱。
 
 ## 测试
 
-- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom）、`detail-labels`、`palette`、`map/map-export`、`map/config`、`map/geometry`（市界和标签避让）等
+- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom）、`detail-labels`、`palette`、`charts/useChartDetail`、`charts/useChartDownload`（jsdom，出图和保存换成假函数）、`map/map-export`、`map/config`、`map/geometry`（市界和标签避让）等
 - 组件（jsdom）：`ChartActions`、`ChartCard`、`ChartDetailDialog`、`DashboardPlot` 的键盘与悬停方式、`filters`、`DashboardShell`、`DashboardTimeline`、`useDashboardTooltip`
 - 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 浏览器测试覆盖外壳和筛选、图表的组合
 - 原驾驶舱的回归：拆分前后用同一段临时测试把 96 个指标的卡片和详情配置、地图图例写成 JSON，逐字节比较（生成写法在 `local/land-space/baseline-generator.test.ts.txt`，不入库）
