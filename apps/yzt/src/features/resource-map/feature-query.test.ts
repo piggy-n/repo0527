@@ -622,7 +622,9 @@ describe('planIdentify', () => {
     ]);
     const scope = rect(0.4, 0.5, 0.7, 0.7);
 
-    expect(planIdentify([POINTS], { x: 50, y: 20 }, 16, view, scope, CIRCLE_MARK, () => false, () => true)).toBeNull();
+    expect(
+      planIdentify([POINTS], { x: 50, y: 20 }, 16, view, scope, () => CIRCLE_MARK, () => false, () => true)
+    ).toBeNull();
     expect(queries).toStrictEqual([]);
   });
 
@@ -631,7 +633,7 @@ describe('planIdentify', () => {
       onPointLayer('resource-labels-csxhjctb_gyssp', 'a', { type: 'Point', coordinates: [0.5, 0.2] })
     ]);
 
-    const tasks = planIdentify([POINTS], { x: 50, y: 20 }, 16, view, null, CIRCLE_MARK, () => false, () => true);
+    const tasks = planIdentify([POINTS], { x: 50, y: 20 }, 16, view, null, () => CIRCLE_MARK, () => false, () => true);
 
     expect(queries[0]?.[0]).toStrictEqual({ x: 50, y: 20 });
     expect(kindsOf(tasks ?? [])).toStrictEqual([['csxhjctb_gyssp', 'rendered']]);
