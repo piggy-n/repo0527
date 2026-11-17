@@ -1,8 +1,11 @@
 import { Loading } from '@element-plus/icons-vue';
+import { useEventListener, useResizeObserver } from '@vueuse/core';
+import { usePageActive } from '@mx/map-vue';
 import { ElButton, ElIcon } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
+import { computed, defineComponent, type PropType, ref, shallowRef, type VNode, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { useLightDismiss } from '../popover/useLightDismiss';
+import { type RequestPopoverPlacement, requestPopoverPlacement } from './request-popover';
 import {
   type RequestItem,
   requestGroups,
@@ -15,6 +18,7 @@ import styles from './RequestStatusChip.module.scss';
 /**
  * 状态栏右边的请求状态（ADR 0158，原型 `/design.local/current-map-layers/`）：空闲时不显示；点开是"数据加载"的明细，
  * 分加载中、有失败、已完成三组。点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点条目关闭。
+ * 明细贴着资源图层面板的右边、底边在状态栏上方（requestPopoverPlacement），不跟着条目左右移（用户 2026-11-16）。
  * 时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
  */
 export const RequestStatusChip = defineComponent({
@@ -22,7 +26,11 @@ export const RequestStatusChip = defineComponent({
   props: {
     status: { type: Object as PropType<RequestStatus>, required: true },
     /** 能在面板的图层列表里选中的项 */
-    selectable: { type: Function as PropType<(key: string) => boolean>, default: () => false }
+    selectable: { type: Function as PropType<(key: string) => boolean>, default: () => false },
+    /** 资源图层面板所在的一列：明细贴在它右边，宽度变了、收起时跟着走；没有时贴着区域的左边 */
+    panel: { type: Function as PropType<() => HTMLElement | null>, default: () => null },
+    /** 明细能放的区域（地图上四周留白以内）；没有时用整个视口 */
+    area: { type: Function as PropType<() => HTMLElement | null>, default: () => null }
   },
   emits: {
     select: (key: string) => typeof key === 'string',
@@ -48,6 +56,32 @@ export const RequestStatusChip = defineComponent({
       onOutside: () => (open.value = false),
       onEscape: () => (open.value = false)
     });
+
+    // 明细的位置：开着时量面板、区域和状态栏（条目的上边），面板的宽度、收起和窗口变了重新放；页面停用时量不到，激活后再放
+    const placement = shallowRef<RequestPopoverPlacement | null>(null);
+    const pageActive = usePageActive();
+    const place = () => {
+      const chip = root.value;
+      if (!open.value || !chip?.isConnected) {
+        return;
+      }
+      const area = props.area()?.getBoundingClientRect() ?? {
+        left: 0,
+        top: 0,
+        right: window.innerWidth,
+        bottom: window.innerHeight
+      };
+      placement.value = requestPopoverPlacement({
+        panel: props.panel()?.getBoundingClientRect() ?? null,
+        area,
+        barTop: chip.getBoundingClientRect().top,
+        viewport: { height: window.innerHeight }
+      });
+    };
+    watch([open, pageActive, () => props.panel(), () => props.area()], place, { immediate: true, flush: 'post' });
+    useResizeObserver(() => props.panel(), place);
+    useResizeObserver(() => props.area(), place);
+    useEventListener(window, 'resize', place);
 
     const renderChip = (): VNode | null => {
       const current = summary.value;
@@ -165,8 +199,13 @@ export const RequestStatusChip = defineComponent({
 
     const renderPopover = () => {
       const { loading, failed, done } = groups.value;
+      const box = placement.value;
+      // 量好之前先不显示：放好的位置在同一轮渲染里就到，看不到闪动
+      const style = box
+        ? { left: `${box.left}px`, bottom: `${box.bottom}px`, width: `${box.width}px`, maxHeight: `${box.maxHeight}px` }
+        : { visibility: 'hidden' as const };
       return (
-        <div class={styles.popover} role="dialog" aria-label="数据加载" data-request-popover>
+        <div class={styles.popover} style={style} role="dialog" aria-label="数据加载" data-request-popover>
           <div class={styles.head}>
             <strong>数据加载</strong>
             <button type="button" class={styles.close} aria-label="关闭" onClick={() => (open.value = false)}>

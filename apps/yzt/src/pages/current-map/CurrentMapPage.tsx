@@ -153,6 +153,9 @@ export const CurrentMapPage = defineComponent({
     });
     // 请求状态的明细里点了一行：在当前图层里选中它
     const revealed = shallowRef<{ readonly key: string } | null>(null);
+    // 明细贴着左侧面板所在的一列、放在四周留白以内（用户 2026-11-16）
+    const overlay = ref<HTMLElement>();
+    const left = ref<HTMLElement>();
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
     // 视图控件和状态栏都隐藏，不能加入模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
@@ -408,14 +411,14 @@ export const CurrentMapPage = defineComponent({
           <BoxSelectOverlay pick={pick} />
           {/* 浮层里的区域都带 key：好几个按条件出现，同时变化时（开始漫游、进入地下空间、窄屏时换边）Vue 会把没有 key 的
               div 按类型配对，左侧面板的 KeepAlive 配到别的 div 上就被重建，搜索、展开这些状态丢失（2026-10-28 发现） */}
-          <div class={styles.overlay}>
+          <div ref={overlay} class={styles.overlay}>
             {/* 当前区划放在第一个：和面板重叠时（窄屏）面板在上面 */}
             {scopeShown && (
               <div key="scope" class={styles.scope}>
                 <RegionScopeBar region={region} />
               </div>
             )}
-            <div key="left" class={[styles.left, underground && styles.noStatus]}>
+            <div key="left" ref={left} class={[styles.left, underground && styles.noStatus]}>
               <KeepAlive exclude={RoamPanel.name}>{renderLeft(scene)}</KeepAlive>
             </div>
             <div key="lane" ref={lane} class={styles.lane}>
@@ -497,6 +500,8 @@ export const CurrentMapPage = defineComponent({
                       <RequestStatusChip
                         status={requests}
                         selectable={key => key !== 'basemap'}
+                        panel={() => left.value ?? null}
+                        area={() => overlay.value ?? null}
                         onSelect={(key: string) => {
                           // 面板收起、窄屏时被右侧挤掉都看不到反应：先展开左侧，面板在下一轮渲染后滚到这一行、闪两下
                           changeLeftCollapsed(false);

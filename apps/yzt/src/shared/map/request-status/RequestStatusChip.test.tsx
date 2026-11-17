@@ -34,6 +34,13 @@ function mountChip(initial: readonly RequestItem[], now = 1000) {
   return { wrapper, items, clock };
 }
 
+// 量到的位置由用例给出：jsdom 没有布局
+function placed(left: number, top: number, right: number, bottom: number): HTMLElement {
+  const element = document.body.appendChild(document.createElement('div'));
+  element.getBoundingClientRect = () => new DOMRect(left, top, right - left, bottom - top);
+  return element;
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -117,6 +124,36 @@ describe('RequestStatusChip', () => {
     await model.get('button[aria-label="重新加载：model:m 的名称"]').trigger('click');
     expect(wrapper.emitted('select')).toStrictEqual([['resource:a']]);
     expect(wrapper.emitted('retry')).toStrictEqual([['model:m']]);
+  });
+
+  it('明细贴着资源图层面板的右边、底边在状态栏上方：条目左右移时不动，面板换了宽度时跟着走（用户 2026-11-16）', async () => {
+    const area = placed(16, 72, 1264, 760);
+    const panel = placed(16, 72, 336, 724);
+    const strip = placed(16, 72, 40, 724);
+    const { wrapper } = mountChip([item('a')]);
+    await wrapper.setProps({ panel: () => panel, area: () => area });
+    const chip = wrapper.get('[data-request-status]').element;
+    let chipLeft = 400;
+    chip.getBoundingClientRect = () => new DOMRect(chipLeft, 736, 120, 24);
+
+    await wrapper.get('[data-request-chip]').trigger('click');
+    const style = () => wrapper.get<HTMLElement>('[data-request-popover]').element.style;
+    // jsdom 的视口高 768：底边在条目上边 736 再往上 8
+    expect([style().left, style().bottom, style().width, style().maxHeight]).toStrictEqual([
+      '344px',
+      '40px',
+      '340px',
+      '420px'
+    ]);
+
+    // 经纬度变宽，条目右移
+    chipLeft = 520;
+    window.dispatchEvent(new Event('resize'));
+    await nextTick();
+    expect(style().left).toBe('344px');
+
+    await wrapper.setProps({ panel: () => strip });
+    expect(style().left).toBe('48px');
   });
 
   it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {
