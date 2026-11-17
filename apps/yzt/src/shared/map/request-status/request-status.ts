@@ -10,8 +10,8 @@ export const DONE_HOLD = 1500;
 /** 加载超过这么久在明细里写等了几秒（毫秒） */
 export const SLOW_AFTER = 5000;
 /**
- * 模型读完索引以后，渲染器下一帧才开始请求块（ADR 0162）：两段相隔不到这么久算同一段，读完、还没请求时也等这么久再算结束，
- * 转圈和条目不闪（毫秒）。比 SHOW_DELAY 短：读完以后什么也不请求的模型不会因为它显示出来
+ * 模型读完索引以后，渲染器在下一次选瓦片时才开始请求块或暂缓请求（ADR 0162）：两段相隔不到这么久算同一段，读完、还没有块时
+ * 也等这么久再算结束，转圈和条目不闪（毫秒）。还没显示出来的读索引，等待不超过开始后 SHOW_DELAY，不会因为等这一下显示出来
  */
 export const MODEL_SETTLE = 300;
 
@@ -85,7 +85,12 @@ export function modelRequestItem(
   }
   const current = activity && (activity.finishedAt === null || activity.finishedAt >= phase.startedAt) ? activity : null;
   if (!current) {
-    const finishedAt = now - readAt < MODEL_SETTLE ? null : readAt;
+    // 读索引已经显示出来（超过 SHOW_DELAY）的等到读完后 MODEL_SETTLE；还没显示的最多等到开始后 SHOW_DELAY，不因为等这一下显示出来
+    const until =
+      readAt - phase.startedAt > SHOW_DELAY
+        ? readAt + MODEL_SETTLE
+        : Math.min(readAt + MODEL_SETTLE, phase.startedAt + SHOW_DELAY);
+    const finishedAt = now < until ? null : readAt;
     return { ...common, kind: 'model', requested: 0, loaded: 1, failed: 0, startedAt: phase.startedAt, finishedAt };
   }
   const startedAt = current.startedAt <= readAt + MODEL_SETTLE ? phase.startedAt : current.startedAt;

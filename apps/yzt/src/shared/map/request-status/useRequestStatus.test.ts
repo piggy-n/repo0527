@@ -3,7 +3,7 @@ import type { SceneActivity } from '@mx/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, shallowRef } from 'vue';
 import { required } from '../../testing/required';
-import type { RequestSource } from './request-status';
+import { type RequestSource, requestSummary } from './request-status';
 import { useRequestStatus } from './useRequestStatus';
 
 // 时钟和来源都由用例控制；定时器用假的
@@ -112,6 +112,23 @@ describe('useRequestStatus', () => {
     ctx.sources.value = [model('m', 'ready', { ...blocks, loaded: 6, finishedAt: 1400 })];
     await nextTick();
     expect(ctx.status.loadingKeys.value.size).toBe(0);
+  });
+
+  it('读索引 0.3 秒、之后不请求块的模型：不进行内转圈，条目不出现（2026-11-16 复核）', async () => {
+    using ctx = setup([model('m', 'loading')]);
+    await ctx.advance(250);
+    await ctx.advance(50);
+    ctx.sources.value = [model('m', 'ready')];
+    await nextTick();
+    const quiet = () =>
+      ctx.status.loadingKeys.value.size === 0 &&
+      requestSummary(ctx.status.items.value, ctx.status.now.value).kind === 'hidden';
+    // 时钟每 250 毫秒走一格：走到 500、750 都不出现
+    await ctx.advance(200);
+    expect(quiet()).toBe(true);
+    await ctx.advance(250);
+    expect(quiet()).toBe(true);
+    expect(ctx.status.items.value[0]).toMatchObject({ kind: 'model', finishedAt: 300 });
   });
 
   it('读完索引以后什么也不请求的模型：等一会儿算结束，结束时间是读完的时候', async () => {

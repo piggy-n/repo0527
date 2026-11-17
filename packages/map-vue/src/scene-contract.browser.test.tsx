@@ -484,6 +484,12 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     );
     await until(() => page.stateOf('missing') === 'failed', '索引下载失败');
     await until(() => page.stateOf('broken') === 'failed', '瓦片下载失败');
+    // 瓦片 404：这一轮记下失败的块，照样结束；索引都没读到的没有这一轮（ADR 0162）
+    await until(() => typeof page.map.sceneActivity.value.get('broken')?.finishedAt === 'number', '有失败的这一轮结束');
+    const broken = page.map.sceneActivity.value.get('broken');
+    expect(broken?.kind).toBe('blocks');
+    expect(broken?.kind === 'blocks' ? broken.failed : 0).toBeGreaterThan(0);
+    expect(page.map.sceneActivity.value.has('missing')).toBe(false);
     const failed = page.history.length;
     page.content.value = {
       tilesets: [
@@ -789,6 +795,9 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
       await until(() => pickedHeight() !== null, '画布中心拾取到泼溅');
       expect(pickedHeight()).toBeCloseTo(0, 0);
       await until(() => dominant(pixel({ x: WIDTH / 2, y: HEIGHT / 2 }), 1), '画出绿色的泼溅');
+      // 数据块都到了：当前视角细节的这一轮结束（ADR 0162）
+      await until(() => typeof page.map.sceneActivity.value.get('square')?.finishedAt === 'number', '泼溅这一轮结束');
+      expect(page.map.sceneActivity.value.get('square')?.kind).toBe('detail');
 
       const canvas = document.querySelector<HTMLCanvasElement>('.maplibregl-canvas');
       const gl = canvas?.getContext('webgl2');
@@ -807,6 +816,7 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
 
       page.content.value = { tilesets: [], underground: null };
       await until(() => page.stateOf('square') === undefined, '删掉泼溅');
+      await until(() => !page.map.sceneActivity.value.has('square'), '删掉以后这一轮也没有了');
       expect(pickedHeight()).toBeNull();
       expect(page.errors).toStrictEqual([]);
     }

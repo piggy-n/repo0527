@@ -177,6 +177,16 @@ describe('modelRequestItem', () => {
     expect(modelRequestItem(base, ready, null, 1100 + MODEL_SETTLE)).toMatchObject({ kind: 'model', finishedAt: 1100 });
     expect(modelRequestItem(base, ready, blocks(0, 50), 2000)).toMatchObject({ kind: 'model', finishedAt: 1100 });
   });
+
+  it('读索引不到 0.4 秒就读完的：等块最多等到开始后 0.4 秒，不因为等这一下显示出来（2026-11-16 复核）', () => {
+    const quick: ModelPhase = { state: 'ready', startedAt: 0, finishedAt: 300 };
+    expect(modelRequestItem(base, quick, null, 350)).toMatchObject({ finishedAt: null });
+    expect(modelRequestItem(base, quick, null, SHOW_DELAY)).toMatchObject({ finishedAt: 300 });
+    expect(modelRequestItem(base, quick, null, 500)).toMatchObject({ finishedAt: 300 });
+    // 读得更快的照样等满 MODEL_SETTLE
+    const quicker: ModelPhase = { state: 'ready', startedAt: 0, finishedAt: 50 };
+    expect(modelRequestItem(base, quicker, null, 50 + MODEL_SETTLE - 1)).toMatchObject({ finishedAt: null });
+  });
 });
 
 describe('mergedActivity', () => {

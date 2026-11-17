@@ -60,30 +60,32 @@ export const RequestStatusChip = defineComponent({
       onEscape: () => (open.value = false)
     });
 
-    // 明细的位置：开着时量面板、区域和状态栏（条目的上边），面板的宽度、收起和窗口变了重新放；页面停用时量不到，激活后再放
+    // 明细的位置：开着时量面板、区域和状态栏（条目的上边），面板的宽度、收起和窗口变了重新放；页面停用时量不到，激活后再放。
+    // 页面给的面板一直是同一个元素，展开、收起只改它的宽度，靠尺寸监听；只在开着时监听，元素没换时不重建监听
     const placement = shallowRef<RequestPopoverPlacement | null>(null);
     const pageActive = usePageActive();
+    const panel = computed(() => (open.value ? props.panel() : null));
+    const area = computed(() => (open.value ? props.area() : null));
     const place = () => {
       const chip = root.value;
       if (!open.value || !chip?.isConnected) {
         return;
       }
-      const area = props.area()?.getBoundingClientRect() ?? {
-        left: 0,
-        top: 0,
-        right: window.innerWidth,
-        bottom: window.innerHeight
-      };
       placement.value = requestPopoverPlacement({
-        panel: props.panel()?.getBoundingClientRect() ?? null,
-        area,
+        panel: panel.value?.getBoundingClientRect() ?? null,
+        area: area.value?.getBoundingClientRect() ?? {
+          left: 0,
+          top: 0,
+          right: window.innerWidth,
+          bottom: window.innerHeight
+        },
         barTop: chip.getBoundingClientRect().top,
         viewport: { height: window.innerHeight }
       });
     };
-    watch([open, pageActive, () => props.panel(), () => props.area()], place, { immediate: true, flush: 'post' });
-    useResizeObserver(() => props.panel(), place);
-    useResizeObserver(() => props.area(), place);
+    watch([open, pageActive, panel, area], place, { immediate: true, flush: 'post' });
+    useResizeObserver(panel, place);
+    useResizeObserver(area, place);
     useEventListener(window, 'resize', place);
 
     const renderChip = (): VNode | null => {

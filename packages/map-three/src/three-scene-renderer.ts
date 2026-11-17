@@ -26,6 +26,7 @@ import { AnimatedModel, type ModelPlacement } from './animated-model';
 import { type BudgetPose, ErrorScale } from './error-scale';
 import { FrameMath, toNdc, withDeeperFar } from './frame';
 import { SceneActivityTracker } from './scene-activity-tracker';
+import { watchCacheRemovals } from './tile-tracking';
 import type { FogUniform } from './lighting';
 import { TileUploader } from './tile-uploader';
 import type { CullWindow } from './request-cull';
@@ -193,6 +194,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
   #steady = true;
   // 新瓦片到了、还没有画过的一帧：这时读数还是旧的
   #framePending = false;
+  // 已经排了一次画帧之外的结算（ADR 0162）
+  #settleQueued = false;
 
   constructor({
     cacheBytes = CACHE_BYTES,
@@ -212,6 +215,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#cacheLimitBytes = cacheLimitBytes;
     this.#requestCullWindow = requestCullWindow;
     this.#cache.unloadPriorityCallback = DEFAULT_LRU_CACHE.unloadPriorityCallback;
+    // 缓存移除一块（淘汰、满了不留）时库不发事件，淘汰还在画完以后的微任务、动画帧里：在等的块这时不结算就一直是加载中
+    watchCacheRemovals(this.#cache, () => this.#settleLater());
     this.#cache.minBytesSize = cacheBytes;
     this.#cache.maxBytesSize = cacheLimitBytes;
     this.#scale = new ErrorScale({ hardBytes: cacheLimitBytes });
@@ -404,7 +409,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
       releaseImages: this.#releaseImages,
       onRequest: (tile, probe) => this.#activity.requested(id, tile, probe),
       events: {
-        failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
+        failed: error => {
+          this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error }));
+          // 失败不一定再画一帧
+          this.#settleLater();
+        },
         initial: () => this.#emitter.emit('tilesetinitial', id),
         repaint: () => this.#requestFrame()
       }
@@ -665,6 +674,20 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#uploader[Symbol.dispose]();
     this.#dropRenderer();
     this.#emitter.events = {};
+  }
+
+  // 画帧之外结算这一轮：一个微任务里只做一次，等库改完瓦片的状态
+  #settleLater(): void {
+    if (this.#settleQueued || this.#disposed) {
+      return;
+    }
+    this.#settleQueued = true;
+    queueMicrotask(() => {
+      this.#settleQueued = false;
+      if (!this.#disposed) {
+        this.#activity.sweep();
+      }
+    });
   }
 
   #requestFrame(): void {

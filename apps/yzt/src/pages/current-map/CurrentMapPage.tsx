@@ -153,9 +153,11 @@ export const CurrentMapPage = defineComponent({
     });
     // 请求状态的明细里点了一行：在当前图层里选中它
     const revealed = shallowRef<{ readonly key: string } | null>(null);
-    // 明细贴着左侧面板所在的一列、放在四周留白以内（用户 2026-11-16）
+    // 明细贴着左侧面板所在的一列、放在四周留白以内（用户 2026-11-16）；交给条目的是同一对函数，重渲染时不换
     const overlay = ref<HTMLElement>();
     const left = ref<HTMLElement>();
+    const leftColumn = () => left.value ?? null;
+    const mapArea = () => overlay.value ?? null;
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
     // 视图控件和状态栏都隐藏，不能加入模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
@@ -500,8 +502,8 @@ export const CurrentMapPage = defineComponent({
                       <RequestStatusChip
                         status={requests}
                         selectable={key => key !== 'basemap'}
-                        panel={() => left.value ?? null}
-                        area={() => overlay.value ?? null}
+                        panel={leftColumn}
+                        area={mapArea}
                         onSelect={(key: string) => {
                           // 面板收起、窄屏时被右侧挤掉都看不到反应：先展开左侧，面板在下一轮渲染后滚到这一行、闪两下
                           changeLeftCollapsed(false);
