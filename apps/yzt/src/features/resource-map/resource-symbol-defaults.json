@@ -1,1 +1,88 @@
-{}
+{
+  "csxhjctb_bzssa": {
+    "uniform": {
+      "fillColor": "rgba(215, 201, 165, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_cqnfwjza": {
+    "uniform": {
+      "fillColor": "rgba(206, 168, 117, 1)"
+    }
+  },
+  "csxhjctb_cya": {
+    "uniform": {
+      "fillColor": "rgba(217, 67, 63, 1)"
+    }
+  },
+  "csxhjctb_czzza": {
+    "uniform": {
+      "fillColor": "rgba(254, 233, 185, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_gyylda": {
+    "uniform": {
+      "fillColor": "rgba(127, 153, 130, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_hyda": {
+    "uniform": {
+      "fillColor": "rgba(143, 199, 245, 1)"
+    },
+    "mode": "uniform",
+    "items": {
+      "河流": {
+        "fillColor": "rgba(95, 160, 218, 1)"
+      }
+    }
+  },
+  "csxhjctb_jtysydp": {
+    "uniform": {
+      "fillColor": "rgba(227, 160, 35, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_lctl": {
+    "uniform": {
+      "color": "rgba(249, 177, 127, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_lrdl": {
+    "uniform": {
+      "color": "rgba(246, 234, 146, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_lvll": {
+    "uniform": {
+      "color": "rgba(221, 171, 174, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_tyhda": {
+    "uniform": {
+      "fillColor": "rgba(185, 192, 165, 1)"
+    }
+  },
+  "csxhjctb_tyhdp": {
+    "uniform": {
+      "size": "XL",
+      "fillColor": "rgba(217, 67, 63, 1)"
+    }
+  },
+  "csxhjctb_wycga": {
+    "uniform": {
+      "fillColor": "rgba(213, 175, 153, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_yljga": {
+    "uniform": {
+      "fillColor": "rgba(249, 204, 223, 1)"
+    },
+    "mode": "uniform"
+  }
+}
