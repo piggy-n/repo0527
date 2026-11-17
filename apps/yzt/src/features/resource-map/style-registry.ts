@@ -99,8 +99,8 @@ function valueRule(property: string, entries: readonly ClassEntry[], fallback = 
 const WATER_FALLBACK = '#2F80ED';
 
 // 按属性配色：字段和取值来自探查（ADR 0123），点层比面层少的取值只列实际有的。
-// 图例摘要的代表取值（summary，ADR 0159）：地类图斑由用户 2026-11-16 确定，其余按 2026-11-01 探查的抽样次数取最常见的、
-// 各大类一个，待用户确认；没写的取前几个取值
+// 图例摘要的代表取值（summary，ADR 0159）：用户 2026-11-16 确认。地类按 2026-11-01 探查的抽样次数取最常见的、各大类一个，
+// 颜色分不开的换掉（湿地的河流水面和内陆滩涂同是浅蓝，换成沼泽草地）；界线、道路、学校取常见的几级；没写的取前几个取值
 const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   [
     'bgdc_dltb',
@@ -110,10 +110,16 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['bgdc_czcdyd', { color: valueRule('czclx', URBAN_VILLAGE_TYPES), summary: ['201', '202', '203'] }],
   ['lcsh_sltb', { color: valueRule('lin_zhong', FOREST_TYPES) }],
   ['lcsh_cdtb', { color: { kind: 'landuse-code', only: GRASSLAND_LANDUSE }, summary: ['0404', '0301', '0102'] }],
-  ['lcsh_sdtb', { color: { kind: 'landuse-code', only: WETLAND_LANDUSE }, summary: ['1106', '1101', '0301'] }],
+  ['lcsh_sdtb', { color: { kind: 'landuse-code', only: WETLAND_LANDUSE }, summary: ['1106', '0402', '0301'] }],
   ['lcsh_hmtb', { color: valueRule('tu_rang_lx', SOIL_TYPES) }],
   ['csxhjctb_xxa', { color: valueRule('cc', SCHOOL_TYPES) }],
-  ['csxhjctb_xxp', { color: valueRule('cc', pickEntries(SCHOOL_TYPES, '08H212', '08H213', '08H214', '08H215')) }],
+  [
+    'csxhjctb_xxp',
+    {
+      color: valueRule('cc', pickEntries(SCHOOL_TYPES, '08H212', '08H213', '08H214', '08H215')),
+      summary: ['08H213', '08H214', '08H212']
+    }
+  ],
   ['csxhjctb_yljga', { color: valueRule('cc', MEDICAL_TYPES) }],
   ['csxhjctb_yljgp', { color: valueRule('cc', MEDICAL_TYPES) }],
   ['csxhjctb_fljga', { color: valueRule('cc', WELFARE_TYPES) }],
@@ -133,7 +139,7 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['csxhjctb_hyda', { color: valueRule('ccn', WATER_TYPES, WATER_FALLBACK) }],
   ['csxhjctb_lvll', { color: valueRule('type', RURAL_ROAD_TYPES, '#A1887F') }],
   ['csxhjctb_lrdl', { color: valueRule('type', HIGHWAY_TYPES) }],
-  ['csxhjctb_lctl', { color: valueRule('type', CITY_ROAD_TYPES) }],
+  ['csxhjctb_lctl', { color: valueRule('type', CITY_ROAD_TYPES), summary: ['主干路', '次干路', '支路'] }],
   ['csxhjctb_llkl', { color: valueRule('type', RAMP_TYPES) }],
   ['csxhjctb_llkp', { color: valueRule('type', HIGHWAY_EXIT_TYPES) }],
   ['csxhjctb_lrrl', { color: valueRule('type', RAILWAY_TYPES) }],
@@ -153,12 +159,13 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['szy_kt', { color: valueRule('lymc', BASIN_TYPES) }],
   ['bgdc_gddb', { color: valueRule('lyd', FARMLAND_GRADES) }],
   ['bgdc_pzwjstd', { color: valueRule('ywlx', UNBUILT_LAND_TYPES) }],
-  ['bgdc_xzqjx', { color: valueRule('jxlx', BOUNDARY_TYPES) }],
+  ['bgdc_xzqjx', { color: valueRule('jxlx', BOUNDARY_TYPES), summary: ['640200', '650200', '660200'] }],
   ['bgdc_yjjbnttb', { color: valueRule('dlmc', PERMANENT_FARMLAND_TYPES), summary: ['水田', '水浇地', '旱地'] }],
   [
     'bgdc_cjdcqjx',
     {
-      color: valueRule('jxlx', pickEntries(BOUNDARY_TYPES, '630200', '640200', '650200', '660200', '670500'))
+      color: valueRule('jxlx', pickEntries(BOUNDARY_TYPES, '630200', '640200', '650200', '660200', '670500')),
+      summary: ['650200', '660200', '670500']
     }
   ]
 ]);

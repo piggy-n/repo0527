@@ -355,6 +355,10 @@ describe('登记表', () => {
       'bgdc_czcdyd',
       'lcsh_cdtb',
       'lcsh_sdtb',
+      'csxhjctb_xxp',
+      'csxhjctb_lctl',
+      'bgdc_xzqjx',
+      'bgdc_cjdcqjx',
       'bgdc_yjjbnttb'
     ]);
     // 每个资源不合要求的取值：不在规则里、兜底、历史地类、重复，或者超过 4 个
