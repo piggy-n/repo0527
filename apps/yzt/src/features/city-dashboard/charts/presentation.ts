@@ -1,7 +1,7 @@
-import type { ChartType, Indicator } from '../model';
+import type { CartesianChartType, Indicator } from '../model';
 
 // 覆盖类指标按比较重点选择图形，显式配置不依赖卡片顺序或 Mock 数据
-const CHART_PREFERENCES: Readonly<Record<string, ChartType>> = {
+const CHART_PREFERENCES: Readonly<Record<string, CartesianChartType>> = {
   'A-15': 'bar',
   'B-11': 'line',
   'D01-5': 'line',
@@ -34,7 +34,7 @@ const CHART_PREFERENCES: Readonly<Record<string, ChartType>> = {
 };
 
 // 数量、年度新增量和距离侧重比较；密度、人均和结构比例侧重轮廓变化
-export function getDefaultChartType(indicator: Indicator): ChartType {
+export function getDefaultChartType(indicator: Indicator): CartesianChartType {
   if (CHART_PREFERENCES[indicator.id]) {
     return CHART_PREFERENCES[indicator.id];
   }

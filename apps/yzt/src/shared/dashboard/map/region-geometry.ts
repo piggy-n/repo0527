@@ -2,9 +2,9 @@ import { geoMercator } from 'd3-geo';
 import { simplify } from '@turf/simplify';
 import { Path, Shape, Vector2 } from 'three';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from 'geojson';
-import { sharedRegionBoundaryLoader } from '@/shared/map/region/region-geometry';
-import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { CITIES } from '../catalog';
+import { sharedRegionBoundaryLoader } from '../../map/region/region-geometry';
+import { JIANGSU_CITIES } from '../../map/region/region-catalog';
+import { DASHBOARD_CITIES } from '../cities';
 import type { MapRegion } from './types';
 
 export interface RegionGeometry {
@@ -24,7 +24,7 @@ export interface DashboardRegions {
 
 /** 保留同市离散面和孔洞；展示简化只操作副本 */
 export function prepareRegions(entries: readonly RegionGeometry[]): DashboardRegions {
-  const features = CITIES.map(city => {
+  const features = DASHBOARD_CITIES.map(city => {
     const coordinates = entries.filter(entry => entry.code === city.code).flatMap(({ geometry }) =>
       geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates);
     if (!coordinates.length) {
@@ -70,10 +70,10 @@ export function prepareRegions(entries: readonly RegionGeometry[]): DashboardReg
   return {
     featureCollection: { type: 'FeatureCollection', features },
     regions: features.map((feature, index) => ({
-      code: CITIES[index].code,
-      name: CITIES[index].name,
-      anchor: CITIES[index].anchor,
-      anchorPoint: projectCoordinate([...CITIES[index].anchor]),
+      code: DASHBOARD_CITIES[index].code,
+      name: DASHBOARD_CITIES[index].name,
+      anchor: DASHBOARD_CITIES[index].anchor,
+      anchorPoint: projectCoordinate([...DASHBOARD_CITIES[index].anchor]),
       shapes: feature.geometry.coordinates.map(([outerRing, ...holes]) => {
         const shape = new Shape(outerRing.map(projectCoordinate));
         shape.holes = holes.map(ring => new Path(ring.map(projectCoordinate)));

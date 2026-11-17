@@ -1,7 +1,7 @@
 import { effectScope } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import { useImageExport } from './useImageExport';
-import { safeImageName, titleLines } from '../export/image-export';
+import { safeImageName, titleLines } from './image-export';
 
 function createExporter() {
   const scope = effectScope();

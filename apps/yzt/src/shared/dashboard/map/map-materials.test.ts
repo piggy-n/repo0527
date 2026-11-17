@@ -1,7 +1,7 @@
 import { gsap } from 'gsap';
 import { Color } from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
-import { required } from '@/shared/testing/required';
+import { required } from '../../testing/required';
 import { getMapColor } from './config';
 import { createRegionMaterials, updateRegionMaterials } from './map-materials';
 

@@ -1,14 +1,15 @@
 import { defineComponent, type PropType } from 'vue';
-import type { City, Comparison, Indicator } from '../model';
-import { yearColor } from '../charts/colors';
+import type { City, Comparison, IndicatorMeta } from '../model';
 import { formatValue } from '../calculations';
-import styles from './DashboardCharts.module.scss';
+import styles from './charts.module.scss';
 
 /** Vue 文本节点显示外部名称，避免拼接 HTML 带来的注入风险 */
 export const TooltipTable = defineComponent({
   name: 'DashboardTooltipTable',
   props: {
-    indicator: { type: Object as PropType<Indicator>, required: true },
+    indicator: { type: Object as PropType<IndicatorMeta>, required: true },
+    /** 年份的颜色，与图表系列一致 */
+    color: { type: Function as PropType<(year: number) => string>, required: true },
     comparison: { type: Array as PropType<readonly Comparison[]>, required: true },
     cities: { type: Array as PropType<readonly City[]>, required: true },
     city: { type: Object as PropType<City>, required: true },
@@ -57,7 +58,7 @@ export const TooltipTable = defineComponent({
                   {rows.map(item => (
                     <tr key={item.year} aria-current={item.year === props.activeYear ? 'true' : undefined}>
                       <th scope="row">
-                        <i aria-hidden="true" style={{ background: yearColor(item.year, props.indicator.id) }} />
+                        <i aria-hidden="true" style={{ background: props.color(item.year) }} />
                         {item.year}
                         {item.year === props.activeYear && <small class={styles.currentYear}>当前</small>}
                       </th>

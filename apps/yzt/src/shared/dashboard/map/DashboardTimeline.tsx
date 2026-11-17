@@ -1,5 +1,5 @@
 import { defineComponent, type PropType } from 'vue';
-import { SvgIcon } from '@/shared/icons/SvgIcon';
+import { SvgIcon } from '../../icons/SvgIcon';
 import styles from './DashboardMap.module.scss';
 
 /** 原生 range 保留拖动和键盘语义，独立视觉层复原旧时间轴 */

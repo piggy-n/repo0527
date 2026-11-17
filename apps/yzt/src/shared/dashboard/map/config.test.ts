@@ -1,8 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { INDICATORS } from '../catalog';
+import { INDICATORS, type Indicator } from '../../city-indicators/catalog';
 import { createMapClassification } from '../map-classification';
-import type { Indicator } from '../model';
 import { colorCoordinate, EMPTY_COLOR, getMapColor, mapLegendLevels, MAP_COLORS } from './config';
 
 function indicator(id: string): Indicator {

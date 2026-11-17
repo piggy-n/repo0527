@@ -4,7 +4,7 @@ import { SvgIcon, type IconName } from '@/shared/icons/SvgIcon';
 import { CATEGORIES, CITIES } from '../catalog';
 import type { CategoryId } from '../model';
 import type { DashboardModel } from '../composables/useDashboard';
-import fonts from './DashboardFonts.module.scss';
+import fonts from '@/shared/dashboard/shell/DashboardFonts.module.scss';
 import styles from './DashboardFilters.module.scss';
 
 const categoryIcons: Record<CategoryId, IconName> = {

@@ -107,7 +107,7 @@
       }
     },
     {
-      "files": ["apps/yzt/src/features/city-dashboard/**"],
+      "files": ["apps/yzt/src/features/city-dashboard/**", "apps/yzt/src/shared/dashboard/map/**"],
       "rules": {
         "no-restricted-imports": [
           "error",

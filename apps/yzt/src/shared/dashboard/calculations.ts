@@ -1,4 +1,4 @@
-import type { City, Comparison, DashboardData, Indicator } from './model';
+import type { City, Comparison, DashboardData, IndicatorMeta } from './model';
 
 /** 只接受有限数字，缺失值与 NaN 不参与统计 */
 export function isValue(value: number | null | undefined): value is number {
@@ -27,7 +27,7 @@ export function decimalPlaces(value: number): number {
 /** 每年独立计算所选城市的算术平均，空集不返回零 */
 export function compareIndicator(
   data: DashboardData,
-  indicator: Indicator,
+  indicator: Pick<IndicatorMeta, 'id' | 'precision'>,
   years: readonly number[],
   cities: readonly City[]
 ): Comparison[] {
@@ -54,7 +54,7 @@ const formats = new Map<number, Intl.NumberFormat>();
 /** 数量、覆盖率与职住比共用精度规则；1:X 的数值表示 X */
 export function formatValue(
   value: number | null | undefined,
-  indicator: Pick<Indicator, 'unit' | 'precision'>,
+  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>,
   withUnit = true,
   precision = indicator.precision
 ): string {

@@ -1,18 +1,35 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { required } from '@/shared/testing/required';
+import { INDICATORS, requireIndicator, type Indicator } from '../../city-indicators/catalog';
+import { indicatorValue } from '../../city-indicators/indicator-value';
+import { required } from '../../testing/required';
+import { DASHBOARD_CITIES } from '../cities';
+import { createMapClassification } from '../map-classification';
+import tooltipStyles from '../tooltip/TooltipLayer.module.scss';
+import { DashboardMap } from './DashboardMap';
 import { JiangsuMapScene } from './JiangsuMapScene';
 import { loadDashboardRegions } from './region-geometry';
-import { DashboardMap } from '../components/DashboardMap';
-import { useDashboard } from '../composables/useDashboard';
-import { createMockData } from '../data/mock-data';
 import type { SceneCallbacks } from './types';
-import viewStyles from '../components/DashboardView.module.scss';
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
   hosts.splice(0).forEach(element => element.remove());
 });
+
+// 与原驾驶舱的默认筛选一致：2025、2026 两年，全部城市，地图显示 2026 年
+function mapProps(indicator: Indicator) {
+  const values = Object.fromEntries(
+    DASHBOARD_CITIES.map(city => [city.code, indicatorValue(city.code, indicator, 2026)])
+  );
+  return {
+    indicator,
+    title: `2026年江苏省${indicator.name}分布图（${indicator.unit}）`,
+    values,
+    classification: createMapClassification(Object.values(values)),
+    years: [2025, 2026],
+    activeYear: 2026
+  };
+}
 
 function host(): HTMLDivElement {
   const element = document.createElement('div');
@@ -24,16 +41,12 @@ function host(): HTMLDivElement {
 
 describe('驾驶舱真实地图引擎', () => {
   it('窄地图的多行标题与固定提示表格保留间距', async () => {
-    const model = useDashboard(createMockData(2026));
-    model.selectCategory('happiness');
-    const { indicators } = model.category.value;
-    const indicator = required(indicators.find(item => item.name.startsWith('每10万人拥有的博物馆')), '博物馆指标');
-    model.selectIndicator(indicator.id);
+    const indicator = required(INDICATORS.find(item => item.name.startsWith('每10万人拥有的博物馆')), '博物馆指标');
     const wrapper = mount(DashboardMap, {
       attachTo: host(),
-      props: { model, reducedMotion: true, active: true, forceFallback: true },
+      props: { ...mapProps(indicator), reducedMotion: true, active: true, forceFallback: true },
       attrs: { style: 'width:366px;height:600px;--ui-scale:0.9' },
-      slots: { default: () => <div class={viewStyles.tooltip} data-dashboard-tooltip>城市数据表格</div> }
+      slots: { default: () => <div class={tooltipStyles.tooltip} data-dashboard-tooltip>城市数据表格</div> }
     });
     try {
       await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'), { timeout: 10000 });
@@ -126,11 +139,11 @@ describe('驾驶舱真实地图引擎', () => {
   it('运行中失去 WebGL 自动降为二维，重复进入退出不遗留画布', async () => {
     const element = host();
     for (let index = 0; index < 3; index++) {
-      const model = useDashboard(createMockData(2026));
-      const wrapper = mount(
-        DashboardMap,
-        { attachTo: element, props: { model, reducedMotion: true }, attrs: { style: 'width:900px;height:700px' } }
-      );
+      const wrapper = mount(DashboardMap, {
+        attachTo: element,
+        props: { ...mapProps(requireIndicator('A-15')), reducedMotion: true },
+        attrs: { style: 'width:900px;height:700px' }
+      });
       try {
         // oxlint-disable-next-line no-await-in-loop -- 连续创建和释放同一容器，验证上一轮资源已清理
         await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'), { timeout: 10000 });
@@ -145,7 +158,14 @@ describe('驾驶舱真实地图引擎', () => {
         await vi.waitFor(() => expect(wrapper.text()).toContain('地图采用简化显示'));
         expect(wrapper.findAll('canvas')).toHaveLength(1);
         expect(wrapper.find('[aria-label="消防救援5分钟可达覆盖率二维分布图"]').exists()).toBe(true);
-        model.setYears([]);
+        // 清空年份：标题、时间轴和数值都由调用方一起改
+        // oxlint-disable-next-line no-await-in-loop -- 本轮清空年份后才能检查标题
+        await wrapper.setProps({
+          title: '请选择年份',
+          values: Object.fromEntries(DASHBOARD_CITIES.map(city => [city.code, null])),
+          years: [],
+          activeYear: null
+        });
         // oxlint-disable-next-line no-await-in-loop -- 卸载前确认本轮筛选收敛
         await vi.waitFor(() => expect(wrapper.text()).toContain('请选择年份'));
       } finally {

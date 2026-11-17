@@ -1,10 +1,10 @@
 import { defineComponent, onMounted, onScopeDispose, ref, watch, type PropType } from 'vue';
 import { useDocumentVisibility, useIntersectionObserver, useResizeObserver } from '@vueuse/core';
-import { createChart } from '../charts/runtime';
-import type { DashboardChartOption } from '../charts/options';
+import { createChart } from './runtime';
+import type { DashboardChartOption } from './options';
 import type { City } from '../model';
-import { useChartFonts } from '../composables/useChartFonts';
-import styles from './DashboardCharts.module.scss';
+import { useChartFonts } from './useChartFonts';
+import styles from './charts.module.scss';
 
 /** 第三方事件在边界收窄，避免将宽泛的 ECharts 事件类型传入业务状态 */
 function objectValue(value: unknown): Record<string, unknown> | null {

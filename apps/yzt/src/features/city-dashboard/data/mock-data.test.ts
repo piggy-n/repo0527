@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { indicatorValue } from '@/shared/city-indicators/indicator-value';
 import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
+import { createMapClassification } from '@/shared/dashboard/map-classification';
 import { CATEGORIES, CITIES, DASHBOARD_YEARS, INDICATORS } from '../catalog';
-import { createMapClassification } from '../map-classification';
 import { createMockData } from './mock-data';
 import baseline from './legacy-baseline.json';
 

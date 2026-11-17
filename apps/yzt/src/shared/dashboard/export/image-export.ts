@@ -1,4 +1,4 @@
-import { saveFile } from '@/shared/file-transfer';
+import { saveFile } from '../../file-transfer';
 
 /** 字体等待可中止，离开页面后不保留下载任务 */
 export async function waitForExportFonts(signal: AbortSignal): Promise<void> {

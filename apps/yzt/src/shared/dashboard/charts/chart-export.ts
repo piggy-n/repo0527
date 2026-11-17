@@ -1,5 +1,5 @@
-import { createChart } from '../charts/runtime';
-import type { DashboardChartOption } from '../charts/options';
+import { createChart } from './runtime';
+import type { DashboardChartOption } from './options';
 
 /** 独立导出实例读取固定选项，不依赖可能已滚出屏幕或切换的实时画布 */
 export function renderChartImage(option: DashboardChartOption, width: number, height: number): HTMLCanvasElement {

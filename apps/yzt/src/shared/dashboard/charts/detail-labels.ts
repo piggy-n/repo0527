@@ -1,5 +1,5 @@
 import { isValue } from '../calculations';
-import type { ChartType, Comparison } from '../model';
+import type { CartesianChartType, Comparison } from '../model';
 
 export interface LabelPlacement {
   show: boolean;
@@ -13,7 +13,7 @@ interface LabelInput {
   cityIndex: number;
   cityCount: number;
   activeYear: number | null;
-  chartType: ChartType;
+  chartType: CartesianChartType;
   stacked: boolean;
   axis: { min: number; max: number };
   size: { width: number; height: number };

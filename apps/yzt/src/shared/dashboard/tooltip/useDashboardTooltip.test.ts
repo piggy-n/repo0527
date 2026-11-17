@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref } from 'vue';
-import { createMockData } from '../data/mock-data';
-import { useDashboard } from './useDashboard';
 import { useDashboardTooltip } from './useDashboardTooltip';
 
 const scopes: ReturnType<typeof effectScope>[] = [];
@@ -11,11 +9,12 @@ function createTooltip() {
   const scope = effectScope();
   scopes.push(scope);
   const created = scope.run(() => {
-    const model = useDashboard(createMockData(2026));
+    // 筛选状态的替身：每次变化相当于用户改了一次筛选
+    const filters = ref(0);
     const visibility = ref<DocumentVisibilityState>('visible');
-    const tooltip = useDashboardTooltip(model, visibility);
-    const target = { indicatorId: model.indicator.value.id, cityCode: '320100' };
-    return { model, visibility, tooltip, target, stop: () => scope.stop() };
+    const tooltip = useDashboardTooltip({ reset: filters, visibility });
+    const target = { indicatorId: 'A-15', cityCode: '320100' };
+    return { filters, visibility, tooltip, target, stop: () => scope.stop() };
   });
   if (!created) {
     throw new Error('提示没有创建');
@@ -57,9 +56,9 @@ describe('驾驶舱共享提示', () => {
   });
 
   it('筛选变化、页面隐藏和外部滚动立即关闭提示', async () => {
-    const { model, visibility, tooltip, target } = createTooltip();
+    const { filters, visibility, tooltip, target } = createTooltip();
     tooltip.show('map', target);
-    model.setYears([2024]);
+    filters.value += 1;
     await nextTick();
     expect(tooltip.context.value).toBeNull();
     tooltip.show('chart', target);

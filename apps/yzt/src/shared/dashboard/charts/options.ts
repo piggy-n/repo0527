@@ -1,10 +1,10 @@
 import type { BarSeriesOption, LineSeriesOption } from 'echarts/charts';
 import type { GridComponentOption, LegendComponentOption, TooltipComponentOption } from 'echarts/components';
 import type { ComposeOption } from 'echarts/core';
-import type { ChartPreference, City, Comparison, Indicator } from '../model';
+import type { ChartPreference, City, Comparison, IndicatorMeta } from '../model';
 import { formatValue, isValue } from '../calculations';
 import { createValueAxisScale } from './axis-scale';
-import { AVERAGE_COLOR, yearColor } from './colors';
+import { AVERAGE_COLOR } from './palette';
 import { createDetailLabelPlan, type LabelPlacement } from './detail-labels';
 
 export type DashboardChartOption = ComposeOption<
@@ -12,7 +12,9 @@ export type DashboardChartOption = ComposeOption<
 >;
 
 export interface ChartInput {
-  readonly indicator: Indicator;
+  readonly indicator: IndicatorMeta;
+  /** 年份系列的颜色：同一指标的卡片、详情、提示要传同一种取色，保证同色 */
+  readonly color: (year: number) => string;
   readonly cities: readonly City[];
   readonly comparison: readonly Comparison[];
   readonly preference: ChartPreference;
@@ -92,7 +94,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
     return { opacity: focused ? 1 : 0.38, borderColor: focused ? '#C88E00' : undefined, borderWidth: focused ? 2 : 0 };
   };
   const series = comparison.map((item, seriesIndex): BarSeriesOption | LineSeriesOption => {
-    const color = yearColor(item.year, indicator.id);
+    const color = input.color(item.year);
     const showLabelYear = plan[item.year]?.compact || preference.type === 'line';
     const labelPrefix = showLabelYear ? `${item.year}年${stacked ? '\n' : ' '}` : '';
     const data = item.values.map((value, index) => ({

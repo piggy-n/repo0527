@@ -1,18 +1,20 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { createChartOption } from '@/shared/dashboard/charts/options';
+import { AVERAGE_COLOR } from '@/shared/dashboard/charts/palette';
 import { CATEGORIES, CITIES, DASHBOARD_YEARS } from '../catalog';
-import type { ChartType, Indicator } from '../model';
-import { AVERAGE_COLOR, yearColor } from './colors';
-import { createChartOption } from './options';
+import type { CartesianChartType, Indicator } from '../model';
+import { yearColor } from './colors';
 
 const colorsOf = (indicatorId: string) => DASHBOARD_YEARS.map(year => yearColor(year, indicatorId));
 
-function seriesOf(indicator: Indicator, type: ChartType) {
+function seriesOf(indicator: Indicator, type: CartesianChartType) {
   return createChartOption({
     indicator,
     cities: CITIES.slice(0, 2),
     comparison: [{ year: 2026, values: [1, 2], average: 1.5 }],
-    preference: { type, showAverage: false, legend: {} }
+    preference: { type, showAverage: false, legend: {} },
+    color: year => yearColor(year, indicator.id)
   }).series;
 }
 

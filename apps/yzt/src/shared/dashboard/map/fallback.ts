@@ -3,9 +3,9 @@ import { MapChart, type MapSeriesOption } from 'echarts/charts';
 import { GeoComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LabelLayout } from 'echarts/features';
-import { CITIES } from '../catalog';
+import { DASHBOARD_CITIES } from '../cities';
 import { formatValue } from '../calculations';
-import type { Indicator } from '../model';
+import type { IndicatorMeta } from '../model';
 import type { DashboardRegions } from './region-geometry';
 import type { MapValues } from './types';
 
@@ -16,11 +16,15 @@ function cityCode(event: unknown): string | null {
   if (typeof event !== 'object' || event === null || !('name' in event)) {
     return null;
   }
-  return CITIES.find(city => city.name === event.name)?.code ?? null;
+  return DASHBOARD_CITIES.find(city => city.name === event.name)?.code ?? null;
 }
 
 // 简化地图上城市名称下面的数值；没有数值时只写名称
-function cityLabel(name: string, value: number | null | undefined, indicator: Indicator): string {
+function cityLabel(
+  name: string,
+  value: number | null | undefined,
+  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+): string {
   if (value === null || value === undefined) {
     return name;
   }
@@ -46,7 +50,11 @@ export function createFallback(
   chart.on('mouseout', () => hover(null));
   chart.getZr().on('globalout', () => hover(null));
   return {
-    update(values: MapValues, colors: Readonly<Record<string, string>>, indicator: Indicator): void {
+    update(
+      values: MapValues,
+      colors: Readonly<Record<string, string>>,
+      indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+    ): void {
       const series: MapSeriesOption = {
         type: 'map',
         map: 'jiangsu-city-dashboard',
@@ -62,7 +70,7 @@ export function createFallback(
           textBorderColor: '#FFF',
           textBorderWidth: 3,
           formatter: item => {
-            const city = CITIES.find(current => current.name === item.name);
+            const city = DASHBOARD_CITIES.find(current => current.name === item.name);
             return cityLabel(item.name, city ? values[city.code] : null, indicator);
           }
         },
@@ -72,7 +80,7 @@ export function createFallback(
           itemStyle: { areaColor: 'rgba(255,215,0,0.8)', borderColor: '#FFF', borderWidth: 2 }
         },
         select: { label: { color: 'rgb(100,0,0)' }, itemStyle: { color: 'rgba(255,215,0,0.8)' } },
-        data: CITIES.map(city => ({
+        data: DASHBOARD_CITIES.map(city => ({
           name: city.name,
           value: values[city.code] ?? undefined,
           itemStyle: {

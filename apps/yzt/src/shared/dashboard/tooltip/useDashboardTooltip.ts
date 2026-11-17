@@ -1,18 +1,18 @@
-import { computed, onScopeDispose, shallowRef, watch, type Ref } from 'vue';
+import { onScopeDispose, shallowRef, watch, type Ref, type WatchSource } from 'vue';
 import { useEventListener } from '@vueuse/core';
-import { CITIES } from '../catalog';
 import type { ChartHover } from '../model';
-import type { DashboardModel } from './useDashboard';
 
 type TooltipSource = 'map' | 'chart';
 
-/** 统一地图与图表的提示目标，移入提示表格时取消延迟关闭 */
-export function useDashboardTooltip(model: DashboardModel, visibility: Ref<DocumentVisibilityState>) {
+interface TooltipOptions {
+  /** 筛选等状态变化时关闭提示 */
+  reset: WatchSource<unknown>;
+  visibility: Ref<DocumentVisibilityState>;
+}
+
+/** 统一地图与图表的提示目标，移入提示表格时取消延迟关闭；指标和城市由调用方按目标解析 */
+export function useDashboardTooltip({ reset, visibility }: TooltipOptions) {
   const context = shallowRef<(ChartHover & { source: TooltipSource }) | null>(null);
-  const indicator = computed(
-    () => model.category.value.indicators.find(item => item.id === context.value?.indicatorId)
-  );
-  const city = computed(() => CITIES.find(item => item.code === context.value?.cityCode));
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
 
   function keepOpen(): void {
@@ -41,7 +41,7 @@ export function useDashboardTooltip(model: DashboardModel, visibility: Ref<Docum
     }
   }
 
-  watch(model.state, close);
+  watch(reset, close);
   watch(visibility, close);
   // 外层滚动使悬停坐标失效，提示表格内部滚动继续保留
   useEventListener(window, 'resize', close);
@@ -52,5 +52,5 @@ export function useDashboardTooltip(model: DashboardModel, visibility: Ref<Docum
   }, { capture: true, passive: true });
   onScopeDispose(close);
 
-  return { context, indicator, city, keepOpen, close, show, leave };
+  return { context, keepOpen, close, show, leave };
 }

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { CITIES } from '../catalog';
+import { DASHBOARD_CITIES as CITIES } from '../cities';
 import { prepareRegions, type RegionGeometry } from './region-geometry';
 import { layoutMapLabels } from './label-layout';
 

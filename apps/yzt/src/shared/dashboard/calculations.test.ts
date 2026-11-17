@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { CITIES, INDICATORS } from './catalog';
+import { INDICATORS } from '../city-indicators/catalog';
 import { compareIndicator, decimalPlaces, formatValue, niceStep, trimFloat } from './calculations';
 import { createMapClassification, getMapClassIndex } from './map-classification';
 import { createValueAxisScale } from './charts/axis-scale';
 import { createChartOption, isStacked } from './charts/options';
+import { DASHBOARD_CITIES as CITIES } from './cities';
 import type { ChartPreference, DashboardData } from './model';
 
 const indicator = INDICATORS.find(item => item.id === 'A-15');
@@ -64,7 +65,7 @@ describe('统计口径与展示计算', () => {
   it('四年柱图是年度值累计并移除均值线，折线恢复最新年均值', () => {
     const comparison = [2023, 2024, 2025, 2026].map(year => ({ year, values: [30, 40], average: 35 }));
     const preference: ChartPreference = { type: 'bar', showAverage: true, legend: {} };
-    const input = { indicator, cities: CITIES.slice(0, 2), comparison, preference };
+    const input = { indicator, cities: CITIES.slice(0, 2), comparison, preference, color: () => '#1849A9' };
     expect(isStacked(input)).toBe(true);
     const stacked = createChartOption(input);
     expect(stacked.yAxis).toMatchObject({ name: '年度值累计（%）' });

@@ -1,7 +1,7 @@
 import { usePreferredReducedMotion } from '@vueuse/core';
 import { gsap } from 'gsap';
 import { computed, nextTick, onScopeDispose, type Ref, ref, watch } from 'vue';
-import { LoadTrace } from '@/shared/perf/load-trace';
+import { LoadTrace } from '../../perf/load-trace';
 import { playVisibleTimeline } from '../animation/timeline-clock';
 
 // 首屏以下的卡片不参与入场：分类很长时整个入场不会拖到几十秒

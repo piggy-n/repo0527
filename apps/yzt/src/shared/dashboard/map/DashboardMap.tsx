@@ -1,25 +1,33 @@
 import { computed, defineComponent, ref, watch, type PropType } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
-import { SvgIcon } from '@/shared/icons/SvgIcon';
-import type { DashboardModel } from '../composables/useDashboard';
-import type { MapLabel } from '../map/types';
-import { useDashboardMap } from '../composables/useDashboardMap';
-import { useImageExport } from '../composables/useImageExport';
-import { imageWithTitle, saveImage } from '../export/image-export';
-import { drawMapLabels } from '../export/map-export';
+import { SvgIcon } from '../../icons/SvgIcon';
 import { formatValue } from '../calculations';
-import { mapLegendLevels } from '../map/config';
+import type { MapClassification } from '../map-classification';
+import type { IndicatorMeta } from '../model';
+import { useImageExport } from '../export/useImageExport';
+import { imageWithTitle, saveImage } from '../export/image-export';
+import fonts from '../shell/DashboardFonts.module.scss';
+import chartStyles from '../charts/charts.module.scss';
+import type { MapLabel, MapValues } from './types';
+import { useDashboardMap } from './useDashboardMap';
+import { drawMapLabels } from './map-export';
+import { mapLegendLevels } from './config';
 import { DashboardTimeline } from './DashboardTimeline';
 import { DashboardMapFrame } from './DashboardMapFrame';
-import fonts from './DashboardFonts.module.scss';
 import styles from './DashboardMap.module.scss';
-import chartStyles from './DashboardCharts.module.scss';
 
 /** 地图外壳组合场景、标签、图例、时间轴，保留独立大屏的布局 */
 export const DashboardMap = defineComponent({
   name: 'DashboardMap',
   props: {
-    model: { type: Object as PropType<DashboardModel>, required: true },
+    indicator: { type: Object as PropType<IndicatorMeta>, required: true },
+    /** 地图上方的标题，由调用方按年份和指标拼好 */
+    title: { type: String, required: true },
+    values: { type: Object as PropType<MapValues>, required: true },
+    classification: { type: Object as PropType<MapClassification>, required: true },
+    /** 时间轴上的年份，从旧到新 */
+    years: { type: Array as PropType<readonly number[]>, required: true },
+    activeYear: { type: Number as PropType<number | null>, default: null },
     forceFallback: { type: Boolean, default: false },
     reducedMotion: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
@@ -28,7 +36,8 @@ export const DashboardMap = defineComponent({
   emits: {
     hover: (_code: string | null) => true,
     detail: (_code: string) => true,
-    settled: () => true
+    settled: () => true,
+    year: (_year: number) => true
   },
   setup(props, { emit, slots }) {
     const canvas = ref<HTMLElement>();
@@ -42,7 +51,12 @@ export const DashboardMap = defineComponent({
       }
     });
     const exporting = useImageExport();
-    const map = useDashboardMap(canvas, props.model, {
+    const source = {
+      values: () => props.values,
+      classification: () => props.classification,
+      indicator: () => props.indicator
+    };
+    const map = useDashboardMap(canvas, source, {
       fallback: () => props.forceFallback,
       reducedMotion: () => props.reducedMotion,
       valuesVisible: () => props.valuesVisible,
@@ -63,18 +77,13 @@ export const DashboardMap = defineComponent({
         }
       }
     );
-    const title = computed(() => {
-      const { activeYear } = props.model.state.value;
-      const { name, unit } = props.model.indicator.value;
-      return activeYear === null ? '请选择年份' : `${activeYear}年江苏省${name}分布图（${unit}）`;
-    });
-    const levels = computed(() => mapLegendLevels(props.model.classification.value, props.model.indicator.value));
+    const levels = computed(() => mapLegendLevels(props.classification, props.indicator));
 
     /** 导出内容取点击时的快照，不受等待字体期间的筛选变化影响 */
     async function download(): Promise<void> {
-      const exportTitle = title.value;
-      const indicator = props.model.indicator.value;
-      const filename = `江苏省-${props.model.state.value.activeYear}-${indicator.name}`;
+      const exportTitle = props.title;
+      const indicator = props.indicator;
+      const filename = `江苏省-${props.activeYear}-${indicator.name}`;
       const blob = await exporting.run('map', async signal => {
         const snapshot = map.capture();
         await exporting.waitForFonts(signal);
@@ -88,9 +97,8 @@ export const DashboardMap = defineComponent({
 
     // 三维地图上的城市标签：名称和数值，点开详情；避让后离开锚点的画一条引线
     function renderLabel(label: MapLabel) {
-      const { model } = props;
-      const value = model.mapValues.value[label.code];
-      const indicator = model.indicator.value;
+      const value = props.values[label.code];
+      const indicator = props.indicator;
       return (
         <button
           key={label.code}
@@ -133,8 +141,7 @@ export const DashboardMap = defineComponent({
     }
 
     return () => {
-      const model = props.model;
-      const years = model.comparisonYears.value;
+      const years = props.years;
       const ready = map.status.value === 'ready';
       return (
         <section
@@ -159,7 +166,7 @@ export const DashboardMap = defineComponent({
           </div>
           <div class={styles.mist} data-scene="mist" aria-hidden="true" />
           <div ref={heading} class={styles.heading} data-enter="map-title" inert={!props.active}>
-            <h2>{title.value}</h2>
+            <h2>{props.title}</h2>
             <button
               class={chartStyles.iconButton}
               type="button"
@@ -175,7 +182,7 @@ export const DashboardMap = defineComponent({
               ref={canvas}
               class={styles.canvas}
               role="img"
-              aria-label={`${model.indicator.value.name}${map.simple.value ? '二维' : '三维'}分布图`}
+              aria-label={`${props.indicator.name}${map.simple.value ? '二维' : '三维'}分布图`}
             />
             {ready && !map.simple.value && renderLabels()}
             {map.status.value === 'failed' && (
@@ -200,10 +207,10 @@ export const DashboardMap = defineComponent({
           <div class={styles.timelinePosition} data-enter="timeline" inert={!props.active}>
             <DashboardTimeline
               years={years}
-              activeYear={model.state.value.activeYear}
+              activeYear={props.activeYear}
               ready={ready}
               reduced={props.reducedMotion}
-              onChange={model.setActiveYear}
+              onChange={year => emit('year', year)}
             />
           </div>
           {slots.default?.()}

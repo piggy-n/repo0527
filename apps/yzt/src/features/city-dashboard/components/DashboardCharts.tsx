@@ -2,20 +2,22 @@ import { computed, defineComponent, onMounted, ref, shallowRef, watch, type Prop
 import { ElButton, ElDialog } from 'element-plus';
 import { MxTitle } from '@mx/ui';
 import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
+import { formatValue } from '@/shared/dashboard/calculations';
+import { renderChartImage } from '@/shared/dashboard/charts/chart-export';
+import chartStyles from '@/shared/dashboard/charts/charts.module.scss';
+import { DashboardPlot } from '@/shared/dashboard/charts/DashboardPlot';
+import { createChartOption, isStacked } from '@/shared/dashboard/charts/options';
+import { TooltipTable } from '@/shared/dashboard/charts/TooltipTable';
+import { warmUpChart } from '@/shared/dashboard/charts/warm-up';
+import { imageWithTitle, saveImage } from '@/shared/dashboard/export/image-export';
+import { useImageExport } from '@/shared/dashboard/export/useImageExport';
+import fonts from '@/shared/dashboard/shell/DashboardFonts.module.scss';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CITIES } from '../catalog';
-import { formatValue } from '../calculations';
-import { createChartOption, isStacked } from '../charts/options';
-import { warmUpChart } from '../charts/warm-up';
+import { yearColor } from '../charts/colors';
 import { useCardNavigation } from '../composables/useCardNavigation';
 import type { DashboardModel } from '../composables/useDashboard';
-import { useImageExport } from '../composables/useImageExport';
-import { renderChartImage } from '../export/chart-export';
-import { imageWithTitle, saveImage } from '../export/image-export';
 import type { ChartHover, Comparison, Indicator } from '../model';
-import { DashboardPlot } from './DashboardPlot';
-import { TooltipTable } from './TooltipTable';
-import fonts from './DashboardFonts.module.scss';
 import styles from './DashboardCharts.module.scss';
 
 export interface DashboardChartsHandle {
@@ -71,6 +73,7 @@ export const DashboardCharts = defineComponent({
         comparison,
         option: createChartOption({
           indicator,
+          color: year => yearColor(year, indicator.id),
           cities: props.model.cities.value,
           comparison,
           preference,
@@ -86,6 +89,7 @@ export const DashboardCharts = defineComponent({
       }
       return createChartOption({
         indicator: selected.indicator,
+        color: year => yearColor(year, selected.indicator.id),
         cities: props.model.cities.value,
         comparison: props.model.comparisons.value.get(selected.indicator.id) ?? [],
         preference: { ...props.model.preference(selected.indicator), legend: detailLegend.value },
@@ -149,10 +153,10 @@ export const DashboardCharts = defineComponent({
       const exportKey = `${expanded ? 'detail' : 'card'}:${indicator.id}`;
       const cannotDownload = !comparison.length || !model.cities.value.length || exporting.pending.value.has(exportKey);
       return (
-        <div class={styles.actions}>
+        <div class={chartStyles.actions}>
           <button
             type="button"
-            class={[styles.iconButton, preference.showAverage && !stacked && styles.averageActive]}
+            class={[chartStyles.iconButton, preference.showAverage && !stacked && chartStyles.averageActive]}
             aria-label={`${prefix}${preference.showAverage ? '隐藏' : '显示'}均值线`}
             aria-pressed={preference.showAverage && !stacked}
             title={stacked ? '堆叠模式只在提示表格显示逐年均值' : '显示或隐藏均值线'}
@@ -163,7 +167,7 @@ export const DashboardCharts = defineComponent({
           </button>
           <button
             type="button"
-            class={[styles.iconButton, preference.type === 'line' && styles.lineType]}
+            class={[chartStyles.iconButton, preference.type === 'line' && chartStyles.lineType]}
             aria-label={`${prefix}切换为${preference.type === 'bar' ? '折线' : '柱状'}图`}
             title={`切换为${preference.type === 'bar' ? '折线' : '柱状'}图`}
             onClick={() => model.setPreference(indicator, { type: preference.type === 'bar' ? 'line' : 'bar' })}
@@ -173,7 +177,7 @@ export const DashboardCharts = defineComponent({
           {!expanded && (
             <button
               type="button"
-              class={styles.iconButton}
+              class={chartStyles.iconButton}
               aria-label={`放大${indicator.name}图表`}
               title="放大图表"
               onClick={() => openDetail({ indicatorId: indicator.id })}
@@ -183,7 +187,7 @@ export const DashboardCharts = defineComponent({
           )}
           <button
             type="button"
-            class={styles.iconButton}
+            class={chartStyles.iconButton}
             aria-label={`下载${expanded ? '详情' : indicator.name}图表`}
             title="下载图片"
             disabled={cannotDownload}
@@ -231,10 +235,10 @@ export const DashboardCharts = defineComponent({
     function renderDetailPlot(selected: Indicator, comparison: readonly Comparison[]) {
       const option = detailOption.value;
       if (!comparison.length || !props.model.cities.value.length || !option) {
-        return <div class={styles.empty}>暂无比较数据</div>;
+        return <div class={chartStyles.empty}>暂无比较数据</div>;
       }
       return (
-        <div ref={detailPlot} class={styles.detailPlot}>
+        <div ref={detailPlot} class={chartStyles.detailPlot}>
           <DashboardPlot
             option={option}
             cities={props.model.cities.value}
@@ -250,19 +254,20 @@ export const DashboardCharts = defineComponent({
     function renderDetail(selected: Indicator, comparison: readonly Comparison[]) {
       const { model } = props;
       return (
-        <div class={styles.detail}>
-          <h2 class={styles.fullTitle}>
+        <div class={chartStyles.detail}>
+          <h2 class={chartStyles.fullTitle}>
             {selected.name}（{selected.unit}）
           </h2>
-          <div class={styles.detailTools}>
+          <div class={chartStyles.detailTools}>
             <span>{focusedCityText()}</span>
             {renderActions(selected, true)}
           </div>
-          <div class={styles.detailScroll}>{renderDetailPlot(selected, comparison)}</div>
+          <div class={chartStyles.detailScroll}>{renderDetailPlot(selected, comparison)}</div>
           {hoveredCity.value && (
-            <div class={styles.detailTooltip}>
+            <div class={chartStyles.detailTooltip}>
               <TooltipTable
                 indicator={selected}
+                color={year => yearColor(year, selected.id)}
                 comparison={comparison}
                 cities={model.cities.value}
                 city={hoveredCity.value}
@@ -306,13 +311,13 @@ export const DashboardCharts = defineComponent({
                   key={`${state.categoryId}:${indicator.id}`}
                   data-chart-id={indicator.id}
                   data-enter="chart"
-                  class={[styles.card, current && styles.selected]}
+                  class={[chartStyles.card, current && styles.selected]}
                   aria-current={state.indicatorId === indicator.id ? 'true' : undefined}
                 >
-                  <div class={styles.heading}>
+                  <div class={chartStyles.heading}>
                     <button
                       type="button"
-                      class={styles.title}
+                      class={chartStyles.title}
                       title={`${indicator.name}（${indicator.unit}）`}
                       onClick={() => model.selectIndicator(indicator.id)}
                     >
@@ -320,7 +325,7 @@ export const DashboardCharts = defineComponent({
                     </button>
                     {renderActions(indicator)}
                   </div>
-                  <div class={styles.average}>
+                  <div class={chartStyles.average}>
                     {latest ? (
                       <span aria-label="最新所选年份的城市平均值">
                         <i aria-hidden="true" />
@@ -328,7 +333,7 @@ export const DashboardCharts = defineComponent({
                       </span>
                     ) : '未选择比较年份'}
                   </div>
-                  <div class={styles.body}>
+                  <div class={chartStyles.body}>
                     {cardComparison.length && model.cities.value.length ? (
                       <DashboardPlot
                         option={option}
@@ -340,7 +345,7 @@ export const DashboardCharts = defineComponent({
                         onLegend={legend => model.setPreference(indicator, { legend })}
                       />
                     ) : (
-                      <div class={styles.empty}>
+                      <div class={chartStyles.empty}>
                         {cardComparison.length ? '请选择城市后查看比较数据' : '请选择年份后查看比较数据'}
                       </div>
                     )}
@@ -350,7 +355,7 @@ export const DashboardCharts = defineComponent({
             })}
           </div>
           <ElDialog
-            class={['dialog-panel-header', styles.dialog]}
+            class={['dialog-panel-header', chartStyles.dialog]}
             title="指标图表详情"
             width="min(1100px, 94vw)"
             top="6vh"

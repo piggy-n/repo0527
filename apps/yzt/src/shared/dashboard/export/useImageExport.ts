@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, shallowRef } from 'vue';
-import { canvasBlob, waitForExportFonts } from '../export/image-export';
+import { canvasBlob, waitForExportFonts } from './image-export';
 
 /** 同一张图防重复导出，卸载只作废尚未交给浏览器的结果 */
 export function useImageExport() {

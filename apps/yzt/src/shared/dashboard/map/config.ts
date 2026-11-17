@@ -1,6 +1,6 @@
 import { decimalPlaces, formatValue } from '../calculations';
 import { getMapClassIndex, type MapClassification } from '../map-classification';
-import type { Indicator } from '../model';
+import type { IndicatorMeta } from '../model';
 
 export const MAP_DEPTH = 14;
 export const MAP_COLORS = ['#B4E2FD', '#56C3FB', '#2EA7F6', '#168CF2', '#075BE7'];
@@ -31,7 +31,10 @@ export interface MapLegendLevel {
 }
 
 /** 地图图例：从高到低每档一行，分界统一按其中最多的小数位显示（至多 20 位） */
-export function mapLegendLevels(classification: MapClassification, indicator: Indicator): MapLegendLevel[] {
+export function mapLegendLevels(
+  classification: MapClassification,
+  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+): MapLegendLevel[] {
   const { classCount, displayMin, displayMax, breaks } = classification;
   // 有分档就有观测值，显示范围一定有值
   if (!classCount || displayMin === null || displayMax === null) {

@@ -3,15 +3,23 @@ import { useDocumentVisibility, usePreferredReducedMotion, useResizeObserver } f
 import { gsap } from 'gsap';
 import { Color } from 'three';
 import { LatestController } from '@mx/utils';
-import { CITIES } from '../catalog';
-import { loadDashboardRegions } from '../map/region-geometry';
-import { layoutMapLabels } from '../map/label-layout';
-import { JiangsuMapScene } from '../map/JiangsuMapScene';
-import { createFallback } from '../map/fallback';
-import { colorCoordinate, getMapColor, MAP_YEAR_TRANSITION } from '../map/config';
-import type { DashboardMapSnapshot, MapLabel, MapValues } from '../map/types';
-import type { DashboardModel } from './useDashboard';
-import { useChartFonts } from './useChartFonts';
+import { DASHBOARD_CITIES as CITIES } from '../cities';
+import type { MapClassification } from '../map-classification';
+import type { IndicatorMeta } from '../model';
+import { useChartFonts } from '../charts/useChartFonts';
+import { loadDashboardRegions } from './region-geometry';
+import { layoutMapLabels } from './label-layout';
+import { JiangsuMapScene } from './JiangsuMapScene';
+import { createFallback } from './fallback';
+import { colorCoordinate, getMapColor, MAP_YEAR_TRANSITION } from './config';
+import type { DashboardMapSnapshot, MapLabel, MapValues } from './types';
+
+/** 地图要显示的数据，由调用方从自己的状态里取 */
+export interface DashboardMapSource {
+  values: () => MapValues;
+  classification: () => MapClassification;
+  indicator: () => IndicatorMeta;
+}
 
 interface DashboardMapOptions {
   fallback: () => boolean;
@@ -24,7 +32,7 @@ interface DashboardMapOptions {
 /** 组件只持有显示快照；加载、降级、重试和过渡都归同一生命周期 */
 export function useDashboardMap(
   container: Ref<HTMLElement | undefined>,
-  model: DashboardModel,
+  source: DashboardMapSource,
   options: DashboardMapOptions
 ) {
   const status = ref<'loading' | 'entering' | 'ready' | 'failed'>('loading');
@@ -51,15 +59,15 @@ export function useDashboardMap(
   }
 
   function updateFallback(): void {
-    fallback?.update(displayValues.value, colors, model.indicator.value);
+    fallback?.update(displayValues.value, colors, source.indicator());
   }
 
   /** 标签数值与城市颜色使用同一进度，简化地图按较低频率重绘 */
   function transition(duration = 0): void {
     tween?.kill();
-    const target = { ...model.mapValues.value };
+    const target = { ...source.values() };
     const colorValues = Object.fromEntries(
-      CITIES.map(city => [city.code, colorCoordinate(target[city.code], model.classification.value)])
+      CITIES.map(city => [city.code, colorCoordinate(target[city.code], source.classification())])
     );
     const targetColors = Object.fromEntries(CITIES.map(city => [city.code, getMapColor(colorValues[city.code])]));
     scene?.updateValues(colorValues, duration);
@@ -196,7 +204,7 @@ export function useDashboardMap(
   }
 
   watch(
-    [model.mapValues, model.classification],
+    [source.values, source.classification],
     () => {
       hover(null);
       if (status.value === 'ready') {
@@ -251,7 +259,7 @@ export function useDashboardMap(
     return {
       canvas,
       labels: labels.value.map(label => ({ ...label })),
-      values: { ...model.mapValues.value },
+      values: { ...source.values() },
       simple: simple.value,
       labelScale: labelScale.value
     };

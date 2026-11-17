@@ -1,9 +1,12 @@
 import { formatValue } from '../calculations';
-import type { DashboardMapSnapshot } from '../map/types';
-import type { Indicator } from '../model';
+import type { DashboardMapSnapshot } from './types';
+import type { IndicatorMeta } from '../model';
 
 /** 将 DOM 城市标签绘入已冻结的地图像素，简化地图已自带标签 */
-export function drawMapLabels(snapshot: DashboardMapSnapshot, indicator: Indicator): void {
+export function drawMapLabels(
+  snapshot: DashboardMapSnapshot,
+  indicator: Pick<IndicatorMeta, 'unit' | 'precision'>
+): void {
   const context = snapshot.canvas.getContext('2d');
   if (!context) {
     throw new Error('地图导出画布不可用');
