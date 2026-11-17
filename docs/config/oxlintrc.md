@@ -184,8 +184,8 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 - `paths` 的 lodash-es：禁止 `import _ from 'lodash-es'`（默认导入整个库，影响 tree-shaking）
 - `patterns` 的 lodash：禁止 `lodash` 和 `lodash/xxx`（CommonJS 版本）
 - maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `packages/map-core/src/maplibre/`、`app/` 和包的 `test-setup.browser.ts` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
-- three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/`、驾驶舱 `features/city-dashboard/` 和驾驶舱公共的地图目录 `shared/dashboard/map/` 放开（ADR 0147 第 5 节；驾驶舱比 map-three 早，原来就用 three；两个驾驶舱共用的地图移到 `shared/dashboard/map/` 后只放开这个目录，`shared` 的其他目录仍然禁止，ADR 0163）。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl 一样
-- gaussian-splat-lite（LCC2 加入）：只对 `packages/map-three/src/` 放开（ADR 0149 第 2 节）。驾驶舱和 map-three 原来共用一个 override，现在分成两个，驾驶舱的那个仍然禁止它；`app/` 的 override 也写上它，所以和 maplibre-gl、three 不同，app 不能导入。包的 `exports` 只有入口，不用 `patterns`
+- three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/` 和驾驶舱公共的地图目录 `shared/dashboard/map/` 放开（ADR 0147 第 5 节、ADR 0163）。驾驶舱比 map-three 早，原来就用 three，放开的是整个 `features/city-dashboard/`；两个驾驶舱共用的地图移到 `shared/dashboard/map/` 后，`features/city-dashboard/` 不再导入 three，例外只留这个目录，两个驾驶舱的 feature 和 `shared` 的其他目录（包括 `shared/dashboard` 的其他子目录）都禁止。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl 一样
+- gaussian-splat-lite（LCC2 加入）：只对 `packages/map-three/src/` 放开（ADR 0149 第 2 节）。驾驶舱和 map-three 原来共用一个 override，现在分成两个，驾驶舱地图目录的那个仍然禁止它；`app/` 的 override 也写上它，所以和 maplibre-gl、three 不同，app 不能导入。包的 `exports` 只有入口，不用 `patterns`
 - proj4（LCC2 的配准工具加入）：只对 `apps/yzt/tools/lcc2-register/` 放开（ADR 0149 第 4 节：清单存换算好的摆放，运行时不换算）。它是 yzt 的开发依赖，和运行时代码共用一个 `package.json`，`src` 里也解析得到，所以要靠 lint 拦（`shpjs` 带的那份在 pnpm 的隔离布局下从应用里解析不到）。基础规则和每个放开别的库的 override（包括 `app/`）都写上它，`patterns` 拦 `proj4/dist/...`、`proj4/lib/...` 这类子路径；工具目录的 override 写基础规则里除 proj4 以外的各项
 
 ### 第三组：类型感知规则
@@ -225,13 +225,13 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 
 ```json
 { "files": ["packages/map-three/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、proj4 的两项 }] } }
-{ "files": ["apps/yzt/src/features/city-dashboard/**", "apps/yzt/src/shared/dashboard/map/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、gaussian-splat-lite、proj4 的两项 }] } }
+{ "files": ["apps/yzt/src/shared/dashboard/map/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、gaussian-splat-lite、proj4 的两项 }] } }
 { "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、three 的三项、gaussian-splat-lite、proj4 的两项 }] } }
 { "files": ["apps/yzt/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、gaussian-splat-lite、proj4 的两项 }] } }
 { "files": ["apps/yzt/tools/lcc2-register/**"], "rules": { "no-restricted-imports": ["error", { 基础规则里除 proj4 以外的各项 }] } }
 ```
 
-默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 three，这里只对各自的适配器（three 还有驾驶舱）、app 的装配（`setWorkerUrl`、CSS，ADR 0023）和包的测试 setup（包的浏览器测试不依赖应用，自己设置 Worker 地址，ADR 0143）放开：MapLibre 适配器仍不能导入 three，map-three 仍不能导入 maplibre-gl（custom layer 的外壳在 MapLibre 适配器里，ADR 0147 第 5 节）。Cesium 引擎移除后，cesium 的几项和 map-cesium 的 override 一起删掉了（ADR 0153）。map-three 的 override 放在测试 setup 那一条前面：override 后写的生效，map-three 的 `test-setup.browser.ts` 要能设置 MapLibre 的 Worker 地址。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
+默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 three，这里只对各自的适配器（three 还有驾驶舱的地图目录 `shared/dashboard/map/`）、app 的装配（`setWorkerUrl`、CSS，ADR 0023）和包的测试 setup（包的浏览器测试不依赖应用，自己设置 Worker 地址，ADR 0143）放开：MapLibre 适配器仍不能导入 three，map-three 仍不能导入 maplibre-gl（custom layer 的外壳在 MapLibre 适配器里，ADR 0147 第 5 节）。Cesium 引擎移除后，cesium 的几项和 map-cesium 的 override 一起删掉了（ADR 0153）。map-three 的 override 放在测试 setup 那一条前面：override 后写的生效，map-three 的 `test-setup.browser.ts` 要能设置 MapLibre 的 Worker 地址。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
 
 没有用 boundaries 的策略实现：boundaries 的元素只能精确到"哪个包"，放行 map-core 就等于整个 map-core 都能导入，`StyleModel` 这类不该接触 SDK 的文件也不受限制。
 
@@ -241,7 +241,7 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 
 2026-11-10 加入 proj4 后验证：`shared`、`app` 里导入 `proj4`，`packages/map-three/src` 里导入 `proj4/dist/proj4-src.js` 都报错；`apps/yzt/tools/lcc2-register` 里导入 `proj4` 通过。
 
-2026-11-16 加入 `shared/dashboard/map/` 后验证：那里导入 `three` 通过，`shared/dashboard/charts/`、`shared/perf/` 里导入报错。
+2026-11-16 加入 `shared/dashboard/map/` 后验证：那里导入 `three` 通过，`shared/dashboard/charts/`、`shared/perf/` 里导入报错。同一天去掉 `features/city-dashboard/` 后再验证：`features/city-dashboard/`、`shared/dashboard/charts/` 里导入 `three` 报错（提示新的文案），`shared/dashboard/map/` 里通过。
 
 ### packages 的依赖方向
 
@@ -345,7 +345,7 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 | 包用相对路径导入应用代码 | packages override（阶段二） |
 | lodash 默认导入、整包 lodash | `no-restricted-imports` |
 | 在 MapLibre 适配器和 app 之外导入 maplibre-gl（包括类型导入和 `dist` 下的文件） | `no-restricted-imports` 加放开用的 override（阶段四） |
-| 在 map-three、驾驶舱和 app 之外导入 three、3d-tiles-renderer（包括子路径） | 同上（3C.1，2026-11-06 验证） |
+| 在 map-three、驾驶舱的地图目录（`shared/dashboard/map`）和 app 之外导入 three、3d-tiles-renderer（包括子路径） | 同上（3C.1，2026-11-06 验证；2026-11-16 例外从 `features/city-dashboard` 换成 `shared/dashboard/map` 后再验证） |
 | 未处理的 Promise、`any`、`console.log`、`==` | 各自的规则 |
 
 有两类问题不归 lint 管，而是交给 TS：

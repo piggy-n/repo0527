@@ -1,8 +1,8 @@
-# 0163. 驾驶舱的公共能力上移到 `shared/dashboard`，three 的 lint 例外扩到 `shared/dashboard/map`
+# 0163. 驾驶舱的公共能力上移到 `shared/dashboard`，three 的 lint 例外移到 `shared/dashboard/map`
 
 - 状态：已接受（2026-11-16 用户在"新建模块 + 公共部分移到 shared"等方案里选定）
 - 日期：2026-11-16
-- 补充：ADR 0077（驾驶舱在 feature 内拆分的计算、场景、组件，两个驾驶舱共用的部分移到 shared）、ADR 0006（three 的导入位置多放开一个目录）
+- 补充：ADR 0077（驾驶舱在 feature 内拆分的计算、场景、组件，两个驾驶舱共用的部分移到 shared）、ADR 0006（three 的导入位置从 `features/city-dashboard` 换成 `shared/dashboard/map`）
 
 ## 背景
 
@@ -23,7 +23,7 @@
 
 1. `shared/dashboard` 放两个驾驶舱共用的大屏能力：`model`、`cities`、`calculations`、`map-classification`、`format`、`animation/`、`assets/`、`shell/`、`filters/`、`charts/`、`export/`、`map/`、`tooltip/`。指标目录、数据、筛选状态和偏好留在各自的 feature。用法见 [dashboard](../modules/dashboard.md)。
 2. 拆成组合单元，不做带开关的全能大屏组件：外壳 `DashboardShell`（插槽给出入场状态和缩放）、筛选的 `FilterPanel` 等六个控件、图表的 `ChartCard`、`ChartActions`、`ChartDetailDialog`、`DashboardPlot`。地图仍是一个 `DashboardMap`，新驾驶舱要的差异做成窄的选项：`showValues`、`notice`、`overlay` 插槽；雷达是新的配置函数 `createRadarOption` 和 `DashboardPlot` 的 `hoverMode`。只属于原驾驶舱的翻卡导航、选中卡片的边框、可点击的卡片标题、预热留在 `features/city-dashboard`。
-3. `.oxlintrc.json` 里驾驶舱的 three 例外加上 `apps/yzt/src/shared/dashboard/map/**`，只放开地图目录；`shared` 的其他目录（包括 `shared/dashboard` 的其他子目录）仍然禁止导入 three。
+3. `.oxlintrc.json` 里驾驶舱的 three 例外从 `apps/yzt/src/features/city-dashboard/**` 换成 `apps/yzt/src/shared/dashboard/map/**`：地图移走后原驾驶舱的 feature 不再导入 three，例外只留地图目录。两个驾驶舱的 feature、`shared` 的其他目录（包括 `shared/dashboard` 的其他子目录）都禁止导入 three，报错文案是"只能在 packages/map-three 和 shared/dashboard/map 中导入（ADR 0147、0163）"。
 4. 搬移用 `git mv` 保留历史。入场的加载耗时标记名由外壳的 `traceName` 给出，原驾驶舱仍是 `city-dashboard`（实测工具依赖它）。
 5. 原驾驶舱"行为不变"的检查：拆分前后用同一段临时测试把 96 个指标的卡片、详情图表配置和地图图例写成 JSON 逐字节比较；原驾驶舱的单元测试和浏览器测试（入场、图表列表、地图、预热）断言不改、全部通过。
 
@@ -31,5 +31,5 @@
 
 - 原驾驶舱从 `shared/dashboard` 组合，DOM、类名效果、`data-*`、读屏文字、入场和导出不变；标题统一用 `withUnit`，原驾驶舱的单位都不为空，显示不变。
 - 改 `shared/dashboard` 会同时影响两个驾驶舱：按 ADR 0139 至少算级别 2，两个驾驶舱的测试都要跑。入场选择器（`data-enter`、`data-filter-group`、`data-card-list`、`data-scene`）是外壳和各单元之间的约定，写在模块文档里。
-- `three` 可以在 `shared/dashboard/map` 里用；以后别的 shared 目录要用 three 时另行决定。
+- 应用代码里只有 `shared/dashboard/map`（和 `app/` 的装配）能用 `three`，驾驶舱的 feature 要用立体地图时经过 `DashboardMap`；以后别的目录要用 three 时另行决定。
 - 驾驶舱的规则（`.claude/rules/city-dashboard.md`）也适用于 `shared/dashboard`。
