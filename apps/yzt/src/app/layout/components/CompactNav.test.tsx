@@ -51,6 +51,7 @@ describe('CompactNav', () => {
       '  城市国土空间监测基本统计',
       '  城市国土空间监测指标',
       '  城市国土空间监测驾驶舱',
+      '  城市国土空间监测综合分析驾驶舱',
       '——',
       '[图标] 文件管理',
       '[图标] 系统管理',
@@ -77,10 +78,10 @@ describe('CompactNav', () => {
     const rows = await openMenu(Role.user, '/current-map', items => items.filter(item => item.kind === 'dropdown'));
 
     expect(rows.at(0)).toBe('[标题+图标] 查询统计');
-    expect(rows.at(-1)).toBe('  城市国土空间监测驾驶舱');
+    expect(rows.at(-1)).toBe('  城市国土空间监测综合分析驾驶舱');
   });
 
-  it('驾驶舱在新标签页打开，当前页面不跳转', async () => {
+  it('两个驾驶舱都在新标签页打开，当前页面不跳转', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const router = createRouter({ history: createMemoryHistory(), routes: routesWithoutPages() });
     await router.push('/current-map');
@@ -89,13 +90,16 @@ describe('CompactNav', () => {
     await wrapper.find('button').trigger('click');
     await vi.waitFor(() => expect(document.querySelector('.el-dropdown-menu')).not.toBeNull());
 
-    const dashboard = [...document.querySelectorAll<HTMLElement>('.el-dropdown-menu__item')].find(
-      item => item.textContent?.trim() === '城市国土空间监测驾驶舱'
-    );
-    dashboard?.click();
+    const menuItems = [...document.querySelectorAll<HTMLElement>('.el-dropdown-menu__item')];
+    for (const label of ['城市国土空间监测驾驶舱', '城市国土空间监测综合分析驾驶舱']) {
+      menuItems.find(item => item.textContent?.trim() === label)?.click();
+    }
     await flushPromises();
 
-    expect(open).toHaveBeenCalledWith('/city-dashboard', '_blank', 'noopener');
+    expect(open.mock.calls).toEqual([
+      ['/city-dashboard', '_blank', 'noopener'],
+      ['/land-space-analysis', '_blank', 'noopener']
+    ]);
     expect(router.currentRoute.value.path).toBe('/current-map');
     open.mockRestore();
   });

@@ -20,6 +20,7 @@ export const RouteName = {
   devSplatWatch: 'dev-splat-watch',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
+  landSpaceDashboard: 'land-space-dashboard',
   landChangeQuery: 'land-change-query',
   spaceMonitoringQuery: 'space-monitoring-query',
   forestGrassWetlandDesertQuery: 'forest-grass-wetland-desert-query',

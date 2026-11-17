@@ -57,7 +57,8 @@ describe('visibleNavItems', () => {
     const onlyAdmin = new Set<RouteName>([
       RouteName.spaceMonitoringBasicStatistics,
       RouteName.spaceMonitoringIndicators,
-      RouteName.cityDashboard
+      RouteName.cityDashboard,
+      RouteName.landSpaceDashboard
     ]);
     const items = visibleNavItems(navItems, Role.user, route => (onlyAdmin.has(route) ? [Role.admin] : undefined));
     const query = items.find(item => item.kind === 'dropdown');

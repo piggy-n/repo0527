@@ -102,12 +102,19 @@ describe('路由表', () => {
     expect(applicationsRouteProps({ query: { apply: '' } })).toEqual({ section: 'applications', applyId: null });
   });
 
-  it('驾驶舱独立懒加载，所有登录角色可访问且离开即释放', () => {
-    const dashboard = routes.find(record => record.name === RouteName.cityDashboard);
-    expect(dashboard?.path).toBe('/city-dashboard');
-    expect(typeof dashboard?.component).toBe('function');
-    expect(dashboard?.meta?.public).not.toBe(true);
-    expect(dashboard?.meta?.roles).toBeUndefined();
-    expect(dashboard?.meta?.keepAlive).not.toBe(true);
+  it('两个驾驶舱都在业务布局外独立懒加载，所有登录角色可访问且离开即释放', () => {
+    const dashboards = [
+      [RouteName.cityDashboard, '/city-dashboard', '城市国土空间监测驾驶舱'],
+      [RouteName.landSpaceDashboard, '/land-space-analysis', '城市国土空间监测综合分析']
+    ] as const;
+    for (const [name, path, title] of dashboards) {
+      const dashboard = routes.find(record => record.name === name);
+      expect(dashboard?.path).toBe(path);
+      expect(dashboard?.meta?.title).toBe(title);
+      expect(typeof dashboard?.component).toBe('function');
+      expect(dashboard?.meta?.public).not.toBe(true);
+      expect(dashboard?.meta?.roles).toBeUndefined();
+      expect(dashboard?.meta?.keepAlive).not.toBe(true);
+    }
   });
 });
