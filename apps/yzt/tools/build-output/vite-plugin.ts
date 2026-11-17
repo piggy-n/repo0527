@@ -43,6 +43,13 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
     if (prefix === '3dt/' && entry.name !== 'manifest.json') {
       throw new Error(`[build-output] 产物包含 3DT 模型数据：${name}（模型放在 local/3dt，见 ADR 0141）`);
     }
+    // 服务器底图由 nginx 从数据目录提供，产物里不能有（ADR 0165 第 5、6 节）
+    if (prefix === '' && entry.name === 'basemap' && entry.isDirectory()) {
+      throw new Error(`[build-output] 产物包含服务器底图：${name}/（底图放在 local/basemap，见 ADR 0165）`);
+    }
+    if (/\.(?:bundle|bundlx)$/i.test(entry.name)) {
+      throw new Error(`[build-output] 产物包含紧凑缓存的瓦片：${name}（底图放在 local/basemap，见 ADR 0165）`);
+    }
     if (entry.isDirectory()) {
       checkFiles(path, keys, `${name}/`);
     } else if (keys.length > 0 && /\.(?:[cm]?js|css|html|json|map|svg|txt)$/i.test(entry.name)) {
@@ -55,7 +62,7 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
   }
 }
 
-/** 构建完成时检查产物：没有开发页、本地设计稿和 3DT 模型数据，入口依赖不含地图引擎，关闭天地图时没有 key */
+/** 构建完成时检查产物：没有开发页、本地设计稿、3DT 模型数据和服务器底图，入口依赖不含地图引擎，关闭天地图时没有 key */
 export function buildOutputPlugin(): Plugin {
   let config: ResolvedConfig;
   let forbiddenKeys: string[] = [];

@@ -41,6 +41,8 @@ describe('localFilesPlugin', () => {
   });
 
   describe('开发服务器', () => {
+    // 地址的层级和服务器上一样：/basemap/<前缀>/ 对应缓存的 Layers/（ADR 0165）
+    const BUNDLE = 'imagery/_alllayers/L10/R0180C0300.bundle';
     let root: string;
     let server: ViteDevServer;
     let port: number;
@@ -51,16 +53,24 @@ describe('localFilesPlugin', () => {
       writeFileSync(file, content);
     };
 
-    // fetch 会把路径里的 .. 规范化，穿越的用例要原样发出去，所以都用 http.request
-    const get = (path: string) =>
-      new Promise<{ status: number | undefined; type: string | undefined; body: string }>((done, fail) => {
-        const req = request({ port, path, headers: { accept: 'text/html,*/*' } }, res => {
+    // fetch 会把路径里的 .. 规范化，穿越的用例要原样发出去，所以都用 http.request；
+    // accept 和浏览器的 fetch 一样带 */*，Vite 见到它才会回落到 index.html
+    const get = (path: string, range?: string) =>
+      new Promise<{
+        status: number | undefined;
+        type: string | undefined;
+        contentRange: string | undefined;
+        body: string;
+      }>((done, fail) => {
+        const headers = { accept: 'text/html,*/*', ...(range ? { range } : {}) };
+        const req = request({ port, path, headers }, res => {
           const chunks: Buffer[] = [];
           res.on('data', (chunk: Buffer) => chunks.push(chunk));
           res.on('end', () =>
             done({
               status: res.statusCode,
               type: res.headers['content-type'],
+              contentRange: res.headers['content-range'],
               body: Buffer.concat(chunks).toString('utf8')
             })
           );
@@ -77,6 +87,7 @@ describe('localFilesPlugin', () => {
       write('local/3dt/suzhou/3dtiles/星海广场站/tileset.json', '{"from":"local"}');
       write('local/design/主题 一/index.html', '<!doctype html><title>原型</title><script src="./app.js"></script>');
       write('local/design/主题 一/app.js', 'import "/不存在的模块"; console.log("原样");');
+      write(`local/basemap/${BUNDLE}`, '0123456789abcdef');
 
       server = await createServer({
         configFile: false,
@@ -86,7 +97,11 @@ describe('localFilesPlugin', () => {
         server: { port: 0, host: '127.0.0.1' },
         optimizeDeps: { noDiscovery: true },
         plugins: [
-          localFilesPlugin({ '/3dt': join(root, 'local/3dt'), '/design.local': join(root, 'local/design') })
+          localFilesPlugin({
+            '/3dt': join(root, 'local/3dt'),
+            '/basemap': { directory: join(root, 'local/basemap'), fallthrough: false },
+            '/design.local': join(root, 'local/design')
+          })
         ]
       });
       await server.listen();
@@ -140,7 +155,32 @@ describe('localFilesPlugin', () => {
       expect(res.body).toContain('<title>单页应用</title>');
     });
 
-    it.each(['/3dt/../../secret.txt', '/3dt/..%2f..%2fsecret.txt', '/design.local/%2e%2e/%2e%2e/secret.txt'])(
+    it('服务器底图按 Range 读，回 206 和 Content-Range', async () => {
+      const res = await get(`/basemap/${BUNDLE}`, 'bytes=4-9');
+      expect(res.status).toBe(206);
+      expect(res.contentRange).toBe('bytes 4-9/16');
+      expect(res.body).toBe('456789');
+    });
+
+    it.each([
+      '/basemap/imagery/_alllayers/L10/R0180C0300.bundlx',
+      '/basemap/black/conf.xml',
+      '/basemap/imagery/',
+      '/basemap/',
+      '/basemap'
+    ])('服务器底图缺的文件回 404，不交给单页应用：%s', async path => {
+      const res = await get(path);
+      expect(res.status).toBe(404);
+      expect(res.body).not.toContain('单页应用');
+    });
+
+    it.each([
+      '/3dt/../../secret.txt',
+      '/3dt/..%2f..%2fsecret.txt',
+      '/basemap/../../secret.txt',
+      '/basemap/%2e%2e/%2e%2e/secret.txt',
+      '/design.local/%2e%2e/%2e%2e/secret.txt'
+    ])(
       '不能穿越到映射目录之外：%s',
       async path => {
         const res = await get(path);

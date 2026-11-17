@@ -24,6 +24,12 @@ export const test = base.extend<{ localBackend: undefined }>({
         await route.abort('blockedbyclient');
         return;
       }
+      // 服务器底图（ADR 0165）默认这台没有：同线上没配的前缀回 404。预览服务器会回落成 index.html，
+      // 设了 YZT_BASEMAP_PROXY 时还会转到真的服务器，用例不依赖这些；要服务器底图的用例自己用 page.route 提供
+      if (url.pathname.startsWith('/basemap/')) {
+        await route.fulfill({ status: 404, body: '' });
+        return;
+      }
       if (!url.pathname.startsWith('/backend/')) {
         await route.continue();
         return;

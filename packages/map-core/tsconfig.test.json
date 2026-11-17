@@ -4,5 +4,5 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
     "types": ["vite/client", "geojson"]
   },
-  "include": ["src/**/*.test.ts", "src/test-setup.browser.ts"]
+  "include": ["src/**/*.test.ts", "src/test-setup.browser.ts", "src/testing"]
 }

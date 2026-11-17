@@ -1,5 +1,5 @@
 import type { StyleGroup, ViewKind } from '@mx/map-core';
-import { computed, type ComputedRef, shallowRef } from 'vue';
+import { computed, type ComputedRef, hasInjectionContext, inject, shallowRef } from 'vue';
 import { appConfig, type TiandituConfig } from '../../config/app-config';
 import type { PreferenceScope } from '../../storage/preference-scope';
 import { usePreference } from '../../storage/use-preference';
@@ -12,29 +12,36 @@ import {
   type BasemapThumbnail,
   basemapThumbnails,
   createBasemapStyles,
+  defaultBasemap,
   initialBasemapState,
   initialLabelsVisible
 } from './basemap-style';
+import { NO_SERVER_BASEMAPS, SERVER_BASEMAPS, type ServerBasemaps } from './server-basemaps';
 
 export interface UseBasemapOptions {
   /** 默认读取 appConfig.tianditu；测试时传入 */
   readonly tianditu?: TiandituConfig | null;
+  /** 这台服务器有的服务器底图（ADR 0165）：默认注入地图页加载时探测的结果，没有注入时（测试、开发页）没有 */
+  readonly servers?: ServerBasemaps;
   /** 页面提供时记住上次的底图、透明度和标注（ADR 0042、0146），各有开关；不提供时不读不写 */
   readonly preferences?: PreferenceScope | null;
 }
 
 /** 底图的拥有者（ADR 0031）：状态随页面，面板通过 props 拿到它，页面把两个推导函数绑定到分组；函数都是闭包，可以直接取出来传递 */
 export interface Basemap {
-  /** 可选的底图，按天地图配置得出 */
+  /** 可选的底图，按天地图配置和服务器底图的探测结果得出 */
   readonly options: readonly BasemapOption[];
-  /** 各种底图的缩略图（面板和底图卡用）；无底图、关闭天地图时为 null */
+  /** 各种底图的缩略图（面板和底图卡用）；无底图、这个部署没有的底图为 null */
   readonly thumbnails: Readonly<Record<BasemapId, BasemapThumbnail | null>>;
   readonly selected: ComputedRef<BasemapId>;
   /** 当前底图的透明度（0～1），无底图时为 null */
   readonly opacity: ComputedRef<number | null>;
   /** 选择底图；不可用的底图直接抛错 */
   readonly select: (id: BasemapId) => void;
-  /** 切换二三维后选默认的底图（ADR 0078 第 2 节）：三维影像、二维矢量；没有这种底图（关闭天地图）时不变 */
+  /**
+   * 切换二三维后选默认的底图（ADR 0078 第 2 节、ADR 0165 第 1 节）：三维选影像，二维选二维的默认（公网矢量，
+   * 内网有标准时标准、没有时静态）；没有影像时两个方向都不变
+   */
   readonly selectForDimension: (kind: ViewKind) => void;
   /** 修改当前底图的透明度；不在 0～1 之间、或者无底图时直接抛错 */
   readonly setOpacity: (value: number) => void;
@@ -48,12 +55,19 @@ export interface Basemap {
 }
 
 /** 创建底图的拥有者，在页面的 setup 中调用；先用默认值，存下的偏好读到后替换一次（ADR 0042 第 5 节） */
-export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBasemapOptions = {}): Basemap {
-  const options = basemapOptions(tianditu);
-  const thumbnails = basemapThumbnails(tianditu);
-  const styles = createBasemapStyles(tianditu);
+export function useBasemap({
+  tianditu = appConfig.tianditu,
+  servers = injectedServerBasemaps(),
+  preferences
+}: UseBasemapOptions = {}): Basemap {
+  const options = basemapOptions(tianditu, servers);
+  const thumbnails = basemapThumbnails(tianditu, servers);
+  const styles = createBasemapStyles(tianditu, servers);
+  const available = (id: BasemapId) => options.some(option => option.id === id);
+  // 二维的默认底图：进入页面、三维切回二维时都是它
+  const default2d = defaultBasemap(tianditu, servers);
   // 状态不可变，变化时整体替换；推导只依赖它
-  const state = shallowRef<BasemapState>(initialBasemapState(tianditu));
+  const state = shallowRef<BasemapState>(initialBasemapState(tianditu, servers));
   // 用户自己选的底图：偏好只存它，切换二三维时自动换的底图不写进去（ADR 0114），否则重新进入页面时二维也是影像
   const chosen = shallowRef<BasemapId>(state.value.selected);
   // 和底图的状态分开：两项偏好各读各的，一项恢复时不能让另一项以为用户已经操作过
@@ -94,7 +108,7 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
 
   // 不合法的调用是编程错误：界面只提供可用的操作。在操作里抛错，不进入推导和 computed
   const select = (id: BasemapId) => {
-    if (!options.some(option => option.id === id)) {
+    if (!available(id)) {
       throw new Error(`底图 ${id} 不可用`);
     }
     chosen.value = id;
@@ -103,10 +117,13 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
     }
   };
 
-  // 只换显示的底图，不算用户的选择
+  // 只换显示的底图，不算用户的选择；没有影像的部署上一直是用户选的（ADR 0133、0165）
   const selectForDimension = (kind: ViewKind) => {
-    const id: BasemapId = kind === '3d' ? 'imagery' : 'vector';
-    if (options.some(option => option.id === id) && id !== state.value.selected) {
+    if (!available('imagery')) {
+      return;
+    }
+    const id = kind === '3d' ? 'imagery' : default2d;
+    if (id !== state.value.selected) {
       state.value = { ...state.value, selected: id };
     }
   };
@@ -140,4 +157,9 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
     deriveGroup: () => styles.basemapGroup(state.value),
     deriveLabelsGroup: () => styles.labelsGroup(state.value, labels.value)
   };
+}
+
+// 地图页由 app 提供探测结果；在组件外（测试的 effectScope）调用时没有注入上下文，不调 inject，免得 Vue 警告
+function injectedServerBasemaps(): ServerBasemaps {
+  return hasInjectionContext() ? inject(SERVER_BASEMAPS, NO_SERVER_BASEMAPS) : NO_SERVER_BASEMAPS;
 }

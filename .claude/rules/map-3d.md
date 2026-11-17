@@ -23,7 +23,7 @@ paths:
 - 三维的预算按设备分档（ADR 0155）：数值只在 `shared/config/scene-tier-options.ts`；map-three 不读配置、不判断显卡，只按 app 交给它的预算来源（map-core 的 `SceneBudgetSource`）做；档位、降档、崩溃标记在 `shared/map/scene-tier`，由 app 注入的三维引擎（`app/map-runtime-provider.ts`）交给渲染器（`docs/config/scene-tier.md`）
 - 性能实测要测生产包，不测 PoC：`pnpm --filter yzt measure:3d`，在显卡机器上跑（map-three.md"性能验收"）
 - LCC2 高斯泼溅（ADR 0149）：会话的 `splats`，能力声明 `splats` 为 false 时面板不列出；清单存配准后的 `placement`，运行时不用 proj4、不用数据带的 `offset`；`gaussian-splat-lite` 只由 map-three 动态导入、精确锁版本，它在渲染回调外调 GL，靠每帧两头的 `resetState`，升级时重跑 GL 监听；同一处的倾斜模型（`clippedBySplats`）在泼溅的包围盒里用裁剪平面裁掉、拾取也跳过；每帧都调的拾取（状态栏读数、跟着鼠标的预览）传 `{ hover: true }`，不打泼溅（map-three.md"高斯泼溅"）
-- 二三维切换用上下文的 `map.setDimension(kind)`，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。地图的运行时由 app 的 `withMapRuntime` 随地图页加载，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0061、0079 第 2 节）
+- 二三维切换用上下文的 `map.setDimension(kind)`，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：有影像时三维选影像，二维回到二维的默认，公网矢量、内网有标准时标准、没有时静态，ADR 0165）由页面在同一处调用。地图的运行时由 app 的 `withMapRuntime` 随地图页加载，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0061、0079 第 2 节）
 - 覆盖物是二维样式的图层，三维里照常显示，拥有者不为三维另写分组；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
 - 三维独有的内容（3D Tiles 瓦片集、高斯泼溅、地下、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物；本机放在 `local/3dt/`（ADR 0141），服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）。清单只有一份全集，每台服务器缺哪些模型记在部署站点 `tools/site/sites.json`，构建时用 `YZT_SITE` 选（ADR 0164）；不为某台服务器另抄一份清单，也不让站点改路径或模型的字段
 - 新增或修改清单里的模型时，按 `docs/config/3dt-manifest.md` 的"新增一个模型"做：先判断能不能不改代码接入，再按瓦片集或高斯泼溅的步骤，最后过检查清单

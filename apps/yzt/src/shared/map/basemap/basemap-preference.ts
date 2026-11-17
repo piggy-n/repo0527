@@ -2,17 +2,29 @@ import { z } from 'zod';
 import type { BasemapOption, BasemapState } from './basemap-style';
 
 const opacity = z.number().min(0).max(1);
+// 服务器底图的透明度（ADR 0165）在版本 2 里后加，旧数据没有，按 1
+const addedOpacity = opacity.default(1);
 
 /** 存下的底图偏好（ADR 0042）：选中的底图和每种底图各自的透明度 */
 export const storedBasemapSchema = z.object({
-  selected: z.enum(['vector', 'imagery', 'static', 'none']),
-  opacity: z.object({ vector: opacity, imagery: opacity, static: opacity })
+  selected: z.enum(['vector', 'imagery', 'static', 'standard', 'black', 'night-blue', 'none']),
+  opacity: z.object({
+    vector: opacity,
+    imagery: opacity,
+    static: opacity,
+    standard: addedOpacity,
+    black: addedOpacity,
+    'night-blue': addedOpacity
+  })
 });
 
 /** 存下的标注显隐（ADR 0146）：单独一项，底图偏好关着时也记住 */
 export const storedBasemapLabelsSchema = z.boolean();
 
-/** 存下的偏好合并进当前状态：选中的底图当前不可用（换了部署环境，ADR 0031、0032、0133）时保留当前的选择 */
+/**
+ * 存下的偏好合并进当前状态：选中的底图当前不可用（换了部署环境，ADR 0031、0032、0133；
+ * 这台服务器没有这套服务器底图，ADR 0165）时保留当前的选择
+ */
 export function restoredBasemapState(
   stored: z.infer<typeof storedBasemapSchema>,
   current: BasemapState,

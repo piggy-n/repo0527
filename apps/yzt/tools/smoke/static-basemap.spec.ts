@@ -75,6 +75,17 @@ async function colorShare(
 const landShare = (page: Page, canvas: Locator) => colorShare(page, canvas, LAND_COLORS, TOLERANCE);
 const textShare = (page: Page, canvas: Locator) => colorShare(page, canvas, CITY_LABEL_COLOR, LABEL_TOLERANCE);
 
+/** 底图面板里各张缩略图的全称，按显示的顺序（不含当前缩略图角上的入口） */
+async function optionNames(page: Page): Promise<(string | null)[]> {
+  const options = page.getByRole('group', { name: '底图', exact: true }).locator('button[aria-label$="底图"]');
+  return Promise.all((await options.all()).map(option => option.getAttribute('aria-label')));
+}
+
+// 探测服务器底图读的南京那块 z10 瓦片的索引，四套都读（ADR 0165 第 4 节），按地址排序
+const PROBED_INDEXES = ['black', 'imagery', 'night-blue', 'standard'].map(
+  prefix => `/basemap/${prefix}/_alllayers/L10/R0180C0300.bundlx`
+);
+
 // 内网默认的静态底图（ADR 0133、0134）：全部来自产物，不请求字形和公网（公网由 fixtures 拦下并判失败）
 test('静态底图：内网默认选中，二三维都画得出来，能一键切到无底图再切回', async ({ page }) => {
   // 软件渲染下三维的瓦片慢
@@ -97,6 +108,12 @@ test('静态底图：内网默认选中，二三维都画得出来，能一键�
   const staticOption = page.getByRole('button', { name: '静态底图', exact: true });
   const noneOption = page.getByRole('button', { name: '无底图', exact: true });
   await expect(staticOption).toHaveAttribute('aria-pressed', 'true');
+  // 这台没有服务器底图（fixtures 让 /basemap/ 回 404）：探测过四套，都不出现，和以前一样只有两张（ADR 0165）
+  expect(await optionNames(page)).toEqual(['静态底图', '无底图']);
+  expect(
+    requested.filter(path => path.startsWith('/basemap/')).toSorted(),
+    '探测只读了四套的索引，404 以后不读 .bundle'
+  ).toEqual(PROBED_INDEXES);
   await noneOption.click();
   await expect(card).toHaveAttribute('aria-label', '底图：无底图');
   await expect(noneOption, '选了底图就关闭').toHaveCount(0);

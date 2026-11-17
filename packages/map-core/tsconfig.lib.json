@@ -5,5 +5,5 @@
     "types": ["geojson"]
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.worker.ts", "src/test-setup.browser.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.worker.ts", "src/test-setup.browser.ts", "src/testing"]
 }

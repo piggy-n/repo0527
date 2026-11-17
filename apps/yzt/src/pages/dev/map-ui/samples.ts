@@ -63,10 +63,16 @@ export const SAMPLE_CATALOG = buildCatalog([{
   ]
 }]);
 
-/** 本地示意图替代天地图缩略图，预览页不发外部地图请求；静态底图的缩略图本来就是本地的 */
+/**
+ * 本地示意图替代天地图缩略图，预览页不发外部地图请求；静态底图的缩略图本来就是本地的。
+ * 服务器底图的瓦片是数据方的数据，不入库，三套矢量借用矢量的示意图（地名印在图上，没有注记）
+ */
 export const SAMPLE_THUMBNAILS: Readonly<Record<BasemapId, BasemapThumbnail | null>> = {
   vector: { base: vector, labels: vector, focus: 'center' },
   imagery: { base: imagery, labels: imagery, focus: 'center' },
   static: basemapThumbnails(null).static,
+  standard: { base: vector, labels: null, focus: 'center' },
+  black: { base: vector, labels: null, focus: 'center' },
+  'night-blue': { base: vector, labels: null, focus: 'center' },
   none: null
 };

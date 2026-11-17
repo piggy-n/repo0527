@@ -36,6 +36,7 @@
 | 开关 | 文件 | 默认 | 作用 | ADR |
 |---|---|---|---|---|
 | `SCENE_TIER_BUDGETS` | `scene-tier-options.ts` | 低 1 GB、标准 2 GB、高 6 GB（到它不再加载，淘汰到一半），每帧上传 16 MB，泼溅 300 万 | 三维各档的预算；部署方只在 `scene-tier.json` 里选档，数值改代码（[scene-tier.md](scene-tier.md)） | 0155 |
+| `SERVER_BASEMAP_OPTIONS`、`SERVER_BASEMAP_PROBE_TILE`、`SERVER_BASEMAP_PROBE_TIMEOUT` | `server-basemap-options.ts` | 标准、影像、黑色、极夜蓝 4 套，前缀 `standard`、`imagery`、`black`、`night-blue`，7～18 级，范围取 `conf.cdi` 向外取整；探测读 z10 的 849/415，最多等 3 秒 | 内网服务器可能有的底图：每台服务器有哪几套进入地图页前探测（nginx 配了哪几个前缀），影像叠静态地名，三套矢量的地名印在图上；在面板里的位置是 `basemap-style.ts` 的 `INTRANET_ORDER` | 0165 |
 
 以前的两个在 2026-11-11 去掉了：`SCENE_OPTIONS` 随 ADR 0153 删除，`STATIC_BASEMAP_OPTIONS.cityColors` 由用户决定取消、全省固定一种陆地色（见 ADR 0134 的状态行）。以后要加时按下面的"新增一个开关时放哪"新建文件，在这里登记一行。
 
@@ -58,6 +59,7 @@
 | `PROXY_TARGET`、`AI_PROXY_TARGET` | `.env`（不带 `VITE_`，不进产物） | 开发服务器和 `vite preview` 的接口代理目标 |
 | `YZT_LOCAL_DIR` | 进程环境变量 | 未入库的本地文件放在哪里（ADR 0141） |
 | `YZT_3DT_PROXY` | 进程环境变量 | 开发服务器把 `/3dt/` 整个代理到别的服务器，用来看服务器上的大模型；`measure:3d`、`lcc2:register` 也改从 `<它>/3dt/` 读模型 |
+| `YZT_BASEMAP_PROXY` | 进程环境变量 | 开发服务器和 `vite preview` 把 `/basemap/` 整个代理到别的服务器，读它的服务器底图（ADR 0165）；不设时开发服务器从 `local/basemap/` 提供，缺的文件回 404 |
 | `YZT_SITE` | 进程环境变量（`vite.config.ts` 用 `process.env` 读，写在 `.env` 里不生效） | 部署站点（ADR 0164）：构建时三维模型清单去掉这台服务器缺的模型，开发服务器的清单来自工作区的组合；会改变产物，但不是 `.env` 的变量：不同服务器只差"有没有这个模型"，站点的内容入库在 `tools/site/sites.json` |
 
 ## 新增一个开关时放哪

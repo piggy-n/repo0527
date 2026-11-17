@@ -1,13 +1,20 @@
 // @vitest-environment node
 import type { StyleGroup } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
-import { computed } from 'vue';
+import { computed, createApp } from 'vue';
 import { appConfig } from '../../config/app-config';
-import { basemapOptions } from './basemap-style';
+import type { ServerBasemapId } from '../../config/server-basemap-options';
+import { type BasemapId, basemapOptions } from './basemap-style';
+import { SERVER_BASEMAPS, type ServerBasemaps } from './server-basemaps';
 import { staticLabelsGroup } from './static-basemap';
 import { useBasemap } from './useBasemap';
 
 const TIANDITU = { key: '0123456789abcdef0123456789abcdef' };
+
+// 探测到的服务器底图（ADR 0165）
+const servers = (...ids: ServerBasemapId[]): ServerBasemaps =>
+  ids.map(id => ({ id, root: `http://intranet.test/basemap/${id}/`, thumbnail: `data:image/png;base64,${id}` }));
+const ALL_FOUR = servers('standard', 'imagery', 'black', 'night-blue');
 
 // 分组里各图层的透明度，按图层 ID
 function opacities(group: StyleGroup) {
@@ -96,6 +103,86 @@ describe('useBasemap', () => {
     intranet.select('none');
     intranet.selectForDimension('3d');
     expect(intranet.selected.value).toBe('none');
+  });
+
+  it('切换二三维（ADR 0165 第 1 节）：内网有影像时三维选影像、二维选二维的默认；没有影像时两个方向都不变', () => {
+    // [服务器有的, 进入时, 先选的（null 不选）, 切三维后, 再切二维后]
+    const cases: readonly [ServerBasemaps, BasemapId, BasemapId | null, BasemapId, BasemapId][] = [
+      [servers(), 'static', null, 'static', 'static'],
+      [servers('imagery'), 'static', null, 'imagery', 'static'],
+      [servers('standard'), 'standard', null, 'standard', 'standard'],
+      [servers('standard'), 'standard', 'static', 'static', 'static'],
+      [servers('standard', 'black'), 'standard', 'black', 'black', 'black'],
+      [ALL_FOUR, 'standard', null, 'imagery', 'standard'],
+      [ALL_FOUR, 'standard', 'black', 'imagery', 'standard'],
+      [ALL_FOUR, 'standard', 'static', 'imagery', 'standard'],
+      [ALL_FOUR, 'standard', 'none', 'imagery', 'standard'],
+      [servers('imagery', 'night-blue'), 'static', 'none', 'imagery', 'static']
+    ];
+
+    const results = cases.map(([found, , picked]) => {
+      const basemap = useBasemap({ tianditu: null, servers: found });
+      const initial = basemap.selected.value;
+      if (picked) {
+        basemap.select(picked);
+      }
+      basemap.selectForDimension('3d');
+      const in3d = basemap.selected.value;
+      basemap.selectForDimension('2d');
+      return [found, initial, picked, in3d, basemap.selected.value];
+    });
+
+    expect(results).toStrictEqual(cases);
+  });
+
+  it('公网不看探测结果：选项、进入时的底图、切换二三维都和没有服务器底图时一样', () => {
+    const basemap = useBasemap({ tianditu: TIANDITU, servers: ALL_FOUR });
+
+    expect(basemap.options.map(option => option.id)).toStrictEqual(['vector', 'imagery', 'none']);
+    expect(basemap.selected.value).toBe('vector');
+    basemap.select('none');
+    basemap.selectForDimension('3d');
+    expect(basemap.selected.value).toBe('imagery');
+    basemap.selectForDimension('2d');
+    expect(basemap.selected.value).toBe('vector');
+    expect(() => basemap.select('standard')).toThrow('底图 standard 不可用');
+  });
+
+  it('内网的影像叠静态底图的地名，跟着标注开关、用影像的透明度；三套矢量的地名印在图上，标注打开也是空的', () => {
+    const basemap = useBasemap({ tianditu: null, servers: ALL_FOUR });
+    expect(Object.keys(basemap.deriveGroup().sources)).toStrictEqual(['basemap-standard']);
+    basemap.setLabelsVisible(true);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+
+    basemap.select('imagery');
+    basemap.setOpacity(0.4);
+    expect(Object.keys(basemap.deriveGroup().sources)).toStrictEqual(['basemap-imagery']);
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(0.4));
+    basemap.setLabelsVisible(false);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+
+    basemap.select('night-blue');
+    basemap.setLabelsVisible(true);
+    expect(basemap.labelsVisible.value).toBe(true);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+  });
+
+  it('服务器底图的缩略图来自探测结果', () => {
+    const basemap = useBasemap({ tianditu: null, servers: servers('black') });
+
+    expect(basemap.thumbnails.black?.base).toBe('data:image/png;base64,black');
+    expect(basemap.thumbnails.standard).toBeNull();
+  });
+
+  it('默认注入地图页提供的探测结果；没有注入上下文时没有服务器底图，传入的优先', () => {
+    const app = createApp({}).provide(SERVER_BASEMAPS, servers('imagery'));
+
+    const injected = app.runWithContext(() => useBasemap({ tianditu: null }));
+    const passed = app.runWithContext(() => useBasemap({ tianditu: null, servers: servers('standard') }));
+
+    expect(injected.options.map(option => option.id)).toStrictEqual(['imagery', 'static', 'none']);
+    expect(passed.options.map(option => option.id)).toStrictEqual(['standard', 'static', 'none']);
+    expect(useBasemap({ tianditu: null }).options.map(option => option.id)).toStrictEqual(['static', 'none']);
   });
 
   it('透明度作用于当前底图的底图和注记，每种底图各自记住', () => {

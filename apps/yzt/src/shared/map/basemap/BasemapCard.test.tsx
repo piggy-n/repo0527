@@ -2,20 +2,29 @@ import { mount } from '@vue/test-utils';
 import { provideMap } from '@mx/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import type { ServerBasemapId } from '../../config/server-basemap-options';
 import { JIANGSU_CAMERA } from '../jiangsu';
 import { BasemapCard } from './BasemapCard';
+import { NO_SERVER_BASEMAPS, type ServerBasemaps } from './server-basemaps';
 import { useBasemap } from './useBasemap';
 
 const TIANDITU = { key: '0123456789abcdef0123456789abcdef' };
 
+const servers = (...ids: ServerBasemapId[]): ServerBasemaps =>
+  ids.map(id => ({ id, root: `http://intranet.test/basemap/${id}/`, thumbnail: `data:image/png;base64,${id}` }));
+
 // 页面持有开关和"能不能显示"；浮层定位要地图上下文（没有画布）
-function mountCard(visible = true, tianditu: typeof TIANDITU | null = TIANDITU) {
+function mountCard(
+  visible = true,
+  tianditu: typeof TIANDITU | null = TIANDITU,
+  found: ServerBasemaps = NO_SERVER_BASEMAPS
+) {
   const open = ref(false);
   const shown = ref(visible);
   let basemap: ReturnType<typeof useBasemap> | undefined;
   const Page = defineComponent(() => {
     provideMap({ groups: [], camera: JIANGSU_CAMERA });
-    const owner = useBasemap({ tianditu });
+    const owner = useBasemap({ tianditu, servers: found });
     basemap = owner;
     return () => (
       <BasemapCard basemap={owner} open={open.value} visible={shown.value} onUpdate:open={value => (open.value = value)} />
@@ -61,6 +70,21 @@ describe('BasemapCard', () => {
     basemap?.select('none');
     await wrapper.vm.$nextTick();
     expect(card(wrapper).text()).toBe('无底图');
+  });
+
+  it('内网有标准时卡片写"标准"，缩略图是探测读到的瓦片；换成极夜蓝后写"极夜蓝"', async () => {
+    const { wrapper, basemap } = mountCard(true, null, servers('standard', 'imagery', 'black', 'night-blue'));
+
+    expect(card(wrapper).text()).toBe('标准');
+    expect(card(wrapper).attributes('aria-label')).toBe('底图：标准底图');
+    expect(card(wrapper).find('[aria-hidden="true"]').attributes('style')).toContain(
+      'url("data:image/png;base64,standard")'
+    );
+
+    basemap?.select('night-blue');
+    await wrapper.vm.$nextTick();
+    expect(card(wrapper).text()).toBe('极夜蓝');
+    expect(card(wrapper).attributes('aria-label')).toBe('底图：极夜蓝底图');
   });
 
   it('选了底图就关闭，焦点回到卡片；点当前底图也一样', async () => {
