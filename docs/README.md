@@ -57,6 +57,7 @@ docs/
 │  ├─ monitoring-statistics.md 城市国土空间监测基本统计
 │  ├─ indicator-simulation.md 城市国土空间监测指标AI计算
 │  ├─ city-dashboard.md       城市体检驾驶舱：范围、依赖评估、分步实施、性能基线
+│  ├─ dashboard.md            shared/dashboard：两个驾驶舱共用的外壳、入场约定、筛选、图表、地图、提示与导出
 │  └─ ai-chat.md              AI 对话：最小迁移的范围、接口与待办
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）

@@ -3,6 +3,7 @@ paths:
   - "apps/yzt/src/features/city-dashboard/**"
   - "apps/yzt/src/pages/city-dashboard/**"
   - "apps/yzt/src/shared/city-indicators/**"
+  - "apps/yzt/src/shared/dashboard/**"
 ---
 
 # 城市体检驾驶舱

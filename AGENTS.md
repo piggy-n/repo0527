@@ -28,7 +28,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `map-3d.md` | `map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、`shared/map/scene-tier`、现状底图页 | 三维、二三维切换、设备档位、漫游、导航网格 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes`、`symbol-defaults` | 年份、分类、最小显示级别、发布的默认符号、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
-| `city-dashboard.md` | 驾驶舱、`shared/city-indicators` | 范围、入场、保存图片 |
+| `city-dashboard.md` | 驾驶舱、`shared/city-indicators`、`shared/dashboard` | 范围、入场、保存图片 |
 | `deps-config.md` | `package.json`、`pnpm-*`、`.github/`、`.oxlintrc.json`、`.env*`、`vite.config.ts`、`tsconfig*`、`shared/config/` | 依赖维护、环境变量、CI |
 
 ## 技术栈
@@ -51,7 +51,7 @@ apps/yzt/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局、字体声明
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-└─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与取值（city-indicators）、对话头像（chat-avatar）、只供测试的辅助（testing）
+└─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与取值（city-indicators）、驾驶舱公共能力（dashboard）、对话头像（chat-avatar）、只供测试的辅助（testing）
 
 packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @mx/<name> 导入（ADR 0143）
 ├─ utils/       @mx/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）

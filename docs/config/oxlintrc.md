@@ -184,7 +184,7 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 - `paths` 的 lodash-es：禁止 `import _ from 'lodash-es'`（默认导入整个库，影响 tree-shaking）
 - `patterns` 的 lodash：禁止 `lodash` 和 `lodash/xxx`（CommonJS 版本）
 - maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `packages/map-core/src/maplibre/`、`app/` 和包的 `test-setup.browser.ts` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
-- three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/`、驾驶舱 `features/city-dashboard/` 和驾驶舱公共的地图目录 `shared/dashboard/map/` 放开（ADR 0147 第 5 节；驾驶舱比 map-three 早，原来就用 three；两个驾驶舱共用的地图移到 `shared/dashboard/map/` 后只放开这个目录，`shared` 的其他目录仍然禁止）。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl 一样
+- three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/`、驾驶舱 `features/city-dashboard/` 和驾驶舱公共的地图目录 `shared/dashboard/map/` 放开（ADR 0147 第 5 节；驾驶舱比 map-three 早，原来就用 three；两个驾驶舱共用的地图移到 `shared/dashboard/map/` 后只放开这个目录，`shared` 的其他目录仍然禁止，ADR 0163）。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl 一样
 - gaussian-splat-lite（LCC2 加入）：只对 `packages/map-three/src/` 放开（ADR 0149 第 2 节）。驾驶舱和 map-three 原来共用一个 override，现在分成两个，驾驶舱的那个仍然禁止它；`app/` 的 override 也写上它，所以和 maplibre-gl、three 不同，app 不能导入。包的 `exports` 只有入口，不用 `patterns`
 - proj4（LCC2 的配准工具加入）：只对 `apps/yzt/tools/lcc2-register/` 放开（ADR 0149 第 4 节：清单存换算好的摆放，运行时不换算）。它是 yzt 的开发依赖，和运行时代码共用一个 `package.json`，`src` 里也解析得到，所以要靠 lint 拦（`shpjs` 带的那份在 pnpm 的隔离布局下从应用里解析不到）。基础规则和每个放开别的库的 override（包括 `app/`）都写上它，`patterns` 拦 `proj4/dist/...`、`proj4/lib/...` 这类子路径；工具目录的 override 写基础规则里除 proj4 以外的各项
 
