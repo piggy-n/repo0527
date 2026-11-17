@@ -54,6 +54,16 @@ describe('createRadarOption', () => {
     expect(coordinate.splitNumber).toBe(Math.round((axis.max - axis.min) / axis.interval));
   });
 
+  it('卡片里图例竖排在左上角、雷达居中，详情里图例和柱图一样在上方居中', () => {
+    const card = radar();
+    expect(card.option.legend).toMatchObject({ orient: 'vertical', left: 0, top: 0 });
+    expect(card.coordinate.center).toEqual(['50%', '50%']);
+    const detail = radar({ detail: true });
+    expect(detail.option.legend).toMatchObject({ left: 'center', top: 2 });
+    expect(detail.option.legend).not.toHaveProperty('orient');
+    expect(detail.coordinate.center).toEqual(['50%', '54%']);
+  });
+
   it('每个年份一个半透明的面，颜色取 color(year)，缺失值原样交给引擎', () => {
     const { series, option } = radar({
       comparison: [{ year: 2024, values, average: 70 }, ...comparison]

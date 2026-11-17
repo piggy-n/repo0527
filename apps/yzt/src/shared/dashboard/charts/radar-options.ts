@@ -76,13 +76,15 @@ export function createRadarOption(input: RadarInput): DashboardChartOption {
       data: [{ name, value: values }]
     });
   }
+  const legend = chartLegend(density, fontSize, preference.legend, [...rows.keys()]);
   return {
     animation: !input.reducedMotion,
     animationDuration: 750,
     animationDurationUpdate: 550,
     animationEasing: 'cubicOut',
     textStyle: { fontFamily: CHART_FONT_FAMILY, color: '#0F4FA6' },
-    legend: chartLegend(density, fontSize, preference.legend, [...rows.keys()]),
+    // 卡片矮，图例竖排在左上角：放在上方居中时，雷达最上面的城市名在绘图区不到 140 像素高时会碰到它
+    legend: detail ? legend : { ...legend, orient: 'vertical', left: 0, right: 'auto', top: 0 },
     tooltip: {
       trigger: 'item',
       confine: true,
@@ -110,8 +112,9 @@ export function createRadarOption(input: RadarInput): DashboardChartOption {
       }
     },
     radar: {
-      center: ['50%', detail ? '54%' : '57%'],
-      radius: detail ? '70%' : '62%',
+      // 卡片的图例让开了上方，雷达居中、占满高度（上下留出城市名）
+      center: ['50%', detail ? '54%' : '50%'],
+      radius: detail ? '70%' : '66%',
       // 从正上方顺时针按城市目录的顺序排
       startAngle: 90,
       clockwise: true,
