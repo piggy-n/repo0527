@@ -631,10 +631,16 @@ describe('resourceLabelsGroup（ADR 0160）', () => {
     expect(upAt16({ items: { '080901': { shape: 'pin' } } })).toBeCloseTo(2.4 * 6 + 1);
     expect(labelTargetOf(lines, display, undefined)?.reach).toBeNull();
 
-    const target = labelTargetOf(points, display, { items: { '080901': { shape: 'pin' } } });
-    const offset = target && resourceLabelLayer(target).layout?.['text-offset'];
-    // 16 级的偏移：(针头 15.4 + 间隔 3) / 12 号字，往上
-    expect(JSON.stringify(offset)).toContain(`16,["literal",[0,${-Number((18.4 / 12).toFixed(3))}]]`);
+    // 默认放在下方：16 级的偏移是 (往下伸出的 + 间隔 3) / 12 号字，再收回字形顶上的 0.125 em
+    const offsetAt16 = (override: ResourceSymbolOverride) => {
+      const target = labelTargetOf(points, display, override);
+      return JSON.stringify(target && resourceLabelLayer(target).layout?.['text-offset']);
+    };
+    const below = (pixels: number) => Number(((pixels + 3) / 12 - 0.125).toFixed(3));
+    // 都换成定位针：针尖在要素的位置，只让开针尖的描边 1
+    expect(offsetAt16({ mode: 'uniform', uniform: { shape: 'pin' } })).toContain(`16,["literal",[0,${below(1)}]]`);
+    // 改成 XL：半径 14.4 加描边 1
+    expect(offsetAt16({ mode: 'uniform', uniform: { size: 'XL' } })).toContain(`16,["literal",[0,${below(15.4)}]]`);
   });
 
   it('标注图层不算画出要素本身的图层：框选的估数不数它（ADR 0050）', () => {

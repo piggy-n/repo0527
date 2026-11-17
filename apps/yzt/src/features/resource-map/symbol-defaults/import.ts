@@ -1,7 +1,15 @@
 import { z } from 'zod';
 import { classItems } from '../classification';
 import { labelFieldsOf } from '../label-fields';
-import { compactLabel, LABEL_KEYS, type LabelField, type LabelOverride } from '../labels';
+import {
+  compactLabel,
+  LABEL_KEYS,
+  LABEL_PLACEMENTS,
+  type LabelField,
+  type LabelOverride,
+  type LabelPlacement,
+  PLACEMENTS_OF
+} from '../labels';
 import {
   CODE_DEFAULT_MODE,
   fromStoredSymbols,
@@ -140,9 +148,15 @@ function mergeItems(
   return Object.fromEntries([...keys].map(key => [key, { ...base?.[key], ...top[key] }]));
 }
 
+// 还有几何在用的放置方式；点以前的"上方"（top）用户 2026-11-16 去掉了，哪种几何都不用。离线不知道资源的几何，只滤掉这种
+const OFFERED_PLACEMENTS: ReadonlySet<LabelPlacement> = new Set(Object.values(PLACEMENTS_OF).flat());
+
+const offered = (placement: LabelPlacement | undefined) =>
+  placement !== undefined && OFFERED_PLACEMENTS.has(placement) ? placement : undefined;
+
 /**
  * 标注的新默认（ADR 0160）：现在的发布默认叠加这个用户的标注；没有登记标注字段的资源、不在登记里的字段跳过，
- * 原因记进 skipped
+ * 不再提供的放置方式用现在的发布默认（同页面上 resolveLabel 的做法），原因记进 skipped
  */
 function mergedLabel(
   code: string,
@@ -162,7 +176,16 @@ function mergedLabel(
   if (!known) {
     skipped.push(`${code}：标注字段 ${person.field} 不在登记里`);
   }
-  return compactLabel({ ...current, ...person, field: known ? (person.field ?? current?.field) : current?.field });
+  const { placement } = person;
+  if (placement !== undefined && !offered(placement)) {
+    skipped.push(`${code}：标注的放置方式 ${LABEL_PLACEMENTS[placement]}（${placement}）已经不提供，用现在的默认`);
+  }
+  return compactLabel({
+    ...current,
+    ...person,
+    field: known ? (person.field ?? current?.field) : current?.field,
+    placement: offered(placement) ?? offered(current?.placement)
+  });
 }
 
 /**

@@ -90,7 +90,7 @@ const HYDL = resource('csxhjctb_hydl', 'line', 9);
 const DLTB = resource('bgdc_dltb', 'fill');
 
 describe('默认标注', () => {
-  it('第一个登记的字段，12 号、普惠体常规、白色 1.5 描边，15 级起；点默认"上方"（用户 2026-11-16）', () => {
+  it('第一个登记的字段，12 号、普惠体常规、白色 1.5 描边，15 级起；点默认"下方"（用户 2026-11-16）', () => {
     expect(codeDefaultLabel(XXP)).toStrictEqual({
       field: 'name',
       font: 'regular',
@@ -98,7 +98,7 @@ describe('默认标注', () => {
       color: '#374151',
       haloColor: '#FFFFFF',
       haloWidth: 1.5,
-      placement: 'top',
+      placement: 'bottom',
       minzoom: 15,
       maxzoom: 20,
       overlap: false
@@ -125,8 +125,20 @@ describe('默认标注', () => {
 
     expect(resolveLabel(XXP, defaults, { field: 'dlmc', size: 16 })).toMatchObject({ field: 'dlmc', size: 16 });
     expect(resolveLabel(XXP, defaults, { field: 'unknown' }).field).toBe('name');
-    expect(resolveLabel(XXP, defaults, { placement: 'line' }).placement).toBe('top');
+    expect(resolveLabel(XXP, defaults, { placement: 'line' }).placement).toBe('bottom');
     expect(resolveLabel(XXP, defaults, { minzoom: 16, maxzoom: 12 })).toMatchObject({ minzoom: 16, maxzoom: 16 });
+  });
+
+  it('点的放置是自动、右侧、下方；以前存下的"上方"哪种几何都不用了，用默认的，别的字段照旧（用户 2026-11-16）', () => {
+    expect(PLACEMENTS_OF.circle).toStrictEqual(['auto', 'right', 'bottom']);
+    expect(Object.values(PLACEMENTS_OF).flat()).not.toContain('top');
+    expect(resolveLabel(XXP, requiredLabel(XXP), { placement: 'top', size: 16 })).toMatchObject({
+      placement: 'bottom',
+      size: 16
+    });
+    // 默认是别的放置方式时回到那一种
+    const autoDefaults: ResourceLabel = { ...requiredLabel(XXP), placement: 'auto' };
+    expect(resolveLabel(XXP, autoDefaults, { placement: 'top' }).placement).toBe('auto');
   });
 });
 
@@ -167,22 +179,70 @@ describe('点的文字让开点', () => {
     expect(high?.up).toBeGreaterThan(7);
   });
 
-  it('上方：文字的底边在点的上面，偏移按级别插值、单位是 em', () => {
-    const layer = resourceLabelLayer(target(XXP));
-    const layout = layer.layout ?? {};
+  it('下方：文字的顶边在点的下面，收回字形顶上的 0.125 em，偏移按级别插值、单位是 em；加强标注按大 2 号的字号换算', () => {
+    const layout = resourceLabelLayer(target(XXP)).layout ?? {};
+    const emphasis = emphasisLabelLayer(target(XXP), 'a'.repeat(32)).layout ?? {};
 
-    expect(layout['text-anchor']).toBe('bottom');
+    expect(layout['text-anchor']).toBe('top');
+    // M 档的圆往下 3、5、7 像素，再空 3，除以 12 号字，减 0.125
     expect(layout['text-offset']).toStrictEqual([
       'interpolate',
       ['linear'],
       ['zoom'],
       6,
-      ['literal', [0, -0.5]],
+      ['literal', [0, 0.375]],
       12,
-      ['literal', [0, -0.667]],
+      ['literal', [0, 0.542]],
       16,
-      ['literal', [0, -0.833]]
+      ['literal', [0, 0.708]]
     ]);
+    expect(emphasis['text-anchor']).toBe('top');
+    expect(emphasis['text-offset']).toStrictEqual([
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      6,
+      ['literal', [0, 0.304]],
+      12,
+      ['literal', [0, 0.446]],
+      16,
+      ['literal', [0, 0.589]]
+    ]);
+  });
+
+  it('下方的定位针：针尖在要素的位置，文字只让开针尖的描边再空 3 像素，各级一样', () => {
+    const reach = pointReach([{ shape: 'pin', size: 'M', strokeWidth: 1 }]);
+    const layout = resourceLabelLayer({ ...target(XXP), reach }).layout ?? {};
+
+    expect(layout['text-offset']).toStrictEqual([
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      6,
+      ['literal', [0, 0.208]],
+      12,
+      ['literal', [0, 0.208]],
+      16,
+      ['literal', [0, 0.208]]
+    ]);
+  });
+
+  it('自动：先右边、再左边、下面、上面，各自让开点', () => {
+    const autoLabel: ResourceLabel = { ...requiredLabel(XXP), placement: 'auto' };
+    const layout = resourceLabelLayer(target(XXP, autoLabel)).layout ?? {};
+
+    expect(layout['text-variable-anchor-offset']).toStrictEqual([
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      6,
+      ['literal', ['left', [0.5, 0], 'right', [-0.5, 0], 'top', [0, 0.375], 'bottom', [0, -0.5]]],
+      12,
+      ['literal', ['left', [0.667, 0], 'right', [-0.667, 0], 'top', [0, 0.542], 'bottom', [0, -0.667]]],
+      16,
+      ['literal', ['left', [0.833, 0], 'right', [-0.833, 0], 'top', [0, 0.708], 'bottom', [0, -0.833]]]
+    ]);
+    expect(layout['text-anchor']).toBeUndefined();
   });
 });
 

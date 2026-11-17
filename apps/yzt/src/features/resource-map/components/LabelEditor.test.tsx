@@ -86,12 +86,15 @@ describe('LabelEditor（ADR 0160）', () => {
     expect(fieldSelect()?.props('disabled')).toBe(false);
   });
 
-  it('字段、字号、描边宽度、放置、压盖点下就保存；点的放置是自动、右侧、上方，默认上方', async () => {
+  it('字段、字号、描边宽度、放置、压盖点下就保存；点的放置是自动、右侧、下方，默认下方（用户 2026-11-16）', async () => {
     const { wrapper, symbols, layers } = mountEditor();
     layers.setLabeled('csxhjctb_xxp', true);
     await nextTick();
 
-    expect(wrapper.text()).toContain('自动右侧上方');
+    expect(wrapper.text()).toContain('自动右侧下方');
+    expect(wrapper.text()).not.toContain('上方');
+    const checked = wrapper.findAll('label').filter(item => item.get('input').element.checked);
+    expect(checked.map(item => item.text())).toContain('下方');
     wrapper.findAllComponents(ElSelect)[0]?.vm.$emit('update:modelValue', 'type');
     await choose(wrapper, '16');
     await choose(wrapper, '3');
