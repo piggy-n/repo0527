@@ -28,7 +28,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `map-3d.md` | `map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、`shared/map/scene-tier`、现状底图页 | 三维、二三维切换、设备档位、漫游、导航网格 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes`、`symbol-defaults` | 年份、分类、最小显示级别、发布的默认符号、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
-| `city-dashboard.md` | 驾驶舱、`shared/city-indicators`、`shared/dashboard` | 范围、入场、保存图片 |
+| `city-dashboard.md` | 城市体检、综合分析两个驾驶舱，`shared/city-indicators`、`shared/dashboard` | 范围、入场、保存图片 |
 | `deps-config.md` | `package.json`、`pnpm-*`、`.github/`、`.oxlintrc.json`、`.env*`、`vite.config.ts`、`tsconfig*`、`shared/config/` | 依赖维护、环境变量、CI |
 
 ## 技术栈

@@ -3,7 +3,7 @@
 相关决策：ADR 0163；驾驶舱的独立路由和入口见 ADR 0077、0110，原驾驶舱的范围和基线见 [city-dashboard](city-dashboard.md)
 对应目录：`apps/yzt/src/shared/dashboard/`
 
-城市体检驾驶舱（`features/city-dashboard`，`/city-dashboard`）和城市国土空间监测综合分析驾驶舱（`features/land-space-dashboard`，`/land-space-analysis`，开发中）共用的大屏能力。2026-11-16 从 `features/city-dashboard` 移来：features 之间不能互相导入，第二个驾驶舱要用同一套外壳、筛选、图表、地图和导出。
+城市体检驾驶舱（`features/city-dashboard`，`/city-dashboard`）和城市国土空间监测综合分析驾驶舱（`features/land-space-dashboard`，`/land-space-analysis`，见 [land-space-dashboard](land-space-dashboard.md)）共用的大屏能力。2026-11-16 从 `features/city-dashboard` 移来：features 之间不能互相导入，第二个驾驶舱要用同一套外壳、筛选、图表、地图和导出。
 
 这里只放"大屏怎么显示"：外壳与入场、筛选控件、图表、立体地图、提示、导出图片。指标目录、数据、筛选状态和偏好留在各自的 feature（原驾驶舱是 `useDashboard`），组件通过 props 拿到要显示的东西、通过 emits 交回用户的操作。
 
@@ -87,7 +87,7 @@ shared/dashboard/
 ### 配置
 
 - `createChartOption(input)`：柱状、折线（按城市为横轴、每个年份一个系列，多于三年的柱状按城市堆叠）。`input.color(year)` 给年份系列的颜色，同一指标的卡片、详情、提示要传同一种取色
-- `createRadarOption(input)`：以所选城市为轴（从正上方顺时针，名字去掉"市"），每个年份一个半透明的面，均值是一圈虚线（`AVERAGE_COLOR`，名字"{年}均值"）；轴的上界用 `createValueAxisScale` 对全部值和均值算出，和柱图的纵轴一致。提示框按项触发，列出每个城市的值；格式化函数返回元素，城市名和数值写进文本节点，不拼 HTML。城市少于 3 个时画不成雷达，由调用方显示空态
+- `createRadarOption(input)`：以所选城市为轴（从正上方顺时针，名字去掉"市"），每个年份一个半透明的面，均值是一圈虚线（`AVERAGE_COLOR`，名字"{年}均值"）；轴的上界用 `createValueAxisScale` 对全部值和均值算出，和柱图的纵轴一致。提示框按项触发，列出每个城市的值；格式化函数返回元素，城市名和数值写进文本节点，不拼 HTML。城市少于 3 个时画不成雷达，由调用方显示空态。卡片里图例竖排在左上角、雷达居中（半径 66%）：卡片的绘图区不到 140 像素高时，上方居中的图例会碰到最上面的城市名；详情里图例和柱图一样在上方居中
 - `chartLegend`、`CHART_FONT_FAMILY`：三种图共用的图例和字体
 - `palette.ts`：三组各 6 色、均值色 `AVERAGE_COLOR`；`paletteColor(year, group, latestYear)` 取第 group 组（取模）里 year 的颜色，latestYear 取第一色、往前每年下一色，6 年一循环。原驾驶舱的 `yearColor(year, id)` 是按卡片序号分组的包装
 - `runtime.ts` 只注册柱、折线、雷达和网格、图例、雷达坐标、提示框组件
@@ -121,7 +121,7 @@ const downloads = useChartDownload();
 downloads.download({ indicator, years, detail: false, option, size: cardPlotSize(list.value, indicator.id) });
 ```
 
-- `useChartDetail<T>(options)`：放大详情的状态。`T` 是打开的目标，原驾驶舱是指标（`Indicator`），新驾驶舱可以是卡位（一级、二级、三级），由调用方按它算详情配置（柱、折线用 `createChartOption`，雷达用 `createRadarOption` 并给弹窗 `hoverMode="none"`）
+- `useChartDetail<T>(options)`：放大详情的状态。`T` 是打开的目标，原驾驶舱是指标（`Indicator`），新驾驶舱是卡位（`LandSpaceCardId`：一级 `domain`、二级 `sub`、三级 `indicator`），由调用方按它算详情配置（柱、折线用 `createChartOption`，雷达用 `createRadarOption` 并给弹窗 `hoverMode="none"`）
   - `open(target, cityCode?)`：打开并聚焦城市（地图点城市时传，卡片的放大按钮不传）；把 `options.legend(target)` 复制一份作为详情的图例，之后 `setLegend` 只改这一份，卡片的图例不变，再次打开或换目标时重新复制
   - `close()`：关闭并清掉悬停的城市；目标留着，弹窗淡出时内容不变
   - 状态（只读）：`visible`、`target`、`cityCode`、`focusedCity`、`focusText`（"{城市} · 当前查看城市"，不在 `options.cities()` 里时是"{城市} · 未纳入当前城市筛选"）、`hoveredCity`（详情里悬停的城市，给提示表格）、`legend`、`size`（图表区的尺寸，弹窗量到之前是 `DEFAULT_DETAIL_SIZE` 780×440）；`setHover`、`setLegend`、`setSize` 接弹窗的 `hover`、`legend`、`size`
@@ -179,20 +179,20 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 
 ## 两个驾驶舱的组合
 
-| | 城市体检驾驶舱 | 城市国土空间监测综合分析（按规格，开发中） |
+| | 城市体检驾驶舱 | 城市国土空间监测综合分析驾驶舱 |
 |---|---|---|
-| 外壳 | `DashboardShell`，标题"江苏省城市国土空间监测驾驶舱"，`traceName="city-dashboard"` | 标题"江苏省城市国土空间监测综合分析"，`traceName="land-space-dashboard"` |
-| 左栏 | `YearFilter`、`CityFilter`、指标类型 `IconOptionList`、具体指标 `OptionList(fill)` | 年份只有 2025（不能清空）、`CityFilter`、一级指标 `IconOptionList`、二级指标 `OptionList(fill)` |
+| 外壳 | `DashboardShell`，标题"江苏省城市国土空间监测驾驶舱"，`traceName="city-dashboard"` | 标题"江苏省城市国土空间监测综合分析"，`traceName="land-space-dashboard"`；窄屏右栏行高 `--dashboard-charts-row: 880px` |
+| 左栏 | `YearFilter`、`CityFilter`、指标类型 `IconOptionList`、具体指标 `OptionList(fill)` | `YearFilter`（只有 2025，`clearable=false`）、`CityFilter`、一级指标 `IconOptionList`（六个一级图标）、二级指标 `OptionList(fill)` |
 | 地图 | 当前指标、写数值 | 当前二级指标、`showValues=false`、无指数值时 `notice`，`topRight` 放指北针、`bottomRight` 放比例尺 |
-| 右栏 | 当前指标类型的全部卡片，翻卡导航、`.selected`、可点击标题、预热 | 固定三张 `ChartCard`（一级、二级、三级），二级默认雷达（`hoverMode="none"`），三级标题是下拉框、`toolbar` 放分项栏 |
-| 详情和下载 | `useChartDetail<Indicator>`（切换指标类型时关闭）、`useChartDownload`，文件名「{比较年份}-{指标名}[-详情]」 | `useChartDetail` 以卡位为目标，地图点城市打开二级卡的详情并聚焦该城市；文件名「2025-{指标名}[-详情]」 |
-| 提示 | `TooltipLayer` | 同 |
+| 右栏 | 当前指标类型的全部卡片，翻卡导航、`.selected`、可点击标题、预热 | 固定三张 `ChartCard`（一级、二级、三级），等分高度、矮屏按最小高度滚动；二级默认雷达（`hoverMode="none"`）；三级标题是 `ElDropdown`、`toolbar` 放分项栏；预热一级和二级的图 |
+| 详情和下载 | `useChartDetail<Indicator>`（切换指标类型时关闭）、`useChartDownload`，文件名「{比较年份}-{指标名}[-详情]」 | `useChartDetail<LandSpaceCardId>` 以卡位为目标，地图点城市打开二级卡的详情并聚焦该城市；文件名「2025-{指标名}[-详情]」，三级有分项时指标名是「三级名 · 分项名」 |
+| 提示 | `TooltipLayer` | 同；提示目标的 `indicatorId` 是卡位，地图悬停对应二级卡 |
 
-原驾驶舱的 `DashboardView` 组合外壳和三栏，`DashboardFilters`、`DashboardCharts` 组合筛选单元和图表单元；翻卡导航（`useCardNavigation`）、`.selected`、卡片吸附只在原驾驶舱。
+原驾驶舱的 `DashboardView` 组合外壳和三栏，`DashboardFilters`、`DashboardCharts` 组合筛选单元和图表单元；翻卡导航（`useCardNavigation`）、`.selected`、卡片吸附只在原驾驶舱。综合分析驾驶舱的 `LandSpaceView` 组合外壳、筛选单元和地图，`LandSpaceCharts` 组合三张卡，见 [land-space-dashboard](land-space-dashboard.md)。
 
 ## 测试
 
-- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom）、`detail-labels`、`palette`、`charts/useChartDetail`、`charts/useChartDownload`（jsdom，出图和保存换成假函数）、`map/map-export`、`map/config`、`map/geometry`（市界、标签避让、形状坐标反算）、`map/scale-bar`、`map/map-view` 等
+- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom；卡片和详情的图例位置）、`detail-labels`、`palette`、`charts/useChartDetail`、`charts/useChartDownload`（jsdom，出图和保存换成假函数）、`map/map-export`、`map/config`、`map/geometry`（市界、标签避让、形状坐标反算）、`map/scale-bar`、`map/map-view` 等
 - 组件（jsdom）：`ChartActions`、`ChartCard`、`ChartDetailDialog`、`DashboardPlot` 的键盘与悬停方式、`filters`、`DashboardShell`、`DashboardTimeline`、`useDashboardTooltip`
-- 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`map/map-overlay.browser.test.tsx`（指北针的角度跟着拖动变、二维降级正北、每像素米数的范围、不用角上插槽时不取样，1920×1080、1366×768、1280×720 和 ≤720 的地图尺寸下指北针、比例尺与标题、时间轴、图例不重叠）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 浏览器测试覆盖外壳和筛选、图表的组合
+- 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`map/map-overlay.browser.test.tsx`（指北针的角度跟着拖动变、二维降级正北、每像素米数的范围、不用角上插槽时不取样，1920×1080、1366×768、1280×720 和 ≤720 的地图尺寸下指北针、比例尺与标题、时间轴、图例不重叠）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 和综合分析驾驶舱的 `LandSpaceView` 浏览器测试覆盖外壳和筛选、图表、地图的组合
 - 原驾驶舱的回归：拆分前后用同一段临时测试把 96 个指标的卡片和详情配置、地图图例写成 JSON，逐字节比较（生成写法在 `local/land-space/baseline-generator.test.ts.txt`，不入库）
