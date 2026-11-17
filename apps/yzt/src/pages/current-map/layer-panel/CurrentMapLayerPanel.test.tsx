@@ -1,6 +1,6 @@
 import type { CameraState, SceneStatus } from '@mx/map-core';
 import { type MapContext, provideMap } from '@mx/map-vue';
-import { mount, type VueWrapper } from '@vue/test-utils';
+import { type DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, effectScope, nextTick, shallowRef, watchEffect } from 'vue';
@@ -196,6 +196,15 @@ async function showLayers(wrapper: VueWrapper, view: 'all' | 'models' | 'resourc
 const rowKeys = (wrapper: VueWrapper) =>
   wrapper.findAll('[data-current-row]').map(item => item.attributes('data-current-row'));
 const coverOf = (wrapper: VueWrapper, code: string) => row(wrapper, code).find('[data-row-cover]').exists();
+// 鼠标点一下：jsdom 按下鼠标时不移动焦点，这里照浏览器的做法，按下没被 preventDefault 时聚焦最近的可聚焦祖先
+async function press(target: Pick<DOMWrapper<Element>, 'element' | 'trigger'>) {
+  const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+  target.element.dispatchEvent(down);
+  if (!down.defaultPrevented) {
+    target.element.closest<HTMLElement>('[tabindex]')?.focus();
+  }
+  await target.trigger('click');
+}
 
 afterEach(() => {
   // Element 的提示挂在 body 下，不归组件管
@@ -811,6 +820,28 @@ describe('CurrentMapLayerPanel', () => {
     await cover.trigger('focus');
 
     await vi.waitFor(() => expect(document.body.textContent).toContain('盖住模型：调低透明度可以透出模型'));
+  });
+
+  it('鼠标点"盖住模型"的图标：焦点落在这一行，行的键盘操作照常（图标只在 Tab 进来时得到焦点）', async () => {
+    const { wrapper, models, map } = await mountPanel();
+    models.add(['white']);
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    map.setDimension('3d');
+    await nextTick();
+    await wrapper.get('[data-current-row="model:white"]').trigger('click');
+
+    await press(row(wrapper, 'bgdc_dltb').get('[data-row-cover]'));
+    expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+    expect(document.activeElement).toBe(row(wrapper, 'bgdc_dltb').element);
+
+    // 按键发给有焦点的元素
+    required(document.activeElement, '有焦点的元素').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })
+    );
+    await nextTick();
+    expect(rowKeys(wrapper)).toStrictEqual(['model:white']);
   });
 
   it('目录里右键分类：菜单作用于它下面的项，没有定位；分类不能选中（用户 2026-11-15）', async () => {

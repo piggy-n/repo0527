@@ -15,6 +15,15 @@ import { ResourceStatusIcon } from './ResourceStatusIcon';
 const COVER_TIP = '盖住模型：调低透明度可以透出模型';
 const COVER_TRIGGERS: ('hover' | 'focus')[] = ['hover', 'focus'];
 
+// 鼠标按在图标上时焦点交给所在的行（同其他不是控件的地方）：停在图标上时行的键盘操作（Delete、上下、菜单）都不响应；
+// 只有 Tab 进来时停在图标上
+const focusRowOf = (event: MouseEvent) => {
+  event.preventDefault();
+  if (event.currentTarget instanceof Element) {
+    event.currentTarget.closest<HTMLElement>('[data-current-row]')?.focus();
+  }
+};
+
 /**
  * 当前图层里一个资源的行内容（ADR 0157），放在图层列表的手柄、复选框后面：符号（点了选中并打开图例）、名称、
  * 紧跟名称的状态（会把模型盖住时一个橙色的图标，ADR 0161；瓦片加载超过 0.4 秒时转圈，ADR 0158；状态图标，ADR 0059）、
@@ -75,7 +84,14 @@ export const ResourceLayerRow = defineComponent({
         <span class={rowStyles.status}>
           {props.covering && (
             <ElTooltip {...MAP_TOOLTIP_PROPS} content={COVER_TIP} placement="top" trigger={COVER_TRIGGERS}>
-              <span class={rowStyles.cover} tabindex={0} role="img" aria-label={COVER_TIP} data-row-cover>
+              <span
+                class={rowStyles.cover}
+                tabindex={0}
+                role="img"
+                aria-label={COVER_TIP}
+                data-row-cover
+                onMousedown={focusRowOf}
+              >
                 <SvgIcon name="model-covered" size={16} />
               </span>
             </ElTooltip>
