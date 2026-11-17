@@ -1,0 +1,50 @@
+# 0162. 三维模型读完索引以后的加载：渲染器按模型统计这一轮，视图接口给出 `sceneActivity`
+
+- 状态：已接受（2026-11-16 用户的修改意见第 3 条，做法由用户确认）
+- 日期：2026-11-16
+- 补充：ADR 0158（请求状态多了三维模型这一轮的进度）、ADR 0147 第 5 节（三维渲染器的窄接口多一项统计）、ADR 0024（视图接口多一项可选的 `sceneActivity`）、ADR 0157 第 6 节（"细节还剩几块"）
+
+## 背景
+
+- 模型的状态只有 `sceneStatus` 的加载中、就绪、失败（ADR 0081 第 2 节）：瓦片集读到根索引、高斯泼溅读到索引就是就绪。之后相机移动引起的请求（3D Tiles 的瓦片下载、解析、上传，LCC2 的数据块）在请求状态的明细、状态栏的条目、图层的行内转圈里都看不到（2026-11-16 用户的修改意见）。
+- 渲染器手里有数据，只在测量用的读数（`inspect()`）里：
+  - 3d-tiles-renderer 0.5.4：瓦片的 `internal.loadingState`（排队、下载、解析、到了、失败、没请求）。被共用的缓存淘汰的请求直接改回"没请求"，不发事件。我们的上传插件让瓦片在上传完之前一直是"解析"（`tile-load-plugin.ts`），所以"到了"就是能画了。
+  - gaussian-splat-lite 1.6.1：只有在路上的数据块数（并发 2）和 `loadProgress`（当前视角要的细节到了多少，随视角变），拿不到这一轮要请求的总块数。视野里什么也没选中时 `loadProgress` 是 0，不是 1。
+- 模型行的转圈是 `ModelLayerRow` 按 `stateOf` 自己画的，和资源行（`useRequestStatus` 的 `loadingKeys`）不是一份数据。
+
+## 候选方案
+
+| 问题 | 候选 | 选择与理由 |
+|---|---|---|
+| 统计放在哪 | 页面、拥有者读渲染器的读数；渲染器统计，经视图接口给出 | **渲染器统计，视图接口给出**，同二维的 `sourceActivity`（ADR 0158）：只有 map-three 能碰 Three 和瓦片库，页面、feature 不碰 |
+| 瓦片集怎样数 | 用库自己的"一轮"（`tiles-load-start`、`inCacheSinceLoad`）；按瓦片记、看瓦片的状态 | **按瓦片记、看状态，复用 map-core 的 `SourceActivityTracker`**。库的一轮只在 `update()` 里结束，不画的瓦片集（隐藏、抬高别的）停在加载中；按瓦片记的在每帧画完时看一眼就能结束，取消（淘汰）照样不算请求 |
+| 高斯泼溅的进度 | 只给比例；读库的私有字段凑出"就绪的块 / 要的块" | **只给比例**（用户确认）。私有字段在版本锁定下也脆弱，而且那是当前视角的细节，不是请求数 |
+| 模型行的转圈 | 仍按 `stateOf`；改用 `loadingKeys` | **改用 `loadingKeys`**（用户确认）：明细、条目、行内转圈一份数据；读索引时也等 0.4 秒才出现，同资源行 |
+
+## 决定
+
+### 1. 渲染器的统计
+
+- `SceneRenderer` 多一项 `activity`（每个瓦片集、高斯泼溅这一轮的加载，键同 `SceneStatus`）和事件 `activitychange`。
+- 瓦片集：包住瓦片库的 `requestTileContents`，真正排进下载队列的瓦片交给 `SourceActivityTracker`（瓦片键放宽成任意值，这里是瓦片对象）。结果看瓦片的状态：到了算到了、失败算失败、回到"没请求"算取消（不算请求）。渲染器每画完一帧看一眼还在等的瓦片；瓦片集移除时忘掉。
+- 高斯泼溅：每帧画完时看这一帧画了的泼溅，在路上的数据块数大于 0、或者细节的比例在 0 和 1 之间算加载中（比例为 0 且没有在路上的是视野里什么也没选中）；开始、结束的时间按变成加载中、不再加载的那一帧记，比例取最近一帧的。
+- 类型是 map-core 的 `SceneActivity`：瓦片集是 `{ kind: 'blocks', ...SourceActivity }`，高斯泼溅是 `{ kind: 'detail', progress, startedAt, finishedAt }`。
+
+### 2. 接口
+
+- `MapLibreScene` 转出渲染器的 `activity`；`MapView` 多一项可选的 `sceneActivity` 和 `onSceneActivityChange`（只有三维视图有，显示二维时为空）。
+- map-vue 的上下文给出只读的 `sceneActivity`，和 `sourceActivity` 同一帧最多更新一次。
+- 契约测试（`scene-contract.browser.test.tsx`）加上：瓦片集就绪以后，这一轮请求的块都到了才结束。
+
+### 3. 请求状态
+
+- 拥有者 `useSceneModels` 给出 `activityOf(id)`（按当前效果的瓦片集 ID），`modelRequests` 把它带进来源。
+- 一个模型在读索引、或这一轮没结束时算加载中：明细写"读取模型…"、"12/40 块"加进度条、"当前视角细节 62%"加进度条（悬停说明和块数不是一种口径）。读完索引后渲染器下一帧才开始请求，两段相隔不到 0.3 秒时算同一段，转圈不闪。
+- 状态栏的百分比只按请求的张数、块数算（二维瓦片和瓦片集的块）；高斯泼溅的比例不是请求数，不算进去，只算在"N 项"里。
+- 模型行的转圈改用 `loadingKeys`，失败和重试仍按 `stateOf`。
+
+## 后果
+
+- 移动相机时能看到模型还在加载、到了多少；高斯泼溅只能看到当前视角的比例。
+- 统计用到瓦片库运行时有、类型声明里没有的 `requestTileContents` 和瓦片状态，和请求剔除（`queueTileForDownload`）一样；库升级时由 map-three 的浏览器测试和契约测试发现。
+- 用法见 [map-three.md](../modules/map-three.md)"加载的统计"、[shared-map.md](../modules/shared-map.md)"请求状态"。

@@ -2,6 +2,7 @@ import type {
   LngLat,
   PickOptions,
   PreparedTileset,
+  SceneActivities,
   SceneBudget,
   SceneBudgetSource,
   SceneFrame,
@@ -24,6 +25,7 @@ import { Color, Matrix4, Raycaster, WebGLRenderer } from 'three';
 import { AnimatedModel, type ModelPlacement } from './animated-model';
 import { type BudgetPose, ErrorScale } from './error-scale';
 import { FrameMath, toNdc, withDeeperFar } from './frame';
+import { SceneActivityTracker } from './scene-activity-tracker';
 import type { FogUniform } from './lighting';
 import { TileUploader } from './tile-uploader';
 import type { CullWindow } from './request-cull';
@@ -143,6 +145,8 @@ function copyFrame({ mainMatrix, fallbackMatrix, projectionMatrix, transition, c
  */
 export class ThreeSceneRenderer implements SceneRenderer {
   readonly #emitter = createNanoEvents<SceneRendererEvents>();
+  // 这一轮的加载（ADR 0162）：瓦片集的块请求时记下，每画完一帧看一眼；泼溅每帧报一次
+  readonly #activity = new SceneActivityTracker(() => this.#emitter.emit('activitychange'));
   readonly #tilesets = new Map<string, TilesetEntry>();
   readonly #splats = new Map<string, SplatEntry>();
   // 还在读索引的泼溅和这次加载的信号：同一个 ID 先中止、紧接着重新加时（同步换摆放、重试），上一份还没走到 catch 里移除
@@ -212,6 +216,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#cache.maxBytesSize = cacheLimitBytes;
     this.#scale = new ErrorScale({ hardBytes: cacheLimitBytes });
     this.#uploader = new TileUploader(uploadBytesPerFrame, () => this.#requestFrame());
+  }
+
+  get activity(): SceneActivities {
+    return this.#activity.activities;
   }
 
   attach(surface: SceneSurface): void {
@@ -351,7 +359,12 @@ export class ThreeSceneRenderer implements SceneRenderer {
       } else if (entry.prepare(frame, surface)) {
         webgl.render(entry.scene, entry.camera);
       }
+      // 这一轮的加载按这一帧画没画、库的统计（ADR 0162）
+      const { loading, progress } = entry.detailLoad();
+      this.#activity.detail(id, loading, progress);
     }
+    // 瓦片集请求过的块：到了、失败、被缓存淘汰的这时结算（淘汰发生在选瓦片时，没有事件）
+    this.#activity.sweep();
     if (isolating && this.#shareSplatBudget()) {
       surface.requestRepaint();
     }
@@ -389,6 +402,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       uploader: this.#uploader,
       requestCullWindow: this.#requestCullWindow,
       releaseImages: this.#releaseImages,
+      onRequest: (tile, probe) => this.#activity.requested(id, tile, probe),
       events: {
         failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
         initial: () => this.#emitter.emit('tilesetinitial', id),
@@ -411,6 +425,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
     } catch (error) {
       if (this.#tilesets.get(id) === entry) {
         this.#tilesets.delete(id);
+        this.#activity.forget(id);
       }
       entry[Symbol.dispose]();
       throw error;
@@ -429,6 +444,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       return;
     }
     this.#tilesets.delete(id);
+    this.#activity.forget(id);
     entry[Symbol.dispose]();
     this.#scale.release();
     this.#surface?.requestRepaint();
@@ -466,6 +482,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
     } catch (error) {
       if (this.#splats.get(id) === entry) {
         this.#splats.delete(id);
+        this.#activity.forget(id);
         this.#shareSplatBudget();
       }
       entry[Symbol.dispose]();
@@ -484,6 +501,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       return;
     }
     this.#splats.delete(id);
+    this.#activity.forget(id);
     entry[Symbol.dispose]();
     this.#shareSplatBudget();
     this.#clipTilesets();
@@ -731,6 +749,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       throw new Error(`高斯泼溅 ${id} 已经加过`);
     }
     this.#splats.delete(id);
+    this.#activity.forget(id);
     previous[Symbol.dispose]();
     this.#shareSplatBudget();
   }

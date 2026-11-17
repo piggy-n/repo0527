@@ -5,6 +5,7 @@ import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { LoadJson } from '../scene/prepare-tileset';
+import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import { NO_SCENE_STATUS, type RoamStatus, type SceneStatus } from '../scene/scene-content-model';
 import type { MapSession } from '../session/map-session';
 import { diffSnapshot, type StyleCommand, type StyleSnapshot } from '../style/diff-style';
@@ -81,6 +82,7 @@ interface MapLibreViewEvents {
   sourceerrorchange: (errors: SourceErrors) => void;
   sourceactivitychange: () => void;
   scenestatuschange: (status: SceneStatus) => void;
+  sceneactivitychange: () => void;
   roamstatuschange: (status: RoamStatus | null) => void;
 }
 
@@ -350,6 +352,12 @@ export class MapLibreView<const G extends string> implements MapView {
             onError: this.#onError,
             onStatus: status => this.#onSceneStatus(status),
             onModuleChange: state => this.#onModuleChange(state),
+            // 显示二维时不报告；切到三维时 setKind 报告一次
+            onActivity: () => {
+              if (this.#kind === '3d') {
+                this.#emitter.emit('sceneactivitychange');
+              }
+            },
             onContent: content => this.#guard(() => this.#roam?.apply(content, true))
           })
         )
@@ -420,6 +428,15 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.on('scenestatuschange', callback);
   }
 
+  /** 瓦片集、高斯泼溅读完索引以后这一轮的加载（ADR 0162）；显示二维时为空 */
+  get sceneActivity(): SceneActivities {
+    return this.#kind === '3d' ? (this.#scene?.activity ?? NO_SCENE_ACTIVITY) : NO_SCENE_ACTIVITY;
+  }
+
+  onSceneActivityChange(callback: () => void): Unsubscribe {
+    return this.on('sceneactivitychange', callback);
+  }
+
   /** 漫游的进度（ADR 0083、0086、0147 第 4 节）；没有漫游时为 null */
   get roamStatus(): RoamStatus | null {
     return this.#roam?.status ?? null;
@@ -458,6 +475,7 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     this.#syncScene();
     this.#emitter.emit('scenestatuschange', this.sceneStatus);
+    this.#emitter.emit('sceneactivitychange');
     this.#notifyState();
   }
 

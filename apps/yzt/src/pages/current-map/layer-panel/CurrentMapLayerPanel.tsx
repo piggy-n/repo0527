@@ -721,7 +721,15 @@ export const CurrentMapLayerPanel = defineComponent({
     const renderRow = (key: string) => {
       const id = modelIdOfKey(key);
       if (id !== null) {
-        return [<ModelLayerRow models={props.models} id={id} scene={scene.value} onRemove={() => removeKeys([key])} />];
+        return [
+          <ModelLayerRow
+            models={props.models}
+            id={id}
+            scene={scene.value}
+            loading={props.requests?.loadingKeys.value.has(key) ?? false}
+            onRemove={() => removeKeys([key])}
+          />
+        ];
       }
       const code = resourceCodeOfKey(key);
       return code === null

@@ -86,15 +86,26 @@ export function modelKindOptions(models: readonly SceneModel[]): { readonly kind
 }
 
 /**
- * 请求状态里的模型（ADR 0158）：三维里加入、显示着的，按当前图层的先后；只有加载中、就绪、失败，"细节还剩几块"往后放。
- * 键同当前图层的行
+ * 请求状态里的模型（ADR 0158）：三维里加入、显示着的，按当前图层的先后；读索引的加载中、就绪、失败，
+ * 加上读完索引以后这一轮的加载（ADR 0162）。键同当前图层的行
  */
-export function modelRequests(models: Pick<SceneModels, 'models' | 'added' | 'hidden' | 'stateOf'>): RequestSource[] {
+export function modelRequests(
+  models: Pick<SceneModels, 'models' | 'added' | 'hidden' | 'stateOf' | 'activityOf'>
+): RequestSource[] {
   return models.added.value.flatMap(id => {
     const model = models.models.value.find(item => item.id === id);
     if (!model || models.hidden.value.has(id)) {
       return [];
     }
-    return [{ kind: 'model', key: modelKey(id), name: model.name, icon: 'model-3d', state: models.stateOf(id) }];
+    return [
+      {
+        kind: 'model',
+        key: modelKey(id),
+        name: model.name,
+        icon: 'model-3d',
+        state: models.stateOf(id),
+        activity: models.activityOf(id)
+      }
+    ];
   });
 }

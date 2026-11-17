@@ -105,18 +105,20 @@ describe('三维模型在资源图层面板上', () => {
 });
 
 describe('modelRequests', () => {
-  it('加入、显示着的模型按当前图层的先后，带加载状态；隐藏的、目录里没有的不算（ADR 0158）', () => {
-    const states: Record<string, 'loading' | 'ready' | 'failed'> = { white: 'ready', station: 'failed', city: 'loading' };
+  it('加入、显示着的模型按当前图层的先后，带读索引的状态和这一轮的加载；隐藏的、目录里没有的不算（ADR 0158、0162）', () => {
+    const states: Record<string, 'loading' | 'ready' | 'failed'> = { white: 'ready', station: 'failed', city: 'ready' };
+    const blocks = { kind: 'blocks', requested: 4, loaded: 1, failed: 0, startedAt: 0, finishedAt: null } as const;
     const models = {
       models: computed(() => CATALOG),
       added: shallowRef(['city', 'white', 'gone', 'station']),
       hidden: shallowRef<ReadonlySet<string>>(new Set(['white'])),
-      stateOf: (id: string) => states[id] ?? 'loading'
+      stateOf: (id: string) => states[id] ?? 'loading',
+      activityOf: (id: string) => (id === 'city' ? blocks : null)
     };
 
     expect(modelRequests(models)).toStrictEqual([
-      { kind: 'model', key: 'model:city', name: '新街口倾斜摄影', icon: 'model-3d', state: 'loading' },
-      { kind: 'model', key: 'model:station', name: '苏州站地下空间', icon: 'model-3d', state: 'failed' }
+      { kind: 'model', key: 'model:city', name: '新街口倾斜摄影', icon: 'model-3d', state: 'ready', activity: blocks },
+      { kind: 'model', key: 'model:station', name: '苏州站地下空间', icon: 'model-3d', state: 'failed', activity: null }
     ]);
   });
 });

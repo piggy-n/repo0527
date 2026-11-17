@@ -1,5 +1,6 @@
 import type { Unsubscribe } from '../events';
 import type { PreparedTileset } from '../scene/prepare-tileset';
+import type { SceneActivities } from '../scene/scene-activity';
 import type { SplatOptions, SplatSource } from '../scene/splat-sync';
 import type { TilesetSphere } from '../scene/tileset-camera';
 import type { TilesetOptions } from '../scene/tileset-sync';
@@ -42,11 +43,15 @@ export interface SceneFrame {
   readonly clippingPlane: readonly [number, number, number, number];
 }
 
-/** 渲染器报告的事件：瓦片失败、显示后首批瓦片到位、高斯泼溅的数据加载失败 */
+/**
+ * 渲染器报告的事件：瓦片失败、显示后首批瓦片到位、高斯泼溅的数据加载失败；
+ * activitychange 是这一轮的加载有变化（每块瓦片都可能通知一次，使用方自己决定多久读一次 activity，ADR 0162）
+ */
 export interface SceneRendererEvents {
   tilesetfailed: (id: string, error: unknown) => void;
   tilesetinitial: (id: string) => void;
   splatfailed: (id: string, error: unknown) => void;
+  activitychange: () => void;
 }
 
 /** 拾取到的模型表面：真实的经纬度和椭球高 */
@@ -78,6 +83,8 @@ export interface SceneMarker {
  * 撤下层、上下文丢失时内容都保留
  */
 export interface SceneRenderer extends Disposable {
+  /** 每个瓦片集、高斯泼溅这一轮的加载（ADR 0162）：没有变化时是同一个对象，变化时发 activitychange；移除的不再有 */
+  readonly activity: SceneActivities;
   /** 外壳加到地图上（onAdd）：同一个上下文再次挂上时复用之前的渲染器和 GPU 资源 */
   attach(surface: SceneSurface): void;
   /** 外壳从地图撤下（onRemove）：不再画，内容和 GPU 资源保留 */

@@ -17,7 +17,7 @@ export function roamTip(scene: boolean, hidden: boolean, ready: boolean): string
 
 /**
  * 当前图层里一个三维模型的行内容（ADR 0157），放在通用分组的手柄、复选框后面：模型图标、名称、紧跟名称的状态
- * （三维里显示着时：加载中转圈，失败时红色图标加"重试"）、行尾的框（白膜是效果下拉，能漫游的是"漫游"按钮）、移除。
+ * （三维里显示着时：请求状态说加载中时转圈，失败时红色图标加"重试"）、行尾的框（白膜是效果下拉，能漫游的是"漫游"按钮）、移除。
  * 二维里不加载、不能漫游，整组由分组变淡；拥有者的目录里没有这个模型时不显示
  */
 export const ModelLayerRow = defineComponent({
@@ -26,7 +26,9 @@ export const ModelLayerRow = defineComponent({
     models: { type: Object as PropType<SceneModels>, required: true },
     id: { type: String, required: true },
     /** 正在显示三维：二维里模型不加载，不显示状态，不能漫游 */
-    scene: { type: Boolean, required: true }
+    scene: { type: Boolean, required: true },
+    /** 加载超过 0.4 秒（请求状态的 loadingKeys，读索引和读完以后这一轮都算，ADR 0162）：名称后面转圈 */
+    loading: { type: Boolean, default: false }
   },
   emits: {
     remove: () => true
@@ -40,7 +42,7 @@ export const ModelLayerRow = defineComponent({
         return null;
       }
       const state = props.models.stateOf(props.id);
-      if (state === 'loading') {
+      if (props.loading) {
         return (
           <ElIcon class={['is-loading', rowStyles.spinner]} aria-label="加载中">
             <Loading />

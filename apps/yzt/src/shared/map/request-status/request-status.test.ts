@@ -1,8 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import type { SceneActivity } from '@mx/map-core';
 import {
   DONE_HOLD,
   mergedActivity,
+  MODEL_SETTLE,
+  type ModelPhase,
+  modelRequestItem,
   type RequestItem,
   requestGroups,
   requestRowText,
@@ -18,6 +22,7 @@ const tiles = (key: string, extra: Partial<RequestItem> = {}): RequestItem => ({
   requested: 10,
   loaded: 0,
   failed: 0,
+  detail: null,
   startedAt: 0,
   finishedAt: null,
   ...extra
@@ -46,6 +51,13 @@ describe('requestSummary', () => {
     });
     // 只有模型在加载时没有比例
     expect(requestSummary([model('m')], 1000)).toStrictEqual({ kind: 'loading', count: 1, ratio: null, withFailures: 0 });
+  });
+
+  it('瓦片集的块和二维瓦片按张数、块数合起来算比例；高斯泼溅的细节比例不算进去，只算项数（ADR 0162）', () => {
+    const blocks = tiles('b', { kind: 'blocks', requested: 30, loaded: 15 });
+    const detail = tiles('d', { kind: 'detail', requested: 0, detail: 0.9 });
+    expect(requestSummary([tiles('a', { loaded: 5 }), blocks, detail], 1000)).toMatchObject({ count: 3, ratio: 0.5 });
+    expect(requestSummary([detail], 1000)).toMatchObject({ count: 1, ratio: null });
   });
 
   it('结束后有失败时一直显示几项失败；显示过的加载结束后 1.5 秒内是"已加载完成"，快的不显示；明细开着时至少显示完成', () => {
@@ -94,6 +106,76 @@ describe('requestGroups 和 requestRowText', () => {
     expect(requestRowText(model('m'), 20).text).toBe('读取模型…');
     expect(requestRowText(model('m', { failed: 1, finishedAt: 10 }), 20)).toMatchObject({ text: '加载失败', tone: 'error' });
     expect(requestRowText(model('m', { loaded: 1, finishedAt: 10 }), 20).text).toBe('已完成');
+  });
+
+  it('瓦片集按块写，高斯泼溅写当前视角细节的百分比和进度；都超过 5 秒写等了几秒（ADR 0162）', () => {
+    expect(requestRowText(tiles('b', { kind: 'blocks', requested: 40, loaded: 12 }), 1000)).toMatchObject({
+      text: '12/40 块',
+      progress: 0.3
+    });
+    expect(requestRowText(tiles('b', { kind: 'blocks', requested: 40, loaded: 40, finishedAt: 10 }), 20).text).toBe(
+      '40 块'
+    );
+    const detail = tiles('d', { kind: 'detail', requested: 0, detail: 0.624 });
+    expect(requestRowText(detail, 1000)).toStrictEqual({
+      text: '当前视角细节 62%',
+      progress: 0.624,
+      tone: 'normal',
+      waited: null
+    });
+    expect(requestRowText(detail, 6000)).toMatchObject({ tone: 'slow', waited: 6 });
+    expect(requestRowText({ ...detail, finishedAt: 10 }, 20)).toMatchObject({ text: '已完成', progress: null });
+  });
+});
+
+const base = { key: 'model:m', name: '模型', icon: 'model-3d' } as const;
+const blocks = (startedAt: number, finishedAt: number | null = null): SceneActivity => ({
+  kind: 'blocks',
+  requested: 8,
+  loaded: 3,
+  failed: 0,
+  startedAt,
+  finishedAt
+});
+// 100 开始读索引，1100 读完
+const ready: ModelPhase = { state: 'ready', startedAt: 100, finishedAt: 1100 };
+
+describe('modelRequestItem', () => {
+  it('读索引、失败按读索引的阶段', () => {
+    expect(modelRequestItem(base, { state: 'loading', startedAt: 100, finishedAt: null }, blocks(0), 500)).toMatchObject({
+      kind: 'model',
+      startedAt: 100,
+      finishedAt: null
+    });
+    expect(modelRequestItem(base, { state: 'failed', startedAt: 100, finishedAt: 900 }, null, 1000)).toMatchObject({
+      kind: 'model',
+      failed: 1,
+      finishedAt: 900
+    });
+  });
+
+  it('读完索引后紧接着请求的块和读索引算同一段，从读索引开始；隔得久的一轮从自己开始', () => {
+    expect(modelRequestItem(base, ready, blocks(1100 + MODEL_SETTLE), 1500)).toMatchObject({
+      kind: 'blocks',
+      requested: 8,
+      loaded: 3,
+      startedAt: 100,
+      finishedAt: null
+    });
+    expect(modelRequestItem(base, ready, blocks(9000), 9100)).toMatchObject({ kind: 'blocks', startedAt: 9000 });
+    const detail: SceneActivity = { kind: 'detail', progress: 0.4, startedAt: 1050, finishedAt: 3000 };
+    expect(modelRequestItem(base, ready, detail, 4000)).toMatchObject({
+      kind: 'detail',
+      detail: 0.4,
+      startedAt: 100,
+      finishedAt: 3000
+    });
+  });
+
+  it('读完、还没请求时等一会儿再算结束；这一段开始以前就结束的一轮是上次显示时的，不算', () => {
+    expect(modelRequestItem(base, ready, null, 1100 + MODEL_SETTLE - 1)).toMatchObject({ kind: 'model', finishedAt: null });
+    expect(modelRequestItem(base, ready, null, 1100 + MODEL_SETTLE)).toMatchObject({ kind: 'model', finishedAt: 1100 });
+    expect(modelRequestItem(base, ready, blocks(0, 50), 2000)).toMatchObject({ kind: 'model', finishedAt: 1100 });
   });
 });
 

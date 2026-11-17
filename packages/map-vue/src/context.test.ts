@@ -6,6 +6,7 @@ import {
   type MapView,
   type MapViewFailure,
   MapSession,
+  NO_SCENE_ACTIVITY,
   NO_SCENE_STATUS,
   NO_SOURCE_ACTIVITY,
   NO_SOURCE_ERRORS,
@@ -13,6 +14,7 @@ import {
   type RenderedFeature,
   type ScreenPoint,
   type RoamStatus,
+  type SceneActivities,
   type SceneStatus,
   type SourceActivities,
   type SourceErrors,
@@ -41,6 +43,7 @@ class FakeView implements MapView {
   failure: MapViewFailure | null = null;
   sourceErrors: SourceErrors = NO_SOURCE_ERRORS;
   sourceActivity: SourceActivities = NO_SOURCE_ACTIVITY;
+  sceneActivity: SceneActivities = NO_SCENE_ACTIVITY;
   // 这一轮整体加载的结果，测试可以换成还没结束的 Promise
   ready: Promise<void> = Promise.resolve();
   readonly #listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -86,6 +89,7 @@ class FakeView implements MapView {
   on(event: 'settle', callback: () => void): Unsubscribe;
   on(event: 'sourceerrorchange', callback: (errors: SourceErrors) => void): Unsubscribe;
   on(event: 'sourceactivitychange', callback: () => void): Unsubscribe;
+  on(event: 'sceneactivitychange', callback: () => void): Unsubscribe;
   on(event: string, callback: (payload: never) => void): Unsubscribe {
     // 和 MapLibreView 一样，释放后不能再订阅
     if (this.disposed) {
@@ -131,6 +135,16 @@ class FakeView implements MapView {
   setSourceActivity(activity: SourceActivities): void {
     this.sourceActivity = activity;
     this.#fire('sourceactivitychange', undefined);
+  }
+
+  onSceneActivityChange(callback: () => void): Unsubscribe {
+    return this.on('sceneactivitychange', callback);
+  }
+
+  /** 模拟三维模型这一轮加载的变化 */
+  setSceneActivity(activity: SceneActivities): void {
+    this.sceneActivity = activity;
+    this.#fire('sceneactivitychange', undefined);
   }
 
   disposed = false;
@@ -1520,5 +1534,24 @@ describe('MapContextState 的瓦片请求（ADR 0158）', () => {
     next.sourceActivity = activity(4);
     ctx.state.attachView(next, CANVAS);
     expect(ctx.state.context.sourceActivity.value).toBe(next.sourceActivity);
+  });
+
+  it('三维模型这一轮的加载（ADR 0162）和瓦片请求同一帧读：一帧最多更新一次；卸下后为空', () => {
+    using ctx = setupPointer();
+    expect(ctx.state.context.sceneActivity.value).toBe(NO_SCENE_ACTIVITY);
+
+    ctx.view.setSourceActivity(activity(1));
+    ctx.view.setSceneActivity(
+      new Map([['station', { kind: 'blocks', requested: 3, loaded: 1, failed: 0, startedAt: 0, finishedAt: null }]])
+    );
+    ctx.view.setSceneActivity(new Map([['splat', { kind: 'detail', progress: 0.4, startedAt: 0, finishedAt: null }]]));
+    expect(ctx.frames.pending).toBe(1);
+    expect(ctx.state.context.sceneActivity.value).toBe(NO_SCENE_ACTIVITY);
+    ctx.frames.flush();
+    expect(ctx.state.context.sceneActivity.value).toBe(ctx.view.sceneActivity);
+    expect(ctx.state.context.sourceActivity.value).toBe(ctx.view.sourceActivity);
+
+    ctx.state.detachView(ctx.view);
+    expect(ctx.state.context.sceneActivity.value).toBe(NO_SCENE_ACTIVITY);
   });
 });

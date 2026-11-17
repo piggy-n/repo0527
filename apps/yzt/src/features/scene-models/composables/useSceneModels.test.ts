@@ -7,6 +7,7 @@ import {
   navigationFrame,
   type RoamStatus,
   type ScanNavigation,
+  type SceneActivities,
   type SceneStatus,
   type WalkView
 } from '@mx/map-core';
@@ -120,6 +121,7 @@ function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
       })
     );
   const sceneStatus = shallowRef<SceneStatus>(new Map());
+  const sceneActivity = shallowRef<SceneActivities>(new Map());
   const roamStatus = shallowRef<RoamStatus | null>(null);
   const flyTo = vi.fn<CameraControl['flyTo']>();
   const control = { flyTo } as unknown as CameraControl;
@@ -144,7 +146,7 @@ function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
   const scope = effectScope();
   const owner = scope.run(() =>
     useSceneModels(
-      { sceneStatus, roamStatus, runCameraOperation, beginCameraOperation, sceneCapabilities, dimension },
+      { sceneStatus, sceneActivity, roamStatus, runCameraOperation, beginCameraOperation, sceneCapabilities, dimension },
       catalog,
       { loadNavigation, loadSplatNavigation, avatarUrl: AVATAR_URL }
     )
@@ -160,6 +162,7 @@ function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
     owner,
     dimension,
     sceneStatus,
+    sceneActivity,
     roamStatus,
     flyTo,
     runCameraOperation,
@@ -291,6 +294,18 @@ describe('useSceneModels', () => {
     expect(ctx.owner.stateOf('white')).toBe('failed');
     ctx.owner.setEffect('white', 'window');
     expect(ctx.owner.stateOf('white')).toBe('loading');
+  });
+
+  it('读完索引以后这一轮的加载取当前效果的瓦片集（ADR 0162）；没加入、还没请求时为 null', () => {
+    using ctx = setup();
+    const blocks = { kind: 'blocks', requested: 4, loaded: 1, failed: 0, startedAt: 0, finishedAt: null } as const;
+    ctx.sceneActivity.value = new Map([['white/plain', blocks]]);
+    expect(ctx.owner.activityOf('white')).toBeNull();
+
+    ctx.owner.add(['white']);
+    expect(ctx.owner.activityOf('white')).toBe(blocks);
+    ctx.owner.setEffect('white', 'window');
+    expect(ctx.owner.activityOf('white')).toBeNull();
   });
 
   it('定位：就绪后飞到报告的相机；没有单独的钻地，地下的模型也只是飞过去（ADR 0097 第 5 节）', () => {

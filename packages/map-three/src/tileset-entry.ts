@@ -4,6 +4,7 @@ import {
   type PreparedTileset,
   type SceneFrame,
   type SceneSurface,
+  type TileOutcome,
   type TilesetOptions,
   type TilesetSphere
 } from '@mx/map-core';
@@ -56,6 +57,8 @@ export interface TilesetEntryOptions {
   /** 瓦片记完字节以后释放内存里的贴图（ADR 0155 第 5 节） */
   readonly releaseImages: boolean;
   readonly events: TilesetEntryEvents;
+  /** 一块瓦片真正排进了下载队列（ADR 0162）：probe 按瓦片现在的状态给出结果（到了、失败、取消），还在路上时为 null */
+  readonly onRequest?: (tile: object, probe: () => TileOutcome | null) => void;
 }
 
 /** 裁剪盒（ADR 0149）：盒子的局部系（原点在盒子中心，轴和盒子的边平行）到地心坐标，和三个方向的半边长（米） */
@@ -144,6 +147,7 @@ interface TilesInternals {
   readonly visibleTiles: Set<TileInternals>;
   readonly loadingTiles: Set<TileInternals>;
   queueTileForDownload(tile: TileInternals): void;
+  requestTileContents(tile: TileInternals): unknown;
   readonly stats: {
     readonly refused: number;
     readonly queued: number;
@@ -164,8 +168,25 @@ const ERROR_TARGET = 8;
 // 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来。
 // 之前不估计，也不借别的层的大小：开始加载时只有粗的几层有样本，粗瓦片大时细的一层按它估计远超实际，停着就放宽锁住
 const MIN_SIZE_SAMPLES = 3;
-// 瓦片还没有请求过：库的常量 UNLOADED，类型声明里没有导出
+// 瓦片的加载状态：库的常量 FAILED、UNLOADED、QUEUED、LOADED，类型声明里没有导出
+const FAILED = -1;
 const UNLOADED = 0;
+const QUEUED = 1;
+const LOADED = 4;
+
+// 一块请求过的瓦片现在的结果：到了、失败、被缓存淘汰回到没请求算取消；还在排队、下载、解析（含等上传）时为 null
+function outcomeOf(tile: TileInternals): TileOutcome | null {
+  switch (tile.internal.loadingState) {
+    case LOADED:
+      return 'loaded';
+    case FAILED:
+      return 'failed';
+    case UNLOADED:
+      return 'aborted';
+    default:
+      return null;
+  }
+}
 
 // 命中的面用的材质；多材质的网格按面的材质序号取
 function hitMaterial({ object, face }: Intersection): Material | undefined {
@@ -229,7 +250,18 @@ export class TilesetEntry implements Disposable {
   // 根索引的包围球（地心坐标）：判断和裁剪盒是否重叠
   #ecefSphere: Sphere | null = null;
 
-  constructor({ prepared, options, cache, math, fog, uploader, requestCullWindow, releaseImages, events }: TilesetEntryOptions) {
+  constructor({
+    prepared,
+    options,
+    cache,
+    math,
+    fog,
+    uploader,
+    requestCullWindow,
+    releaseImages,
+    events,
+    onRequest
+  }: TilesetEntryOptions) {
     this.#requestCull = requestCullWindow === null ? null : new RequestCull(requestCullWindow);
     this.#cache = cache;
     this.#uploader = uploader;
@@ -255,6 +287,18 @@ export class TilesetEntry implements Disposable {
         queue(tile);
       }
     };
+    // 排队以后缓存满了库还会拒绝：真正开始请求的瓦片状态从"没请求"变成"排队"，这时才记进这一轮（ADR 0162）
+    if (onRequest) {
+      const request = internals.requestTileContents.bind(tiles);
+      internals.requestTileContents = tile => {
+        const before = tile.internal.loadingState;
+        const result = request(tile);
+        if (before === UNLOADED && tile.internal.loadingState === QUEUED) {
+          onRequest(tile, () => outcomeOf(tile));
+        }
+        return result;
+      };
+    }
     tiles.setCamera(this.camera);
     tiles.setResolution(this.camera, 1, 1);
     // 库在记完这块瓦片的字节（缓存的记账）以后才派发 load-model：这时才能释放内存里的贴图

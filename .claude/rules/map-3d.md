@@ -15,7 +15,7 @@ paths:
 - 三维只用 MapLibre + Three.js（`@mx/map-three`，ADR 0147）。Cesium 引擎由 ADR 0153 移除，代码在标签 `cesium-engine-2026-11`，不要再引入 Cesium 或第二种三维引擎；要改这一点先写 ADR
 - `MapCanvas` 的一个视图同时担任二三维：第一次切到三维时由 map-vue 动态导入 map-three（只有 map-vue 能导入它，只有 map-three 和驾驶舱能导入 `three`、`3d-tiles-renderer`）；三维模块加载失败只让三维失败，二维照常可用，`retry` 只重新加载这个模块。二维第一次画面稳定后由画布交给 `MAP_RUNTIME_PRELOAD` 预加载 map-three（ADR 0091）
 - 页面和拥有者不判断引擎，按上下文的 `sceneCapabilities`（三维里显示样式图层、三维里识别、高斯泼溅）和 `dimension` 决定资源图层、图例、点/框选怎样显示；三维里照常显示资源图层、点/框选（ADR 0157）：app 注入的能力（`app/map-runtime-provider.ts`）原样，三项都是 true，没有开关。模型永远不是点/框选的结果：点到模型上时，画在模型下面的资源查模型脚下（命中点正下方的地面投影回屏幕，渲染要素和容差框围着它），画在模型上面的按鼠标下的地面（ADR 0161），框和容差框的四角用只打地面的拾取（`PickOptions.ground`）
-- 契约：三维实现会话的三维内容（`SceneContent`、`sceneStatus`、`roamStatus`）、`MapView` 和 `ToolView`；契约测试是 map-vue 的 `scene-contract.browser.test.tsx`（真实的 MapLibre + Three），改契约时同步改它
+- 契约：三维实现会话的三维内容（`SceneContent`、`sceneStatus`、`sceneActivity`、`roamStatus`）、`MapView` 和 `ToolView`；契约测试是 map-vue 的 `scene-contract.browser.test.tsx`（真实的 MapLibre + Three），改契约时同步改它
 - 模型层的位置（ADR 0161）：`provideMap` 的 `sceneBelow` 是上限，这个分组及以上永远画在模型上面；页面用 `map.bindSceneSlot` 绑定运行时的插槽，模型层插在推导出的图层下面（不在样式里、在上限及以上时按上限放）。现状底图的上限是 `selection`，插槽是"图层"列表里排在最上面那个模型上面的资源里最下面的一层；改这套规则时同步契约测试
 - 地下的模型要抬高（MapLibre 把相机限制在 0 米以上，ADR 0147 第 4 节）：抬高只存在于渲染适配器内部，拾取、相机、漫游状态对外都是真实椭球高。漫游在 map-core 的 `maplibre/roam/`：路线、步行只用真实坐标，经 `RoamHost` 设相机、拾取，抬高只在 `MapLibreRoam` 的相机换算和渲染器里（[map-three.md](../../docs/modules/map-three.md)"漫游"）
 - 缓存放不下时放宽屏幕误差：一放宽就锁在这个姿态，相机离开之前收紧不到放不下的倍数以下，不能写成"低于收回线就收紧"（整级丢掉后又加载回来，来回折腾）；动着的时候离开那个姿态、需求低于上限的 80% 可以收紧，收紧过又放不下，这一路就不再试；新瓦片在算加载完之前按每帧字节数上传；相机在一块瓦片加载完之前走的路达到瓦片直径就不请求这块瓦片（加载时间按动着时请求的瓦片实测，不用固定的秒数：本机和服务器差几倍），相机停下的那一帧起全部放行，这些瓦片要算进需求，有它们时要再画一帧（map-three.md"缓存""上传""动着的时候不请求"）

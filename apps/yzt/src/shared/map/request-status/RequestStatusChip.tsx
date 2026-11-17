@@ -15,6 +15,9 @@ import {
 import type { RequestStatus } from './useRequestStatus';
 import styles from './RequestStatusChip.module.scss';
 
+// 高斯泼溅那一行的说明：库只给比例（ADR 0162）
+const DETAIL_HINT = '高斯泼溅只能知道当前视角的细节加载了多少，和瓦片集的块数不是一种算法';
+
 /**
  * 状态栏右边的请求状态（ADR 0158，原型 `/design.local/current-map-layers/`）：空闲时不显示；点开是"数据加载"的明细，
  * 分加载中、有失败、已完成三组。点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点条目关闭。
@@ -162,7 +165,10 @@ export const RequestStatusChip = defineComponent({
           ) : (
             <span class={styles.name}>{item.name}</span>
           )}
-          <span class={[styles.state, tone === 'slow' && styles.slow, tone === 'error' && styles.error]}>
+          <span
+            class={[styles.state, tone === 'slow' && styles.slow, tone === 'error' && styles.error]}
+            title={item.kind === 'detail' ? DETAIL_HINT : undefined}
+          >
             {text}
             {failedModel && (
               <ElButton

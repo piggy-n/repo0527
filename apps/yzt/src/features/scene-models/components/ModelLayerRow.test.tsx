@@ -1,4 +1,4 @@
-import type { CameraState, RoamStatus, SceneStatus } from '@mx/map-core';
+import type { CameraState, RoamStatus, SceneActivities, SceneStatus } from '@mx/map-core';
 import { type CameraControl, MAPLIBRE_ENGINE } from '@mx/map-vue';
 import { mount } from '@vue/test-utils';
 import { ElOption, ElSelect } from 'element-plus';
@@ -41,9 +41,11 @@ const CATALOG = buildModelCatalog(
   'https://maps.test/3dt/manifest.json'
 );
 
-// 拥有者用测试控制的状态报告；三个模型都已加入，每个一行
+// 拥有者用测试控制的状态报告；三个模型都已加入，每个一行；转圈的行由用例给出（页面里是请求状态的 loadingKeys）
 function mountRows() {
   const sceneStatus = shallowRef<SceneStatus>(new Map());
+  const sceneActivity = shallowRef<SceneActivities>(new Map());
+  const loading = shallowRef<ReadonlySet<string>>(new Set(['station', 'white']));
   const roamStatus = shallowRef<RoamStatus | null>(null);
   const dimension = ref<'2d' | '3d'>('3d');
   const control = { flyTo: vi.fn<CameraControl['flyTo']>() } as unknown as CameraControl;
@@ -53,6 +55,7 @@ function mountRows() {
     const models = useSceneModels(
       {
         sceneStatus,
+        sceneActivity,
         roamStatus,
         dimension,
         sceneCapabilities: MAPLIBRE_ENGINE.capabilities,
@@ -67,7 +70,13 @@ function mountRows() {
       <ul>
         {models.added.value.map(id => (
           <li key={id} data-row={id}>
-            <ModelLayerRow models={models} id={id} scene={dimension.value === '3d'} onRemove={() => onRemove(id)} />
+            <ModelLayerRow
+              models={models}
+              id={id}
+              scene={dimension.value === '3d'}
+              loading={loading.value.has(id)}
+              onRemove={() => onRemove(id)}
+            />
           </li>
         ))}
       </ul>
@@ -83,15 +92,18 @@ function mountRows() {
     );
     return nextTick();
   };
-  return { wrapper, owner: required(owner, '页面没有创建拥有者'), dimension, report, onRemove };
+  return { wrapper, owner: required(owner, '页面没有创建拥有者'), dimension, loading, report, onRemove };
 }
 
 describe('ModelLayerRow', () => {
-  it('三维里加载中转圈，失败时红色图标和"重试"（加重试次数），就绪后没有状态；二维里、隐藏时不显示状态', async () => {
-    const { wrapper, owner, dimension, report } = mountRows();
+  it('三维里请求状态说加载中时转圈（ADR 0162），失败时红色图标和"重试"（加重试次数），就绪后没有状态；二维里、隐藏时不显示状态', async () => {
+    const { wrapper, owner, dimension, loading, report } = mountRows();
     const row = (id: string) => wrapper.get(`[data-row="${id}"]`);
     expect(row('station').find('[aria-label="加载中"]').exists()).toBe(true);
+    // 还在读索引、请求状态还没说加载中（不到 0.4 秒）的不转圈
+    expect(row('city').find('[aria-label="加载中"]').exists()).toBe(false);
 
+    loading.value = new Set(['white']);
     await report({ station: 'failed', city: 'ready' });
     expect(row('station').find('[aria-label="加载失败"]').exists()).toBe(true);
     await row('station').get('button[aria-label="重新加载：苏州站地下空间"]').trigger('click');

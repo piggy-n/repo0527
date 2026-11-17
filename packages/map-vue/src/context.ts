@@ -7,6 +7,7 @@ import {
   type MapSession,
   type MapView,
   type MapViewFailure,
+  NO_SCENE_ACTIVITY,
   NO_SCENE_STATUS,
   NO_SOURCE_ERRORS,
   type PickOptions,
@@ -15,6 +16,7 @@ import {
   type RenderedQueryOptions,
   type RoamStatus,
   type ScreenBox,
+  type SceneActivities,
   type SceneStatus,
   type ScreenPoint,
   type SelectedFeature,
@@ -114,6 +116,11 @@ export interface MapContext {
   readonly sourceActivity: Readonly<ShallowRef<SourceActivities>>;
   /** 当前视图报告的三维内容状态（ADR 0081 第 2 节）；二维、没有视图时为空 */
   readonly sceneStatus: Readonly<ShallowRef<SceneStatus>>;
+  /**
+   * 当前视图里瓦片集、高斯泼溅读完索引以后这一轮的加载（ADR 0162），和 sourceActivity 同一帧最多更新一次；
+   * 二维、没有视图、视图不统计时为空
+   */
+  readonly sceneActivity: Readonly<ShallowRef<SceneActivities>>;
   /** 当前视图报告的漫游进度（ADR 0083 第 2 节）；没有在漫游、二维、没有视图时为 null */
   readonly roamStatus: Readonly<ShallowRef<RoamStatus | null>>;
   /** 三维引擎能做什么（ADR 0147 第 3 节）：和 dimension 一起决定三维里显示什么；不随视图就绪变化 */
@@ -231,7 +238,8 @@ export class MapContextState implements Disposable {
   readonly #failure = shallowRef<MapViewFailure | null>(null);
   readonly #sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
   readonly #sourceActivity = shallowRef<SourceActivities>(NO_SOURCE_ACTIVITY);
-  // 瓦片请求每张瓦片都会变：下一帧再读当前视图的统计
+  readonly #sceneActivity = shallowRef<SceneActivities>(NO_SCENE_ACTIVITY);
+  // 瓦片请求每张瓦片都会变：下一帧再读当前视图的统计（二维的数据源和三维的模型一起读）
   #cancelActivityFrame: (() => void) | null = null;
   readonly #sceneStatus = shallowRef<SceneStatus>(NO_SCENE_STATUS);
   readonly #roamStatus = shallowRef<RoamStatus | null>(null);
@@ -293,6 +301,7 @@ export class MapContextState implements Disposable {
       sourceErrors: shallowReadonly(this.#sourceErrors),
       sourceActivity: shallowReadonly(this.#sourceActivity),
       sceneStatus: shallowReadonly(this.#sceneStatus),
+      sceneActivity: shallowReadonly(this.#sceneActivity),
       roamStatus: shallowReadonly(this.#roamStatus),
       sceneCapabilities,
       retry: () => this.#retry(),
@@ -388,6 +397,11 @@ export class MapContextState implements Disposable {
         this.#sceneStatus.value = status;
       }
     });
+    const unsubscribeSceneActivity = view.onSceneActivityChange?.(() => {
+      if (this.#current === attached) {
+        this.#scheduleActivity();
+      }
+    });
     const unsubscribeRoamStatus = view.onRoamStatusChange?.(status => {
       if (this.#current === attached) {
         this.#roamStatus.value = status;
@@ -399,6 +413,7 @@ export class MapContextState implements Disposable {
       unsubscribeSourceErrors();
       unsubscribeSourceActivity?.();
       unsubscribeSceneStatus?.();
+      unsubscribeSceneActivity?.();
       unsubscribeRoamStatus?.();
     };
     const attached: AttachedView = { view, viewport, canvas, unsubscribe, detached: new AbortController() };
@@ -462,6 +477,7 @@ export class MapContextState implements Disposable {
     this.#failure.value = current?.view.failure ?? null;
     this.#sourceErrors.value = current?.view.sourceErrors ?? NO_SOURCE_ERRORS;
     this.#sourceActivity.value = current?.view.sourceActivity ?? NO_SOURCE_ACTIVITY;
+    this.#sceneActivity.value = current?.view.sceneActivity ?? NO_SCENE_ACTIVITY;
     this.#sceneStatus.value = current?.view.sceneStatus ?? NO_SCENE_STATUS;
     this.#roamStatus.value = current?.view.roamStatus ?? null;
     this.#viewport.value = current?.view.state === 'ready' ? current.viewport : null;
@@ -524,6 +540,7 @@ export class MapContextState implements Disposable {
     this.#cancelActivityFrame ??= this.#requestFrame(() => {
       this.#cancelActivityFrame = null;
       this.#sourceActivity.value = this.#current?.view.sourceActivity ?? NO_SOURCE_ACTIVITY;
+      this.#sceneActivity.value = this.#current?.view.sceneActivity ?? NO_SCENE_ACTIVITY;
     });
   }
 

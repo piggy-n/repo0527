@@ -84,6 +84,7 @@ function mountPanel(catalog: readonly SceneModel[] = CATALOG, { personSwitch = f
     owner = useSceneModels(
       {
         sceneStatus,
+        sceneActivity: shallowRef(new Map()),
         roamStatus,
         sceneCapabilities: MAPLIBRE_ENGINE.capabilities,
         dimension: ref('3d'),

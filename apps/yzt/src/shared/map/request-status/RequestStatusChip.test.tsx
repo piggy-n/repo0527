@@ -13,6 +13,7 @@ const item = (key: string, extra: Partial<RequestItem> = {}): RequestItem => ({
   requested: 10,
   loaded: 4,
   failed: 0,
+  detail: null,
   startedAt: 0,
   finishedAt: null,
   ...extra

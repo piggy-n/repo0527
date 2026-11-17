@@ -2,6 +2,7 @@ import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { LngLat as MapLibreLngLat, Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
+import { NO_SCENE_ACTIVITY } from '../scene/scene-activity';
 import { MapSession } from '../session/map-session';
 import type { StyleImage } from '../style/style-image';
 import type { StyleGroup } from '../style/style-model';
@@ -223,6 +224,7 @@ const noModels = () => Promise.reject(new Error('这里不加模型'));
 // 什么也不画的三维渲染器：只看切换二三维时 MapLibre 的相机，不需要 Three
 function emptyRenderer(): SceneRenderer {
   return {
+    activity: NO_SCENE_ACTIVITY,
     attach: () => undefined,
     detach: () => undefined,
     loseContext: () => undefined,

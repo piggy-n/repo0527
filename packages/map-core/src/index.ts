@@ -47,6 +47,7 @@ export {
   MeasureStore
 } from './measure/measure-store';
 export { type SelectedFeature, SelectionModel } from './selection/selection-model';
+export { NO_SCENE_ACTIVITY, type SceneActivities, type SceneActivity } from './scene/scene-activity';
 export {
   EMPTY_SCENE_CONTENT,
   NO_SCENE_STATUS,

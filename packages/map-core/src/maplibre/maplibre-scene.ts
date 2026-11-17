@@ -1,6 +1,7 @@
 import type { CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { LoadJson, PreparedTileset } from '../scene/prepare-tileset';
+import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import {
   NO_SCENE_STATUS,
   type SceneContent,
@@ -42,6 +43,8 @@ export interface MapLibreSceneOptions {
   readonly onStatus: (status: SceneStatus) => void;
   /** 三维模块的加载状态变了 */
   readonly onModuleChange: (state: SceneModuleState) => void;
+  /** 瓦片集、高斯泼溅这一轮的加载有变化（ADR 0162）：每块瓦片都可能通知一次 */
+  readonly onActivity?: () => void;
   /** 瓦片集之外的三维内容（漫游、地下）要应用：和瓦片集同时，只在显示三维、渲染器建好以后 */
   readonly onContent?: (content: SceneContent) => void;
 }
@@ -63,6 +66,7 @@ export class MapLibreScene implements Disposable {
   readonly #onModuleChange: (state: SceneModuleState) => void;
   readonly #onContent: ((content: SceneContent) => void) | undefined;
   readonly #onStatus: (status: SceneStatus) => void;
+  readonly #onActivity: (() => void) | undefined;
   readonly #sync: SceneTilesetSync;
   readonly #splats: SceneSplatSync;
   readonly #unsubscribeContent: Unsubscribe;
@@ -92,9 +96,11 @@ export class MapLibreScene implements Disposable {
     onError,
     onStatus,
     onModuleChange,
-    onContent
+    onContent,
+    onActivity
   }: MapLibreSceneOptions) {
     this.#map = map;
+    this.#onActivity = onActivity;
     this.#content = scene;
     this.#loadRenderer = loadRenderer;
     this.#onError = onError;
@@ -127,6 +133,11 @@ export class MapLibreScene implements Disposable {
 
   get module(): SceneModuleState {
     return this.#module;
+  }
+
+  /** 瓦片集、高斯泼溅这一轮的加载（ADR 0162）；三维模块还没加载时为空 */
+  get activity(): SceneActivities {
+    return this.#renderer?.activity ?? NO_SCENE_ACTIVITY;
   }
 
   /** 三维模块加载好以后的渲染器（漫游用它拾取、投影、抬高）；还没加载时为 null */
@@ -251,10 +262,12 @@ export class MapLibreScene implements Disposable {
     const unsubscribeFailed = renderer.on('tilesetfailed', (id, error) => this.#sync.failed(id, error));
     const unsubscribeInitial = renderer.on('tilesetinitial', id => this.#sync.initial(id));
     const unsubscribeSplatFailed = renderer.on('splatfailed', (id, error) => this.#splats.failed(id, error));
+    const unsubscribeActivity = renderer.on('activitychange', () => this.#onActivity?.());
     this.#unsubscribeRenderer = () => {
       unsubscribeFailed();
       unsubscribeInitial();
       unsubscribeSplatFailed();
+      unsubscribeActivity();
     };
   }
 

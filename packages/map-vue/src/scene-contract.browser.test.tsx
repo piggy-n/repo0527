@@ -441,6 +441,14 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     // 夹具的球心离地 40 米：视线穿过球心，地面上的落点在球心以北 40·tan(俯角) 米
     const north = (ready.camera.center[1] - MODEL_AT[1]) * 111320;
     expect(Math.abs(north - 40 * Math.tan((ready.camera.pitch * Math.PI) / 180))).toBeLessThan(1);
+
+    // 读完索引以后请求的块：都到了才结束（ADR 0162）
+    await until(() => typeof page.map.sceneActivity.value.get('box')?.finishedAt === 'number', '这一轮的块都到了');
+    const activity = page.map.sceneActivity.value.get('box');
+    expect(activity).toMatchObject({ kind: 'blocks', failed: 0 });
+    const { requested, loaded } = activity?.kind === 'blocks' ? activity : { requested: 0, loaded: -1 };
+    expect(requested).toBeGreaterThan(0);
+    expect(loaded).toBe(requested);
     expect(page.errors).toStrictEqual([]);
   });
 
@@ -459,6 +467,7 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     expect(page.history.slice(loaded)).toStrictEqual([]);
     page.content.value = EMPTY_SCENE_CONTENT;
     await until(() => page.map.sceneStatus.value.size === 0, '状态里去掉瓦片集');
+    await until(() => page.map.sceneActivity.value.size === 0, '这一轮的加载里也去掉');
 
     expect(page.errors).toStrictEqual([]);
   });

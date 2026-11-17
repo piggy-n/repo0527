@@ -1,5 +1,6 @@
 import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
+import type { SceneActivities } from '../scene/scene-activity';
 import type { RoamStatus, SceneStatus } from '../scene/scene-content-model';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from './rendered-features';
 import type { SourceActivities } from './source-activity';
@@ -99,6 +100,13 @@ export interface MapView extends Disposable {
   readonly sceneStatus?: SceneStatus;
   /** 三维内容的状态变化；只有三维视图有这项能力 */
   onSceneStatusChange?(callback: (status: SceneStatus) => void): Unsubscribe;
+  /**
+   * 瓦片集、高斯泼溅读完索引以后这一轮的加载（ADR 0162）：瓦片集按块数，高斯泼溅只有当前视角细节的比例；
+   * 只有三维视图有这项能力，同时担任二三维的视图显示二维时为空
+   */
+  readonly sceneActivity?: SceneActivities;
+  /** 这一轮的加载有变化：每块瓦片都可能通知一次，使用方自己决定多久读一次 sceneActivity */
+  onSceneActivityChange?(callback: () => void): Unsubscribe;
   /** 漫游的进度（ADR 0083 第 2 节），没有在漫游时为 null；只有三维视图有这项能力 */
   readonly roamStatus?: RoamStatus | null;
   /** 漫游的进度变化，最多 10 次每秒；只有三维视图有这项能力 */
