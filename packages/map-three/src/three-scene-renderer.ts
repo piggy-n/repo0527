@@ -146,7 +146,7 @@ function copyFrame({ mainMatrix, fallbackMatrix, projectionMatrix, transition, c
  */
 export class ThreeSceneRenderer implements SceneRenderer {
   readonly #emitter = createNanoEvents<SceneRendererEvents>();
-  // 这一轮的加载（ADR 0162）：瓦片集的块请求时记下，每画完一帧看一眼；泼溅每帧报一次
+  // 这一轮的加载（ADR 0162）：瓦片集的块请求时记下，每画完一帧看一眼，缓存移除、块失败时在微任务里也看一眼；泼溅每帧报一次
   readonly #activity = new SceneActivityTracker(() => this.#emitter.emit('activitychange'));
   readonly #tilesets = new Map<string, TilesetEntry>();
   readonly #splats = new Map<string, SplatEntry>();
@@ -368,7 +368,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       const { loading, progress } = entry.detailLoad();
       this.#activity.detail(id, loading, progress);
     }
-    // 瓦片集请求过的块：到了、失败、被缓存淘汰的这时结算（淘汰发生在选瓦片时，没有事件）
+    // 瓦片集请求过的块：到了、失败、被淘汰的这时结算；淘汰在选瓦片之后的微任务、动画帧里，那时由 #settleLater 再结算
     this.#activity.sweep();
     if (isolating && this.#shareSplatBudget()) {
       surface.requestRepaint();

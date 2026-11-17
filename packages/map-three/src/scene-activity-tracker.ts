@@ -54,12 +54,12 @@ export class SceneActivityTracker {
     return this.#snapshot;
   }
 
-  /** 瓦片集的一块瓦片真正排进了下载队列；probe 按瓦片的状态给出结果，由 sweep 调用 */
+  /** 瓦片集的一块瓦片真正排进了下载队列，或因相机动着暂缓请求；probe 按瓦片的状态给出结果，由 sweep 调用 */
   requested(id: string, tile: object, probe: TileProbe): void {
     this.#blocks.started(id, tile, probe);
   }
 
-  /** 看一眼还在等的块：渲染器每画完一帧调用 */
+  /** 看一眼还在等的块：渲染器每画完一帧调用，缓存移除、块失败时也在微任务里调用 */
   sweep(): void {
     this.#blocks.sweep();
   }
