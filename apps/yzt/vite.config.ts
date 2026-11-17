@@ -9,6 +9,7 @@ import { buildOutputPlugin } from './tools/build-output/vite-plugin.ts';
 import { iconsPaths } from './tools/icons/paths.ts';
 import { localPath } from './tools/local-files/paths.ts';
 import { localFilesPlugin } from './tools/local-files/vite-plugin.ts';
+import { sitePlugin } from './tools/site/vite-plugin.ts';
 import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 import { thirdPartyNoticesPlugin } from './tools/third-party-notices/vite-plugin.ts';
@@ -61,8 +62,12 @@ export default defineConfig(({ mode }) => {
     '/design.local': localPath('design')
   });
 
+  // 按站点发布三维模型清单（ADR 0164）：只认进程环境变量，写在 .env 里不生效，忘了删的本地文件不会把构建绑到某个站点；
+  // 排在 localFiles 前面，开发服务器上它的清单优先
+  const site = sitePlugin(process.env.YZT_SITE);
+
   return {
-    plugins: [vueJsx(), ...generators, staticFiles, localFiles, thirdPartyNoticesPlugin(), buildOutputPlugin()],
+    plugins: [vueJsx(), ...generators, staticFiles, site, localFiles, thirdPartyNoticesPlugin(), buildOutputPlugin()],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true
@@ -90,7 +95,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: path => path.slice(aiApiBaseUrl.length)
         },
-        // 清单和模型数据都从那台服务器取：和部署后的地址一样，不改清单
+        // 模型数据从那台服务器取，地址和部署后一样；清单也从它取，设了 YZT_SITE 时由 site 插件先回答
         ...(modelProxy ? { '/3dt/': { target: modelProxy, changeOrigin: true } } : {})
       }
     },

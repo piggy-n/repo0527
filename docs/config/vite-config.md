@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/yzt/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0137（资源的最小显示级别）、ADR 0141（未入库的本地文件）、ADR 0149 第 8 节（gaussian-splat-lite 的 LICENSE、NOTICE）
+相关决策：ADR 0164（按部署站点发布三维模型清单）、ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0137（资源的最小显示级别）、ADR 0141（未入库的本地文件）、ADR 0149 第 8 节（gaussian-splat-lite 的 LICENSE、NOTICE）
 
 ## 整体结构
 
@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`localFiles`、`thirdPartyNoticesPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 把资源的最小显示级别复制到产物，`localFiles` 只在开发服务器上提供未入库的模型和原型，`thirdPartyNoticesPlugin` 构建时随附第三方包的 LICENSE、NOTICE，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`site`、`localFiles`、`thirdPartyNoticesPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 把资源的最小显示级别复制到产物，`site` 按部署站点发布三维模型清单，`localFiles` 只在开发服务器上提供未入库的模型和原型，`thirdPartyNoticesPlugin` 构建时随附第三方包的 LICENSE、NOTICE，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `build.rolldownOptions.output.chunkFileNames` | 函数 | 包入口所在的分块按包名命名，见下文"分块的名字" |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -65,6 +65,20 @@ const localFiles = localFilesPlugin({
 ```
 
 模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。设了 `YZT_3DT_PROXY` 时 `/3dt/` 不映射到本地目录，改由 `server.proxy` 整个代理到那台服务器（清单也从它取），本机没有的模型也能在开发服务器上加载。
+
+### 按部署站点发布的清单
+
+```ts
+const site = sitePlugin(process.env.YZT_SITE);
+```
+
+`tools/site/vite-plugin.ts` 的 `sitePlugin`（ADR 0164，站点和用法见 [3dt-manifest.md](3dt-manifest.md)"按站点发布"）：
+
+- 站点名直接读进程环境变量 `YZT_SITE`，不经过 `loadEnv`：写在 `.env`、`.env.local` 里不生效，忘了删的本地文件不会把构建悄悄绑到某台服务器
+- 站点从 `tools/site/sites.json` 用 fs 读，不 import：它不是配置的依赖，改它时 `test:changed` 不会把全部测试都选上（Vitest 改到配置的依赖时全选）
+- 构建：设了站点时 `configResolved` 校验站点和缺的模型（写错时打包之前就失败），日志写一行站点、模型数和缺的原因；全集不是合法的 JSON 时也在这里失败，写明 `public/3dt/manifest.json`；`writeBundle` 把全集去掉缺的模型、写到产物的 `3dt/manifest.json`，覆盖 Vite 从 public 复制的全集（Vite 8 在 `renderStart` 复制 public，`vite:prepare-out-dir`）；`closeBundle` 再读一遍，以后 Vite 改了复制的时机、产物被盖回全集时构建失败。没设站点时不改清单，日志写一行"发布全集"
+- 开发服务器：设了站点时在 `configureServer` 里直接注册中间件回答 `/3dt/manifest.json`。Vite 8 先调各插件的 `configureServer`，再挂代理和 public 的中间件，所以它排在 `YZT_3DT_PROXY` 的代理、`localFiles`（插件也排在它前面）和 public 之前，清单来自工作区；每次请求重新读全集和站点，改了都不用重启
+- 测试里不启用（`mode === 'test'`），`vite preview` 里也不启用（`isPreview`，它只提供构建好的产物）；`buildOutputPlugin` 不用改，`3dt/` 下仍然只有清单
 
 ### 构建产物检查
 

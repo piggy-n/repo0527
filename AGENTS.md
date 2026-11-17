@@ -25,7 +25,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `state.md` | `features/*/store.ts`、`shared/storage/` | Pinia、偏好的持久化与开关 |
 | `packages.md` | `packages/`、`tsconfig.package*`、`vitest.shared.ts` | 拆包规则、包之间的依赖方向、依赖声明、包的测试 |
 | `map.md` | 地图的包、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
-| `map-3d.md` | `map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、`shared/map/scene-tier`、现状底图页 | 三维、二三维切换、设备档位、漫游、导航网格 |
+| `map-3d.md` | `map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、`shared/map/scene-tier`、现状底图页、`tools/site` | 三维、二三维切换、设备档位、漫游、导航网格、清单的部署站点 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes`、`symbol-defaults` | 年份、分类、最小显示级别、发布的默认符号、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
 | `city-dashboard.md` | 城市体检、综合分析两个驾驶舱，`shared/city-indicators`、`shared/dashboard` | 范围、入场、保存图片 |
@@ -146,7 +146,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 - `test:changed` 只沿 import 关系选测试：`.module.scss` 和被 import 的 JSON 选得到；全局样式（`packages/theme`、`app/styles`）一个也选不到，`.env`、运行时才请求的文件同样查不到，不能因为它没选中测试就算通过
 - `pnpm test:changed` 逐个包执行：改包里的代码时，包自己的测试和依赖它的包、web 的测试都能选中
-- 改了任何一个 `package.json`、`vite.config.*`、`vitest.config.*` 时，Vitest 自动跑全部测试
+- 改了任何一个 `package.json`、`vite.config.*`、`vitest.config.*`，或者 `vite.config.ts` 导入的文件（`tools/*/vite-plugin.ts` 和它们导入的）时，Vitest 自动跑全部测试
 - UI 改动按 `docs/design/ui-workflow.md` 另外验证，这里的检查不能代替
 
 ## 文档

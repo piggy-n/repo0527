@@ -23,7 +23,7 @@ export type ManifestSource =
   | { readonly kind: 'local'; readonly file: string }
   | { readonly kind: 'public'; readonly file: string };
 
-/** 和开发服务器的选法相同（docs/config/local-files.md）：local/3dt/manifest.json 盖住入库的清单，设了代理时两者都不用 */
+/** 和没设 YZT_SITE 的开发服务器选法相同（docs/config/local-files.md）：local/3dt/manifest.json 盖住入库的清单，设了代理时两者都不用 */
 export function manifestSource(localFile: string, publicFile: string, proxy: string | null, exists = existsSync): ManifestSource {
   if (proxy) {
     return { kind: 'proxy', url: new URL('/3dt/manifest.json', proxy).href };

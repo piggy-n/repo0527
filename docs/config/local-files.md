@@ -52,12 +52,21 @@ $env:YZT_3DT_PROXY = 'http://192.168.153.194:5173'
 pnpm --filter yzt dev:intranet
 ```
 
-两台服务器（2026-11-11）：
+服务器：
 
-- 内网服务器 `192.168.153.194`：5173 端口的 nginx 提供前端（`/opt/front/dcjcxzt/`）和 `/3dt/`（`/opt/front/3dt/` 的 alias，不开 gzip），按"目录层级"放着清单里的全部模型；
+- 内网 Windows 服务器 `192.168.15.111`（2026-11-17 加入，本机连得到）：5173 端口的 nginx 1.24 提供前端（`D:\01Project\front\dist`）和 `/3dt/`。数据在 `D:\02Data\3dtiles\models\<市>\` 下，已经按"目录层级"整理，`/3dt/` 的 alias 指向它；清单里只有彭城广场的倾斜摄影还没拷过去（2026-11-17，`pnpm --filter yzt site:check 15-111` 可以看），另有 17 个只在这台上的模型（站点 `153-194` 记为缺）；
+- 内网服务器 `192.168.153.194`（2026-11-11）：5173 端口的 nginx 提供前端（`/opt/front/dcjcxzt/`）和 `/3dt/`（`/opt/front/3dt/` 的 alias，不开 gzip），按"目录层级"放着清单里的全部模型，本机连不到；
 - 测试服务器 `192.168.1.180`：提供 `/opt/front/3dt/` 的 nginx 也在 5173 端口（`/etc/nginx/nginx.conf`；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`）。目录还是原来平铺的，有 LCC2 模型和彭城广场的倾斜摄影（`XZ_GC_3DT`），没有经开区（请求是 404）。它的清单是旧路径，和它的目录对得上，页面上照样能看；`measure:3d` 的瓦片集场景按新的层级取，对它取不到，`lcc2:register` 的相对路径要写它的旧目录（如 `楚王山1号/lcc2-sog-result/楚王山1号.lcc2`）。
 
-服务器的 `/3dt/manifest.json` 是部署时放上去的那份，要发布前端才更新，所以新加进清单的模型在发布之前看不到；服务器换了目录层级、清单还是旧路径时，模型都加载失败。开发服务器没有内置的办法替换清单（代理转发整个 `/3dt/`，`local/3dt/manifest.json` 这时也不生效）：用浏览器 DevTools 的 Local Overrides，或者一次性的 Playwright 脚本 `context.route('**/3dt/manifest.json', ...)` 换成入库的清单（写法见 `tools/smoke/scene.spec.ts`）。
+服务器的 `/3dt/manifest.json` 是部署时放上去的那份，要发布前端才更新，所以新加进清单的模型在发布之前看不到；服务器换了目录层级、清单还是旧路径时，模型都加载失败。要看工作区里的清单时，同时设部署站点 `YZT_SITE`（ADR 0164）：开发服务器用全集按这个站点去掉缺的模型回答 `/3dt/manifest.json`，这个中间件排在代理和 `local/3dt` 前面，每次请求重新读全集，模型照旧从服务器取：
+
+```powershell
+$env:YZT_3DT_PROXY = 'http://192.168.15.111:5173'
+$env:YZT_SITE = '15-111'
+pnpm --filter yzt dev:intranet
+```
+
+这时 `local/3dt/manifest.json` 也不生效。不设 `YZT_SITE` 时代理转发整个 `/3dt/`，清单是服务器上部署的那份。`measure:3d` 不认 `YZT_SITE`，设了代理时读服务器上部署的清单。
 
 用途是在有显卡的机器上看、测服务器上的模型。`measure:3d` 和配准工具 `lcc2:register` 用同一个变量，从 `<它>/3dt/` 读模型（[commands.md](../commands.md)）。原来的瓦片集诊断页 `/dev/tileset-probe` 读的是 Cesium 的读数，随引擎删掉（ADR 0153）。
 

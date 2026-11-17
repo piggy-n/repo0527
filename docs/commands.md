@@ -19,6 +19,8 @@
 | 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter yzt test:unit` / `pnpm --filter yzt test:browser` |
 | 生产产物的浏览器冒烟（只跑某个文件时后面加文件名） | `pnpm build:intranet` → `pnpm --filter yzt test:smoke` |
 | 内网部署的构建 | `pnpm build:intranet` |
+| 给某台服务器构建（三维模型清单按部署站点去掉缺的模型，ADR 0164） | `$env:YZT_SITE = '15-111'; pnpm build:intranet; Remove-Item Env:YZT_SITE` |
+| 发布后核对服务器上的三维模型清单和模型 | `pnpm --filter yzt site:check <站点>` |
 | 预览构建产物 | `pnpm --filter yzt preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
 | 三维的性能实测、高斯泼溅的预算（显卡机器上，ADR 0149 L.3） | `pnpm --filter yzt measure:3d` |
@@ -235,6 +237,25 @@ pnpm --filter yzt measure:3d --only jkq-z16-tilt --repeat 1 --upload-mb none --c
   - 给了 `--route` 时各段生成的路线（拉直以后、写进清单的那些点，终点带箭头）和它的 ID，路线上眼高低于 1.6 的点各一个红圈（和清单同一个判断：取整到厘米以后比，圈和清单里带眼高的点一一对应，提示里是清单写的值），图例里写每段的起止、长度和点数；
   - 比例尺、指北针和图例。正北朝上（按摆放的 `heading` 把局部系转过来），和 `/dev/nav-grid` 的平面图同一个方向；高度是局部系的 z，不是椭球高
 - 楚王山1号（17 个网格文件）约 1 秒，彭城广场的样例（79 个、1565 万个三角形）约 25 秒；土山墓的平面图约 230 KB；proj4 只是这个工具的开发依赖，运行时代码不能导入（lint 检查）
+
+### `pnpm --filter yzt site:check <站点>`
+
+**作用**：核对一台服务器上按部署站点发布的三维模型清单（ADR 0164，[config/3dt-manifest.md](config/3dt-manifest.md)"按站点发布"），只读、不写文件：
+
+1. 服务器上的 `/3dt/manifest.json` 是不是这个站点的组合；不是时说出它等于全集、别的站点，还是都不是（旧版本），并列出多出、少了、字段不同的模型；
+2. 每个模型的入口（`tileset.json`，白膜的每种效果，`.lcc2` 索引）能取到：404、回退成网页的说服务器上没有，别的状态码、连不上的说没法判断；
+3. 每个能取到的 LCC2 的第一个数据块按 [deployment.md](deployment.md) 的验收发两段 Range：206、有 `Content-Range`、不压缩、两次的 `ETag` 相同。
+
+全部通过时退出码 0，否则 1（pnpm 还会打印 `ELIFECYCLE`）。
+
+**什么时候用**：给一台服务器发布前端以后；新加服务器、服务器上的数据有变化时加 `--suggest`，探测全集里的每个模型，打印这台服务器缺的模型（入口 404 或回退成网页的，可以抄进站点的 `missing`，`reason` 要改成真实的原因），站点写了缺、服务器上却都能取到的也列出来；站点已经写了缺的模型标"－"，不算没通过；全集都取不到时不给建议，提示先查 nginx 的 `/3dt/`。
+
+**执行了什么**：Node 运行 `tools/site/cli.ts`（核对在 `check.ts`，组合在 `compose.ts`，站点在 `sites.json`、由 `sites.ts` 校验）。入口一起请求、按清单的先后打印，GET 只读响应头就断开，不下载内容。
+
+**注意事项**：
+- 站点名见 `tools/site/sites.json`（现在是 `15-111`、`153-194`）；地址默认用站点的 `origin`，`--origin <地址>` 指定别的（前端部署在子路径下时连路径一起写）；`--timeout <秒>` 是每个请求的超时，默认 15
+- 本机连不到 `192.168.153.194`，要在能访问它的机器上运行
+- 站点名写错、连不上服务器时只打印一行原因
 
 ### `pnpm --filter yzt probe:resource-classes`
 
@@ -455,6 +476,7 @@ pnpm --filter yzt test:smoke
 - 和 `pnpm build` 输出到同一个 `apps/yzt/dist`，后一次构建覆盖前一次；部署前确认执行的是对应环境的命令
 - 仍是生产构建（`import.meta.env.PROD` 为真），开发页面同样被剔除
 - `.env.intranet` 同时关闭天地图并清空 key；构建检查会拒绝有效 key 非空的关闭配置，以及文本产物中残留的公网 key
+- 给某台服务器构建时先设部署站点（ADR 0164）：`$env:YZT_SITE = '15-111'; pnpm build:intranet; Remove-Item Env:YZT_SITE`，产物里的三维模型清单去掉这台服务器缺的模型，日志里 `[site]` 那一行写明站点和模型数；不设时发布全集。`$env:` 设的变量在整个窗口里一直有效，构建完清掉，否则后面的构建、开发服务器也按这个站点。站点见 [config/3dt-manifest.md](config/3dt-manifest.md)"按站点发布"，发布后用 `site:check` 核对
 
 ---
 

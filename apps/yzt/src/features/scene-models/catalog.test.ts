@@ -130,7 +130,25 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['xz-gshm', '徐州市'],
       ['xz-tls2', '徐州市'],
       ['xz-ddsh', '徐州市'],
-      ['xz-szs', '徐州市']
+      ['xz-szs', '徐州市'],
+      // 2026-11-17 从 192.168.15.111 接入，名称是用户看过数据后定的（docs/config/3dt-manifest.md）
+      ['wx-xwq01', '无锡市'],
+      ['wx-xwq06', '无锡市'],
+      ['wx-white', '无锡市'],
+      ['sq-syq01', '宿迁市'],
+      ['sq-syq02', '宿迁市'],
+      ['sq-white', '宿迁市'],
+      ['xz-m1', '徐州市'],
+      ['xz-m2-1', '徐州市'],
+      ['xz-m2-2', '徐州市'],
+      ['xz-m3', '徐州市'],
+      ['xz-m4', '徐州市'],
+      ['xz-m5-1', '徐州市'],
+      ['xz-m5-2', '徐州市'],
+      ['xz-m5-3', '徐州市'],
+      ['xz-m6-1', '徐州市'],
+      ['xz-m6-2', '徐州市'],
+      ['xz-m7', '徐州市']
     ]);
     const urls = models.flatMap(({ effects, splat }) => [...effects.map(({ url }) => url), ...(splat ? [splat.url] : [])]);
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
@@ -160,7 +178,12 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
 });
 
 // 模型目录的层级（用户 2026-11-11 定，docs/config/3dt-manifest.md）：<市的拼音>/<类型>/<模型目录>/…
-const CITY_DIRECTORIES: Readonly<Record<string, string>> = { '320200': 'wuxi', '320300': 'xuzhou', '320500': 'suzhou' };
+const CITY_DIRECTORIES: Readonly<Record<string, string>> = {
+  '320200': 'wuxi',
+  '320300': 'xuzhou',
+  '320500': 'suzhou',
+  '321300': 'suqian'
+};
 
 type ManifestModel = SceneManifest['models'][number];
 
