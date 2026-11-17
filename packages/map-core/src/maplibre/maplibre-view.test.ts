@@ -4,6 +4,7 @@ import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { createNanoEvents } from 'nanoevents';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
+import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import { NO_SCENE_STATUS, type SceneStatus } from '../scene/scene-content-model';
 import type { TilesetSphere } from '../scene/tileset-camera';
 import { MapSession } from '../session/map-session';
@@ -2605,6 +2606,7 @@ function fakeRenderer(): SceneRenderer {
   const emitter = createNanoEvents<SceneRendererEvents>();
   const sphere: TilesetSphere = { center: [118.8, 32.05], height: 0, radius: 50 };
   return {
+    activity: NO_SCENE_ACTIVITY,
     attach: () => undefined,
     detach: () => undefined,
     loseContext: () => undefined,
@@ -2707,6 +2709,37 @@ describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => 
 
     expect(statuses.at(-1)).toBe(NO_SCENE_STATUS);
     expect(ctx.view.sceneStatus).toBe(NO_SCENE_STATUS);
+  });
+
+  it('reports the renderer load activity in 3D only, telling listeners when it changes or the kind switches (ADR 0162)', async () => {
+    const emitter = createNanoEvents<SceneRendererEvents>();
+    let activity: SceneActivities = NO_SCENE_ACTIVITY;
+    const renderer: SceneRenderer = {
+      ...fakeRenderer(),
+      get activity() {
+        return activity;
+      },
+      on: (event, callback) => emitter.on(event, callback)
+    };
+    using ctx = setup({ loadSceneRenderer: async () => () => renderer, loadJson: async () => STATION_JSON });
+    ctx.map.fire('style.load');
+    let changes = 0;
+    ctx.view.onSceneActivityChange(() => changes++);
+    activity = new Map([['station', { kind: 'detail', progress: 0.5, startedAt: 1, finishedAt: null }]]);
+
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    expect(changes).toBe(1);
+    expect(ctx.view.sceneActivity).toBe(activity);
+    emitter.emit('activitychange');
+    expect(changes).toBe(2);
+
+    ctx.view.setKind('2d');
+    expect(changes).toBe(3);
+    expect(ctx.view.sceneActivity).toBe(NO_SCENE_ACTIVITY);
+    emitter.emit('activitychange');
+    expect(changes).toBe(3);
   });
 
   it('picks and projects models through the renderer in 3D only', async () => {

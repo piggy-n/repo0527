@@ -609,6 +609,23 @@ describe('CurrentMapLayerPanel', () => {
     expect(selectedRow(wrapper)).toBe('model:white');
   });
 
+  it('请求状态（ADR 0162）：三维里模型行按 loadingKeys 转圈，集合里的键和行的键一样带 model: 前缀', async () => {
+    const { wrapper, models, map, loadingKeys } = await mountPanel();
+    models.add(['white']);
+    map.setDimension('3d');
+    await nextTick();
+    const spinning = () => wrapper.get('[data-current-row="model:white"]').find('[aria-label="加载中"]').exists();
+    // 模型还在读索引，请求状态还没说加载中（不到 0.4 秒）：不转圈
+    expect(spinning()).toBe(false);
+
+    loadingKeys.value = new Set(['model:white']);
+    await nextTick();
+    expect(spinning()).toBe(true);
+    loadingKeys.value = new Set(['white']);
+    await nextTick();
+    expect(spinning()).toBe(false);
+  });
+
   it('行尾的年份（ADR 0052）：多年份的是不带箭头的小下拉，新的在前，只改这一个资源', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);

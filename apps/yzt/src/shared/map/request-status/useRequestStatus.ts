@@ -1,5 +1,13 @@
 import { computed, type ComputedRef, onScopeDispose, type Ref, shallowRef, watch } from 'vue';
-import { DONE_HOLD, isPending, type RequestItem, type RequestSource, SHOW_DELAY } from './request-status';
+import {
+  DONE_HOLD,
+  isPending,
+  type ModelPhase,
+  modelRequestItem,
+  type RequestItem,
+  type RequestSource,
+  SHOW_DELAY
+} from './request-status';
 
 /** 时钟走一格的间隔（毫秒）：加载超过 0.4 秒才显示、"已加载完成"留 1.5 秒、等了几秒都按它刷新 */
 const TICK = 250;
@@ -13,23 +21,16 @@ export interface RequestStatus {
   readonly loadingKeys: ComputedRef<ReadonlySet<string>>;
 }
 
-// 模型这一轮的时间：进入加载中时开始，就绪、失败时结束
-interface ModelTimes {
-  readonly state: 'loading' | 'ready' | 'failed';
-  readonly startedAt: number;
-  readonly finishedAt: number | null;
-}
-
 /**
- * 地图数据的请求状态（ADR 0158）：把页面给出的来源整理成明细的各项，模型按状态变化记下开始、结束的时间；
- * 需要时让时钟走，状态栏的条目、明细、行内的转圈都按它判断
+ * 地图数据的请求状态（ADR 0158）：把页面给出的来源整理成明细的各项，模型按读索引的状态变化记下开始、结束的时间，
+ * 读完以后接上渲染器统计的这一轮（modelRequestItem，ADR 0162）；需要时让时钟走，状态栏的条目、明细、行内的转圈都按它判断
  */
 export function useRequestStatus(
   sources: () => readonly RequestSource[],
   clock: () => number = () => performance.now()
 ): RequestStatus {
   const now = shallowRef(clock());
-  const modelTimes = shallowRef<ReadonlyMap<string, ModelTimes>>(new Map());
+  const modelTimes = shallowRef<ReadonlyMap<string, ModelPhase>>(new Map());
 
   watch(
     () => sources().flatMap(source => (source.kind === 'model' ? [[source.key, source.state] as const] : [])),
@@ -37,7 +38,7 @@ export function useRequestStatus(
       const time = clock();
       const previous = modelTimes.value;
       modelTimes.value = new Map(
-        states.map(([key, state]): [string, ModelTimes] => {
+        states.map(([key, state]): [string, ModelPhase] => {
           const last = previous.get(key);
           if (last?.state === state) {
             return [key, last];
@@ -57,23 +58,18 @@ export function useRequestStatus(
 
   const items = computed((): RequestItem[] =>
     sources().map(source => {
-      const { key, kind, name, icon } = source;
+      const { key, name, icon } = source;
       if (source.kind === 'tiles') {
         const { requested, loaded, failed, startedAt, finishedAt } = source.activity;
-        return { key, kind, name, icon, requested, loaded, failed, startedAt, finishedAt };
+        return { key, kind: 'tiles', name, icon, requested, loaded, failed, detail: null, startedAt, finishedAt };
       }
-      const times = modelTimes.value.get(key);
-      return {
-        key,
-        kind,
-        name,
-        icon,
-        requested: 0,
-        loaded: source.state === 'ready' ? 1 : 0,
-        failed: source.state === 'failed' ? 1 : 0,
-        startedAt: times?.startedAt ?? now.value,
-        finishedAt: source.state === 'loading' ? null : (times?.finishedAt ?? now.value)
+      // 状态变化的监听还没跑到时（同一轮里先读到）按现在算
+      const phase = modelTimes.value.get(key) ?? {
+        state: source.state,
+        startedAt: now.value,
+        finishedAt: source.state === 'loading' ? null : now.value
       };
+      return modelRequestItem(source, phase, source.activity, now.value);
     })
   );
 

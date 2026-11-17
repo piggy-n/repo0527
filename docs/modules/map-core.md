@@ -322,6 +322,12 @@ store.clear();
 - `MapLibreView` 把 `dataloading`（带 `tile` 的是新瓦片，已有瓦片的重新加载不发）、`sourcedata`、`dataabort` 和带 `tile` 的 `error` 交给它，瓦片按 `tile.tileID.key` 区分。MapLibre 6.12 对返回 404 的栅格瓦片不发任何事件，只把瓦片的状态改成 `errored`（矢量瓦片的 404 当作空瓦片，照常发 `data`），没有变化的瓦片（304）也不发、只改成 `loaded`：开始请求时记下瓦片，数据源每有一个事件、地图 `idle` 时看一眼还在等的瓦片（`sweep`），`loaded`、`errored` 算到了，`unloaded` 算取消。不用事件里的 `isSourceLoaded`：一张瓦片失败以后，MapLibre 在下一次开始请求以前一直报 true（`TileManager` 自己先收到 `error`），按它结束会把还在路上的瓦片算成到了
 - 数据源移除（包括换地址的先移除再添加）、样式整体重建时忘掉，和数据源错误一样
 - `MapView` 的 `sourceActivity`、`onSourceActivityChange` 是可选的；每张瓦片都可能通知一次，map-vue 的上下文一帧最多读一次
+- 瓦片键是引擎给的字符串，或瓦片对象本身（三维的瓦片库没有字符串键，ADR 0162）
+
+### 三维模型这一轮的加载（ADR 0162）
+
+- `scene/scene-activity.ts` 的 `SceneActivity`：瓦片集、高斯泼溅读完索引以后、随相机流式加载的这一轮。瓦片集是 `{ kind: 'blocks', ...SourceActivity }`（块数）；高斯泼溅是 `{ kind: 'detail', progress, startedAt, finishedAt }`，库只给当前视角的细节到了多少，没有块数。键同 `SceneStatus`
+- 渲染器（`SceneRenderer`）给出 `activity` 和事件 `activitychange`，`MapLibreScene` 原样转出；`MapLibreView` 的 `sceneActivity`、`onSceneActivityChange` 只在显示三维时有内容，切换种类时通知一次。统计怎样做见 [map-three.md](map-three.md)"加载的统计"
 
 ### app 的地图运行时与开发页
 

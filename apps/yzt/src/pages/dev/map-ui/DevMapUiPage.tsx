@@ -42,7 +42,7 @@ const MapUiSamples = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols });
-    // 模型只进面板：没有画布，三维里也不加载（行上一直转圈）
+    // 模型只进面板：没有画布，三维里也不加载；没有请求状态，行上不转圈
     const models = useSceneModels(map, SAMPLE_MODELS);
     const layerList = useCurrentLayers(layers, models);
     const layout = useResourcePanelLayout();

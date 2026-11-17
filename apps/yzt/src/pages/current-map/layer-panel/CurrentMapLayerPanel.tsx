@@ -118,7 +118,7 @@ export const CurrentMapLayerPanel = defineComponent({
     collapsed: { type: Boolean, default: false },
     /** 手机宽度：浮层盖在面板下段上 */
     sheet: { type: Boolean, default: false },
-    /** 地图数据的请求状态（ADR 0158）：二维图层加载超过 0.4 秒时行内转圈 */
+    /** 地图数据的请求状态（ADR 0158、0162）：资源行和模型行加载超过 0.4 秒时名称后面转圈 */
     requests: { type: Object as PropType<RequestStatus>, default: undefined },
     /** 在图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
     reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null },
@@ -721,7 +721,15 @@ export const CurrentMapLayerPanel = defineComponent({
     const renderRow = (key: string) => {
       const id = modelIdOfKey(key);
       if (id !== null) {
-        return [<ModelLayerRow models={props.models} id={id} scene={scene.value} onRemove={() => removeKeys([key])} />];
+        return [
+          <ModelLayerRow
+            models={props.models}
+            id={id}
+            scene={scene.value}
+            loading={props.requests?.loadingKeys.value.has(key) ?? false}
+            onRemove={() => removeKeys([key])}
+          />
+        ];
       }
       const code = resourceCodeOfKey(key);
       return code === null

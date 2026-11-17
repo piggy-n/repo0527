@@ -29,7 +29,7 @@ export type TileProbe = () => TileOutcome | null;
 
 // 一个数据源的计数：还在请求的瓦片按引擎的瓦片键记，同一张不重复算；能看出结果的带着查看的函数
 interface Round {
-  readonly pending: Map<string, TileProbe | null>;
+  readonly pending: Map<unknown, TileProbe | null>;
   requested: number;
   loaded: number;
   failed: number;
@@ -86,9 +86,10 @@ export class SourceActivityTracker {
 
 /**
    * 开始请求一张新的瓦片；数据源空闲时开始新的一轮。probe 看这张瓦片是不是已经有了结果，给引擎不发事件的情况用
-   * （MapLibre 的栅格瓦片 404、没有变化的瓦片；矢量瓦片的 404 当空瓦片照常有事件），由 sweep 调用
+   * （MapLibre 的栅格瓦片 404、没有变化的瓦片；矢量瓦片的 404 当空瓦片照常有事件），由 sweep 调用。
+   * 瓦片键是引擎给的字符串，或瓦片对象本身（三维的瓦片库，ADR 0162）
    */
-  started(sourceId: string, tileKey: string, probe: TileProbe | null = null): void {
+  started(sourceId: string, tileKey: unknown, probe: TileProbe | null = null): void {
     let round = this.#rounds.get(sourceId);
     if (!round || round.pending.size === 0) {
       round = { pending: new Map(), requested: 0, loaded: 0, failed: 0, startedAt: this.#now(), finishedAt: null };
@@ -103,7 +104,7 @@ export class SourceActivityTracker {
   }
 
   /** 一张瓦片有了结果；不是这一轮在等的（已有瓦片的重新加载）不算 */
-  finished(sourceId: string, tileKey: string, outcome: TileOutcome): void {
+  finished(sourceId: string, tileKey: unknown, outcome: TileOutcome): void {
     const round = this.#rounds.get(sourceId);
     if (!round?.pending.delete(tileKey)) {
       return;

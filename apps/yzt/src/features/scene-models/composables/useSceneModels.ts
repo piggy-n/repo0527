@@ -5,6 +5,7 @@ import {
   type RoamStatus,
   type RouteRoamStatus,
   RoutePath,
+  type SceneActivity,
   type SceneContent,
   type TilesetStatus,
   type WalkNotice,
@@ -57,7 +58,13 @@ import {
  */
 export type SceneModelsContext = Pick<
   MapContext,
-  'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation' | 'sceneCapabilities' | 'dimension'
+  | 'sceneStatus'
+  | 'sceneActivity'
+  | 'roamStatus'
+  | 'runCameraOperation'
+  | 'beginCameraOperation'
+  | 'sceneCapabilities'
+  | 'dimension'
 >;
 
 /** 漫游的方式：步行或路线，同一次漫游里在面板上切换（ADR 0097 第 2 节） */
@@ -102,6 +109,11 @@ export interface SceneModels {
   readonly hidden: Readonly<ShallowRef<ReadonlySet<string>>>;
   /** 模型当前显示的瓦片集的状态；没加入、还没有报告时是 loading */
   readonly stateOf: (id: string) => ModelLoadState;
+  /**
+   * 模型当前显示的瓦片集读完索引以后这一轮的加载（ADR 0162）：瓦片集按块数，高斯泼溅只有当前视角细节的比例；
+   * 没加入、二维里、还没有请求过时为 null
+   */
+  readonly activityOf: (id: string) => SceneActivity | null;
   readonly effectOf: (id: string) => string;
   /**
    * 加入当前地图：没加入过的整批放在最前，批内保持给出的先后；已经加入的不动。三维里等第一个新加入的就绪后飞过去，
@@ -786,6 +798,10 @@ export function useSceneModels(
     added: shallowReadonly(added),
     hidden: shallowReadonly(hidden),
     stateOf: id => (added.value.includes(id) ? loadStateOf(statusOf(modelOf(id))) : 'loading'),
+    activityOf: id =>
+      added.value.includes(id)
+        ? (map.sceneActivity.value.get(currentTilesetId(modelOf(id), effects.value)) ?? null)
+        : null,
     effectOf: id => currentEffect(modelOf(id), effects.value),
     add,
     remove,

@@ -1,5 +1,6 @@
 import { createNanoEvents } from 'nanoevents';
 import { afterEach, describe, expect, it } from 'vitest';
+import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import { SceneContentModel, type SceneStatus, type SplatLayer, type TilesetLayer } from '../scene/scene-content-model';
 import type { SplatOptions, SplatSource } from '../scene/splat-sync';
 import type { TilesetSphere } from '../scene/tileset-camera';
@@ -61,6 +62,7 @@ const SPLAT_SPHERE: TilesetSphere = { center: [117.06, 34.27], height: 0, radius
 
 class FakeRenderer implements SceneRenderer {
   readonly calls: string[] = [];
+  activity: SceneActivities = NO_SCENE_ACTIVITY;
   readonly emitter = createNanoEvents<SceneRendererEvents>();
   surface: SceneSurface | null = null;
   disposed = false;
@@ -162,6 +164,7 @@ function setup(load?: () => Promise<CreateSceneRenderer>) {
   const modules: SceneModuleState['kind'][] = [];
   const errors: unknown[] = [];
   let loads = 0;
+  let activityChanges = 0;
   const scene = new MapLibreScene({
     map,
     scene: content,
@@ -172,11 +175,23 @@ function setup(load?: () => Promise<CreateSceneRenderer>) {
     loadJson: async () => TILESET_JSON,
     onError: error => errors.push(error),
     onStatus: status => statuses.push(status),
-    onModuleChange: state => modules.push(state.kind)
+    onModuleChange: state => modules.push(state.kind),
+    onActivity: () => activityChanges++
   });
   disposables.push(scene, content);
   const state = () => scene.status.get('station')?.state;
-  return { map, content, renderer, scene, statuses, modules, errors, state, loads: () => loads };
+  return {
+    map,
+    content,
+    renderer,
+    scene,
+    statuses,
+    modules,
+    errors,
+    state,
+    loads: () => loads,
+    activityChanges: () => activityChanges
+  };
 }
 
 // 显示三维并加载好三维模块
@@ -237,6 +252,24 @@ describe('MapLibreScene', () => {
     await flush();
     expect(renderer.calls.at(-1)).toBe('remove splat cws');
     expect([...scene.status.keys()]).toStrictEqual(['station']);
+  });
+
+  it('渲染器这一轮的加载原样转出，有变化时通知（ADR 0162）；三维模块还没加载时为空', async () => {
+    const ctx = setup();
+    expect(ctx.scene.activity).toBe(NO_SCENE_ACTIVITY);
+    await shown(ctx);
+
+    const activity: SceneActivities = new Map([
+      ['station', { kind: 'blocks', requested: 3, loaded: 1, failed: 0, startedAt: 10, finishedAt: null }]
+    ]);
+    ctx.renderer.activity = activity;
+    ctx.renderer.emitter.emit('activitychange');
+    expect(ctx.activityChanges()).toBe(1);
+    expect(ctx.scene.activity).toBe(activity);
+
+    ctx.scene[Symbol.dispose]();
+    ctx.renderer.emitter.emit('activitychange');
+    expect(ctx.activityChanges()).toBe(1);
   });
 
   it('不显示三维时加载好三维模块也不挂模型层、不应用内容', async () => {

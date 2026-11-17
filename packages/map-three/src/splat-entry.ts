@@ -206,6 +206,18 @@ export class SplatEntry implements Disposable {
     }
   }
 
+  /**
+   * 这一帧的加载（ADR 0162）：画了，并且有在路上的数据块、或当前视角细节的比例在 0 和 1 之间算加载中。
+   * 比例为 0、没有在路上的是视野里什么也没选中（库这时报 0，不是 1）；progress 是库的比例
+   */
+  detailLoad(): { readonly loading: boolean; readonly progress: number } {
+    if (!this.#drawn) {
+      return { loading: false, progress: 1 };
+    }
+    const { loadingChunks, loadProgress } = this.#scheduler.stats;
+    return { loading: loadingChunks > 0 || (loadProgress > 0 && loadProgress < 1), progress: loadProgress };
+  }
+
   /** 还占着数据（有驻留的网格）：隔离一份泼溅时，别的放掉以后它才拿全部预算 */
   get holding(): boolean {
     return this.#scheduler.stats.residentMeshes > 0;

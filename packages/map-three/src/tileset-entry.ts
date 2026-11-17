@@ -4,6 +4,7 @@ import {
   type PreparedTileset,
   type SceneFrame,
   type SceneSurface,
+  type TileOutcome,
   type TilesetOptions,
   type TilesetSphere
 } from '@mx/map-core';
@@ -30,6 +31,7 @@ import { createSunLights, type FogUniform, TilesetMaterials } from './lighting';
 import { LocalFrame } from './local-frame';
 import { type CullWindow, RequestCull } from './request-cull';
 import { type TileInternals, TileLoadPlugin } from './tile-load-plugin';
+import { TILE_UNLOADED, tileOutcome, trackTileRequests } from './tile-tracking';
 import type { TileUploader } from './tile-uploader';
 
 export interface TilesetEntryEvents {
@@ -56,6 +58,11 @@ export interface TilesetEntryOptions {
   /** 瓦片记完字节以后释放内存里的贴图（ADR 0155 第 5 节） */
   readonly releaseImages: boolean;
   readonly events: TilesetEntryEvents;
+  /**
+   * 一块瓦片真正排进了下载队列，或者因为相机动着暂缓请求（ADR 0162）：probe 按瓦片现在的状态给出结果（到了、失败、取消），
+   * 还在路上、还在暂缓时为 null
+   */
+  readonly onRequest?: (tile: object, probe: () => TileOutcome | null) => void;
 }
 
 /** 裁剪盒（ADR 0149）：盒子的局部系（原点在盒子中心，轴和盒子的边平行）到地心坐标，和三个方向的半边长（米） */
@@ -144,6 +151,7 @@ interface TilesInternals {
   readonly visibleTiles: Set<TileInternals>;
   readonly loadingTiles: Set<TileInternals>;
   queueTileForDownload(tile: TileInternals): void;
+  requestTileContents(tile: TileInternals): unknown;
   readonly stats: {
     readonly refused: number;
     readonly queued: number;
@@ -164,9 +172,6 @@ const ERROR_TARGET = 8;
 // 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来。
 // 之前不估计，也不借别的层的大小：开始加载时只有粗的几层有样本，粗瓦片大时细的一层按它估计远超实际，停着就放宽锁住
 const MIN_SIZE_SAMPLES = 3;
-// 瓦片还没有请求过：库的常量 UNLOADED，类型声明里没有导出
-const UNLOADED = 0;
-
 // 命中的面用的材质；多材质的网格按面的材质序号取
 function hitMaterial({ object, face }: Intersection): Material | undefined {
   const { material } = object as Mesh;
@@ -229,7 +234,18 @@ export class TilesetEntry implements Disposable {
   // 根索引的包围球（地心坐标）：判断和裁剪盒是否重叠
   #ecefSphere: Sphere | null = null;
 
-  constructor({ prepared, options, cache, math, fog, uploader, requestCullWindow, releaseImages, events }: TilesetEntryOptions) {
+  constructor({
+    prepared,
+    options,
+    cache,
+    math,
+    fog,
+    uploader,
+    requestCullWindow,
+    releaseImages,
+    events,
+    onRequest
+  }: TilesetEntryOptions) {
     this.#requestCull = requestCullWindow === null ? null : new RequestCull(requestCullWindow);
     this.#cache = cache;
     this.#uploader = uploader;
@@ -250,11 +266,17 @@ export class TilesetEntry implements Disposable {
     internals.queueTileForDownload = tile => {
       if (this.#cullsRequest(tile)) {
         this.#culled.add(tile);
+        // 动着暂缓请求的块也算这一轮（ADR 0162）：停下就请求，飞过去、拖动时模型算加载中
+        onRequest?.(tile, this.#probe(tile));
       } else {
         this.#noteRequest(tile);
         queue(tile);
       }
     };
+    // 真正开始请求的块记进这一轮（ADR 0162）
+    if (onRequest) {
+      trackTileRequests(internals, tile => onRequest(tile, this.#probe(tile)));
+    }
     tiles.setCamera(this.camera);
     tiles.setResolution(this.camera, 1, 1);
     // 库在记完这块瓦片的字节（缓存的记账）以后才派发 load-model：这时才能释放内存里的贴图
@@ -387,6 +409,7 @@ export class TilesetEntry implements Disposable {
   /** 这一帧不画（抬高别的瓦片集期间）：也拾取不到 */
   skipFrame(): void {
     this.#drawn = false;
+    this.#culled.clear();
     this.#releaseUsed();
   }
 
@@ -495,6 +518,8 @@ export class TilesetEntry implements Disposable {
   /** 画一帧之前：按这一帧的投影换算相机、选瓦片；不显示、根索引没到、在地球背面时不画 */
   prepare(frame: SceneFrame, surface: SceneSurface, width: number, height: number): boolean {
     this.#drawn = false;
+    // 不画的时候没有暂缓的块：暂缓的只在选瓦片时记下
+    this.#culled.clear();
     const localFrame = this.#frame;
     if (!this.#options.show || !localFrame) {
       this.#releaseUsed();
@@ -590,7 +615,7 @@ export class TilesetEntry implements Disposable {
 
   // 动着时请求的记下时刻。停着时请求的不算：停下时看到的一次全请求，排队很长，不代表动着的时候要等多久
   #noteRequest(tile: TileInternals): void {
-    if (!this.#requestCull || tile.internal.loadingState !== UNLOADED) {
+    if (!this.#requestCull || tile.internal.loadingState !== TILE_UNLOADED) {
       return;
     }
     if (this.#requestCull.moving) {
@@ -598,6 +623,14 @@ export class TilesetEntry implements Disposable {
     } else {
       this.#requestedAt.delete(tile);
     }
+  }
+
+  // 这一轮里一块的结果：还在暂缓（这一帧又因为相机动着没请求）时还在等；回到"没请求"、也不再暂缓的是不要了，算取消
+  #probe(tile: TileInternals): () => TileOutcome | null {
+    return () => {
+      const { loadingState } = tile.internal;
+      return loadingState === TILE_UNLOADED && this.#culled.has(tile) ? null : tileOutcome(loadingState);
+    };
   }
 
   #onTileReady(tile: TileInternals): void {
@@ -610,7 +643,7 @@ export class TilesetEntry implements Disposable {
 
   // 只拦还没开始的瓦片。外部索引在整理时都展开了，走到这里的都是有内容的瓦片
   #cullsRequest(tile: TileInternals): boolean {
-    if (!this.#requestCull || tile.internal.loadingState !== UNLOADED) {
+    if (!this.#requestCull || tile.internal.loadingState !== TILE_UNLOADED) {
       return false;
     }
     tile.engineData.boundingVolume.getSphere(this.#sphere);

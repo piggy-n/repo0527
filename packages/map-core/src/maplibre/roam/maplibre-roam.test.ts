@@ -8,6 +8,7 @@ import { navigationFrame, toEcef } from '../../scene/nav/nav-frame';
 import { NavGrid } from '../../scene/nav/nav-grid';
 import { floorQuad, triangles, wallQuad } from '../../scene/nav/nav-testing';
 import { labelRegions } from '../../scene/nav/regions';
+import { NO_SCENE_ACTIVITY } from '../../scene/scene-activity';
 import type {
   RoamStatus,
   RouteRoam,
@@ -123,6 +124,7 @@ class FakeMap implements RoamMap {
 
 // 渲染器只记下抬高、光环和远处压暗；包围盒的最低处由用例设
 class FakeRenderer implements SceneRenderer {
+  readonly activity = NO_SCENE_ACTIVITY;
   readonly lifts: (SceneLift | null)[] = [];
   readonly markers: (SceneMarker | null)[] = [];
   fog = false;

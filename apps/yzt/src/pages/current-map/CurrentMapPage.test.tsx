@@ -17,6 +17,7 @@ import {
   type MapSession,
   type MapSessionOptions,
   type MapSubscription,
+  NO_SCENE_ACTIVITY,
   type SourceDataEventLike,
   type RenderedFeatureLike,
   type SceneRenderer,
@@ -332,6 +333,7 @@ function fakeRenderer() {
   // 屏幕上的点 "x,y" 打到的模型
   const hits = new Map<string, NonNullable<ReturnType<SceneRenderer['pick']>>>();
   const renderer: SceneRenderer = {
+    activity: NO_SCENE_ACTIVITY,
     attach: () => undefined,
     detach: () => undefined,
     loseContext: () => undefined,

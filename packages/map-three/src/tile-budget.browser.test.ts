@@ -213,6 +213,12 @@ function showBlocks(ctx: Context, url: string, screenError: Pick<TilesetLayer, '
 
 const inspect = (ctx: Context): ThreeSceneInspection => ctx.renderer.inspect();
 
+// 这一轮的块都有了结果（ADR 0162）：请求的数等于到了加失败的，被淘汰、被拒绝的不算请求
+function roundEnded(ctx: Context, id = 'blocks'): boolean {
+  const round = ctx.renderer.activity.get(id);
+  return round?.kind === 'blocks' && round.finishedAt !== null && round.loaded + round.failed === round.requested;
+}
+
 async function settle(ctx: Context): Promise<ThreeSceneInspection> {
   await until(() => ctx.view.sceneStatus?.get('blocks')?.state === 'ready', '瓦片集就绪');
   await until(() => {
@@ -292,6 +298,8 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     expect(state.tilesets.blocks?.visible).toBe(16);
     // 粗的一层的屏幕误差约 31，目标 16：放宽到 2 倍就够了
     expect(state.errorScale).toBeLessThan(3);
+    // 还在下载就被淘汰的块不算请求，这一轮照样结束：淘汰在画完以后，不再画帧也要结算（ADR 0162）
+    expect(await within(() => roundEnded(ctx), 10000)).toBe(true);
   });
 
   it('粗的一层也放不下：照样画出放得下的，不会放宽到整棵树不画', { timeout: TEST_TIMEOUT }, async () => {
@@ -383,6 +391,8 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     expect(peak).toBeLessThan(first.pinnedBytes * 1.25);
     expect(state.errorScale).toBe(1);
     expect(state.tilesets.blocks?.visible).toBe(64);
+    // 两个瓦片集互相挤掉块，这一轮都会结束（ADR 0162）
+    expect(await within(() => roundEnded(ctx) && roundEnded(ctx, 'other'), 10000)).toBe(true);
   });
 
   it('第一次加载时细的一层还没有样本：不按粗的一层的大小估计，放得下就不放宽', { timeout: TEST_TIMEOUT }, async () => {
@@ -565,12 +575,17 @@ describe('ThreeSceneRenderer 动着的时候不请求', () => {
     await seconds(1);
     expect(blockRequests()).toBe(0);
     expect(inspect(ctx).tilesets.blocks?.loaded).toBe(0);
+    // 暂缓请求的块也算这一轮（ADR 0162）：飞着的时候模型算加载中
+    const flying = ctx.renderer.activity.get('blocks');
+    expect(flying).toMatchObject({ kind: 'blocks', loaded: 0, finishedAt: null });
+    expect(flying?.kind === 'blocks' ? flying.requested : 0).toBeGreaterThan(0);
     expect(inspect(ctx).settled).toBe(false);
     // 还有没请求的瓦片时不算首批瓦片到了：同组的白膜要等这个事件才撤下上一个
     expect(initial).toBe(0);
     stop();
     expect(await within(() => inspect(ctx).settled && (inspect(ctx).tilesets.blocks?.visible ?? 0) > 0, 30000)).toBe(true);
     expect(initial).toBe(1);
+    expect(await within(() => roundEnded(ctx), 10000)).toBe(true);
   });
 
   it('要的瓦片都到了时，动着也不算有没请求的：按需渲染停得下来', { timeout: TEST_TIMEOUT }, async () => {
