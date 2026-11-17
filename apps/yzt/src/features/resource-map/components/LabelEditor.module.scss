@@ -15,27 +15,6 @@
   color: var(--color-text-primary);
 }
 
-// 字段的选项：名称在左，有值的比例在右
-.fieldOption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  width: 100%;
-}
-
-.fieldName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.share {
-  flex: none;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
 // 字体的选项按这个字重显示
 .semibold {
   font-weight: var(--font-weight-semibold);

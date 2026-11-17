@@ -2,7 +2,7 @@ import type { ExpressionSpecification, SymbolLayerSpecification } from '@maplibr
 import type { StyleGroup } from '@mx/map-core';
 import { MAP_FONT_STACKS } from '@/shared/map/map-fonts';
 import type { Resource, ResourceGeometry } from './catalog';
-import { type LabelFieldOption, labelFieldsOf } from './label-fields';
+import { labelFieldsOf } from './label-fields';
 import { type PointShape, shapeReach } from './point-shapes';
 import { normalizeColor, sdfOpacity, sizeStops, type SymbolSize } from './symbols';
 
@@ -67,8 +67,8 @@ const DEFAULT_PLACEMENTS: Readonly<Record<ResourceGeometry, LabelPlacement>> = {
 /** 显示级别的范围：滑块的两头，最大级别拉到头时不限制（三维最大 20 级） */
 export const LABEL_ZOOM_RANGE = { min: 8, max: 20 } as const;
 
-/** 默认从 14 级起显示（旧项目），地类图斑的面多、15 级起（用户 2026-11-16） */
-const DEFAULT_MINZOOM = 14;
+/** 默认从 15 级起显示（用户 2026-11-16） */
+const DEFAULT_MINZOOM = 15;
 
 /** 一个资源的标注 */
 export interface ResourceLabel {
@@ -107,10 +107,9 @@ const DEFAULT_COLORS: Readonly<Record<ResourceGeometry, string>> = {
 const WATER_LABEL: Partial<Pick<ResourceLabel, 'color' | 'font'>> = { color: '#0B4A78', font: 'semibold' };
 
 // 个别资源和通用默认不同的地方
-type LabelTuning = Partial<Pick<ResourceLabel, 'color' | 'font' | 'minzoom'>>;
+type LabelTuning = Partial<Pick<ResourceLabel, 'color' | 'font'>>;
 
 const LABEL_TUNING: ReadonlyMap<string, LabelTuning> = new Map<string, LabelTuning>([
-  ['bgdc_dltb', { minzoom: 15 }],
   ['csxhjctb_hydl', WATER_LABEL],
   ['csxhjctb_hyda', WATER_LABEL],
   ['szy_hl_fs', WATER_LABEL],
@@ -121,7 +120,7 @@ const LABEL_TUNING: ReadonlyMap<string, LabelTuning> = new Map<string, LabelTuni
   ['szy_sk_ks', WATER_LABEL]
 ]);
 
-/** 代码给出的默认标注：登记的第一个字段，12 号、白色 1.5 像素描边，14 级起；没有登记字段的资源为 null */
+/** 代码给出的默认标注：登记的第一个字段，12 号、白色 1.5 像素描边，15 级起；没有登记字段的资源为 null */
 export function codeDefaultLabel(resource: Resource): ResourceLabel | null {
   const [first] = labelFieldsOf(resource.code);
   if (!first) {
@@ -222,14 +221,6 @@ export const LABEL_PLACEHOLDER = '-9999';
 export function labelText(field: string): ExpressionSpecification {
   const value: ExpressionSpecification = ['to-string', ['coalesce', ['get', field], '']];
   return ['case', ['==', value, LABEL_PLACEHOLDER], '', value];
-}
-
-/** 下拉框里字段后面的比例 */
-export function labelShareText({ share }: LabelFieldOption): string {
-  if (share >= 0.995) {
-    return '全部有值';
-  }
-  return share < 0.01 ? '不到 1%' : `${Math.round(share * 100)}%`;
 }
 
 /** 点在某一级伸出锚点多远（像素，含描边），文字让开它 */

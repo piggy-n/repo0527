@@ -15,7 +15,6 @@ import {
   isLabelLayer,
   LABEL_FONT_NAMES,
   LABEL_PLACEHOLDER,
-  labelShareText,
   labelsGroupOf,
   type LabelTarget,
   labelText,
@@ -91,7 +90,7 @@ const HYDL = resource('csxhjctb_hydl', 'line', 9);
 const DLTB = resource('bgdc_dltb', 'fill');
 
 describe('默认标注', () => {
-  it('第一个登记的字段，12 号、普惠体常规、白色 1.5 描边，14 级起；点默认"上方"（用户 2026-11-16）', () => {
+  it('第一个登记的字段，12 号、普惠体常规、白色 1.5 描边，15 级起；点默认"上方"（用户 2026-11-16）', () => {
     expect(codeDefaultLabel(XXP)).toStrictEqual({
       field: 'name',
       font: 'regular',
@@ -100,13 +99,13 @@ describe('默认标注', () => {
       haloColor: '#FFFFFF',
       haloWidth: 1.5,
       placement: 'top',
-      minzoom: 14,
+      minzoom: 15,
       maxzoom: 20,
       overlap: false
     });
   });
 
-  it('地类图斑 15 级起；水系深蓝中粗；线默认沿线、面默认中心', () => {
+  it('地类图斑也是 15 级起；水系深蓝中粗；线默认沿线、面默认中心', () => {
     expect(codeDefaultLabel(DLTB)).toMatchObject({ field: 'dlmc', minzoom: 15, placement: 'center' });
     expect(codeDefaultLabel(HYDL)).toMatchObject({
       field: 'name',
@@ -140,12 +139,6 @@ describe('标注的覆盖', () => {
     expect(changed).toStrictEqual({ size: 16, color: 'rgba(255, 0, 0, 1)' });
     expect(nextLabelOverride(defaults, changed, { size: 12 })).toStrictEqual({ color: 'rgba(255, 0, 0, 1)' });
     expect(nextLabelOverride(defaults, { color: '#FF0000' }, { color: '#374151' })).toStrictEqual({});
-  });
-
-  it('下拉框里的比例：全部有值、百分比、不到 1%', () => {
-    expect(labelShareText({ field: 'name', name: '名称', share: 1 })).toBe('全部有值');
-    expect(labelShareText({ field: 'name', name: '名称', share: 0.34 })).toBe('34%');
-    expect(labelShareText({ field: 'name', name: '名称', share: 0.004 })).toBe('不到 1%');
   });
 });
 

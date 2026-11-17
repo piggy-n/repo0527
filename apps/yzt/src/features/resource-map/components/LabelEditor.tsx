@@ -23,7 +23,6 @@ import {
   LABEL_ZOOM_RANGE,
   type LabelColorField,
   type LabelOverride,
-  labelShareText,
   PLACEMENTS_OF,
   type ResourceLabel
 } from '../labels';
@@ -150,12 +149,7 @@ export const LabelEditor = defineComponent({
           }}
         >
           {labelFieldsOf(props.code).map(option => (
-            <ElOption key={option.field} value={option.field} label={`${option.name}（${option.field}）`}>
-              <span class={styles.fieldOption} data-label-field={option.field}>
-                <span class={styles.fieldName}>{`${option.name}（${option.field}）`}</span>
-                <span class={styles.share}>{labelShareText(option)}</span>
-              </span>
-            </ElOption>
+            <ElOption key={option.field} value={option.field} label={`${option.name}（${option.field}）`} />
           ))}
         </ElSelect>
       );
