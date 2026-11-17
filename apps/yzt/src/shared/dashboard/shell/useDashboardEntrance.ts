@@ -33,11 +33,22 @@ const LAYERED = [
   '[data-scene="orbit"]'
 ].join(', ');
 
+interface EntranceOptions {
+  /** 加载耗时的标记名（LoadTrace），实测工具按它找，如原驾驶舱的 'city-dashboard' */
+  readonly traceName: string;
+}
+
+export type DashboardEntrance = ReturnType<typeof useDashboardEntrance>;
+
 /**
  * 页面入场的编排：地图先入场（或失败降级），之后标题、侧栏、卡片和背景按时间线进入；
  * 时间线只在页面可见时推进（playVisibleTimeline）。减少动画时直接到终态
  */
-export function useDashboardEntrance(shell: Ref<HTMLElement | undefined>, reduce: () => boolean) {
+export function useDashboardEntrance(
+  shell: Ref<HTMLElement | undefined>,
+  reduce: () => boolean,
+  { traceName }: EntranceOptions
+) {
   const phase = ref<'map-entering' | 'panels-entering' | 'ready'>('map-entering');
   // 地图上的数值先显示为 0，入场到一半再过渡到真实值
   const valuesVisible = ref(false);
@@ -45,7 +56,7 @@ export function useDashboardEntrance(shell: Ref<HTMLElement | undefined>, reduce
   const revealedCharts = ref(0);
   const preferred = usePreferredReducedMotion();
   const reduced = computed(() => reduce() || preferred.value === 'reduce');
-  const trace = new LoadTrace('city-dashboard', ['map', 'ready']);
+  const trace = new LoadTrace(traceName, ['map', 'ready']);
   trace.begin();
   let context: gsap.Context | undefined;
   let clock: Disposable | undefined;

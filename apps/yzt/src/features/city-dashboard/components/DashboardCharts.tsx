@@ -1,8 +1,9 @@
 import { computed, defineComponent, onMounted, ref, shallowRef, watch, type PropType } from 'vue';
-import { ElButton, ElDialog } from 'element-plus';
-import { MxTitle } from '@mx/ui';
-import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
+import { usePreferredReducedMotion } from '@vueuse/core';
 import { formatValue } from '@/shared/dashboard/calculations';
+import { ChartActions, type ChartActionPatch } from '@/shared/dashboard/charts/ChartActions';
+import { ChartCard } from '@/shared/dashboard/charts/ChartCard';
+import { ChartDetailDialog } from '@/shared/dashboard/charts/ChartDetailDialog';
 import { renderChartImage } from '@/shared/dashboard/charts/chart-export';
 import chartStyles from '@/shared/dashboard/charts/charts.module.scss';
 import { DashboardPlot } from '@/shared/dashboard/charts/DashboardPlot';
@@ -11,13 +12,13 @@ import { TooltipTable } from '@/shared/dashboard/charts/TooltipTable';
 import { warmUpChart } from '@/shared/dashboard/charts/warm-up';
 import { imageWithTitle, saveImage } from '@/shared/dashboard/export/image-export';
 import { useImageExport } from '@/shared/dashboard/export/useImageExport';
+import { withUnit } from '@/shared/dashboard/format';
 import fonts from '@/shared/dashboard/shell/DashboardFonts.module.scss';
-import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CITIES } from '../catalog';
 import { yearColor } from '../charts/colors';
 import { useCardNavigation } from '../composables/useCardNavigation';
 import type { DashboardModel } from '../composables/useDashboard';
-import type { ChartHover, Comparison, Indicator } from '../model';
+import type { ChartHover, Indicator } from '../model';
 import styles from './DashboardCharts.module.scss';
 
 export interface DashboardChartsHandle {
@@ -51,15 +52,8 @@ export const DashboardCharts = defineComponent({
     const detailLegend = shallowRef<Readonly<Record<string, boolean>>>({});
     const detailHover = ref<string | null>(null);
     const detailVisible = ref(false);
-    const detailPlot = ref<HTMLElement>();
     const detailSize = shallowRef({ width: 780, height: 440 });
     const exporting = useImageExport();
-    useResizeObserver(detailPlot, entries => {
-      const size = entries[0]?.contentRect;
-      if (size && size.width > 0 && size.height > 0) {
-        detailSize.value = { width: size.width, height: size.height };
-      }
-    });
     const focusedCity = computed(() => CITIES.find(city => city.code === detail.value?.cityCode));
     const hoveredCity = computed(() => CITIES.find(city => city.code === detailHover.value));
     // 从当前列表读取卡片，避免重渲染期间旧 ref 清理影响定位
@@ -122,6 +116,15 @@ export const DashboardCharts = defineComponent({
       detailHover.value = null;
     }
 
+    // 原驾驶舱只有柱状和折线，类型按钮不会给出雷达
+    function setPreference(indicator: Indicator, patch: ChartActionPatch): void {
+      if ('showAverage' in patch) {
+        props.model.setPreference(indicator, patch);
+      } else if (patch.type !== 'radar') {
+        props.model.setPreference(indicator, { type: patch.type });
+      }
+    }
+
     watch(
       () => props.model.state.value,
       () => {
@@ -149,53 +152,21 @@ export const DashboardCharts = defineComponent({
       const preference = model.preference(indicator);
       const comparison = model.comparisons.value.get(indicator.id) ?? [];
       const stacked = isStacked({ comparison, preference });
-      const prefix = expanded ? '详情图' : indicator.name;
       const exportKey = `${expanded ? 'detail' : 'card'}:${indicator.id}`;
       const cannotDownload = !comparison.length || !model.cities.value.length || exporting.pending.value.has(exportKey);
       return (
-        <div class={chartStyles.actions}>
-          <button
-            type="button"
-            class={[chartStyles.iconButton, preference.showAverage && !stacked && chartStyles.averageActive]}
-            aria-label={`${prefix}${preference.showAverage ? '隐藏' : '显示'}均值线`}
-            aria-pressed={preference.showAverage && !stacked}
-            title={stacked ? '堆叠模式只在提示表格显示逐年均值' : '显示或隐藏均值线'}
-            disabled={stacked || !comparison.length || !model.cities.value.length}
-            onClick={() => model.setPreference(indicator, { showAverage: !preference.showAverage })}
-          >
-            <SvgIcon name="dashboard-average" />
-          </button>
-          <button
-            type="button"
-            class={[chartStyles.iconButton, preference.type === 'line' && chartStyles.lineType]}
-            aria-label={`${prefix}切换为${preference.type === 'bar' ? '折线' : '柱状'}图`}
-            title={`切换为${preference.type === 'bar' ? '折线' : '柱状'}图`}
-            onClick={() => model.setPreference(indicator, { type: preference.type === 'bar' ? 'line' : 'bar' })}
-          >
-            <SvgIcon name={preference.type === 'bar' ? 'dashboard-line' : 'dashboard-bar'} />
-          </button>
-          {!expanded && (
-            <button
-              type="button"
-              class={chartStyles.iconButton}
-              aria-label={`放大${indicator.name}图表`}
-              title="放大图表"
-              onClick={() => openDetail({ indicatorId: indicator.id })}
-            >
-              <SvgIcon name="dashboard-expand" />
-            </button>
-          )}
-          <button
-            type="button"
-            class={chartStyles.iconButton}
-            aria-label={`下载${expanded ? '详情' : indicator.name}图表`}
-            title="下载图片"
-            disabled={cannotDownload}
-            onClick={() => void download(indicator, expanded)}
-          >
-            <SvgIcon name="dashboard-download" />
-          </button>
-        </div>
+        <ChartActions
+          prefix={expanded ? '详情图' : indicator.name}
+          preference={{ ...preference, showAverage: preference.showAverage && !stacked }}
+          averageDisabled={stacked || !comparison.length || !model.cities.value.length}
+          averageTitle={stacked ? '堆叠模式只在提示表格显示逐年均值' : '显示或隐藏均值线'}
+          downloadDisabled={cannotDownload}
+          expandLabel={expanded ? undefined : `放大${indicator.name}图表`}
+          downloadLabel={`下载${expanded ? '详情' : indicator.name}图表`}
+          onPreference={patch => setPreference(indicator, patch)}
+          onExpand={() => openDetail({ indicatorId: indicator.id })}
+          onDownload={() => void download(indicator, expanded)}
+        />
       );
     }
 
@@ -212,7 +183,7 @@ export const DashboardCharts = defineComponent({
         width: element?.clientWidth ?? 420,
         height: element?.clientHeight ?? 240
       };
-      const title = `${indicator.name}（${indicator.unit}）`;
+      const title = withUnit(indicator.name, indicator.unit);
       const years = props.model.comparisonYears.value.join('-');
       const blob = await exporting.run(`${expanded ? 'detail' : 'card'}:${indicator.id}`, async signal => {
         await exporting.waitForFonts(signal);
@@ -232,39 +203,27 @@ export const DashboardCharts = defineComponent({
       return props.model.cities.value.includes(city) ? `${city.name} · 当前查看城市` : `${city.name} · 未纳入当前城市筛选`;
     }
 
-    function renderDetailPlot(selected: Indicator, comparison: readonly Comparison[]) {
-      const option = detailOption.value;
-      if (!comparison.length || !props.model.cities.value.length || !option) {
-        return <div class={chartStyles.empty}>暂无比较数据</div>;
-      }
+    function renderDetail() {
+      const model = props.model;
+      const selected = detail.value?.indicator;
+      const comparison = selected ? model.comparisons.value.get(selected.id) ?? [] : [];
+      const plotted = comparison.length > 0 && model.cities.value.length > 0;
       return (
-        <div ref={detailPlot} class={chartStyles.detailPlot}>
-          <DashboardPlot
-            option={option}
-            cities={props.model.cities.value}
-            active={detailVisible.value}
-            description={`${selected.name}详情`}
-            onHover={code => (detailHover.value = code)}
-            onLegend={legend => (detailLegend.value = legend)}
-          />
-        </div>
-      );
-    }
-
-    function renderDetail(selected: Indicator, comparison: readonly Comparison[]) {
-      const { model } = props;
-      return (
-        <div class={chartStyles.detail}>
-          <h2 class={chartStyles.fullTitle}>
-            {selected.name}（{selected.unit}）
-          </h2>
-          <div class={chartStyles.detailTools}>
-            <span>{focusedCityText()}</span>
-            {renderActions(selected, true)}
-          </div>
-          <div class={chartStyles.detailScroll}>{renderDetailPlot(selected, comparison)}</div>
-          {hoveredCity.value && (
-            <div class={chartStyles.detailTooltip}>
+        <ChartDetailDialog
+          visible={detailVisible.value}
+          title={selected ? withUnit(selected.name, selected.unit) : ''}
+          description={`${selected?.name ?? ''}详情`}
+          focusText={focusedCityText()}
+          option={plotted ? detailOption.value : null}
+          cities={model.cities.value}
+          onClose={closeDetail}
+          onHover={code => (detailHover.value = code)}
+          onLegend={legend => (detailLegend.value = legend)}
+          onSize={size => (detailSize.value = size)}
+        >
+          {{
+            actions: () => selected && renderActions(selected, true),
+            tooltip: () => selected && hoveredCity.value && (
               <TooltipTable
                 indicator={selected}
                 color={year => yearColor(year, selected.id)}
@@ -274,9 +233,9 @@ export const DashboardCharts = defineComponent({
                 activeYear={model.state.value.activeYear}
                 legend={detailLegend.value}
               />
-            </div>
-          )}
-        </div>
+            )
+          }}
+        </ChartDetailDialog>
       );
     }
 
@@ -284,8 +243,6 @@ export const DashboardCharts = defineComponent({
     return () => {
       const model = props.model;
       const state = model.state.value;
-      const selected = detail.value?.indicator;
-      const comparison = selected ? model.comparisons.value.get(selected.id) ?? [] : [];
       return (
         <section class={[fonts.scope, styles.charts]} aria-label="当前指标类型的多年度图表" inert={!props.active}>
           {exporting.error.value && <p role="alert">{exporting.error.value}</p>}
@@ -299,42 +256,43 @@ export const DashboardCharts = defineComponent({
             data-ready={props.active}
             onScroll={() => emit('hover', null)}
           >
-            {cards.value.map(({ indicator, comparison: cardComparison, option }, index) => {
+            {cards.value.map(({ indicator, comparison, option }, index) => {
               // 定位中的卡片先不显示选中，定位结束再显示，免得滚动途中闪一下
-              const current = state.indicatorId === indicator.id && navigation.locatingId.value !== indicator.id;
-              const latest = cardComparison.at(-1);
-              const average = latest
-                ? formatValue(latest.average, indicator, true, Math.max(1, indicator.precision))
-                : null;
+              const selected = state.indicatorId === indicator.id && navigation.locatingId.value !== indicator.id;
+              const latest = comparison.at(-1);
+              const title = withUnit(indicator.name, indicator.unit);
+              let emptyText: string | undefined;
+              if (!comparison.length) {
+                emptyText = '请选择年份后查看比较数据';
+              } else if (!model.cities.value.length) {
+                emptyText = '请选择城市后查看比较数据';
+              }
               return (
-                <article
+                <ChartCard
                   key={`${state.categoryId}:${indicator.id}`}
-                  data-chart-id={indicator.id}
-                  data-enter="chart"
-                  class={[chartStyles.card, current && styles.selected]}
-                  aria-current={state.indicatorId === indicator.id ? 'true' : undefined}
+                  id={indicator.id}
+                  title={title}
+                  class={selected && styles.selected}
+                  current={state.indicatorId === indicator.id}
+                  average={latest ? {
+                    year: latest.year,
+                    text: formatValue(latest.average, indicator, true, Math.max(1, indicator.precision))
+                  } : null}
+                  emptyText={emptyText}
                 >
-                  <div class={chartStyles.heading}>
-                    <button
-                      type="button"
-                      class={chartStyles.title}
-                      title={`${indicator.name}（${indicator.unit}）`}
-                      onClick={() => model.selectIndicator(indicator.id)}
-                    >
-                      {indicator.name}（{indicator.unit}）
-                    </button>
-                    {renderActions(indicator)}
-                  </div>
-                  <div class={chartStyles.average}>
-                    {latest ? (
-                      <span aria-label="最新所选年份的城市平均值">
-                        <i aria-hidden="true" />
-                        {latest.year}均值 <b>{average}</b>
-                      </span>
-                    ) : '未选择比较年份'}
-                  </div>
-                  <div class={chartStyles.body}>
-                    {cardComparison.length && model.cities.value.length ? (
+                  {{
+                    heading: () => (
+                      <button
+                        type="button"
+                        class={chartStyles.title}
+                        title={title}
+                        onClick={() => model.selectIndicator(indicator.id)}
+                      >
+                        {title}
+                      </button>
+                    ),
+                    actions: () => renderActions(indicator),
+                    default: () => (
                       <DashboardPlot
                         option={option}
                         active={index < props.revealedCount}
@@ -344,36 +302,13 @@ export const DashboardCharts = defineComponent({
                         onHover={cityCode => emit('hover', cityCode ? { indicatorId: indicator.id, cityCode } : null)}
                         onLegend={legend => model.setPreference(indicator, { legend })}
                       />
-                    ) : (
-                      <div class={chartStyles.empty}>
-                        {cardComparison.length ? '请选择城市后查看比较数据' : '请选择年份后查看比较数据'}
-                      </div>
-                    )}
-                  </div>
-                </article>
+                    )
+                  }}
+                </ChartCard>
               );
             })}
           </div>
-          <ElDialog
-            class={['dialog-panel-header', chartStyles.dialog]}
-            title="指标图表详情"
-            width="min(1100px, 94vw)"
-            top="6vh"
-            appendToBody
-            destroyOnClose
-            modelValue={detailVisible.value}
-            onUpdate:modelValue={value => {
-              if (!value) {
-                closeDetail();
-              }
-            }}
-          >
-            {{
-              header: () => <MxTitle level="panel">指标图表详情</MxTitle>,
-              default: () => selected && renderDetail(selected, comparison),
-              footer: () => <ElButton onClick={closeDetail}>关闭</ElButton>
-            }}
-          </ElDialog>
+          {renderDetail()}
         </section>
       );
     };

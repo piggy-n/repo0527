@@ -34,11 +34,22 @@
   white-space: nowrap;
 }
 
+// 不可点击的标题是 h3，去掉默认外边距
+.heading .titleText {
+  margin: 0;
+}
+
 .actions {
   display: flex;
   gap: 5px;
   padding-top: 2px;
   flex-shrink: 0;
+}
+
+// 三种以上图表类型时的互斥按钮组
+.typeGroup {
+  display: flex;
+  gap: 5px;
 }
 
 .actions svg {
@@ -89,6 +100,17 @@
   color: #b96322;
   border-color: #dcb48b;
   background: #fff4e8;
+}
+
+.typeActive {
+  color: #fff;
+  border-color: #438efb;
+  background: linear-gradient(#438efb, #4facfd);
+
+  &:hover:not(:disabled) {
+    border-color: #1674e8;
+    background: linear-gradient(#438efb, #4facfd);
+  }
 }
 
 .average {

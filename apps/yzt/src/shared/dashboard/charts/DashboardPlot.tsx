@@ -18,7 +18,9 @@ export const DashboardPlot = defineComponent({
     cities: { type: Array as PropType<readonly City[]>, required: true },
     description: { type: String, required: true },
     active: { type: Boolean, default: true },
-    retain: { type: Boolean, default: false }
+    retain: { type: Boolean, default: false },
+    /** axis：按横轴上的城市发出悬停，左右键逐个城市查看；none：不发悬停（雷达用引擎自己的提示框） */
+    hoverMode: { type: String as PropType<'axis' | 'none'>, default: 'axis' }
   },
   emits: {
     hover: (_code: string | null) => true,
@@ -43,7 +45,9 @@ export const DashboardPlot = defineComponent({
 
     function hide(): void {
       chart?.dispatchAction({ type: 'hideTip' });
-      emit('hover', null);
+      if (props.hoverMode === 'axis') {
+        emit('hover', null);
+      }
     }
 
     function release(): void {
@@ -71,6 +75,9 @@ export const DashboardPlot = defineComponent({
       if (!chart) {
         chart = createChart(target, undefined, { devicePixelRatio: Math.min(devicePixelRatio || 1, 2) });
         chart.on('updateAxisPointer', (event: unknown) => {
+          if (props.hoverMode !== 'axis') {
+            return;
+          }
           const axes = objectValue(event)?.axesInfo;
           if (!Array.isArray(axes)) {
             return;
@@ -120,11 +127,15 @@ export const DashboardPlot = defineComponent({
       if (!['ArrowLeft', 'ArrowRight', 'Escape'].includes(event.key)) {
         return;
       }
-      event.preventDefault();
       if (event.key === 'Escape') {
+        event.preventDefault();
         hide();
         return;
       }
+      if (props.hoverMode !== 'axis') {
+        return;
+      }
+      event.preventDefault();
       const step = event.key === 'ArrowRight' ? 1 : -1;
       keyboardCity = Math.max(0, Math.min(props.cities.length - 1, keyboardCity + step));
       chart?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: keyboardCity });
@@ -137,7 +148,9 @@ export const DashboardPlot = defineComponent({
         class={styles.plot}
         tabindex={0}
         role="img"
-        aria-label={`${props.description}，左右键查看城市数值，Esc 关闭提示`}
+        aria-label={
+          props.hoverMode === 'axis' ? `${props.description}，左右键查看城市数值，Esc 关闭提示` : props.description
+        }
         onKeydown={onKeydown}
         onBlur={hide}
       />

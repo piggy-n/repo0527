@@ -162,7 +162,7 @@
   }
 }
 
-.categories, .indicators {
+.iconList, .optionList {
   display: grid;
   gap: calc(8px * var(--ui-scale, 1));
 }
@@ -193,7 +193,7 @@
   box-shadow: 0 3px 7px rgba(67, 142, 251, 0.25);
 }
 
-.category {
+.iconOption {
   gap: calc(12px * var(--ui-scale, 1));
 
   > svg {
@@ -219,7 +219,7 @@
   }
 }
 
-.indicatorGroup {
+.fill {
   flex: 1 0 180px;
   min-height: 180px;
   display: flex;
@@ -227,7 +227,7 @@
   overflow: hidden;
 }
 
-.indicators {
+.optionList {
   flex: 1;
   min-height: 130px;
   height: 0;

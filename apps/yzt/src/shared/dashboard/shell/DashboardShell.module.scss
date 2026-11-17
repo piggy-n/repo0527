@@ -50,8 +50,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  // 图片在 shared/dashboard/assets；Vite 不解析样式 url() 里的 @/ 别名，只能写相对路径
-  background: url('../../../shared/dashboard/assets/header-skyline.webp') center bottom / cover;
+  background: url('../assets/header-skyline.webp') center bottom / cover;
   padding: 0 calc(220px * var(--ui-scale, 1));
 }
 
@@ -124,7 +123,8 @@
   }
   .content {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: clamp(620px, 68vw, 800px) 760px;
+    // 窄屏时右栏（与筛选并排）的行高；页面可以用 --dashboard-charts-row 覆盖
+    grid-template-rows: clamp(620px, 68vw, 800px) var(--dashboard-charts-row, 760px);
     grid-template-areas: 'map map' 'filters charts';
     overflow: auto;
   }
@@ -142,7 +142,7 @@
   }
   .content {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 600px 760px 440px;
+    grid-template-rows: 600px 760px var(--dashboard-charts-row, 440px);
     grid-template-areas: 'map' 'filters' 'charts';
     padding: 12px;
     gap: 12px;

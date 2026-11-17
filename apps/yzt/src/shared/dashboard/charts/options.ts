@@ -1,14 +1,26 @@
-import type { BarSeriesOption, LineSeriesOption } from 'echarts/charts';
-import type { GridComponentOption, LegendComponentOption, TooltipComponentOption } from 'echarts/components';
+import type { BarSeriesOption, LineSeriesOption, RadarSeriesOption } from 'echarts/charts';
+import type {
+  GridComponentOption,
+  LegendComponentOption,
+  RadarComponentOption,
+  TooltipComponentOption
+} from 'echarts/components';
 import type { ComposeOption } from 'echarts/core';
 import type { ChartPreference, City, Comparison, IndicatorMeta } from '../model';
 import { formatValue, isValue } from '../calculations';
+import { withUnit } from '../format';
 import { createValueAxisScale } from './axis-scale';
 import { AVERAGE_COLOR } from './palette';
 import { createDetailLabelPlan, type LabelPlacement } from './detail-labels';
 
 export type DashboardChartOption = ComposeOption<
-  BarSeriesOption | LineSeriesOption | GridComponentOption | LegendComponentOption | TooltipComponentOption
+  | BarSeriesOption
+  | LineSeriesOption
+  | RadarSeriesOption
+  | GridComponentOption
+  | LegendComponentOption
+  | RadarComponentOption
+  | TooltipComponentOption
 >;
 
 export interface ChartInput {
@@ -47,9 +59,38 @@ function axisValues(comparison: readonly Comparison[], cities: readonly City[], 
   });
 }
 
+export const CHART_FONT_FAMILY = 'Alibaba PuHuiTi, Microsoft YaHei, sans-serif';
+
+/** 柱、折线、雷达共用的图例；ECharts 6 换了默认主题，未选中图例和翻页的颜色沿用 5 的取值 */
+export function chartLegend(
+  density: number,
+  fontSize: number,
+  selected: Readonly<Record<string, boolean>>,
+  names: readonly string[]
+): LegendComponentOption {
+  return {
+    type: 'scroll',
+    top: 2,
+    left: 'center',
+    right: 12,
+    itemWidth: 16 * density,
+    itemHeight: 9 * density,
+    itemGap: 10 * density,
+    textStyle: { fontSize, color: '#0F4FA6' },
+    selected: { ...selected },
+    data: [...names],
+    inactiveColor: '#CCC',
+    inactiveBorderColor: '#CCC',
+    lineStyle: { inactiveColor: '#CCC' },
+    pageIconColor: '#438EFB',
+    pageIconInactiveColor: '#AAA',
+    pageTextStyle: { color: '#333' }
+  };
+}
+
 // 堆叠时纵轴是各年数值的累计
 function stackedAxisName(unit: string): string {
-  return unit === '1:X' ? '年度 X 值累计' : `年度值累计（${unit}）`;
+  return unit === '1:X' ? '年度 X 值累计' : withUnit('年度值累计', unit);
 }
 
 /** 图表配置只依赖快照；均值始终取最新比较年，与地图时间轴无关 */
@@ -159,7 +200,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
     animationDuration: 750,
     animationDurationUpdate: 550,
     animationEasing: 'cubicOut',
-    textStyle: { fontFamily: 'Alibaba PuHuiTi, Microsoft YaHei, sans-serif', color: '#0F4FA6' },
+    textStyle: { fontFamily: CHART_FONT_FAMILY, color: '#0F4FA6' },
     // containLabel 由 runtime 注册的 LegacyGridContainLabel 按 ECharts 5 的算法排版，绘图区与验收时一致
     grid: {
       left: detail ? 18 : 8 * density,
@@ -168,28 +209,10 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       bottom: detail ? 20 : 12 * density,
       containLabel: true
     },
-    // ECharts 6 换了默认主题，未选中图例和翻页的颜色沿用 5 的取值
-    legend: {
-      type: 'scroll',
-      top: 2,
-      left: 'center',
-      right: 12,
-      itemWidth: 16 * density,
-      itemHeight: 9 * density,
-      itemGap: 10 * density,
-      textStyle: { fontSize, color: '#0F4FA6' },
-      selected: { ...preference.legend },
-      data: [
-        ...comparison.map(item => String(item.year)),
-        ...(showAverage ? [`${latest.year}均值`] : [])
-      ],
-      inactiveColor: '#CCC',
-      inactiveBorderColor: '#CCC',
-      lineStyle: { inactiveColor: '#CCC' },
-      pageIconColor: '#438EFB',
-      pageIconInactiveColor: '#AAA',
-      pageTextStyle: { color: '#333' }
-    },
+    legend: chartLegend(density, fontSize, preference.legend, [
+      ...comparison.map(item => String(item.year)),
+      ...(showAverage ? [`${latest.year}均值`] : [])
+    ]),
     // 唯一 DOM 表格由组件呈现，ECharts 只计算指示线与城市索引
     tooltip: {
       trigger: 'axis',

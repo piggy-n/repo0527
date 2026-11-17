@@ -1,6 +1,7 @@
 import { defineComponent, type PropType } from 'vue';
 import type { City, Comparison, IndicatorMeta } from '../model';
 import { formatValue } from '../calculations';
+import { withUnit } from '../format';
 import styles from './charts.module.scss';
 
 /** Vue 文本节点显示外部名称，避免拼接 HTML 带来的注入风险 */
@@ -39,9 +40,7 @@ export const TooltipTable = defineComponent({
               </strong>
             )}
           </div>
-          <p class={styles.tooltipIndicator}>
-            {props.indicator.name}（{props.indicator.unit}）
-          </p>
+          <p class={styles.tooltipIndicator}>{withUnit(props.indicator.name, props.indicator.unit)}</p>
           {emptyMessage ? (
             <p>{emptyMessage}</p>
           ) : (
