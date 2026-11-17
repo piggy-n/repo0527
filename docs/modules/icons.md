@@ -189,11 +189,13 @@ packages/icons/
 | `menu-list` | `list-details` | 数据下载页面内导航的数据列表（2026-11-02 加入，ADR 0127） |
 | `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
 | `vertex-edit` / `undo` / `trash` | `edit` / `arrow-back-up` / `trash` | 自定义范围弹窗的编辑节点、撤销、删除节点（2026-10-31 加入，ADR 0121） |
-| `layer-add` / `layer-remove` | `check` / `x`（2026-11-15 用户定为勾和叉，先后取代改绘的地图加减、简约的加减号）；图形和 `check` / `close` 相同，按用途另起名字，以后换图形只改这两个文件 | 资源图层面板的添加到当前地图、从当前地图移除（ADR 0157）：资源的标题和行尾、图层的工具栏和行尾、右键菜单 |
+| `layer-add` / `layer-remove` | `check` / `x`（2026-11-15 用户定为勾和叉，先后取代改绘的地图加减、简约的加减号）；图形和 `check` / `close` 相同，按用途另起名字，以后换图形只改这两个文件；描边 2（2026-11-16 用户要求加粗，比别的面板图标粗） | 资源图层面板的添加到当前地图、从当前地图移除（ADR 0157）：资源的标题和行尾、图层的工具栏和行尾、右键菜单 |
+| `layer-added` | `check`，描边 2.25 | 资源里已加入的项行尾的绿色勾（2026-11-16 从 `check` 分出来）：显示 14，描边 2.25 时和 16、描边 2 的 `layer-add` / `layer-remove` 一样粗（约 1.3 像素）；`check` 别处还在用，保持 1.5 |
 | `tree-expand-all` / `tree-collapse-all` | 自绘，仿 `selector`：箭头向外、向内 | 资源的全部展开、全部收起（ADR 0157），和上移、下移的三角区分开 |
 | `move-top` / `move-bottom` | 自制：和 `move-up` / `move-down` 同样的实心三角，加一条到头的横线 | 图层的置顶、置底（ADR 0157） |
 | `eye` / `eye-off` | `eye` / `eye-off` | 图层右键菜单的显示、隐藏 |
 | `model-3d` / `roam-walk` | `box` / `walk` | 图层列表里三维模型的图标、行内的漫游按钮（ADR 0157） |
+| `model-covered` | 自绘：`model-3d` 加一道斜线，照 Tabler 的 `*-off` 图标在斜线一侧断开 | 图层里会把模型盖住的资源，名称后面的橙色图标（ADR 0161，2026-11-16 取代文字"盖住模型"） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

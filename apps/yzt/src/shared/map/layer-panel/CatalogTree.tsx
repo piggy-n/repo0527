@@ -181,7 +181,7 @@ export const CatalogTree = defineComponent({
           {node.kind === 'branch' && <span class={styles.badge}>{leaves.length}</span>}
           {node.kind === 'leaf' && node.added && (
             <span class={styles.mark} role="img" aria-label="已添加" data-added-mark>
-              <SvgIcon name="check" size={14} />
+              <SvgIcon name="layer-added" size={14} />
             </span>
           )}
           {leaves.length > 0 && (
