@@ -1,10 +1,10 @@
 import type { TileOutcome } from '@mx/map-core';
 import type { LRUCache } from '3d-tiles-renderer';
 
-// 统计这一轮的加载（ADR 0162）要碰的瓦片库内部：瓦片的状态取值、请求的入口、缓存移除的回调。
-// 这些都不在库的类型声明里，版本锁定，升级时由这里的测试和 tile-budget、契约的浏览器测试发现
+// 统计这一轮的加载（ADR 0162）要碰的瓦片库内部：瓦片的状态取值、请求的入口（类型声明里都没有），和缓存移除的回调。
+// 版本锁定；升级时状态取值、缓存移除由这里的测试对照真实的库发现，请求入口由 tile-budget、契约的浏览器测试发现
 
-/** 瓦片的加载状态：库的常量 FAILED、UNLOADED、QUEUED、LOADED，类型声明里没有导出 */
+/** 瓦片的加载状态：库运行时导出的常量 FAILED、UNLOADED、QUEUED、LOADED，类型声明里没有，测试对照它们 */
 export const TILE_FAILED = -1;
 export const TILE_UNLOADED = 0;
 export const TILE_QUEUED = 1;

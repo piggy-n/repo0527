@@ -46,5 +46,5 @@
 ## 后果
 
 - 移动相机时能看到模型还在加载、到了多少；高斯泼溅只能看到当前视角的比例。一直拖动、飞行时，有暂缓请求的块的模型一直算加载中，和二维拖动时一样。
-- 统计用到瓦片库运行时有、类型声明里没有的 `requestTileContents`、瓦片状态的取值和缓存的移除回调，和请求剔除（`queueTileForDownload`）一样。库升级时由这些测试发现：`tile-tracking.test.ts`（状态取值、请求入口只记"没请求→排队"、缓存移除时通知，用真实的 `LRUCache`），`tile-budget.browser.test.ts`（有淘汰的一轮照样结束、暂缓的块算这一轮），契约测试（成功、404 的块、泼溅）。
+- 统计用到瓦片库类型声明里没有的 `requestTileContents` 和瓦片状态的取值（常量在运行时有导出），还有缓存的移除回调（`LRUCache.add` 的 `removeCb`），和请求剔除（`queueTileForDownload`）一样。库升级时：状态取值、缓存移除由 `tile-tracking.test.ts` 对照真实的库发现（读库运行时导出的常量，用真实的 `LRUCache`）；请求入口由浏览器测试发现：`tile-budget.browser.test.ts`（有淘汰的一轮照样结束、暂缓的块算这一轮）和契约测试（成功、404 的块、泼溅）。
 - 用法见 [map-three.md](../modules/map-three.md)"加载的统计"、[shared-map.md](../modules/shared-map.md)"请求状态"。

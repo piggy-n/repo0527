@@ -1,4 +1,4 @@
-import { LRUCache } from '3d-tiles-renderer';
+import * as tilesLib from '3d-tiles-renderer';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type StatefulTile,
@@ -11,8 +11,21 @@ import {
   watchCacheRemovals
 } from './tile-tracking';
 
-// 瓦片库内部的这几处升级时最容易变（ADR 0162）：状态取值、请求的入口、缓存移除的回调
+// 瓦片库内部的这几处升级时最容易变（ADR 0162）：状态取值对照库运行时导出的常量，缓存移除用真实的 LRUCache；
+// 请求入口这里只测包装的逻辑，库的行为由 tile-budget、契约的浏览器测试发现
 describe('瓦片库的状态和入口', () => {
+  it('写死的状态取值和库运行时导出的常量一样（类型声明里没有这几个常量）', () => {
+    const exported = tilesLib as unknown as Record<string, unknown>;
+    expect([exported.FAILED, exported.UNLOADED, exported.QUEUED, exported.LOADED]).toStrictEqual([
+      TILE_FAILED,
+      TILE_UNLOADED,
+      TILE_QUEUED,
+      TILE_LOADED
+    ]);
+    // 排队和到了之间的下载、解析：还在等
+    expect([exported.LOADING, exported.PARSING].map(state => tileOutcome(Number(state)))).toStrictEqual([null, null]);
+  });
+
   it('到了算到了，失败（-1）算失败，回到没请求算取消；排队、下载、解析时还在等', () => {
     expect(tileOutcome(TILE_LOADED)).toBe('loaded');
     expect(tileOutcome(TILE_FAILED)).toBe('failed');
@@ -45,7 +58,7 @@ describe('瓦片库的状态和入口', () => {
   });
 
   it('缓存移除一项时通知：直接移除、淘汰不用的都在原来的回调之后', () => {
-    const cache = new LRUCache();
+    const cache = new tilesLib.LRUCache();
     cache.minSize = 0;
     cache.maxSize = 10;
     const order: string[] = [];
