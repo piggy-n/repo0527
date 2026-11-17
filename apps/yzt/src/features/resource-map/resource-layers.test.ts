@@ -636,11 +636,10 @@ describe('resourceLabelsGroup（ADR 0160）', () => {
       const target = labelTargetOf(points, display, override);
       return JSON.stringify(target && resourceLabelLayer(target).layout?.['text-offset']);
     };
-    const below = (pixels: number) => Number(((pixels + 3) / 12 - 0.125).toFixed(3));
-    // 都换成定位针：针尖在要素的位置，只让开针尖的描边 1
-    expect(offsetAt16({ mode: 'uniform', uniform: { shape: 'pin' } })).toContain(`16,["literal",[0,${below(1)}]]`);
-    // 改成 XL：半径 14.4 加描边 1
-    expect(offsetAt16({ mode: 'uniform', uniform: { size: 'XL' } })).toContain(`16,["literal",[0,${below(15.4)}]]`);
+    // 都换成定位针：针尖在要素的位置，只让开针尖的描边 1，(1 + 3) / 12 - 0.125
+    expect(offsetAt16({ mode: 'uniform', uniform: { shape: 'pin' } })).toContain('16,["literal",[0,0.208]]');
+    // 改成 XL：半径 14.4 加描边 1，(15.4 + 3) / 12 - 0.125
+    expect(offsetAt16({ mode: 'uniform', uniform: { size: 'XL' } })).toContain('16,["literal",[0,1.408]]');
   });
 
   it('标注图层不算画出要素本身的图层：框选的估数不数它（ADR 0050）', () => {
