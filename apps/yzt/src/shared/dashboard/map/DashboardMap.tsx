@@ -45,9 +45,9 @@ export const DashboardMap = defineComponent({
   },
   slots: Object as SlotsType<{
     /** 悬停提示表格 */
-    default?: () => unknown;
+    default?: () => VNode[];
     /** 地图上的叠加元素（如指北针、比例尺），拿到地图当前的朝向和比例 */
-    overlay?: (view: MapView | null) => VNode;
+    overlay?: (view: MapView | null) => VNode[];
   }>,
   setup(props, { emit, slots }) {
     const canvas = ref<HTMLElement>();
@@ -216,14 +216,17 @@ export const DashboardMap = defineComponent({
           )}
           {map.simple.value && ready && <small class={styles.note}>地图采用简化显示</small>}
           {map.status.value === 'loading' && <div class={styles.failure} role="status">地图加载中…</div>}
-          <div class={styles.legend} data-enter="legend" aria-label="地图数值分级">
-            {levels.value.map(level => (
-              <div key={level.label}>
-                <span style={{ background: level.color }} />
-                {level.label}
-              </div>
-            ))}
-          </div>
+          {/* 没有一个城市有值时没有档位，不留空的图例框 */}
+          {levels.value.length > 0 && (
+            <div class={styles.legend} data-enter="legend" aria-label="地图数值分级">
+              {levels.value.map(level => (
+                <div key={level.label}>
+                  <span style={{ background: level.color }} />
+                  {level.label}
+                </div>
+              ))}
+            </div>
+          )}
           <div class={styles.timelinePosition} data-enter="timeline" inert={!props.active}>
             <DashboardTimeline
               years={years}
@@ -233,7 +236,7 @@ export const DashboardMap = defineComponent({
               onChange={year => emit('year', year)}
             />
           </div>
-          {/* 朝向和比例在后续阶段由场景算出，目前先给 null */}
+          {/* 叠加元素拿到地图的朝向和比例；场景还没给出时为 null */}
           {slots.overlay?.(null)}
           {slots.default?.()}
           {exporting.error.value && <p class={styles.error} role="alert">{exporting.error.value}</p>}

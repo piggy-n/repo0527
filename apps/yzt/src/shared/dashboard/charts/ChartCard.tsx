@@ -1,4 +1,4 @@
-import { defineComponent, type PropType, type SlotsType } from 'vue';
+import { defineComponent, type PropType, type SlotsType, type VNode } from 'vue';
 import styles from './charts.module.scss';
 
 /** 卡片的外壳：标题行（标题、操作）、可选的工具栏、均值摘要、图表或空态；入场按 data-enter="chart" 找卡片 */
@@ -17,10 +17,10 @@ export const ChartCard = defineComponent({
     current: { type: Boolean, default: false }
   },
   slots: Object as SlotsType<{
-    heading?: () => unknown;
-    actions?: () => unknown;
-    toolbar?: () => unknown;
-    default?: () => unknown;
+    heading?: () => VNode[];
+    actions?: () => VNode[];
+    toolbar?: () => VNode[];
+    default?: () => VNode[];
   }>,
   setup(props, { slots }) {
     return () => (

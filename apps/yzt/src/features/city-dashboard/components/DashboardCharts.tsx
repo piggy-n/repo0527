@@ -157,7 +157,8 @@ export const DashboardCharts = defineComponent({
       return (
         <ChartActions
           prefix={expanded ? '详情图' : indicator.name}
-          preference={{ ...preference, showAverage: preference.showAverage && !stacked }}
+          preference={preference}
+          averageDrawable={!stacked}
           averageDisabled={stacked || !comparison.length || !model.cities.value.length}
           averageTitle={stacked ? '堆叠模式只在提示表格显示逐年均值' : '显示或隐藏均值线'}
           downloadDisabled={cannotDownload}
@@ -214,7 +215,7 @@ export const DashboardCharts = defineComponent({
           title={selected ? withUnit(selected.name, selected.unit) : ''}
           description={`${selected?.name ?? ''}详情`}
           focusText={focusedCityText()}
-          option={plotted ? detailOption.value : null}
+          option={() => (plotted ? detailOption.value : null)}
           cities={model.cities.value}
           onClose={closeDetail}
           onHover={code => (detailHover.value = code)}
@@ -244,11 +245,11 @@ export const DashboardCharts = defineComponent({
       const model = props.model;
       const state = model.state.value;
       return (
-        <section class={[fonts.scope, styles.charts]} aria-label="当前指标类型的多年度图表" inert={!props.active}>
+        <section class={[fonts.scope, chartStyles.column]} aria-label="当前指标类型的多年度图表" inert={!props.active}>
           {exporting.error.value && <p role="alert">{exporting.error.value}</p>}
           <div
             ref={list}
-            class={styles.list}
+            class={[chartStyles.cardList, styles.list]}
             tabindex={0}
             role="region"
             aria-label="指标图表列表，使用上下方向键逐项切换"

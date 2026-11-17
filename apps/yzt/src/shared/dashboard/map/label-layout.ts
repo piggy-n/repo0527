@@ -1,10 +1,18 @@
 import type { LabelPosition, MapLabel } from './types';
 
-// 优先保留地理锚点，在密集区域选择距离最近的可用标签位置
-export function layoutMapLabels(positions: readonly LabelPosition[], width: number, height: number) {
+// 优先保留地理锚点，在密集区域选择距离最近的可用标签位置；showValues 为 false 时标签只有一行名称
+export function layoutMapLabels(
+  positions: readonly LabelPosition[],
+  width: number,
+  height: number,
+  showValues = true
+) {
   const scale = Math.max(0.65, Math.min(1.8, width / 970, height / 760));
   // 仅窄屏为最小字号预留高度；桌面沿用旧锚点间距，避免无碰撞时把标签推离城市
-  const labelHeight = Math.max(width <= 720 ? 50 : 40, 50 * scale);
+  // 只有名称时是一行，约为名称加数值框的一半多
+  const labelHeight = showValues
+    ? Math.max(width <= 720 ? 50 : 40, 50 * scale)
+    : Math.max(width <= 720 ? 28 : 22, 28 * scale);
   const placed: MapLabel[] = [];
   const ordered = positions.toSorted((a, b) => a.y - b.y);
 

@@ -1,4 +1,4 @@
-import { defineComponent, type SlotsType } from 'vue';
+import { defineComponent, type SlotsType, type VNode } from 'vue';
 import fonts from '../shell/DashboardFonts.module.scss';
 import styles from './filters.module.scss';
 
@@ -8,7 +8,7 @@ export const FilterPanel = defineComponent({
   props: {
     active: { type: Boolean, default: true }
   },
-  slots: Object as SlotsType<{ default?: () => unknown }>,
+  slots: Object as SlotsType<{ default?: () => VNode[] }>,
   setup(props, { slots }) {
     return () => (
       <aside class={[fonts.scope, styles.filters]} aria-label="大屏筛选条件" data-enter="left" inert={!props.active}>

@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { required } from '../../testing/required';
 import { DASHBOARD_CITIES } from '../cities';
@@ -22,7 +22,7 @@ describe('ChartDetailDialog', () => {
         title: '教育便利性指数',
         description: '教育便利性指数详情',
         focusText: '南京市 · 当前查看城市',
-        option: null,
+        option: () => null,
         cities: DASHBOARD_CITIES
       },
       slots: { actions: () => <button type="button">操作</button> }
@@ -45,7 +45,7 @@ describe('ChartDetailDialog', () => {
         visible: true,
         title: '标题',
         description: '说明',
-        option: null,
+        option: () => null,
         cities: DASHBOARD_CITIES,
         emptyText: '雷达图至少需要 3 个城市'
       },
@@ -60,5 +60,18 @@ describe('ChartDetailDialog', () => {
     await nextTick();
     expect(blocks()).toHaveLength(3);
     expect(blocks()[2].textContent).toBe('提示表格');
+  });
+
+  it('关着的弹窗不取图表配置，打开后才取', async () => {
+    const option = vi.fn<() => null>(() => null);
+    const wrapper = mount(ChartDetailDialog, {
+      props: { visible: false, title: '标题', description: '说明', option, cities: DASHBOARD_CITIES }
+    });
+    await nextTick();
+    expect(option).not.toHaveBeenCalled();
+    await wrapper.setProps({ visible: true });
+    await nextTick();
+    expect(option).toHaveBeenCalled();
+    expect(dialog().textContent).toContain('暂无比较数据');
   });
 });

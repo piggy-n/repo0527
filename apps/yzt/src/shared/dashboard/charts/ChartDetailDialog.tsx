@@ -23,8 +23,8 @@ export const ChartDetailDialog = defineComponent({
     description: { type: String, required: true },
     /** 标题下方左侧的说明，如聚焦的城市 */
     focusText: { type: String, default: '' },
-    /** 为 null 时显示空态 */
-    option: { type: Object as PropType<DashboardChartOption | null>, default: null },
+    /** 取图表配置，返回 null 时显示空态；弹窗内容渲染时才调用，关着的弹窗不计算详情配置 */
+    option: { type: Function as PropType<() => DashboardChartOption | null>, required: true },
     cities: { type: Array as PropType<readonly City[]>, required: true },
     hoverMode: { type: String as PropType<'axis' | 'none'>, default: 'axis' },
     emptyText: { type: String, default: '暂无比较数据' }
@@ -36,7 +36,7 @@ export const ChartDetailDialog = defineComponent({
     size: (_size: { width: number; height: number }) => true
   },
   slots: Object as SlotsType<{
-    actions?: () => unknown;
+    actions?: () => VNode[];
     tooltip?: () => VNode[];
   }>,
   setup(props, { emit, slots }) {
@@ -49,7 +49,7 @@ export const ChartDetailDialog = defineComponent({
     });
 
     function renderPlot() {
-      const option = props.option;
+      const option = props.option();
       if (!option) {
         return <div class={styles.empty}>{props.emptyText}</div>;
       }

@@ -1,4 +1,3 @@
-// @vitest-environment node
 import type { RadarSeriesOption } from 'echarts/charts';
 import type { RadarComponentOption, TooltipComponentOption } from 'echarts/components';
 import { describe, expect, it } from 'vitest';
@@ -30,17 +29,20 @@ function radar(overrides: Partial<RadarInput> = {}) {
   return { option, series, coordinate, tooltip };
 }
 
-// 提示框的格式化函数按系列名取这一圈的值
+// 提示框的格式化函数按系列名取这一圈的值，返回元素；没有这一圈时返回空字符串
 function tooltipText(tooltip: TooltipComponentOption, name: string): string {
   const formatter = tooltip.formatter;
   if (typeof formatter !== 'function') {
     throw new Error('提示框缺少格式化函数');
   }
-  const text = formatter({ name } as never, '');
-  if (typeof text !== 'string') {
-    throw new Error('提示框应返回 HTML 字符串');
+  const content = formatter({ name } as never, '');
+  if (typeof content === 'string') {
+    return content;
   }
-  return text;
+  if (Array.isArray(content)) {
+    throw new Error('提示框应返回一个元素');
+  }
+  return content.innerHTML;
 }
 
 describe('createRadarOption', () => {
@@ -83,6 +85,14 @@ describe('createRadarOption', () => {
     expect(text).toContain('<span>南京</span><b>60</b>');
     expect(text).toContain(`<span>${cities[4].name.replace(/市$/, '')}</span><b>—</b>`);
     expect(tooltipText(tooltip, '2023')).toBe('');
+  });
+
+  it('城市名写进文本节点，不当作 HTML', () => {
+    const [first, ...rest] = cities;
+    const { tooltip } = radar({ cities: [{ ...first, name: '<img src=x onerror=alert(1)>市' }, ...rest] });
+    const text = tooltipText(tooltip, '2025');
+    expect(text).toContain('<span>&lt;img src=x onerror=alert(1)&gt;</span><b>60</b>');
+    expect(text).not.toContain('<img');
   });
 
   it('图例的选中状态沿用偏好，详情里聚焦的城市名高亮', () => {

@@ -59,4 +59,18 @@ describe('ChartActions', () => {
     expect(average.attributes('title')).toBe('堆叠模式只在提示表格显示逐年均值');
     expect(wrapper.get('[aria-label="下载教育便利性指数图表"]').attributes('disabled')).toBeDefined();
   });
+
+  it('均值线画不出来时不显示按下，文字和点击仍按偏好', async () => {
+    const wrapper = mount(ChartActions, {
+      props: { ...base, preference: { type: 'bar', showAverage: true, legend: {} }, averageDrawable: false }
+    });
+    const average = wrapper.get('[aria-label="教育便利性指数隐藏均值线"]');
+    expect(average.attributes('aria-pressed')).toBe('false');
+    expect(average.classes()).toHaveLength(1);
+    await average.trigger('click');
+    expect(wrapper.emitted('preference')).toEqual([[{ showAverage: false }]]);
+    await wrapper.setProps({ averageDrawable: true });
+    expect(average.attributes('aria-pressed')).toBe('true');
+    expect(average.classes()).toHaveLength(2);
+  });
 });

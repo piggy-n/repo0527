@@ -5,9 +5,6 @@ import { createValueAxisScale } from './axis-scale';
 import { AVERAGE_COLOR } from './palette';
 import { CHART_FONT_FAMILY, chartLegend, type ChartInput, type DashboardChartOption } from './options';
 
-/** 雷达图至少要 3 根轴；城市更少时由调用方显示空态 */
-export const RADAR_MIN_CITIES = 3;
-
 /** 与柱、折线的输入同义；size、activeYear 只有柱和折线的标签排布用到，雷达不读 */
 export interface RadarInput extends Omit<ChartInput, 'preference'> {
   readonly preference: ChartPreference<ChartType>;
@@ -16,6 +13,16 @@ export interface RadarInput extends Omit<ChartInput, 'preference'> {
 // 横轴、雷达轴上的城市名去掉末尾的"市"，与柱图一致
 function axisName(name: string): string {
   return name.replace(/市$/, '');
+}
+
+// 提示框里的元素：文字写进文本节点，城市名由调用方给出，不拼进 HTML
+function tooltipElement(tag: 'div' | 'span' | 'b', text: string, style = ''): HTMLElement {
+  const element = document.createElement(tag);
+  if (style) {
+    element.style.cssText = style;
+  }
+  element.textContent = text;
+  return element;
 }
 
 /** 以所选城市为轴的雷达：每个年份一个面，均值是一圈虚线；提示框列出每个城市的值 */
@@ -35,7 +42,7 @@ export function createRadarOption(input: RadarInput): DashboardChartOption {
     upperBound: percentage ? 100 : undefined
   });
   const focusedName = cities.find(city => city.code === focusedCity)?.name;
-  // 提示框按系列名找到这一圈的值；表头只写年份，单元格只有城市名（固定目录）和数字
+  // 提示框按系列名找到这一圈的值；表头写年份，下面是每个城市的值
   const rows = new Map<string, { label: string; values: readonly (number | null)[] }>();
   const series: RadarSeriesOption[] = comparison.map(item => {
     const name = String(item.year);
@@ -90,11 +97,16 @@ export function createRadarOption(input: RadarInput): DashboardChartOption {
         if (!row) {
           return '';
         }
-        const cells = cities.map((city, index) => (
-          `<span>${axisName(city.name)}</span><b>${formatValue(row.values[index], indicator, false)}</b>`
-        ));
-        return `<div style="font-weight:600;margin-bottom:4px">${row.label}</div>`
-          + `<div style="display:grid;grid-template-columns:repeat(2,auto auto);gap:2px 10px">${cells.join('')}</div>`;
+        const grid = tooltipElement('div', '', 'display:grid;grid-template-columns:repeat(2,auto auto);gap:2px 10px');
+        cities.forEach((city, index) => {
+          grid.append(
+            tooltipElement('span', axisName(city.name)),
+            tooltipElement('b', formatValue(row.values[index], indicator, false))
+          );
+        });
+        const content = tooltipElement('div', '');
+        content.append(tooltipElement('div', row.label, 'font-weight:600;margin-bottom:4px'), grid);
+        return content;
       }
     },
     radar: {

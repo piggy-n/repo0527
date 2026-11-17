@@ -162,7 +162,7 @@ export function useDashboardMap(
             if (signal.aborted) {
               return;
             }
-            const layout = layoutMapLabels(positions, target.clientWidth, target.clientHeight);
+            const layout = layoutMapLabels(positions, target.clientWidth, target.clientHeight, options.showValues());
             labels.value = layout.labels;
             labelScale.value = layout.scale;
           },

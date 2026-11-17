@@ -20,8 +20,10 @@ export const ChartActions = defineComponent({
     /** 读屏文字的前缀，如指标名或"详情图" */
     prefix: { type: String, required: true },
     types: { type: Array as PropType<readonly ChartType[]>, default: () => ['bar', 'line'] },
-    /** 显示中的偏好；均值线画不出来时（如堆叠）调用方把 showAverage 传成 false */
+    /** 用户的偏好：均值线按钮的文字和点击都按它的 showAverage */
     preference: { type: Object as PropType<ChartPreference<ChartType>>, required: true },
+    /** 均值线画得出来（如不是堆叠）时，按钮才显示按下 */
+    averageDrawable: { type: Boolean, default: true },
     averageDisabled: { type: Boolean, default: false },
     averageTitle: { type: String, default: '显示或隐藏均值线' },
     downloadDisabled: { type: Boolean, default: false },
@@ -78,13 +80,14 @@ export const ChartActions = defineComponent({
 
     return () => {
       const { preference } = props;
+      const averageOn = preference.showAverage && props.averageDrawable;
       return (
         <div class={styles.actions}>
           <button
             type="button"
-            class={[styles.iconButton, preference.showAverage && styles.averageActive]}
+            class={[styles.iconButton, averageOn && styles.averageActive]}
             aria-label={`${props.prefix}${preference.showAverage ? '隐藏' : '显示'}均值线`}
-            aria-pressed={preference.showAverage}
+            aria-pressed={averageOn}
             title={props.averageTitle}
             disabled={props.averageDisabled}
             onClick={() => emit('preference', { showAverage: !preference.showAverage })}

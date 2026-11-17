@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { ElOption } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { DASHBOARD_CITIES } from '../cities';
@@ -48,6 +49,25 @@ describe('驾驶舱筛选单元', () => {
     const wrapper = mount(YearFilter, { props: { options: [2025], selected: [2025], clearable: false } });
     expect(wrapper.get('h2').text()).toBe('年份选择');
     expect(wrapper.findComponent({ name: 'ElSelect' }).props('clearable')).toBe(false);
+  });
+
+  it('不能清空时最后一个年份的标签没有关闭按钮，退格也删不掉', async () => {
+    const wrapper = mount(YearFilter, { props: { options: [2024, 2025], selected: [2025], clearable: false } });
+    await nextTick();
+    const disabled = () => wrapper.findAllComponents(ElOption).map(option => option.props('disabled'));
+    expect(disabled()).toEqual([false, true]);
+    expect(wrapper.find('.el-tag__close').exists()).toBe(false);
+    await wrapper.get('input').trigger('keydown', { key: 'Backspace', code: 'Backspace' });
+    expect(wrapper.emitted('change')).toBeUndefined();
+    // 选了两个时都能去掉；可以清空时最后一个也能去掉
+    await wrapper.setProps({ selected: [2024, 2025] });
+    expect(disabled()).toEqual([false, false]);
+    expect(wrapper.findAll('.el-tag__close')).toHaveLength(2);
+    await wrapper.setProps({ selected: [2025], clearable: true });
+    expect(disabled()).toEqual([false, false]);
+    expect(wrapper.findAll('.el-tag__close')).toHaveLength(1);
+    await wrapper.get('input').trigger('keydown', { key: 'Backspace', code: 'Backspace' });
+    expect(wrapper.emitted('change')).toEqual([[[]]]);
   });
 
   it('带图标的列表只在选中项显示箭头', async () => {

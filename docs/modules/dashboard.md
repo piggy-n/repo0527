@@ -29,9 +29,10 @@ shared/dashboard/
 
 ## 边界
 
-- 只依赖 `shared` 里的 `perf`（LoadTrace）、`icons`（SvgIcon）、`testing`（测试）和 `@mx/*`、ECharts、GSAP、Element Plus；不导入任何 feature（`boundaries` 检查）。测试数据可以取 `shared/city-indicators`
+- 依赖 `shared` 里的 `perf`（LoadTrace）、`icons`（SvgIcon）、`map/region`（市界几何 `sharedRegionBoundaryLoader`、区划目录 `JIANGSU_CITIES`）、`file-transfer`（保存图片），测试另用 `testing`、`city-indicators`（测试数据）；包和库有 `@mx/ui`、`@mx/utils`、Vue、`@vueuse/core`、ECharts、GSAP、Element Plus，地图另有 three、d3-geo、d3-polygon、`@turf/simplify`。不导入任何 feature（`boundaries` 检查）
 - `three` 只在 `map/**` 里用：`.oxlintrc.json` 的 three 例外只放开 `features/city-dashboard/**` 和 `shared/dashboard/map/**`（见 [oxlintrc](../config/oxlintrc.md)）
 - 驾驶舱专属的样式只在这里和 feature 里，不改全局 Element 主题；下拉传送到 body 的用组件专属的 popper 类（如 `YearFilter` 的 `yearPopper`）
+- 配色：驾驶舱大屏沿用旧版的固定配色（深蓝 `#0e4894`、主蓝 `#438efb` 等），样式里直接写色值、不走全局的颜色令牌，和字体一样是驾驶舱局部的例外（见 [fonts](../design/fonts.md)"驾驶舱局部标题字体"）；新加的样式取驾驶舱已有的色值，不另起一套
 - 单元内部用相对路径，feature 用 `@/shared/dashboard/...` 导入
 - 入场的约束（中途不做几十毫秒的事、逐帧变换的层加 `will-change`、装饰动画只变换 HTML 盒子或外层 `<svg>`）同样适用，见 `.claude/rules/city-dashboard.md` 和 city-dashboard.md 的"入场卡顿"
 
@@ -61,7 +62,7 @@ shared/dashboard/
 | `data-enter="map-title"` | 地图标题、地图上的状态提示（`notice`） | 下移、横向展开 |
 | `data-enter="left"` | `FilterPanel` | 从左侧滑入 |
 | `data-filter-group` | `FilterSection` | 逐块错开淡入 |
-| `data-card-list` | 右栏卡片列表的容器（由页面写） | 只有它里面、首屏可见的 `data-enter="chart"` 参与入场 |
+| `data-card-list` | 右栏卡片列表的容器（由页面写，样式用 `charts.module.scss` 的 `.cardList`） | 只有它里面、首屏可见（`offsetTop` 小于列表高度）的 `data-enter="chart"` 参与入场 |
 | `data-enter="chart"` | `ChartCard` | 逐张从右侧滑入，滑到约三分之一时 `revealedCharts` 加一 |
 | `data-enter="legend"`、`"timeline"` | 地图图例、时间轴 | 上移、放大淡入 |
 | `data-scene="surface" / "wash" / "honeycomb" / "grid" / "haze" / "particles" / "mist" / "orbit" / "frame"` | 背景氛围和地图装饰 | 淡入、缩放、外框描边 |
@@ -74,7 +75,7 @@ shared/dashboard/
 |---|---|---|---|
 | `FilterPanel` | `active` | | `<aside aria-label="大屏筛选条件" data-enter="left">`，入场完成前 `inert` |
 | `FilterSection` | `title`、`fill` | | 带彩色标记的标题；`fill` 占满剩余高度、内容在区块里滚动；插槽 `extra` 放在标题右侧 |
-| `YearFilter` | `options`、`selected`、`clearable`（默认 true）、`title`（默认"年份选择"） | `change(years)` | 整个区块；Element 多选 |
+| `YearFilter` | `options`、`selected`、`clearable`（默认 true）、`title`（默认"年份选择"） | `change(years)` | 整个区块；Element 多选。`clearable=false` 时没有清空按钮，只剩一个选中的年份时停用它的选项：标签没有关闭按钮，下拉里点不掉，退格也删不掉 |
 | `CityFilter` | `cities`、`selected`、`title`（默认"行政区划"） | `toggle(code)`、`set(codes)` | 整个区块；标题右侧"全选 / 清空" |
 | `IconOptionList` | `options: { id, name, icon }[]`、`selected` | `select(id)` | 带图标的单选，选中项右侧显示 `dashboard-chevron` |
 | `OptionList` | `options: { id, label }[]`、`selected`、`label`（读屏名称）、`resetKey` | `select(id)` | 文字单选；`resetKey` 变化后滚回顶部 |
@@ -84,17 +85,18 @@ shared/dashboard/
 ### 配置
 
 - `createChartOption(input)`：柱状、折线（按城市为横轴、每个年份一个系列，多于三年的柱状按城市堆叠）。`input.color(year)` 给年份系列的颜色，同一指标的卡片、详情、提示要传同一种取色
-- `createRadarOption(input)`：以所选城市为轴（从正上方顺时针，名字去掉"市"），每个年份一个半透明的面，均值是一圈虚线（`AVERAGE_COLOR`，名字"{年}均值"）；轴的上界用 `createValueAxisScale` 对全部值和均值算出，和柱图的纵轴一致。提示框按项触发，列出每个城市的值（只拼城市名和数字）。城市少于 `RADAR_MIN_CITIES`（3）个时调用方显示空态，不画
+- `createRadarOption(input)`：以所选城市为轴（从正上方顺时针，名字去掉"市"），每个年份一个半透明的面，均值是一圈虚线（`AVERAGE_COLOR`，名字"{年}均值"）；轴的上界用 `createValueAxisScale` 对全部值和均值算出，和柱图的纵轴一致。提示框按项触发，列出每个城市的值；格式化函数返回元素，城市名和数值写进文本节点，不拼 HTML。城市少于 3 个时画不成雷达，由调用方显示空态
 - `chartLegend`、`CHART_FONT_FAMILY`：三种图共用的图例和字体
-- `palette.ts`：三组各 6 色（`PALETTES`）、均值色；`paletteColor(year, group, latestYear)` 取第 group 组里 year 的颜色，latestYear 取第一色、往前每年下一色。原驾驶舱的 `yearColor(year, id)` 是按卡片序号分组的包装
+- `palette.ts`：三组各 6 色、均值色 `AVERAGE_COLOR`；`paletteColor(year, group, latestYear)` 取第 group 组（取模）里 year 的颜色，latestYear 取第一色、往前每年下一色，6 年一循环。原驾驶舱的 `yearColor(year, id)` 是按卡片序号分组的包装
 - `runtime.ts` 只注册柱、折线、雷达和网格、图例、雷达坐标、提示框组件
 
 ### 组件
 
 - `DashboardPlot`：一个 ECharts 实例，不在视野里、页面隐藏或 `active` 为 false 时释放；`hoverMode="axis"`（默认）按横轴的城市发出 `hover(code)`，左右键逐个城市查看；`"none"`（雷达）不发悬停、左右键不处理，用引擎自己的提示框
-- `ChartCard`：卡片外壳 `<article data-chart-id data-enter="chart">`。props：`id`、`title`（悬停显示）、`average`（`{ year, text } | null`，null 时写"未选择比较年份"）、`emptyText`（有值时图表区显示空态）、`current`（写 `aria-current`）；插槽：`heading`（默认是不可点击的 h3）、`actions`、`toolbar`（标题行下面，如分项切换栏）、默认插槽（图表）；`class` 透传
-- `ChartActions`：均值线、图表类型、放大、下载。`types` 只有两种时是一个切换按钮（图标是切换后的类型），三种时是互斥的一组按钮（`aria-pressed`，雷达图标 `dashboard-radar`）；`preference.showAverage` 传显示中的状态（画不出均值线时传 false 并禁用）；有 `expandLabel` 才显示放大；emits `preference({ showAverage } | { type })`、`expand`、`download`
-- `ChartDetailDialog`：放大详情的 `ElDialog`（`dialog-panel-header` + `MxTitle`"指标图表详情"）。props：`visible`、`title`、`description`（读屏）、`focusText`、`option`（null 时显示 `emptyText`）、`cities`、`hoverMode`；插槽 `actions`、`tooltip`（悬停城市时的提示表格，没内容时不留外框）；emits `close`、`hover`、`legend`、`size`（图表区的尺寸，用来排详情里的标签）
+- 右栏和卡片列表的布局用 `charts.module.scss` 的 `.column`（外壳网格的 `charts` 区、竖排）和 `.cardList`（占满剩余高度、竖排、间距 12px × `--ui-scale`、定位容器）：`.card` 的高度按这两个间距把列表三等分，入场按卡片的 `offsetTop` 判断首屏，两个驾驶舱都用这两个类，滚动、吸附这类只属于自己的样式另加
+- `ChartCard`：卡片外壳 `<article data-chart-id data-enter="chart">`。props：`id`、`title`（默认标题的文字和悬停提示）、`average`（`{ year, text } | null`，null 时写"未选择比较年份"）、`emptyText`（有值时图表区显示空态）、`current`（写 `aria-current`）；插槽：`heading`（默认是不可点击的 h3）、`actions`、`toolbar`（标题行下面，如分项切换栏）、默认插槽（图表）；`class` 透传。自定义 `heading` 时 `title` prop 不再用到：插槽里的标题元素自己写 `title` 属性，并加 `charts.module.scss` 的 `title` 类（`.heading .title` 给出标题的字体、省略号），如原驾驶舱可点击的标题按钮
+- `ChartActions`：均值线、图表类型、放大、下载。`types` 只有两种时是一个切换按钮（图标是切换后的类型），三种时是互斥的一组按钮（`aria-pressed`，雷达图标 `dashboard-radar`）；`preference` 传用户的偏好，均值线按钮的读屏文字和点击都按它；`averageDrawable`（默认 true）为 false 时（如堆叠）按钮不显示按下，一般同时用 `averageDisabled` 停用；有 `expandLabel` 才显示放大；emits `preference({ showAverage } | { type })`、`expand`、`download`
+- `ChartDetailDialog`：放大详情的 `ElDialog`（`dialog-panel-header` + `MxTitle`"指标图表详情"）。props：`visible`、`title`、`description`（读屏）、`focusText`、`option`（取配置的函数，返回 null 时显示 `emptyText`；弹窗内容渲染时才调用，所以详情配置、图例和尺寸的变化只让弹窗内容重绘，关着的弹窗也不计算）、`cities`、`hoverMode`；插槽 `actions`、`tooltip`（悬停城市时的提示表格，没内容时不留外框）；emits `close`、`hover`、`legend`、`size`（图表区的尺寸，用来排详情里的标签）
 - `TooltipTable`：某个城市逐年的值和均值，文本节点显示，不拼 HTML
 
 标题都用 `withUnit(name, unit)`：原驾驶舱的单位都不为空，显示不变；新驾驶舱的指数没有单位，不出现空括号。
@@ -110,8 +112,9 @@ shared/dashboard/
 
 - props：`indicator`、`title`（调用方拼好，如"2026年江苏省…分布图（%）"或"请选择年份"）、`values`（市编码 → 值）、`classification`、`years`（时间轴，从旧到新）、`activeYear`、`showValues`（默认 true）、`notice`、`forceFallback`、`reducedMotion`、`active`、`valuesVisible`
 - emits：`hover(code)`、`detail(code)`、`settled`（就绪或失败，交给 `entrance.mapSettled`）、`year(year)`（时间轴）
-- `showValues=false`：三维标签只有名称（`aria-label`"{城市}，查看详情"），二维降级的标签只写名称（`fallbackLabel`），导出图片只画名称、画在标签中心（`drawMapLabels(snapshot, indicator, false)`），过渡中不逐帧更新显示的数值
+- `showValues=false`：三维标签只有名称（`aria-label`"{城市}，查看详情"），避让按一行名称的高度算（`layoutMapLabels` 的第四个参数），二维降级的标签只写名称，导出图片只画名称、画在标签中心（`drawMapLabels(snapshot, indicator, false)`），过渡中不逐帧更新显示的数值。标签的避让在场景发布位置时算，`showValues` 按页面固定，中途切换要等下一次相机或尺寸变化才重排
 - `notice`：标题下方居中的状态提示（`role="status"`，跟标题一起入场）
+- 图例：`classification` 没有档位（没有一个城市有值）时不显示图例框
 - 插槽 `overlay(view)`：指北针、比例尺这类叠加元素，`view` 是 `MapView`（`northDegrees`、`metersPerPixel`）；场景还没算这两项，目前一直传 null
 - 导出文件名 `江苏省-{年}-{指标名}`，导出图片不含图例、时间轴和叠加元素
 - 三维失败或 WebGL 丢失时用同一份市界降为 ECharts 二维（"地图采用简化显示"）
@@ -134,7 +137,7 @@ shared/dashboard/
 
 ## 测试
 
-- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`、`detail-labels`、`palette`（经原驾驶舱的 `colors.test`）、`map/map-export`、`map/config` 等
+- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom）、`detail-labels`、`palette`、`map/map-export`、`map/config`、`map/geometry`（市界和标签避让）等
 - 组件（jsdom）：`ChartActions`、`ChartCard`、`ChartDetailDialog`、`DashboardPlot` 的键盘与悬停方式、`filters`、`DashboardShell`、`DashboardTimeline`、`useDashboardTooltip`
 - 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 浏览器测试覆盖外壳和筛选、图表的组合
 - 原驾驶舱的回归：拆分前后用同一段临时测试把 96 个指标的卡片和详情配置、地图图例写成 JSON，逐字节比较（生成写法在 `local/land-space/baseline-generator.test.ts.txt`，不入库）

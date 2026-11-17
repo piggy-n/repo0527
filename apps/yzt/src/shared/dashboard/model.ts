@@ -16,7 +16,7 @@ export interface City {
   readonly anchor: readonly [number, number];
 }
 
-/** 页面注入的数据读接口；城市体检驾驶舱目前是固定的本地记录（createMockData），不声明虚构接口 */
+/** 驾驶舱注入的数据读接口：按年份、城市、指标取值，缺失为 null */
 export interface DashboardData {
   readonly years: readonly number[];
 

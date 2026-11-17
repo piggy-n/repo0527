@@ -1,4 +1,4 @@
-import { defineComponent, onScopeDispose, ref, type SlotsType } from 'vue';
+import { defineComponent, onScopeDispose, ref, type SlotsType, type VNode } from 'vue';
 import { useDocumentVisibility, useResizeObserver } from '@vueuse/core';
 import { decodeImages } from '../animation/decode-images';
 import pageBackground from '../assets/bg.webp';
@@ -28,7 +28,7 @@ export const DashboardShell = defineComponent({
   emits: {
     escape: () => true
   },
-  slots: Object as SlotsType<{ default?: (scope: DashboardShellScope) => unknown }>,
+  slots: Object as SlotsType<{ default?: (scope: DashboardShellScope) => VNode[] }>,
   setup(props, { emit, slots }) {
     const shell = ref<HTMLElement>();
     const entrance = useDashboardEntrance(shell, () => props.reducedMotion, { traceName: props.traceName });

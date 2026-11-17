@@ -64,7 +64,7 @@ indicatorValue('320100', requireIndicator('B-65'), 2026); // 49.6，简报的南
 
 ## 各页面自己保留的
 
-- 驾驶舱：开放年份、城市名单与标签锚点（`features/city-dashboard/catalog.ts`），带分组指标列表的 `CATEGORIES`（各类把简报有的指标排在前面，顺序只属于驾驶舱，这里的目录和 AI 计算页不受影响，见 [city-dashboard.md](city-dashboard.md)"数据口径"），十年记录的构建与查询（`data/mock-data.ts`，记录的 `dataSource` 标明来源）。驾驶舱的 `model.ts` 从这里转出 `Indicator`、`CategoryId`，各处仍从 `model.ts` 取
+- 驾驶舱：开放年份（`features/city-dashboard/catalog.ts`），城市名单与标签锚点（两个驾驶舱共用，在 `shared/dashboard/cities.ts` 的 `DASHBOARD_CITIES`，驾驶舱的 `catalog.ts` 转出为 `CITIES`），带分组指标列表的 `CATEGORIES`（各类把简报有的指标排在前面，顺序只属于驾驶舱，这里的目录和 AI 计算页不受影响，见 [city-dashboard.md](city-dashboard.md)"数据口径"），十年记录的构建与查询（`data/mock-data.ts`，记录的 `dataSource` 标明来源）。驾驶舱的 `model.ts` 从这里转出 `Indicator`、`CategoryId`，各处仍从 `model.ts` 取
 - 指标智能推演：区县分解、推演模型与参数（S3，见 [indicator-simulation.md](indicator-simulation.md)）。区县值由市的值反推，简报没有区县数据
 
 ## 测试

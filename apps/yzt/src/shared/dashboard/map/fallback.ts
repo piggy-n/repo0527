@@ -19,8 +19,8 @@ function cityCode(event: unknown): string | null {
   return DASHBOARD_CITIES.find(city => city.name === event.name)?.code ?? null;
 }
 
-/** 简化地图上的城市标签：名称下面写数值；没有数值或不显示数值时只写名称 */
-export function fallbackLabel(
+// 简化地图上的城市标签：名称下面写数值；没有数值或不显示数值时只写名称
+function fallbackLabel(
   name: string,
   value: number | null | undefined,
   indicator: Pick<IndicatorMeta, 'unit' | 'precision'>,

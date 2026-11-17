@@ -138,7 +138,7 @@ describe('驾驶舱真实地图引擎', () => {
     }
   }, 15000);
 
-  it('不显示数值时三维标签、二维降级都只写名称，状态提示和叠加插槽照常显示', async () => {
+  it('不显示数值时三维标签、二维降级都只写名称，状态提示和叠加插槽照常显示，没有档位时不留图例框', async () => {
     const wrapper = mount(DashboardMap, {
       attachTo: host(),
       props: { ...mapProps(requireIndicator('A-15')), reducedMotion: true, showValues: false, notice: '原报告未列指数值' },
@@ -169,6 +169,13 @@ describe('驾驶舱真实地图引擎', () => {
     expect(label('南京市')).toBe('南京市');
     await wrapper.setProps({ showValues: true });
     expect(label('南京市')).toMatch(/^南京市\n\d/);
+    // 没有一个城市有值时没有档位，不留空的图例框
+    expect(wrapper.find('[aria-label="地图数值分级"]').exists()).toBe(true);
+    await wrapper.setProps({
+      values: Object.fromEntries(DASHBOARD_CITIES.map(city => [city.code, null])),
+      classification: createMapClassification([])
+    });
+    expect(wrapper.find('[aria-label="地图数值分级"]').exists()).toBe(false);
   }, 20000);
 
   it('运行中失去 WebGL 自动降为二维，重复进入退出不遗留画布', async () => {

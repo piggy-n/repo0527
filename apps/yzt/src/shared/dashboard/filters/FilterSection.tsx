@@ -1,4 +1,4 @@
-import { defineComponent, type SlotsType } from 'vue';
+import { defineComponent, type SlotsType, type VNode } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import styles from './filters.module.scss';
 
@@ -12,8 +12,8 @@ export const FilterSection = defineComponent({
   },
   slots: Object as SlotsType<{
     /** 标题右侧的按钮 */
-    extra?: () => unknown;
-    default?: () => unknown;
+    extra?: () => VNode[];
+    default?: () => VNode[];
   }>,
   setup(props, { slots }) {
     function renderHeading() {

@@ -67,6 +67,19 @@ describe('驾驶舱地图几何', () => {
     expect(new Set(before.labels.map(label => `${label.x},${label.y}`)).size).toBe(3);
   });
 
+  it('只写名称时按一行的高度避让，上下相近的标签留在锚点', () => {
+    const positions = CITIES.slice(0, 2).map((city, index) => (
+      { code: city.code, name: city.name, x: 300, y: 200 + index * 36 }
+    ));
+    const named = layoutMapLabels(positions, 970, 760, false);
+    expect(named.labels.map(label => label.connected)).toEqual([false, false]);
+    expect(named.labels.map(label => label.y)).toEqual([200, 236]);
+    // 名称加数值框时同样的锚点要错开
+    const valued = layoutMapLabels(positions, 970, 760);
+    expect(valued.labels.some(label => label.connected)).toBe(true);
+    expect(valued.labels[0].halfHeight).toBeGreaterThan(named.labels[0].halfHeight);
+  });
+
   it('窄屏密集锚点可使用外围空位，不把标签放回冲突位置', () => {
     const positions = CITIES.map(city => ({ code: city.code, name: city.name, x: 180, y: 190, offsetX: 0, offsetY: 0 }));
     const { labels } = layoutMapLabels(positions, 366, 345);

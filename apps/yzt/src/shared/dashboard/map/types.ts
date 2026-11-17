@@ -34,7 +34,7 @@ export interface SceneCallbacks {
 
 export type MapValues = Readonly<Record<string, number | null>>;
 
-/** 地图当前的朝向和比例，给指北针、比例尺用；二维降级时北朝正上方 */
+/** 地图当前的朝向和比例，给指北针、比例尺用 */
 export interface MapView {
   /** "北"相对屏幕上方的顺时针角度（度） */
   readonly northDegrees: number;

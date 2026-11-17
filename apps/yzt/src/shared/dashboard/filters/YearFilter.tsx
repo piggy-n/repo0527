@@ -10,12 +10,18 @@ export const YearFilter = defineComponent({
     title: { type: String, default: '年份选择' },
     options: { type: Array as PropType<readonly number[]>, required: true },
     selected: { type: Array as PropType<readonly number[]>, required: true },
+    /** 能否清空成空集合；为 false 时没有清空按钮，只剩一个选中的年份时也去不掉 */
     clearable: { type: Boolean, default: true }
   },
   emits: {
     change: (_years: number[]) => true
   },
   setup(props, { emit }) {
+    // 停用最后一个选中的年份：Element 不给它的标签关闭按钮，下拉里点不掉，退格也跳过它
+    function locked(year: number): boolean {
+      return !props.clearable && props.selected.length === 1 && props.selected[0] === year;
+    }
+
     return () => (
       <FilterSection title={props.title}>
         <ElSelect
@@ -28,7 +34,9 @@ export const YearFilter = defineComponent({
           aria-label="选择比较年份"
           onUpdate:modelValue={(value: number[]) => emit('change', value)}
         >
-          {props.options.map(year => <ElOption key={year} value={year} label={String(year)} />)}
+          {props.options.map(year => (
+            <ElOption key={year} value={year} label={String(year)} disabled={locked(year)} />
+          ))}
         </ElSelect>
       </FilterSection>
     );

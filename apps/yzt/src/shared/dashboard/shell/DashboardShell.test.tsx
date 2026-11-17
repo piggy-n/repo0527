@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { required } from '../../testing/required';
 import { DashboardShell, type DashboardShellScope } from './DashboardShell';
 
 // jsdom 的图片不会解码，背景图的预解码换成立即完成
@@ -35,10 +36,10 @@ describe('DashboardShell', () => {
     expect(wrapper.attributes('aria-busy')).toBe('true');
     expect(wrapper.find('[data-test="panels"]').exists()).toBe(true);
     expect(performance.getEntriesByName('shell-test:start', 'mark')).toHaveLength(1);
-    const scope = scopes.at(-1);
-    expect(scope?.density).toBe(1);
+    const scope = required(scopes.at(-1), '外壳插槽参数');
+    expect(scope.density).toBe(1);
     // 减少动画时地图就绪后直接到终态
-    await scope?.entrance.mapSettled();
+    await scope.entrance.mapSettled();
     await wrapper.vm.$nextTick();
     expect(wrapper.attributes('data-dashboard-phase')).toBe('ready');
     expect(performance.getEntriesByName('shell-test:ready', 'measure')).toHaveLength(1);

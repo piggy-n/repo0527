@@ -38,5 +38,9 @@ describe('雷达图在真实引擎里', () => {
     const canvas = required(element.querySelector('canvas'), '雷达图画布');
     const pixels = required(canvas.getContext('2d'), '二维画布').getImageData(0, 0, canvas.width, canvas.height).data;
     expect(pixels.some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
+    // 提示框的格式化函数返回元素，引擎把它放进提示框
+    required(getInstanceByDom(element), '雷达图实例').dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: 0 });
+    await vi.waitFor(() => expect(element.textContent).toContain('2025年'));
+    expect(element.textContent).toContain('南京0.4');
   });
 });
