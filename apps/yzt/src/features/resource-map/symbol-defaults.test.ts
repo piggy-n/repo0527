@@ -17,7 +17,9 @@ const SHIPPED = vi.hoisted(() => ({
   // 按属性配色的线，默认改成统一样式
   csxhjctb_hydl: { mode: 'uniform', uniform: { color: 'rgba(0, 0, 0, 1)' }, items: { 河流: { width: 'L' } } },
   // 按属性配色的点，只调了一个取值，默认仍是分类样式；标注改成 16 号、自动放置（ADR 0160）
-  csxhjctb_gyssp: { items: { '080901': { size: 'L' } }, label: { size: 16, placement: 'auto' } }
+  csxhjctb_gyssp: { items: { '080901': { size: 'L' } }, label: { size: 16, placement: 'auto' } },
+  // 点的标注以前发布成"上方"：2026-11-16 起点不再提供上方
+  csxhjctb_fljgp: { label: { size: 14, placement: 'top' } }
 }));
 
 vi.mock('./resource-symbol-defaults.json', () => ({ default: SHIPPED }));
@@ -39,6 +41,8 @@ const CATALOG = buildCatalog([
       layer('bgdc_ccwjq', 'Polygon'),
       layer('csxhjctb_hydl', 'Line'),
       layer('csxhjctb_gyssp', 'Point'),
+      layer('csxhjctb_fljgp', 'Point'),
+      layer('csxhjctb_xxp', 'Point'),
       layer('szy_kt', 'Polygon')
     ]
   }
@@ -107,6 +111,26 @@ describe('发布的默认符号', () => {
 
     symbols.resetLabel('csxhjctb_gyssp');
     expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ size: 16, placement: 'auto' });
+  });
+
+  it('点以前的"上方"（用户 2026-11-16 去掉）：发布的、用户存下的都用默认的放置，别的字段照旧，存下的不改写', async () => {
+    const value = {
+      csxhjctb_xxp: { label: { placement: 'top' } },
+      csxhjctb_gyssp: { label: { size: 18, placement: 'top' } }
+    };
+    using ctx = setup(createMemoryStore({ [KEY]: { version: 1, value } }));
+    await vi.advanceTimersByTimeAsync(0);
+    const { symbols } = ctx;
+
+    // 发布的默认里的上方：用代码给出的下方
+    expect(defaultLabel(resourceOf('csxhjctb_fljgp'))).toMatchObject({ size: 14, placement: 'bottom' });
+    expect(symbols.labelOf('csxhjctb_fljgp')).toMatchObject({ size: 14, placement: 'bottom' });
+    // 用户存下的上方：用默认的，没有发布的默认时是代码给出的下方，有时是发布的自动
+    expect(symbols.labelOf('csxhjctb_xxp')).toMatchObject({ placement: 'bottom' });
+    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ size: 18, placement: 'auto' });
+
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(ctx.store.entries.get(KEY)).toStrictEqual({ version: 1, value });
   });
 
   it('已经保存的覆盖照样读出，叠加在上面：改过的字段是用户的值，没改过的跟随新的默认，读出后不写回', async () => {

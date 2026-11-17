@@ -206,8 +206,9 @@ function labeled(map: MapLibreMap, layerId: string): string[] {
   return [...new Set(guids)].toSorted();
 }
 
-// 点击位置对着第一所学校名称的文字：名称在点的上方，20 号字，离开点 10 像素（点 16 级半径 6、描边 1，再空 3）
-function aboveFirstSchool(toolView: ToolView): { readonly x: number; readonly y: number } {
+// 点击位置对着第一所学校名称的文字：名称在点的下方，20 号字，文字的框离点的中心 7.5 像素
+// （点 16 级半径 6、描边 1，再空 3，收回字形顶上的 2.5）
+function belowFirstSchool(toolView: ToolView): { readonly x: number; readonly y: number } {
   const [first] = SCHOOLS.features;
   const geometry = first?.geometry;
   if (geometry?.type !== 'Point') {
@@ -218,11 +219,11 @@ function aboveFirstSchool(toolView: ToolView): { readonly x: number; readonly y:
   if (!point) {
     throw new Error('投影不到第一所学校');
   }
-  return { x: point.x, y: point.y - 22 };
+  return { x: point.x, y: point.y + 22 };
 }
 
 describe('资源的标注（ADR 0160）', () => {
-  it('画出点、面的标注：点的名称在点的上方，-9999 的不画；样式不写 glyphs，不请求字形', async () => {
+  it('画出点、面的标注：点的名称在点的下方，-9999 的不画；样式不写 glyphs，不请求字形', async () => {
     using ctx = setup();
     await nextIdle(ctx.map, '首次渲染完成');
 
@@ -243,7 +244,7 @@ describe('资源的标注（ADR 0160）', () => {
       const resource = STATE.catalog?.resources.get(XXP);
       return resource ? pointMarkOf(resource, ZOOM, overrideOf(XXP)) : null;
     };
-    const click = aboveFirstSchool(ctx.toolView);
+    const click = belowFirstSchool(ctx.toolView);
 
     const [withLabels] = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, undefined, () => true) ?? [];
     const picked = withLabels?.kind === 'rendered' ? withLabels.candidates.map(({ guid }) => guid) : [];
@@ -263,7 +264,7 @@ describe('资源的标注（ADR 0160）', () => {
       const resource = STATE.catalog?.resources.get(target.resource.code);
       return resource ? pointMarkOf(resource, ZOOM, overrideOf(resource.code)) : null;
     };
-    const click = aboveFirstSchool(ctx.toolView);
+    const click = belowFirstSchool(ctx.toolView);
 
     const tasks = planIdentify(targets, click, ZOOM, ctx.toolView, null, markOf, undefined, () => true) ?? [];
     const summary = tasks.map(task => [

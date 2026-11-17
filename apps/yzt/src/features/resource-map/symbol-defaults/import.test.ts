@@ -156,6 +156,36 @@ describe('importSymbolDefaults', () => {
     expect(run(exportFile({ zhangsan: JSON.parse(result.next) }), JSON.parse(result.next)).changed).toBe(false);
   });
 
+  it('点以前的"上方"（用户 2026-11-16 去掉）不写进发布的默认：用现在的发布默认，报告里说明', () => {
+    const current = {
+      csxhjctb_gyssp: { label: { placement: 'auto' } },
+      // 以前发布的上方：这次导入这个资源时一起去掉
+      csxhjctb_fljgp: { label: { size: 14, placement: 'top' } }
+    };
+    const exported = exportFile({
+      zhangsan: {
+        csxhjctb_xxp: { label: { size: 16, placement: 'top' } },
+        csxhjctb_gyssp: { label: { placement: 'top' } },
+        csxhjctb_fljgp: { label: { color: RED } }
+      }
+    });
+
+    const result = run(exported, current);
+
+    expect(JSON.parse(result.next)).toStrictEqual({
+      csxhjctb_fljgp: { label: { size: 14, color: RED } },
+      csxhjctb_gyssp: { label: { placement: 'auto' } },
+      csxhjctb_xxp: { label: { size: 16 } }
+    });
+    expect(result.report).toEqual(
+      expect.arrayContaining([
+        '  csxhjctb_xxp：标注的放置方式 上方（top）已经不提供，用现在的默认',
+        '  csxhjctb_gyssp：标注的放置方式 上方（top）已经不提供，用现在的默认',
+        '  标注 · 放置：top → 代码默认'
+      ])
+    );
+  });
+
   it('只导入选中的资源，其他保持现在的发布默认；选了导出里没有的资源时报错', () => {
     const current = { szy_kt: { uniform: { fillColor: RED } } };
     const exported = exportFile({

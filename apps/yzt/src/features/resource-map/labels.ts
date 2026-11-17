@@ -36,11 +36,15 @@ export const LABEL_HALO_WIDTHS = [0, 1, 1.5, 2, 3] as const;
 
 export type LabelHaloWidth = (typeof LABEL_HALO_WIDTHS)[number];
 
-/** 放置方式和编辑器里的名称；存进偏好的是键，以后只能增加，不能改名或删除 */
+/**
+ * 放置方式和编辑器里的名称；存进偏好的是键，以后只能增加，不能改名或删除。
+ * top 是点以前的"上方"，2026-11-16 起哪种几何都不用，存下的按 resolveLabel 用默认的
+ */
 export const LABEL_PLACEMENTS = {
   auto: '自动',
   right: '右侧',
   top: '上方',
+  bottom: '下方',
   line: '沿线',
   horizontal: '水平',
   center: '中心'
@@ -52,14 +56,14 @@ export const LABEL_PLACEMENT_NAMES = Object.keys(LABEL_PLACEMENTS) as [LabelPlac
 
 /** 各种几何能用的放置方式，按编辑器里的先后 */
 export const PLACEMENTS_OF: Readonly<Record<ResourceGeometry, readonly LabelPlacement[]>> = {
-  circle: ['auto', 'right', 'top'],
+  circle: ['auto', 'right', 'bottom'],
   line: ['line', 'horizontal'],
   fill: ['center']
 };
 
-/** 默认的放置方式：点默认"上方"（用户 2026-11-16） */
+/** 默认的放置方式：点默认"下方"（用户 2026-11-16） */
 const DEFAULT_PLACEMENTS: Readonly<Record<ResourceGeometry, LabelPlacement>> = {
-  circle: 'top',
+  circle: 'bottom',
   line: 'line',
   fill: 'center'
 };
@@ -284,9 +288,14 @@ type SymbolLayout = NonNullable<SymbolLayerSpecification['layout']>;
 
 const literal = (value: unknown): ExpressionSpecification => ['literal', value];
 
+// 文字放在点下面时，普惠体的字形顶上还空着约 0.125 em（2026-11-16 实测：12、16、20 号多空 1.5、2、2.5 像素），
+// 往上收回，下方和上方看上去离点一样远
+const GLYPH_TOP_SPACE = 0.125;
+
 // 点的放置：偏移按级别插值（点的大小随级别变），单位是 em，所以按字号换算
 function pointLayout(placement: LabelPlacement, size: number, reach: readonly PointReachStop[]): SymbolLayout {
   const em = (pixels: number) => Number(((pixels + POINT_GAP) / size).toFixed(3));
+  const below = (pixels: number) => Number(((pixels + POINT_GAP) / size - GLYPH_TOP_SPACE).toFixed(3));
   const byZoom = (value: (stop: PointReachStop) => unknown): ExpressionSpecification => [
     'interpolate',
     ['linear'],
@@ -297,22 +306,23 @@ function pointLayout(placement: LabelPlacement, size: number, reach: readonly Po
     return { 'text-anchor': 'left', 'text-offset': byZoom(stop => [em(stop.side), 0]) };
   }
   if (placement === 'auto') {
-    // 先放右边，再左边、上面、下面
+    // 先放右边，再左边、下面、上面：下方在上方之前，同点的默认放置（用户 2026-11-16）
     return {
       'text-variable-anchor-offset': byZoom(stop => [
         'left',
         [em(stop.side), 0],
         'right',
         [-em(stop.side), 0],
-        'bottom',
-        [0, -em(stop.up)],
         'top',
-        [0, em(stop.down)]
+        [0, below(stop.down)],
+        'bottom',
+        [0, -em(stop.up)]
       ]),
       'text-justify': 'auto'
     };
   }
-  return { 'text-anchor': 'bottom', 'text-offset': byZoom(stop => [0, -em(stop.up)]) };
+  // 下方：resolveLabel 保证点只有自动、右侧、下方
+  return { 'text-anchor': 'top', 'text-offset': byZoom(stop => [0, below(stop.down)]) };
 }
 
 // 放置方式对应的 layout；面用默认的 point 放置（每块瓦片里取不可达极点，跨瓦片的大面会重复标）

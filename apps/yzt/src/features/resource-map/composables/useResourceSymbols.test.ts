@@ -344,7 +344,7 @@ describe('useResourceSymbols', () => {
     using ctx = setup();
     const { symbols } = ctx;
 
-    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ field: 'name', size: 12, placement: 'top' });
+    expect(symbols.labelOf('csxhjctb_gyssp')).toMatchObject({ field: 'name', size: 12, placement: 'bottom' });
     expect(symbols.labelOf('bgdc_ccwjq')).toBeNull();
 
     symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 'L' });
@@ -375,6 +375,7 @@ describe('useResourceSymbols', () => {
 
     expect(() => symbols.setLabel('csxhjctb_gyssp', { field: 'guid' })).toThrow('没有字段');
     expect(() => symbols.setLabel('csxhjctb_gyssp', { placement: 'line' })).toThrow('不能放在');
+    expect(() => symbols.setLabel('csxhjctb_gyssp', { placement: 'top' })).toThrow('不能放在');
     expect(() => symbols.setLabel('csxhjctb_gyssp', { minzoom: 18, maxzoom: 16 })).toThrow(RangeError);
     expect(() => symbols.setLabel('csxhjctb_gyssp', { minzoom: 18 })).not.toThrow();
     expect(() => symbols.setLabel('csxhjctb_gyssp', { maxzoom: 17 })).toThrow(RangeError);
