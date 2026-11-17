@@ -59,20 +59,6 @@ $status-bar-height: 24px;
   padding-bottom: 0;
 }
 
-// 斜着看时的提示（ADR 0161）：中间一列的下方居中，和区划条一样重叠时被面板盖住
-.tilt {
-  grid-row: 2;
-  grid-column: 2;
-  justify-self: center;
-  align-self: end;
-  min-width: 0;
-  max-width: 100%;
-
-  > * {
-    pointer-events: auto;
-  }
-}
-
 // 功能面板跨上方功能区和基础控制区，最大高度止于基础工具栏底部，超出时内部滚动
 .lane {
   grid-row: 1 / 3;

@@ -820,7 +820,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(wrapper.find('[data-list-note]').exists()).toBe(false);
     owner.remove(['bgdc_dltb']);
     await nextTick();
-    expect(wrapper.get('[data-list-note]').text()).toBe('三维模型切换到三维后显示，可以定位、漫游');
+    expect(wrapper.get('[data-list-note]').text()).toBe('三维模型切换到三维模式后显示');
 
     map.setDimension('3d');
     await nextTick();

@@ -2029,7 +2029,7 @@ describe('CurrentMapPage', () => {
       expect(sceneOf(page).session.scene.current.tilesets.map(({ id }) => id)).toStrictEqual(['sz-station']);
     });
 
-    it('图层里排在最上面那个模型上面的资源画在模型上面：模型层插在它下面，点到模型上按鼠标下的地面识别；斜着看时提示，"俯视"回到俯视（ADR 0161）', async () => {
+    it('图层里排在最上面那个模型上面的资源画在模型上面：模型层插在它下面，点到模型上按鼠标下的地面识别（ADR 0161）', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper, map } = page;
@@ -2042,29 +2042,18 @@ describe('CurrentMapPage', () => {
         'resource:bgdc_dltb'
       ]);
       expect(session.style.sceneBefore?.startsWith('resources-')).toBe(false);
-      map.tilt(40);
-      await settle();
-      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
 
-      // 地类图斑挪到模型上面：模型层插在它的图层下面，斜着看时提示
+      // 地类图斑挪到模型上面：模型层插在它的图层下面；斜着看也不提示错开（用户 2026-11-16 去掉了提示）
       await layerRow(wrapper, 'bgdc_dltb').trigger('click');
       await wrapper.get('[data-tool="move-top"]').trigger('click');
-      await settle();
-      expect(session.style.sceneBefore).toBe('resources-bgdc_dltb');
-      expect(wrapper.get('[data-tilt-hint]').text()).toContain('倾斜时二维图层和模型会错开');
-
-      await wrapper.get('[data-tilt-hint] button').trigger('click');
-      await settle();
-      expect(map.flyToCalls.at(-1)).toMatchObject({ pitch: 0 });
-      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
-
-      // 模型隐藏了：没有可以错开的模型，不提示；模型层的位置照旧
       map.tilt(40);
       await settle();
-      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(true);
+      expect(session.style.sceneBefore).toBe('resources-bgdc_dltb');
+      expect(wrapper.text()).not.toContain('错开');
+
+      // 模型隐藏了：模型层的位置照旧（最上面那个模型隐藏时仍是分界）
       await wrapper.get('[data-current-row="model:sz-station"] input[type="checkbox"]').setValue(false);
       await settle();
-      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
       expect(session.style.sceneBefore).toBe('resources-bgdc_dltb');
 
       // 点到模型上：画在模型上面的地类图斑按鼠标下的地面查后端，不查模型脚下（ADR 0161 第 9 节）
@@ -2086,12 +2075,6 @@ describe('CurrentMapPage', () => {
         coordinates: [expect.closeTo(ground.lng, 6), expect.closeTo(ground.lat, 6)]
       });
       await button(wrapper, '移动').trigger('click');
-
-      // 回到二维不提示
-      await switchTo(wrapper, '二维');
-      map.tilt(40);
-      await settle();
-      expect(wrapper.find('[data-tilt-hint]').exists()).toBe(false);
     });
 
     it('加入的模型交给三维视图；定位地下的模型只飞过去，没有单独的钻地（ADR 0097 第 5 节）', async () => {

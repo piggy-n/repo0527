@@ -55,8 +55,6 @@ import styles from './CurrentMapPage.module.scss';
 import { CurrentMapLayerPanel } from './layer-panel/CurrentMapLayerPanel';
 import { useCurrentLayers } from './layer-panel/useCurrentLayers';
 import { mapPageLayout } from './map-page-layout';
-import { TiltHint } from './TiltHint';
-import { tiltHintShown } from './tilt-hint';
 
 // 功能标签、独立详情和底图分开管理，功能与详情同列上下排列（ADR 0070）
 const FUNCTION_PANELS = ['boundaries', 'legend', 'region-locate', 'coordinate-locate'] as const;
@@ -236,17 +234,6 @@ export const CurrentMapPage = defineComponent({
     map.bindScene(models.deriveContent);
     // 模型层插在画在模型上面的资源下面；没有时按 sceneBelow，在资源的最后（ADR 0161）
     map.bindSceneSlot(() => resources.sceneSlot(layerList.overModels.value));
-    // 斜着看时提示二维和模型会错开、可以一键俯视（ADR 0161）
-    const camera = map.useCamera();
-    const tilted = computed(() =>
-      tiltHintShown({
-        scene: map.dimension.value === '3d',
-        pitch: camera.value.pitch,
-        overModels: resources.sceneSlot(layerList.overModels.value) !== undefined,
-        shownModel: layerList.shownModel.value
-      })
-    );
-    const lookDown = () => map.runCameraOperation(control => control.flyTo({ pitch: 0 }));
 
     // 功能入口按显示状态开关；关闭定位面板不清掉区划和位置点
     // 按点击时右边是否显示决定：窄屏时让给了左边就是重新显示，不是关闭
@@ -426,12 +413,6 @@ export const CurrentMapPage = defineComponent({
             {scopeShown && (
               <div key="scope" class={styles.scope}>
                 <RegionScopeBar region={region} />
-              </div>
-            )}
-            {/* 斜着看时的提示在地图下方居中，排在面板前面：重叠时被面板盖住 */}
-            {tilted.value && scopeShown && (
-              <div key="tilt" class={styles.tilt}>
-                <TiltHint onTopDown={lookDown} />
               </div>
             )}
             <div key="left" class={[styles.left, underground && styles.noStatus]}>

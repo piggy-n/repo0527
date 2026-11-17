@@ -11,7 +11,7 @@ export interface CurrentLayers {
   readonly keys: ComputedRef<readonly string[]>;
   /** 画在模型上面的资源：排在最上面那个模型上面的，从上到下；没有模型时没有 */
   readonly overModels: ComputedRef<readonly string[]>;
-  /** 图层里有显示着的模型："盖住模型"和斜着看时的提示只在这时出现 */
+  /** 图层里有显示着的模型："盖住模型"只在这时出现 */
   readonly shownModel: ComputedRef<boolean>;
   /** 加入：模型放在最上面，资源放在最上面那个模型的下面（没有模型时在最上面）；各自保持给出的先后 */
   readonly add: (keys: readonly string[]) => void;

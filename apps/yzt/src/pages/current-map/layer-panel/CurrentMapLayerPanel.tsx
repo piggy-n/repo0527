@@ -785,7 +785,7 @@ export const CurrentMapLayerPanel = defineComponent({
           nameOf={nameOf}
           animationOf={animationOf}
           dimmedOf={(key: string) => !scene.value && modelIdOfKey(key) !== null}
-          note={!scene.value && onlyModels ? '三维模型切换到三维后显示，可以定位、漫游' : undefined}
+          note={!scene.value && onlyModels ? '三维模型切换到三维模式后显示' : undefined}
           dragTip="拖动调整叠放顺序（上层优先显示）"
           {...listHandlers}
         >
