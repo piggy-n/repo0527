@@ -26,6 +26,7 @@
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
 | 把调好的图例样式作为默认（先用控制台片段导出，ADR 0154） | `pnpm --filter yzt symbols:import <导出文件>`，确认后加 `--write` |
+| 从《指标汇总.xlsx》重新生成综合分析驾驶舱的数据 | `pnpm --filter yzt land-space:data <xlsx 路径>` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -262,6 +263,16 @@ pnpm --filter yzt measure:3d --only jkq-z16-tilt --repeat 1 --upload-mb none --c
 **执行了什么**：Node 运行 `tools/symbol-defaults/cli.ts`，它用 Vite 的 `runnerImport` 加载 `symbol-defaults/import.ts`，用页面的 schema 和登记表校验、合并，打印"资源 / 取值 / 字段：旧 → 新"的差异；默认只打印，`--write` 才写入。`--login <登录名>` 在文件里有几个账号时选一个，`--only code1,code2` 只导入部分资源。导出文件的相对路径按运行 pnpm 时所在的目录解析。
 
 **注意事项**：导出文件含登录名，放在 `local/symbol-defaults/`，不要提交。只有统一样式的资源离线确认不了还在不在目录里，工具列出来，对照页面核对。写入后看 `git diff`，按级别 1 检查后提交。
+
+### `pnpm --filter yzt land-space:data <xlsx 路径>`
+
+**作用**：把《指标汇总.xlsx》转成城市国土空间监测综合分析驾驶舱的数据 `src/features/land-space-dashboard/data/land-space-2025.json`。
+
+**什么时候用**：Excel 的指标数值或指标字典更新时。平时不用运行，生成结果已经提交。
+
+**执行了什么**：Node 直接运行 `tools/land-space-data/convert.ts`，用 `node:zlib` 解 xlsx（不引入 xlsx 库），读「指标字典」「指标数值」两张表，取 2025 年的现状值和全省汇总（剔除 M51），城市名称和顺序取 `src/shared/map/region/data/jiangsu-regions.json`；百分比格式的单元格存的是小数，转换时乘 100 存成百分数；打印一级、二级、三级、分项的数量和空值。第二个参数可以指定输出路径；相对路径按运行 pnpm 时所在的目录解析。
+
+**注意事项**：Excel 只读不改，放在 `local/land-space/`（不入库）。单位和字典不一致、单位与百分比格式对不上、地区不认识、记录重复、单一指标找不到二级时报错退出。写入后看 `git diff`，跑 `land-space-data.test.ts`。
 
 ### `pnpm --filter yzt icons`
 
