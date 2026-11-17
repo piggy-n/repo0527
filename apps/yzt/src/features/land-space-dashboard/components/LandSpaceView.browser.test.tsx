@@ -1,5 +1,8 @@
+// 筛选面板的高度按真实的 Element 样式量（年份多选框）
+import 'element-plus/dist/index.css';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { nextTick } from 'vue';
 import { required } from '@/shared/testing/required';
 import { LandSpaceView } from './LandSpaceView';
@@ -145,6 +148,29 @@ describe('综合分析驾驶舱', () => {
     // 1280×800 放不下三张卡的最小高度时列表滚动，各卡的绘图区不被分项栏挤小
     const plots = wrapper.findAll('[data-chart-id] [role="img"]').map(plot => plot.element.clientHeight);
     expect(Math.min(...plots)).toBeGreaterThanOrEqual(125);
+    wrapper.unmount();
+  }, 60000);
+
+  it('矮屏下筛选面板收紧：1366×768 看得到二级列表和选中项，1280×720 六个一级完整、选中的二级露出', async () => {
+    onTestFinished(() => page.viewport(1280, 800));
+    const host = createHost();
+    await page.viewport(1366, 768);
+    const wrapper = mount(LandSpaceView, { attachTo: host, props: { forceFallback: true, reducedMotion: true } });
+    await ready(wrapper);
+    const panel = wrapper.get('[aria-label="大屏筛选条件"]').element;
+    const domains = wrapper.findAll('[data-filter-group]').at(-2)?.findAll('button') ?? [];
+    expect(domains).toHaveLength(6);
+    const lastDomain = required(domains.at(-1), '第六个一级').element;
+    const subs = wrapper.get('[aria-label="二级指标列表"]').element;
+    const selected = wrapper.get('[aria-label="二级指标列表"] [aria-pressed="true"]').element;
+    // 字体回退时城市按钮的行高会差几个像素，这里只比较留有余量的位置
+    const bottom = () => panel.getBoundingClientRect().bottom;
+    expect(subs.getBoundingClientRect().bottom).toBeLessThanOrEqual(bottom());
+    expect(selected.getBoundingClientRect().bottom).toBeLessThanOrEqual(bottom());
+    await page.viewport(1280, 720);
+    await vi.waitFor(() => expect(bottom()).toBeLessThan(720));
+    expect(lastDomain.getBoundingClientRect().bottom).toBeLessThanOrEqual(bottom());
+    expect(selected.getBoundingClientRect().top + 20).toBeLessThanOrEqual(bottom());
     wrapper.unmount();
   }, 60000);
 });

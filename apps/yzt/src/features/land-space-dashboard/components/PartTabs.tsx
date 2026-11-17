@@ -58,10 +58,18 @@ export const PartTabs = defineComponent({
 
     watch([() => props.selected, () => props.parts], reveal, { flush: 'post' });
 
-    function step(delta: number): void {
+    // 按到头的按钮会停用、丢掉焦点，焦点交给选中的分项，键盘用户接着从分项栏往下走
+    async function step(delta: number, event: MouseEvent): Promise<void> {
       const next = options.value[index.value + delta];
-      if (next) {
-        emit('select', next.id);
+      if (!next) {
+        return;
+      }
+      const button = event.currentTarget;
+      const hadFocus = button instanceof HTMLButtonElement && document.activeElement === button;
+      emit('select', next.id);
+      await nextTick();
+      if (hadFocus && button.disabled) {
+        selectedTab()?.focus();
       }
     }
 
@@ -98,7 +106,7 @@ export const PartTabs = defineComponent({
             aria-label="上一个分项"
             title="上一个分项"
             disabled={current <= 0}
-            onClick={() => step(-1)}
+            onClick={(event: MouseEvent) => void step(-1, event)}
           >
             <SvgIcon name="dashboard-chevron" rotate={180} />
           </button>
@@ -129,7 +137,7 @@ export const PartTabs = defineComponent({
             aria-label="下一个分项"
             title="下一个分项"
             disabled={current >= options.value.length - 1}
-            onClick={() => step(1)}
+            onClick={(event: MouseEvent) => void step(1, event)}
           >
             <SvgIcon name="dashboard-chevron" />
           </button>

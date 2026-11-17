@@ -31,7 +31,7 @@ shared/dashboard/
 
 ## 边界
 
-- 依赖 `shared` 里的 `perf`（LoadTrace）、`icons`（SvgIcon）、`map/region`（市界几何 `sharedRegionBoundaryLoader`、区划目录 `JIANGSU_CITIES`）、`file-transfer`（保存图片），测试另用 `testing`、`city-indicators`（测试数据）；包和库有 `@mx/ui`、`@mx/utils`、Vue、`@vueuse/core`、ECharts、GSAP、Element Plus，地图另有 three、d3-geo、d3-polygon、`@turf/simplify`、`geographiclib-geodesic`（比例尺的距离）。不导入任何 feature（`boundaries` 检查）
+- 依赖 `shared` 里的 `perf`（LoadTrace）、`icons`（SvgIcon）、`map/region`（市界几何 `sharedRegionBoundaryLoader`、区划目录 `JIANGSU_CITIES`）、`file-transfer`（保存图片），测试另用 `testing`、`city-indicators`（测试数据）；包和库有 `@mx/ui`、`@mx/utils`、Vue、`@vueuse/core`、ECharts、GSAP、Element Plus，地图另有 three、d3-geo、d3-polygon、`@turf/simplify`、`geographiclib-geodesic`（比例尺的距离，按需动态加载）。不导入任何 feature（`boundaries` 检查）
 - `three` 只在 `map/**` 里用：`.oxlintrc.json` 的 three 例外除了 `packages/map-three` 和 `app/`，只放开 `shared/dashboard/map/**`，两个驾驶舱的 feature 和 `shared/dashboard` 的其他目录都不能导入（见 [oxlintrc](../config/oxlintrc.md)）
 - 驾驶舱专属的样式只在这里和 feature 里，不改全局 Element 主题；下拉传送到 body 的用组件专属的 popper 类（如 `YearFilter` 的 `yearPopper`）
 - 配色：驾驶舱大屏沿用旧版的固定配色（深蓝 `#0e4894`、主蓝 `#438efb` 等），样式里直接写色值、不走全局的颜色令牌，和字体一样是驾驶舱局部的例外（见 [fonts](../design/fonts.md)"驾驶舱局部标题字体"）；新加的样式取驾驶舱已有的色值，不另起一套
@@ -75,7 +75,7 @@ shared/dashboard/
 
 | 组件 | props | emits | 说明 |
 |---|---|---|---|
-| `FilterPanel` | `active` | | `<aside aria-label="大屏筛选条件" data-enter="left">`，入场完成前 `inert` |
+| `FilterPanel` | `active`、`compact` | | `<aside aria-label="大屏筛选条件" data-enter="left">`，入场完成前 `inert`；`compact` 在矮屏（宽于 1180px、高不超过 900px）上收紧区块间距、标题、年份框、城市按钮和选项的行高，最后一块的最小高度降到 108px，选项多的页面（综合分析驾驶舱）用，不传时和原来一样 |
 | `FilterSection` | `title`、`fill` | | 带彩色标记的标题；`fill` 占满剩余高度、内容在区块里滚动；插槽 `extra` 放在标题右侧 |
 | `YearFilter` | `options`、`selected`、`clearable`（默认 true）、`title`（默认"年份选择"） | `change(years)` | 整个区块；Element 多选。`clearable=false` 时没有清空按钮，只剩一个选中的年份时停用它的选项：标签没有关闭按钮，下拉里点不掉，退格也删不掉 |
 | `CityFilter` | `cities`、`selected`、`title`（默认"行政区划"） | `toggle(code)`、`set(codes)` | 整个区块；标题右侧"全选 / 清空" |
@@ -167,7 +167,7 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 - 插槽内容放在一个单独的小组件里渲染：拖动、入场时朝向逐帧变化，只重绘角上的内容，不重绘整个地图外壳
 - `DashboardCompass`：`rotation`（度，传 `northDegrees`），多色图标 `dashboard-compass-color`（针心在 viewBox 中心，转 `<svg>` 就是绕针心转），`role="img"`、`aria-label`"指北针"，填满所在的方块
 - `DashboardScaleBar`：`metersPerPixel`、`maxWidth`。`scale-bar.ts` 的 `scaleBar()` 从 1、2、4、5、8、10、20、40、50、80、100、120、160、200、400 千米里选整体宽度不超过 `maxWidth` 的最长总长度 L（整体宽度算上两端伸出去的刻度文字和单位，文字宽按字号估：数字 0.6 个字宽、汉字 1 个），1 千米都放不下时同样的数改用米；分四段，深蓝、白交替，刻度 0、L/4、L/2、3L/4、L，相邻文字放不下时只写 0、L/2、L，再放不下只写两端；末尾写"千米"或"米"。字号 `max(12px, 14px × --ui-scale)`，量单位的宽度时读一次实际字号。1920×1080 下约是"0 20 40 60 80 千米"，1366×768、1280×720 下约是"0 20 40 千米"
-- 只有用了这两个插槽中的一个，`useDashboardMap` 才算朝向和比例（`trackView`，创建场景时读一次）：
+- 只有用了这两个插槽中的一个，`useDashboardMap` 才算朝向和比例（`trackView`，每次加载地图时读一次），换算模块 `map-view.ts`（带着 `geographiclib-geodesic`）也只在这时和市界一起动态加载，原驾驶舱的分块里没有它；加载失败时 `view` 一直是 null，地图照常显示：
   - 三维：场景的 `SceneCallbacks.onView` 在相机、尺寸或地图厚度变化时（与标签同一次渲染，扫光、悬停不发）给出 `SceneView`：`north` 是地图中心顶面一点和它往北（形状坐标 +y）一点投影到屏幕后的顺时针角；`sample` 是画布中心水平线上相距 100 CSS 像素的两点用射线打到顶面、换回 `mapGroup` 的形状坐标。不传 `onView` 时场景不做这些计算
   - 换算（`map-view.ts`）：`DashboardRegions.unproject(x, y)` 把形状坐标反算回经纬度（`prepareRegions` 的墨卡托投影、缩放和中心），`geographiclib-geodesic`（直接导入，不经 `@mx/map-core` 的入口）量两点的椭球面距离，除以 100 得到每像素米数。静止视角（yaw 0.05、pitch 0.76）下北约偏右 4°
   - 二维降级：`northDegrees` 为 0；比例用 ECharts 的 `convertToPixel` 量中心纬度上相距 0.5° 的两点在图上的距离，创建和缩放后各量一次

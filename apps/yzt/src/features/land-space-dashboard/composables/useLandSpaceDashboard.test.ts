@@ -21,7 +21,7 @@ describe('一级、二级、三级和分项的连带选择', () => {
     expect(model.state.value.activeYear).toBe(2025);
   });
 
-  it('选一级自动选中第一个二级、第一个三级，分项回到「综合」；点当前一级不变', () => {
+  it('选一级自动选中第一个二级、第一个三级，分项回到「综合」；再点当前一级也回到它的第一个二级（同原驾驶舱）', () => {
     const model = useLandSpaceDashboard();
     model.selectDomain('transport');
     model.selectSubIndex('I25');
@@ -29,7 +29,7 @@ describe('一级、二级、三级和分项的连带选择', () => {
     model.selectPart(ROAD);
     expect(selection(model)).toEqual(['transport', 'I25', 'M62', ROAD]);
     model.selectDomain('transport');
-    expect(selection(model)).toEqual(['transport', 'I25', 'M62', ROAD]);
+    expect(selection(model)).toEqual(['transport', 'I22', 'M57', null]);
     model.selectDomain('public-resources');
     expect(selection(model)).toEqual(['public-resources', 'I10', 'M17', null]);
     model.selectDomain('unknown');

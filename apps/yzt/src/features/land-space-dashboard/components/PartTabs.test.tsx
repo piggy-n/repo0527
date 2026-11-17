@@ -49,6 +49,34 @@ describe('PartTabs', () => {
     expect(wrapper.emitted('select')?.at(-1)).toEqual([PARTS[1]?.id]);
   });
 
+  it('按左右按钮到头时按钮停用，焦点交给选中的分项，不落回页面', async () => {
+    const selected = ref<string | null>(PARTS[0]?.id ?? null);
+    const select = (id: string | null) => {
+      selected.value = id;
+    };
+    const wrapper = mount(() => <PartTabs parts={PARTS} selected={selected.value} label="分项" onSelect={select} />, {
+      attachTo: document.body
+    });
+    const next = wrapper.get<HTMLButtonElement>('[aria-label="下一个分项"]');
+    next.element.focus();
+    // 没到头时焦点留在按钮上，可以接着按
+    await next.trigger('click');
+    await flushPromises();
+    expect([selected.value, document.activeElement === next.element]).toEqual([PARTS[1]?.id, true]);
+    await next.trigger('click');
+    await flushPromises();
+    expect(next.element.disabled).toBe(true);
+    expect([selected.value, focused()]).toEqual([PARTS[2]?.id, '与高速公路之间距离']);
+    selected.value = PARTS[0]?.id ?? null;
+    await flushPromises();
+    const previous = wrapper.get<HTMLButtonElement>('[aria-label="上一个分项"]');
+    previous.element.focus();
+    await previous.trigger('click');
+    await flushPromises();
+    expect(previous.element.disabled).toBe(true);
+    expect([selected.value, focused()]).toEqual([null, '综合']);
+  });
+
   it('方向键、Home、End 切换，焦点跟着选中项', async () => {
     // 和真实用法一样，选中项由上层按 select 更新
     const selected = ref<string | null>(null);

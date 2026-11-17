@@ -161,10 +161,10 @@ export function useLandSpaceDashboard() {
     setCities(selected.includes(code) ? selected.filter(item => item !== code) : [...selected, code]);
   }
 
-  /** 换一级时选中它的第一个二级、第一个三级和「综合」；点当前一级不变 */
+  /** 选中一级的第一个二级、第一个三级和「综合」；再点当前一级也一样，同原驾驶舱的指标类型 */
   function selectDomain(id: string): void {
     const next = LAND_SPACE_DOMAINS.find(item => item.id === id);
-    if (next && next.id !== state.value.domainId) {
+    if (next) {
       state.value = { ...state.value, ...domainDefaults(next) };
     }
   }

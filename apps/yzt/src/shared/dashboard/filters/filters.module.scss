@@ -257,6 +257,51 @@
   }
 }
 
+// FilterPanel 的 compact：选项多的页面（综合分析驾驶舱的六个一级）在矮屏上收紧行高和间距，最后一块的列表和选中项留在面板里；
+// 这个高度范围的 --ui-scale 都是 0.9，直接写像素
+@media (min-width: 1181px) and (max-height: 900px) {
+  .compact {
+    .group:not(:last-child) {
+      margin-bottom: 8px;
+    }
+    .heading {
+      min-height: 26px;
+      margin-bottom: 4px;
+      padding-top: 2px;
+      padding-bottom: 2px;
+      line-height: 1.2;
+    }
+    .years :global(.el-select__wrapper) {
+      min-height: 40px;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+    .cities {
+      gap: 5px;
+    }
+    .city {
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+    .iconList, .optionList {
+      gap: 4px;
+    }
+    .option {
+      min-height: 30px;
+      padding-top: 4px;
+      padding-bottom: 4px;
+      line-height: 1.4;
+    }
+    .fill {
+      flex-basis: 108px;
+      min-height: 108px;
+    }
+    .optionList {
+      min-height: 78px;
+    }
+  }
+}
+
 @media (max-width: 720px) {
   .cities {
     grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));

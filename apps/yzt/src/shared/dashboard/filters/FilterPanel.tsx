@@ -6,12 +6,19 @@ import styles from './filters.module.scss';
 export const FilterPanel = defineComponent({
   name: 'DashboardFilterPanel',
   props: {
-    active: { type: Boolean, default: true }
+    active: { type: Boolean, default: true },
+    /** 矮屏（宽于 1180px、高不超过 900px）时收紧行高和间距，选项多的页面用 */
+    compact: { type: Boolean, default: false }
   },
   slots: Object as SlotsType<{ default?: () => VNode[] }>,
   setup(props, { slots }) {
     return () => (
-      <aside class={[fonts.scope, styles.filters]} aria-label="大屏筛选条件" data-enter="left" inert={!props.active}>
+      <aside
+        class={[fonts.scope, styles.filters, props.compact && styles.compact]}
+        aria-label="大屏筛选条件"
+        data-enter="left"
+        inert={!props.active}
+      >
         {slots.default?.()}
       </aside>
     );

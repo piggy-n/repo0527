@@ -9,6 +9,7 @@ import { FilterSection } from './FilterSection';
 import { IconOptionList } from './IconOptionList';
 import { OptionList } from './OptionList';
 import { YearFilter } from './YearFilter';
+import styles from './filters.module.scss';
 
 afterEach(() => {
   // 年份下拉渲染在 body 下，不归组件管
@@ -28,6 +29,14 @@ describe('驾驶舱筛选单元', () => {
     const section = wrapper.get('section');
     expect(section.attributes('data-filter-group')).toBeDefined();
     expect(section.get('h2').text()).toBe('一级指标');
+  });
+
+  it('只有传了 compact 的面板在矮屏上收紧，不传时类名和原来一样', async () => {
+    const wrapper = mount(FilterPanel);
+    const classes = wrapper.get('aside').classes();
+    expect(classes).toHaveLength(2);
+    await wrapper.setProps({ compact: true });
+    expect(wrapper.get('aside').classes()).toEqual([...classes, styles.compact]);
   });
 
   it('行政区划逐个切换，标题右侧在全选和清空之间切换', async () => {

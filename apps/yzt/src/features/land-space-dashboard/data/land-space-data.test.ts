@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { required } from '@/shared/testing/required';
 import data from './land-space-2025.json';
@@ -160,5 +160,25 @@ describe('综合分析的值', () => {
       JIANGSU_CITIES.filter(city => valueOf(city.code, indexId) === null).map(city => `${indexId}@${city.code}`)
     );
     expect(missing).toEqual([]);
+  });
+});
+
+describe('加载时的校验', () => {
+  afterEach(() => {
+    vi.doUnmock('./land-space-2025.json');
+    vi.resetModules();
+  });
+
+  it('二级下面没有三级的数据在加载时就报错', async () => {
+    const [domain, ...domains] = data.domains;
+    const first = required(domain, '第一个一级');
+    const [sub, ...subs] = first.subIndices;
+    const broken = {
+      ...data,
+      domains: [{ ...first, subIndices: [{ ...required(sub, '第一个二级'), indicators: [] }, ...subs] }, ...domains]
+    };
+    vi.doMock('./land-space-2025.json', () => ({ default: broken }));
+    vi.resetModules();
+    await expect(import('./land-space-data')).rejects.toThrow('indicators');
   });
 });

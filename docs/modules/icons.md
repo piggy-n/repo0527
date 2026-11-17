@@ -36,7 +36,7 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 | `dashboard-urban-safety` | 盾牌，中间镂空对勾 | 一级指标「城市安全韧性」 |
 | `dashboard-transport` | 三个环形节点由粗线两两相连 | 一级指标「交通网络通达性」 |
 | `dashboard-building` | 高低两栋楼，窗户镂空，脚下一条地面线 | 一级指标「建筑与住宅规模结构合理性」 |
-| `dashboard-compass-color` | 48 × 48：白色圆底、淡蓝描边 `#a8cbf7`，北针深蓝两种明度（左 `#1f6fe5`、右 `#5fa2ff`）显出立体感，南针浅蓝灰 `#b9d3f2`，北针上方是深蓝的 N（路径，不用 `<text>`），东、南、西三个淡蓝刻度。针的中心就是圆心和 viewBox 中心，`SvgIcon` 的 `rotate` 绕圆心旋转 | 综合分析驾驶舱地图右上角的指北针，跟着地图转；多色，不随 `color` 变化 |
+| `dashboard-compass-color` | 48 × 48：白色圆底、淡蓝描边 `#b2d5fd`、内圈 `#d3e7ff`，北针两种明度的蓝（左 `#1674e8`、右 `#4facfd`）显出立体感，南针淡蓝 `#b2d5fd`，北针上方是蓝色的 N（`#1674e8`，路径，不用 `<text>`），东、南、西三个淡蓝刻度；色值都取驾驶舱样式里已有的（dashboard.md 的"边界"）。针的中心就是圆心和 viewBox 中心，`SvgIcon` 的 `rotate` 绕圆心旋转 | 综合分析驾驶舱地图右上角的指北针，跟着地图转；多色，不随 `color` 变化 |
 
 城市国土空间监测指标AI计算（原名指标智能推演）`simulation-*` 共 11 个（年份、监测范围、监测指标、参数、覆盖率类、人均类，以及计算步骤的条件解析、数据准备、数据核查、空间分析、指标计算；原来的 AI 闪光图标 S14 删除，AI 统一用 `shared/chat-avatar` 的机器人头像，ADR 0109），取自用户确认的第二版原型，项目自绘，24 × 24、描边 1.5；评价分级、结论生成复用 `dashboard-bar`、`menu-report`，拖动手柄、关闭、面板收起展开复用既有图标。
 

@@ -94,7 +94,7 @@ export const LandSpaceView = defineComponent({
     function renderFilters(active: boolean) {
       const state = model.state.value;
       return (
-        <FilterPanel active={active}>
+        <FilterPanel active={active} compact>
           <YearFilter
             options={model.availableYears}
             selected={state.years}

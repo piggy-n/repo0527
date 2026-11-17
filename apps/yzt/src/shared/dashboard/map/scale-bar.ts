@@ -27,11 +27,7 @@ export interface ScaleBar {
   readonly ticks: readonly ScaleTick[];
 }
 
-/**
- * 选整体宽度不超过 maxWidth 的最长总长度 L，分四段。整体宽度算上左端"0"的一半、右端最后一个刻度文字的一半、
- * 空隙和单位；相邻刻度文字放不下时只写 0、L/2、L，再放不下只写两端。textWidth 估一段文字的像素宽度。
- * 比例算不出来、1 米都放不下时为 null
- */
+/** 按 maxWidth 选比例尺的总长度和刻度文字，算法见 docs/modules/dashboard.md「指北针和比例尺」；算不出来时为 null */
 export function scaleBar(
   metersPerPixel: number,
   maxWidth: number,

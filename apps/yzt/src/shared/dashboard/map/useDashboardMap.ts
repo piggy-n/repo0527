@@ -8,7 +8,7 @@ import type { MapClassification } from '../map-classification';
 import type { IndicatorMeta } from '../model';
 import { useChartFonts } from '../charts/useChartFonts';
 import { loadDashboardRegions } from './region-geometry';
-import { flatMapView, sceneMapView, type LngLat } from './map-view';
+import type { flatMapView, LngLat, sceneMapView } from './map-view';
 import { layoutMapLabels } from './label-layout';
 import { JiangsuMapScene } from './JiangsuMapScene';
 import { createFallback } from './fallback';
@@ -22,13 +22,19 @@ export interface DashboardMapSource {
   indicator: () => IndicatorMeta;
 }
 
+// map-view.ts 的换算，按需加载
+interface MapViewMeasure {
+  readonly sceneMapView: typeof sceneMapView;
+  readonly flatMapView: typeof flatMapView;
+}
+
 interface DashboardMapOptions {
   fallback: () => boolean;
   reducedMotion: () => boolean;
   valuesVisible: () => boolean;
   /** 城市标签是否写数值；不写时二维降级只写名称，过渡中也不逐帧更新显示的数值 */
   showValues: () => boolean;
-  /** 是否算地图的朝向和比例（指北针、比例尺用）；创建场景时读一次，和 showValues 一样按页面固定 */
+  /** 是否算地图的朝向和比例（指北针、比例尺用）；每次加载地图时读一次，和 showValues 一样按页面固定 */
   trackView?: () => boolean;
   hover: (code: string | null) => void;
   choose: (code: string) => void;
@@ -57,8 +63,8 @@ export function useDashboardMap(
   let tween: gsap.core.Tween | undefined;
   let disposed = false;
   let colors: Record<string, string> = {};
-  // 二维降级量比例用的中心经纬度；不算朝向和比例时为 undefined
-  let viewCenter: LngLat | undefined;
+  // 朝向和比例的换算、二维降级量比例用的中心经纬度；不算朝向和比例时为 undefined
+  let tracker: { readonly measure: MapViewMeasure; readonly center: LngLat } | undefined;
 
   function hover(code: string | null): void {
     hovered.value = code;
@@ -73,8 +79,8 @@ export function useDashboardMap(
   // 二维降级的范围只随容器尺寸变，创建和缩放后各量一次
   function measureFallback(): void {
     const flat = fallback;
-    if (flat && viewCenter) {
-      view.value = flatMapView(viewCenter, point => flat.toPixel(point));
+    if (flat && tracker) {
+      view.value = tracker.measure.flatMapView(tracker.center, point => flat.toPixel(point));
     }
   }
 
@@ -150,13 +156,16 @@ export function useDashboardMap(
     status.value = 'loading';
     simple.value = false;
     try {
-      const regions = await loadDashboardRegions(signal);
+      // 换算带着 geographiclib，只有算朝向和比例的页面才加载；加载失败时只是没有指北针的角度和比例尺
+      const [regions, measure] = await Promise.all([
+        loadDashboardRegions(signal),
+        options.trackView?.() ? import('./map-view').catch(() => undefined) : undefined
+      ]);
       if (signal.aborted || !container.value) {
         return;
       }
       const target = container.value;
-      const tracking = options.trackView?.() ?? false;
-      viewCenter = tracking ? regions.unproject(0, 0) : undefined;
+      tracker = measure ? { measure, center: regions.unproject(0, 0) } : undefined;
       const activateFallback = () => {
         if (signal.aborted || disposed || fallback) {
           return;
@@ -193,10 +202,10 @@ export function useDashboardMap(
           onCityPointer: options.hover,
           onCityClick: options.choose,
           // 不算朝向和比例时不传，场景不做投影和取样
-          onView: tracking
+          onView: measure
             ? sceneView => {
               if (!signal.aborted) {
-                view.value = sceneMapView(sceneView, regions.unproject);
+                view.value = measure.sceneMapView(sceneView, regions.unproject);
               }
             }
             : undefined,

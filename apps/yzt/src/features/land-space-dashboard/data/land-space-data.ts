@@ -93,7 +93,8 @@ const subIndexSchema = z.object({
   unit: z.string(),
   precision: precisionSchema,
   hasValues: z.boolean(),
-  indicators: z.array(indicatorSchema)
+  // 选二级时连带选它的第一个三级
+  indicators: z.array(indicatorSchema).min(1)
 });
 
 const fileSchema: z.ZodType<LandSpaceFile> = z.object({

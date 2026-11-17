@@ -294,6 +294,11 @@ export function buildLandSpaceFile(book: Workbook, source: string, cities: reado
           if (sub.code !== index.code) {
             collect(sub.code, '');
           }
+          // 页面选二级时连带选它的第一个三级，没有三级的二级在生成时就拦下
+          const indicators = indicatorsOf(index.domain, sub.group);
+          if (indicators.length === 0) {
+            throw new Error(`二级「${sub.group}」下没有单一指标`);
+          }
           return {
             id: sub.code,
             name: sub.group,
@@ -302,7 +307,7 @@ export function buildLandSpaceFile(book: Workbook, source: string, cities: reado
             unit: displayUnit(sub.unit),
             precision: precisionOf(readingsOf(sub.code)),
             hasValues: hasValues(sub.code),
-            indicators: indicatorsOf(index.domain, sub.group)
+            indicators
           };
         });
       if (subIndices.length === 0) {

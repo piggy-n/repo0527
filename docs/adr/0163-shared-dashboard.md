@@ -22,7 +22,7 @@
 ## 决定
 
 1. `shared/dashboard` 放两个驾驶舱共用的大屏能力：`model`、`cities`、`calculations`、`map-classification`、`format`、`animation/`、`assets/`、`shell/`、`filters/`、`charts/`、`export/`、`map/`、`tooltip/`。指标目录、数据、筛选状态和偏好留在各自的 feature。用法见 [dashboard](../modules/dashboard.md)。
-2. 拆成组合单元，不做带开关的全能大屏组件：外壳 `DashboardShell`（插槽给出入场状态和缩放）、筛选的 `FilterPanel` 等六个控件、图表的 `ChartCard`、`ChartActions`、`ChartDetailDialog`、`DashboardPlot`。地图仍是一个 `DashboardMap`，新驾驶舱要的差异做成窄的选项：`showValues`、`notice`、`overlay` 插槽；雷达是新的配置函数 `createRadarOption` 和 `DashboardPlot` 的 `hoverMode`。只属于原驾驶舱的翻卡导航、选中卡片的边框、可点击的卡片标题、预热留在 `features/city-dashboard`。
+2. 拆成组合单元，不做带开关的全能大屏组件：外壳 `DashboardShell`（插槽给出入场状态和缩放）、筛选的 `FilterPanel` 等六个控件、图表的 `ChartCard`、`ChartActions`、`ChartDetailDialog`、`DashboardPlot`。地图仍是一个 `DashboardMap`，新驾驶舱要的差异做成窄的选项：`showValues`、`notice`，角上的两个插槽 `topRight`（指北针）、`bottomRight`（比例尺）；雷达是新的配置函数 `createRadarOption` 和 `DashboardPlot` 的 `hoverMode`。只属于原驾驶舱的翻卡导航、选中卡片的边框、可点击的卡片标题、预热留在 `features/city-dashboard`。
 3. `.oxlintrc.json` 里驾驶舱的 three 例外从 `apps/yzt/src/features/city-dashboard/**` 换成 `apps/yzt/src/shared/dashboard/map/**`：地图移走后原驾驶舱的 feature 不再导入 three，例外只留地图目录。两个驾驶舱的 feature、`shared` 的其他目录（包括 `shared/dashboard` 的其他子目录）都禁止导入 three，报错文案是"只能在 packages/map-three 和 shared/dashboard/map 中导入（ADR 0147、0163）"。
 4. 搬移用 `git mv` 保留历史。入场的加载耗时标记名由外壳的 `traceName` 给出，原驾驶舱仍是 `city-dashboard`（实测工具依赖它）。
 5. 原驾驶舱"行为不变"的检查：拆分前后用同一段临时测试把 96 个指标的卡片、详情图表配置和地图图例写成 JSON 逐字节比较；原驾驶舱的单元测试和浏览器测试（入场、图表列表、地图、预热）断言不改、全部通过。
