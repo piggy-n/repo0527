@@ -367,7 +367,17 @@ const requests = useRequestStatus(() => [
 <MapStatusBar readout={readout} format={format}>
   {{
     // onSelect：先展开左侧面板（changeLeftCollapsed(false)），再给资源图层面板一个新的 reveal
-    after: () => [<RequestStatusChip status={requests} selectable={key => key !== 'basemap'} onSelect={reveal} onRetry={retry} />]
+    // panel、area：明细贴着左侧面板所在的一列、放在地图四周留白以内
+    after: () => [
+      <RequestStatusChip
+        status={requests}
+        selectable={key => key !== 'basemap'}
+        panel={() => left.value ?? null}
+        area={() => overlay.value ?? null}
+        onSelect={reveal}
+        onRetry={retry}
+      />
+    ]
   }}
 </MapStatusBar>
 ```
@@ -376,6 +386,7 @@ const requests = useRequestStatus(() => [
 - 时钟只在有加载、刚结束时每 250 毫秒走一格，只在 `RequestStatusChip` 里读，不带动页面重渲染；`loadingKeys`（加载超过 0.4 秒的项）内容不变时是同一个集合，用它的行不跟着时钟重渲染
 - 条目和明细的规则是纯函数：`requestSummary`（加载中、几项失败、已加载完成、不显示）、`requestGroups`、`requestRowText`；常量 `SHOW_DELAY`（0.4 秒）、`DONE_HOLD`（1.5 秒）、`SLOW_AFTER`（5 秒）
 - 条目自己拦截鼠标（状态栏不拦截）；明细用 `useLightDismiss`，点外面、Esc 关闭
+- 明细的位置是纯函数 `requestPopoverPlacement`（视口坐标）：左边离面板右边 8，面板变窄、收起成竖条、窄屏被挤掉时跟着竖条走；右边放不下（手机宽度展开着面板）时向左移、盖住面板，区域比 340 窄时同宽；底边离状态栏 8，最高 420，上边放不下时变矮。组件只在明细开着时量面板、区域和条目的上边，面板、区域的尺寸和窗口变了、页面激活时重新放；不跟着条目左右移（经纬度的宽度会变，用户 2026-11-16）
 
 ## 自定义范围（ADR 0121）
 
