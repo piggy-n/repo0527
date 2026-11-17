@@ -24,12 +24,26 @@ export interface MapLabel extends LabelPosition {
   readonly connected: boolean;
 }
 
+/** 场景在相机或尺寸变化时给出的朝向和取样，换算成米由调用方做 */
+export interface SceneView {
+  /** "北"（形状坐标 +y）相对屏幕上方的顺时针角度（度） */
+  readonly north: number;
+  /** 画布中心水平线上相距 pixels 个 CSS 像素的两点打到顶面后的形状坐标；打不到顶面时为 null */
+  readonly sample: {
+    readonly a: readonly [number, number];
+    readonly b: readonly [number, number];
+    readonly pixels: number;
+  } | null;
+}
+
 export interface SceneCallbacks {
   onLabels(positions: LabelPosition[]): void;
   onHover(code: string | null): void;
   onCityPointer(code: string | null): void;
   onCityClick(code: string): void;
   onFailure(error: Error): void;
+  /** 不传时场景不算朝向和取样 */
+  onView?(view: SceneView): void;
 }
 
 export type MapValues = Readonly<Record<string, number | null>>;
@@ -40,6 +54,14 @@ export interface MapView {
   readonly northDegrees: number;
   /** 画布中心附近一个 CSS 像素代表的米数 */
   readonly metersPerPixel: number;
+}
+
+/** 地图右下角叠加插槽的参数 */
+export interface MapCornerScope {
+  /** 地图当前的朝向和比例；还没算出来时为 null */
+  readonly view: MapView | null;
+  /** 这个位置能用的宽度（CSS 像素），比例尺按它选长度 */
+  readonly maxWidth: number;
 }
 
 /** 导出时冻结地图像素、标签位置与数值，字体等待期间不再读取活动场景 */

@@ -143,7 +143,7 @@ describe('驾驶舱真实地图引擎', () => {
       attachTo: host(),
       props: { ...mapProps(requireIndicator('A-15')), reducedMotion: true, showValues: false, notice: '原报告未列指数值' },
       attrs: { style: 'width:900px;height:700px' },
-      slots: { overlay: (view: MapView | null) => <div data-test="overlay">{view ? '有视图' : '没有视图'}</div> }
+      slots: { topRight: (view: MapView | null) => <div data-test="overlay">{view ? '有视图' : '没有视图'}</div> }
     });
     await vi.waitFor(() => expect(wrapper.findAll('button[aria-haspopup="dialog"]')).toHaveLength(13), {
       timeout: 10000
@@ -151,7 +151,7 @@ describe('驾驶舱真实地图引擎', () => {
     expect(wrapper.findAll('button[aria-haspopup="dialog"] > span')).toHaveLength(0);
     expect(wrapper.find('button[aria-label="南京市，查看详情"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('原报告未列指数值');
-    expect(wrapper.get('[data-test="overlay"]').text()).toBe('没有视图');
+    await vi.waitFor(() => expect(wrapper.get('[data-test="overlay"]').text()).toBe('有视图'));
     const canvas = wrapper.get('canvas').element as HTMLCanvasElement;
     const context = required(canvas.getContext('webgl2'), 'WebGL2 上下文');
     required(context.getExtension('WEBGL_lose_context'), 'WEBGL_lose_context 扩展').loseContext();

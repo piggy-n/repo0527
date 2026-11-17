@@ -48,6 +48,18 @@ describe('驾驶舱地图几何', () => {
     expect(JSON.stringify(source)).toBe(before);
   });
 
+  it('形状坐标能换回经纬度：标签锚点换回目录里的锚点，形状坐标 +y 朝北', () => {
+    const result = prepareRegions(boundaries());
+    for (const region of result.regions) {
+      const [lng, lat] = result.unproject(region.anchorPoint.x, region.anchorPoint.y);
+      expect(lng).toBeCloseTo(region.anchor[0], 9);
+      expect(lat).toBeCloseTo(region.anchor[1], 9);
+    }
+    const [, south] = result.unproject(0, 0);
+    const [, north] = result.unproject(0, 10);
+    expect(north).toBeGreaterThan(south);
+  });
+
   it('缺少城市边界时明确失败，不展示不完整省域', () => {
     expect(() => prepareRegions(boundaries().slice(1))).toThrow('南京市边界缺失');
   });

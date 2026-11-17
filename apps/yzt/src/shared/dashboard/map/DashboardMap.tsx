@@ -1,5 +1,5 @@
 import { computed, defineComponent, ref, watch, type PropType, type SlotsType, type VNode } from 'vue';
-import { useResizeObserver } from '@vueuse/core';
+import { useElementSize, useResizeObserver } from '@vueuse/core';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { formatValue } from '../calculations';
 import type { MapClassification } from '../map-classification';
@@ -8,13 +8,24 @@ import { useImageExport } from '../export/useImageExport';
 import { imageWithTitle, saveImage } from '../export/image-export';
 import fonts from '../shell/DashboardFonts.module.scss';
 import chartStyles from '../charts/charts.module.scss';
-import type { MapLabel, MapValues, MapView } from './types';
+import type { MapCornerScope, MapLabel, MapValues, MapView } from './types';
 import { useDashboardMap } from './useDashboardMap';
 import { drawMapLabels } from './map-export';
 import { mapLegendLevels } from './config';
 import { DashboardTimeline } from './DashboardTimeline';
 import { DashboardMapFrame } from './DashboardMapFrame';
 import styles from './DashboardMap.module.scss';
+
+// 角上的叠加内容单独成一个组件：朝向和比例逐帧变化时只重绘它，不重绘整个地图外壳
+const MapCorner = defineComponent({
+  name: 'DashboardMapCorner',
+  props: {
+    render: { type: Function as PropType<() => VNode[] | undefined>, required: true }
+  },
+  setup(props) {
+    return () => props.render();
+  }
+});
 
 /** 地图外壳组合场景、标签、图例、时间轴，保留独立大屏的布局 */
 export const DashboardMap = defineComponent({
@@ -46,8 +57,10 @@ export const DashboardMap = defineComponent({
   slots: Object as SlotsType<{
     /** 悬停提示表格 */
     default?: () => VNode[];
-    /** 地图上的叠加元素（如指北针、比例尺），拿到地图当前的朝向和比例 */
-    overlay?: (view: MapView | null) => VNode[];
+    /** 右上角、标题同一行右侧的叠加元素（如指北针），放在 44 × 44（乘界面缩放）的方块里，拿到地图当前的朝向和比例 */
+    topRight?: (view: MapView | null) => VNode[];
+    /** 右下角、时间轴右侧空位里的叠加元素（如比例尺），另拿到这块空位的宽度 */
+    bottomRight?: (scope: MapCornerScope) => VNode[];
   }>,
   setup(props, { emit, slots }) {
     const canvas = ref<HTMLElement>();
@@ -60,6 +73,14 @@ export const DashboardMap = defineComponent({
         headingHeight.value = element.getBoundingClientRect().height;
       }
     });
+    // 右下角量出空位的宽度交给比例尺选长度，窄屏时按图例的高度放到它上方；右上角是固定大小的方块，不用量
+    const bottomRight = ref<HTMLElement>();
+    const bottomRightWidth = ref(0);
+    useResizeObserver(bottomRight, entries => {
+      bottomRightWidth.value = entries[0]?.contentRect.width ?? 0;
+    });
+    const legend = ref<HTMLElement>();
+    const { height: legendHeight } = useElementSize(legend, undefined, { box: 'border-box' });
     const exporting = useImageExport();
     const source = {
       values: () => props.values,
@@ -71,6 +92,7 @@ export const DashboardMap = defineComponent({
       reducedMotion: () => props.reducedMotion,
       valuesVisible: () => props.valuesVisible,
       showValues: () => props.showValues,
+      trackView: () => Boolean(slots.topRight || slots.bottomRight),
       hover: code => emit('hover', code),
       choose: code => emit('detail', code)
     });
@@ -158,12 +180,14 @@ export const DashboardMap = defineComponent({
     return () => {
       const years = props.years;
       const ready = map.status.value === 'ready';
+      // 只在用到右下角时写图例的高度，不用时地图外壳的样式不变
+      const legendStyle = slots.bottomRight ? { '--map-legend-height': `${legendHeight.value}px` } : {};
       return (
         <section
           class={[fonts.scope, styles.map]}
           aria-label="江苏省当前指标分布地图"
           data-state={map.status.value}
-          style={{ '--map-heading-height': `${headingHeight.value}px` }}
+          style={{ '--map-heading-height': `${headingHeight.value}px`, ...legendStyle }}
         >
           <DashboardMapFrame />
           <div class={styles.texture} data-scene="surface" aria-hidden="true" />
@@ -180,7 +204,12 @@ export const DashboardMap = defineComponent({
             </svg>
           </div>
           <div class={styles.mist} data-scene="mist" aria-hidden="true" />
-          <div ref={heading} class={styles.heading} data-enter="map-title" inert={!props.active}>
+          <div
+            ref={heading}
+            class={[styles.heading, slots.topRight && styles.headingAside]}
+            data-enter="map-title"
+            inert={!props.active}
+          >
             <h2>{props.title}</h2>
             <button
               class={chartStyles.iconButton}
@@ -214,11 +243,18 @@ export const DashboardMap = defineComponent({
               {props.notice}
             </p>
           )}
-          {map.simple.value && ready && <small class={styles.note}>地图采用简化显示</small>}
+          {map.simple.value && ready && (
+            <small class={[styles.note, slots.topRight && styles.noteBelowHeading]}>地图采用简化显示</small>
+          )}
           {map.status.value === 'loading' && <div class={styles.failure} role="status">地图加载中…</div>}
           {/* 没有一个城市有值时没有档位，不留空的图例框 */}
           {levels.value.length > 0 && (
-            <div class={styles.legend} data-enter="legend" aria-label="地图数值分级">
+            <div
+              ref={slots.bottomRight ? legend : undefined}
+              class={styles.legend}
+              data-enter="legend"
+              aria-label="地图数值分级"
+            >
               {levels.value.map(level => (
                 <div key={level.label}>
                   <span style={{ background: level.color }} />
@@ -236,8 +272,19 @@ export const DashboardMap = defineComponent({
               onChange={year => emit('year', year)}
             />
           </div>
-          {/* 叠加元素拿到地图的朝向和比例；场景还没给出时为 null */}
-          {slots.overlay?.(null)}
+          {/* 角上的叠加元素跟图例一起入场；场景还没算出朝向和比例时 view 为 null */}
+          {slots.topRight && (
+            <div class={styles.topRight} data-enter="legend">
+              <MapCorner render={() => slots.topRight?.(map.view.value)} />
+            </div>
+          )}
+          {slots.bottomRight && (
+            <div ref={bottomRight} class={styles.bottomRight} data-enter="legend">
+              <MapCorner
+                render={() => slots.bottomRight?.({ view: map.view.value, maxWidth: bottomRightWidth.value })}
+              />
+            </div>
+          )}
           {slots.default?.()}
           {exporting.error.value && <p class={styles.error} role="alert">{exporting.error.value}</p>}
         </section>

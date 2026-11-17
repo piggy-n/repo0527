@@ -1,4 +1,4 @@
-import type { LabelPosition, MapRegion, MapValues, SceneCallbacks, SweepUniforms } from './types';
+import type { LabelPosition, MapRegion, MapValues, SceneCallbacks, SceneView, SweepUniforms } from './types';
 import type { RegionMaterials } from './map-materials';
 import {
   AmbientLight,
@@ -11,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
+  Plane,
   Raycaster,
   Scene,
   ShapeGeometry,
@@ -26,6 +27,9 @@ import { createRegionMaterials, updateRegionMaterials } from './map-materials';
 import { createBoundaryGlow } from './boundary-glow';
 import { MAP_DEPTH, MAP_ENTRANCE } from './config';
 import { playVisibleTimeline } from '../animation/timeline-clock';
+
+// 比例尺取样的两点在画布中心水平线上相距的 CSS 像素
+const VIEW_SAMPLE_PIXELS = 100;
 
 // Three.js 生命周期只存在于独立地图容器中
 interface RegionObject {
@@ -68,6 +72,7 @@ export class JiangsuMapScene implements Disposable {
   private ambientTimer: ReturnType<typeof setTimeout> | undefined;
   private cameraKey = '';
   private labelKey = '';
+  private viewKey = '';
   private hoverCode: string | null = null;
   private suppressClickUntil = 0;
   private drag: { id: number; x: number; y: number; yaw: number; pitch: number; moved: boolean } | null = null;
@@ -605,6 +610,7 @@ export class JiangsuMapScene implements Disposable {
     const cityOffsets = [...this.objects.values()].map(object => object.group.position.z).join(':');
     const key = `${this.cameraKey}:${this.mapGroup.scale.z}:${cityOffsets}`;
     this.dirty = false;
+    this.publishView();
     if (key === this.labelKey) {
       return;
     }
@@ -631,6 +637,50 @@ export class JiangsuMapScene implements Disposable {
       ];
     });
     this.callbacks.onLabels(labels);
+  }
+
+  /** 指北针和比例尺要的朝向与取样：传了 onView 才算，相机、尺寸或地图厚度变了才发，扫光、悬停不发 */
+  private publishView(): void {
+    if (!this.callbacks.onView) {
+      return;
+    }
+    const key = `${this.cameraKey}:${this.mapGroup.scale.z}`;
+    if (key === this.viewKey) {
+      return;
+    }
+    this.viewKey = key;
+    this.callbacks.onView({ north: this.measureNorth(), sample: this.sampleTop() });
+  }
+
+  // 地图中心顶面一点和它往北（形状坐标 +y）一点投影到屏幕；屏幕 y 向下，北的顺时针角是 atan2(dx, -dy)
+  private measureNorth(): number {
+    const center = this.toScreen(new Vector3(0, 0, MAP_DEPTH));
+    const north = this.toScreen(new Vector3(0, 10, MAP_DEPTH));
+    return Math.atan2(north.x - center.x, center.y - north.y) * 180 / Math.PI;
+  }
+
+  private toScreen(local: Vector3): Vector2 {
+    const point = local.applyMatrix4(this.mapGroup.matrixWorld).project(this.camera);
+    return new Vector2((point.x + 1) / 2 * this.width, (1 - point.y) / 2 * this.height);
+  }
+
+  // 画布中心水平线上相距 100 像素的两点从相机打到顶面，换回 mapGroup 的形状坐标
+  private sampleTop(): SceneView['sample'] {
+    const { matrixWorld } = this.mapGroup;
+    const top = new Plane().setFromNormalAndCoplanarPoint(
+      new Vector3(0, 0, 1).transformDirection(matrixWorld),
+      new Vector3(0, 0, MAP_DEPTH).applyMatrix4(matrixWorld)
+    );
+    const half = VIEW_SAMPLE_PIXELS / 2;
+    const [a, b] = [this.width / 2 - half, this.width / 2 + half].map(x => {
+      this.raycaster.setFromCamera(new Vector2(x / this.width * 2 - 1, 0), this.camera);
+      const hit = this.raycaster.ray.intersectPlane(top, new Vector3());
+      return hit && this.mapGroup.worldToLocal(hit);
+    });
+    if (!a || !b) {
+      return null;
+    }
+    return { a: [a.x, a.y], b: [b.x, b.y], pixels: VIEW_SAMPLE_PIXELS };
   }
 
   /** 只在状态变化和动画更新时调度一帧，空闲不持续 RAF */

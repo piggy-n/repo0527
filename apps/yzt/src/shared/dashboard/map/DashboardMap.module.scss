@@ -471,6 +471,44 @@
   font-size: 11px;
 }
 
+// 右上角的叠加元素（指北针）：固定大小的方块，和标题同一行、垂直居中；标题右侧让出它的宽度
+$top-right-size: calc(44px * var(--ui-scale, 1));
+
+.topRight {
+  position: absolute;
+  z-index: 4;
+  top: calc(18px * var(--ui-scale, 1) + (var(--map-heading-height, 50px) - #{$top-right-size}) / 2);
+  right: 5%;
+  width: $top-right-size;
+  height: $top-right-size;
+  pointer-events: none;
+}
+
+.heading.headingAside {
+  right: calc(5% + #{$top-right-size} + 12px);
+}
+
+// 有右上角的叠加元素时"地图采用简化显示"放到标题行下面，标题换行时也不压住指北针
+.note.noteBelowHeading {
+  top: calc(18px * var(--ui-scale, 1) + var(--map-heading-height, 50px) + 6px);
+}
+
+// 右下角的叠加元素（比例尺）：时间轴右侧的空位，宽度按 .timeline 的宽度算，比例尺按量到的宽度选长度。
+// 高度为 0、内容从底边向上伸出：高度不随内容变，量宽度的 ResizeObserver 不会因为放进比例尺再触发一轮
+.bottomRight {
+  position: absolute;
+  z-index: 4;
+  right: 8px;
+  // 比例尺（约 28 像素高）和时间轴（约 68 像素高）竖直居中对齐
+  bottom: calc(10px + 20px * var(--ui-scale, 1));
+  width: min(calc((100% - min(500px * var(--ui-scale, 1), 64%)) / 2 - 18px), calc(220px * var(--ui-scale, 1)));
+  height: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
 .error {
   position: absolute;
   z-index: 8;
@@ -495,6 +533,12 @@
   .heading h2 {
     font-size: 18px;
   }
+  .topRight {
+    right: 3%;
+  }
+  .heading.headingAside {
+    right: calc(3% + #{$top-right-size} + 8px);
+  }
 }
 
 @media (max-width: 720px) {
@@ -518,5 +562,20 @@
     width: 94%;
     padding: 8px;
     gap: 8px;
+  }
+  // 窄屏的标题行只有约 36 像素高，指北针跟着缩小
+  .topRight {
+    top: calc(18px * var(--ui-scale, 1) + (var(--map-heading-height, 50px) - 32px) / 2);
+    width: 32px;
+    height: 32px;
+  }
+  .heading.headingAside {
+    right: calc(3% + 32px + 8px);
+  }
+  // 时间轴占满宽度，比例尺放到图例上方右侧
+  .bottomRight {
+    right: 8px;
+    bottom: calc(84px + var(--map-legend-height, 0px) + 6px);
+    width: min(60%, 240px);
   }
 }

@@ -20,6 +20,8 @@ export interface RegionProperties {
 export interface DashboardRegions {
   readonly regions: MapRegion[];
   readonly featureCollection: FeatureCollection<MultiPolygon, RegionProperties>;
+  /** 形状坐标换回经纬度 [经度, 纬度]，是 regions 里投影的反算 */
+  readonly unproject: (x: number, y: number) => [number, number];
 }
 
 /** 保留同市离散面和孔洞；展示简化只操作副本 */
@@ -69,6 +71,14 @@ export function prepareRegions(entries: readonly RegionGeometry[]): DashboardReg
   };
   return {
     featureCollection: { type: 'FeatureCollection', features },
+    unproject: (x, y) => {
+      // 墨卡托对有限的平面坐标都有反算
+      const coordinate = projection.invert?.([x / factor + centerX, -y / factor + centerY]);
+      if (!coordinate) {
+        throw new Error('形状坐标无法换回经纬度');
+      }
+      return coordinate;
+    },
     regions: features.map((feature, index) => ({
       code: DASHBOARD_CITIES[index].code,
       name: DASHBOARD_CITIES[index].name,

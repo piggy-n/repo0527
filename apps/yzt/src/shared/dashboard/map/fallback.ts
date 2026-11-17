@@ -97,6 +97,15 @@ export function createFallback(
     resize(): void {
       chart.resize();
     },
+    /** 经纬度在图上的位置（CSS 像素），给比例尺量距离；还没画出地图时为 null */
+    toPixel([lng, lat]: readonly [number, number]): [number, number] | null {
+      const pixel = chart.convertToPixel({ seriesIndex: 0 }, [lng, lat]);
+      if (!Array.isArray(pixel)) {
+        return null;
+      }
+      const [x, y] = pixel;
+      return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
+    },
     capture(): HTMLCanvasElement {
       return chart.renderToCanvas({ pixelRatio: 2, backgroundColor: '#D3EFFD' });
     },
