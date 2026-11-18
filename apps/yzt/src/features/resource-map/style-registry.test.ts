@@ -56,6 +56,8 @@ const RULE_CODES = [
   'csxhjctb_syfwya',
   'csxhjctb_syfwyp',
   'csxhjctb_czzza',
+  'csxhjctb_cya',
+  'csxhjctb_cyp',
   'csxhjctb_xzcsgxgzyda',
   'csxhjctb_yjbna',
   'csxhjctb_hydl',
