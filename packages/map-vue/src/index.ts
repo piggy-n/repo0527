@@ -4,6 +4,7 @@ export type { OverlayEdge, OverlayOptions, OverlayPadding } from './overlay';
 export { type MapHandle, provideMap, type ProvideMapOptions } from './provide-map';
 export {
   MAP_ERROR_REPORTER,
+  MAP_MOUSE_SCHEMES,
   MAP_RUNTIME_PRELOAD,
   MAP_SCENE_ENGINE,
   MAPLIBRE_ENGINE,

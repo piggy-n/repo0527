@@ -10,6 +10,7 @@ import type { TilesetSphere } from '../scene/tileset-camera';
 import { MapSession } from '../session/map-session';
 import { type StyleGroup, StyleModel } from '../style/style-model';
 import type { MapTool, ToolView } from '../tool/tool-model';
+import type { MouseSchemes } from '../view/cesium-drag';
 import { type MapViewFailure, NO_SOURCE_ERRORS, type SourceErrors, type ViewState } from '../view/map-view';
 import type { MapInputEvent } from '../view/view-input';
 import type {
@@ -485,6 +486,23 @@ const moveOnDocument = (x: number, y: number, init: MouseEventInit = {}) =>
   document.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, buttons: 1, ...init }));
 const releaseOnDocument = () => document.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
 const holdCtrl = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+const BUTTON_FLAGS = { 0: 1, 1: 4, 2: 2 } as const;
+
+// Cesium 式的鼠标操作（ADR 0168）：在画布上按下 button，移到 to 再松开；移动和松开在文档上
+function dragOnCanvas(
+  map: FakeMap,
+  button: 0 | 1 | 2,
+  [x, y]: readonly [number, number],
+  [toX, toY]: readonly [number, number],
+  init: MouseEventInit = {}
+) {
+  const buttons = BUTTON_FLAGS[button];
+  map.canvas.dispatchEvent(
+    new MouseEvent('mousedown', { bubbles: true, cancelable: true, button, buttons, clientX: x, clientY: y, ...init })
+  );
+  document.dispatchEvent(new MouseEvent('mousemove', { cancelable: true, buttons, clientX: toX, clientY: toY, ...init }));
+  document.dispatchEvent(new MouseEvent('mouseup', { button }));
+}
 
 // 像点/框选一样：关掉拖动平移，按住 Ctrl 临时拖动
 function pickTool() {
@@ -505,6 +523,7 @@ function setup(
       | 'sceneMaxZoom'
       | 'loadSceneRenderer'
       | 'loadJson'
+      | 'mouseSchemes'
     >
   > = {},
   camera = NANJING
@@ -3095,10 +3114,11 @@ describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
   } as const;
 
   // 地下的车站：包围盒最低处 -6 米，抬高 7 米；拾取打到的点在抬高前的真实高度
-  async function roaming() {
+  async function roaming(mouseSchemes?: MouseSchemes) {
     const ctx = setup({
       loadSceneRenderer: async () => () => ({ ...fakeRenderer(), lowestHeight: () => -6 }),
-      loadJson: async () => STATION_JSON
+      loadJson: async () => STATION_JSON,
+      ...(mouseSchemes && { mouseSchemes })
     });
     const { tool, inputs } = recordingTool();
     ctx.session.tool.register('probe', tool);
@@ -3164,6 +3184,29 @@ describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
       ctx.map.mouse('click', 5, 5);
       expect(ctx.inputs).toHaveLength(1);
       expect(ctx.view.eyeHeight()).toBe(1234);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('三维用 Cesium 式（ADR 0168）：漫游接管时右键拖不缩放；结束后 MapLibre 的旋转手势仍然关着，右键拖照常缩放', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming({ '2d': 'maplibre', '3d': 'cesium' });
+      await vi.advanceTimersByTimeAsync(200);
+      expect(ctx.map.dragRotate.enabled).toBe(false);
+      ctx.map.calls.length = 0;
+      dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+      expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+
+      ctx.view.flyTo({ center: [119.5, 32], zoom: 12 });
+      expect(ctx.map.dragPan.enabled).toBe(true);
+      expect(ctx.map.dragRotate.enabled).toBe(false);
+      ctx.map.calls.length = 0;
+      dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+      expect(named(ctx.map.calls, 'easeTo').map(([, camera]) => camera)).toStrictEqual([
+        { zoom: 12.5, around: [120, 32], duration: 0 }
+      ]);
     } finally {
       vi.useRealTimers();
     }
@@ -3236,6 +3279,127 @@ function onGlobe() {
   return ctx;
 }
 const named = (calls: readonly (readonly unknown[])[], name: string) => calls.filter(([call]) => call === name);
+
+describe('MapLibreView 的鼠标操作方式（ADR 0168）', () => {
+  // 部署的设置：二维 MapLibre 自带的，三维 Cesium 式
+  const CESIUM_3D = { '2d': 'maplibre', '3d': 'cesium' } as const;
+  const mouseSetup = (mouseSchemes: MouseSchemes = CESIUM_3D) =>
+    setup({ loadSceneRenderer: async () => fakeRenderer, loadJson: async () => STATION_JSON, mouseSchemes });
+
+  async function inThreeD(ctx: ReturnType<typeof mouseSetup>) {
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+  }
+
+  it('二维用 MapLibre 自带的、三维用 Cesium 式：切到三维关掉 MapLibre 的旋转手势，切回二维只打开自己关掉的', async () => {
+    using ctx = mouseSetup();
+    ctx.map.fire('style.load');
+    expect(ctx.map.dragRotate.calls).toStrictEqual([]);
+
+    await inThreeD(ctx);
+    expect(ctx.map.dragRotate.calls).toStrictEqual(['disable']);
+    // 换工具时照旧
+    ctx.session.tool.register('probe', recordingTool().tool);
+    ctx.session.tool.activate('probe');
+    expect(ctx.map.dragRotate.calls).toStrictEqual(['disable']);
+
+    ctx.view.setKind('2d');
+    expect(ctx.map.dragRotate.calls).toStrictEqual(['disable', 'enable']);
+    expect(ctx.map.dragRotate.enabled).toBe(true);
+  });
+
+  it('三维里右键往下拖放大：按下的位置不动（around），按 user 写回会话；不旋转', async () => {
+    using ctx = mouseSetup();
+    ctx.map.fire('style.load');
+    await inThreeD(ctx);
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+    const zoom = ctx.map.getZoom();
+    ctx.map.calls.length = 0;
+
+    dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+
+    // 假地图的画布在左上角：按下的位置 (200, 100) 换算成 (120, 32)
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([
+      ['easeTo', { zoom: zoom + 0.5, around: [120, 32], duration: 0 }, { cause: 'user' }]
+    ]);
+    expect(changes.map(({ state, cause }) => [state.zoom, cause])).toStrictEqual([[zoom + 0.5, 'user']]);
+    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    ctx.map.canvas.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(true);
+  });
+
+  it('三维里中键拖、Ctrl + 左键拖旋转和倾斜；Ctrl 用作临时拖动的工具里 Ctrl + 左键是临时拖动', async () => {
+    using ctx = mouseSetup();
+    ctx.map.fire('style.load');
+    await inThreeD(ctx);
+    ctx.map.calls.length = 0;
+
+    dragOnCanvas(ctx.map, 1, [100, 100], [110, 80]);
+    dragOnCanvas(ctx.map, 0, [100, 100], [90, 100], { ctrlKey: true });
+    expect(named(ctx.map.calls, 'easeTo').map(([, camera]) => camera)).toStrictEqual([
+      { bearing: 8, pitch: 10, duration: 0 },
+      { bearing: -8, pitch: 0, duration: 0 }
+    ]);
+
+    const { tool } = pickTool();
+    ctx.session.tool.register('pick', tool);
+    ctx.session.tool.activate('pick');
+    ctx.map.calls.length = 0;
+    holdCtrl();
+    dragOnCanvas(ctx.map, 0, [100, 100], [150, 100], { ctrlKey: true });
+    expect(names(ctx.map.calls)).toStrictEqual(['panBy']);
+  });
+
+  it('二维里右键交给 MapLibre：不缩放，也不拦浏览器的右键菜单', async () => {
+    using ctx = mouseSetup();
+    ctx.map.fire('style.load');
+    ctx.map.calls.length = 0;
+
+    dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+    dragOnCanvas(ctx.map, 1, [100, 100], [110, 80]);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    ctx.map.canvas.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(false);
+  });
+
+  it('不给时二维、三维都是 MapLibre 自带的', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    ctx.map.calls.length = 0;
+
+    dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+    expect(ctx.map.dragRotate.calls).toStrictEqual([]);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+  });
+
+  it('都用 Cesium 式：二维也关掉旋转手势，就绪时就按它', () => {
+    using ctx = mouseSetup({ '2d': 'cesium', '3d': 'cesium' });
+    ctx.map.fire('style.load');
+    expect(ctx.map.dragRotate.calls).toStrictEqual(['disable']);
+  });
+
+  it('暂停时、三维模块还没加载好时不截：不缩放', async () => {
+    using ctx = mouseSetup({ '2d': 'cesium', '3d': 'cesium' });
+    ctx.map.fire('style.load');
+    ctx.view.pause();
+    ctx.map.calls.length = 0;
+    dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+
+    ctx.view.resume();
+    // 切到三维的这一轮，三维模块还在加载
+    ctx.view.setKind('3d');
+    ctx.map.calls.length = 0;
+    dragOnCanvas(ctx.map, 2, [200, 100], [200, 150]);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+  });
+});
 
 describe('MapLibreView 地球投影下中心不变的定位', () => {
   it('只改缩放：走 easeTo，时长和 flyTo 默认的相同', () => {

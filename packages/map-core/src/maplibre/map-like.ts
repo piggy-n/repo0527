@@ -151,7 +151,7 @@ export interface MapLike extends StyleTarget {
     },
     eventData: CameraEventData
   ): void;
-  /** 地球投影下中心不变时代替 flyTo，见 globe-fly.ts */
+  /** 地球投影下中心不变时代替 flyTo，见 globe-fly.ts；Cesium 式的右键拖缩放用 around（缩放时这个位置不动） */
   easeTo(
     camera: {
       center?: [number, number];
@@ -160,6 +160,7 @@ export interface MapLike extends StyleTarget {
       pitch?: number;
       duration?: number;
       offset?: [number, number];
+      around?: [number, number];
     },
     eventData: CameraEventData
   ): void;
@@ -190,7 +191,7 @@ export interface MapLike extends StyleTarget {
   readonly doubleClickZoom: GestureHandlerLike;
   readonly boxZoom: GestureHandlerLike;
   readonly scrollZoom: ScrollZoomLike;
-  /** 下面四种手势只在漫游期间关掉（ADR 0147 第 4 节），工具不声明 */
+  /** 下面四种手势只在漫游期间关掉（ADR 0147 第 4 节），工具不声明；dragRotate 在用 Cesium 式操作的种类里也关掉（ADR 0168） */
   readonly dragRotate: GestureHandlerLike;
   readonly keyboard: GestureHandlerLike;
   readonly touchZoomRotate: GestureHandlerLike;

@@ -51,6 +51,7 @@ paths:
 
 - 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`、`queryRendered`），不碰原生地图（ADR 0034、0047）
 - 工具要接管按在自己手柄上的拖动（如逐点编辑的节点）时声明 `capturesPress(point, view)`，只对手柄返回 true，按在别处仍平移地图（ADR 0122）
+- 鼠标的操作方式（MapLibre 自带的或 Cesium 式）按部署由 `.env` 的 `VITE_MAP_MOUSE_2D`、`VITE_MAP_MOUSE_3D` 决定，app 经 `MAP_MOUSE_SCHEMES` 注入，只由 MapLibre 适配器应用（Cesium 式关掉 `dragRotate`、由 `CesiumDrag` 截下右键、中键、Ctrl + 左键）；页面和工具不判断用哪种，也不自己处理右键、中键拖动（ADR 0168）
 - 关掉拖动平移的工具要临时拖动地图时声明 `panModifier`，值取 `@mx/map-tools` 的 `currentPanKey()`（Mac 用 ⌘，其他用 Ctrl），平移和手型光标由适配器负责，工具不自己监听修饰键（ADR 0056）
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
 - 地图上跟着鼠标的提示用 `@mx/map-tools` 的 `PointerHint`（靠边时翻到另一侧），不在各个浮层里各写一套；挂在地图上某一点的卡片（如位置信息）只放在可视区域里（上下文的 `overlayPadding()`，ADR 0055）

@@ -157,6 +157,26 @@ describe('appConfig', () => {
     });
   });
 
+  describe('鼠标的操作方式（ADR 0168）', () => {
+    it('二维、三维各一项：maplibre 或 cesium', async () => {
+      vi.stubEnv('VITE_MAP_MOUSE_2D', 'maplibre');
+      vi.stubEnv('VITE_MAP_MOUSE_3D', 'cesium');
+      expect((await loadAppConfig()).mapMouse).toStrictEqual({ '2d': 'maplibre', '3d': 'cesium' });
+
+      vi.stubEnv('VITE_MAP_MOUSE_2D', 'cesium');
+      vi.stubEnv('VITE_MAP_MOUSE_3D', 'maplibre');
+      expect((await loadAppConfig()).mapMouse).toStrictEqual({ '2d': 'cesium', '3d': 'maplibre' });
+    });
+
+    it.each(['VITE_MAP_MOUSE_2D', 'VITE_MAP_MOUSE_3D'])('%s 写错、为空时加载即报错', async variable => {
+      vi.stubEnv(variable, 'Cesium');
+      await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 maplibre 或 cesium`);
+
+      vi.stubEnv(variable, '');
+      await expect(loadAppConfig()).rejects.toThrow(`缺少环境变量 ${variable}`);
+    });
+  });
+
   describe('天地图（ADR 0031）', () => {
     it('.env 中开启，带着 key', async () => {
       const appConfig = await loadAppConfig();

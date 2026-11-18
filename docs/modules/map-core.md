@@ -41,6 +41,7 @@
 | `testing/compact-fixture.ts` | 只供测试（不进 `tsconfig.lib.json`）：在内存里拼 `.bundlx`、`.bundle`，像静态文件服务器一样回答整份 GET 和 Range；不从入口导出 |
 | `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），包里的漫游用，不从入口导出 |
 | `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，只在包里用，不从入口导出 |
+| `view/cesium-drag.ts` | `CesiumDrag`：Cesium 式的鼠标操作，截下右键、中键、Ctrl + 左键的按下，交给视图缩放、旋转和倾斜（ADR 0168）；操作方式的类型 `MouseScheme`、`MouseSchemes` 和 `MAPLIBRE_MOUSE` 从入口导出，类不导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
 
@@ -310,6 +311,14 @@ store.clear();
 - 交给工具的输入：最近一次按下是临时拖动时，`up`、`click`、`dblclick` 不交给工具，到下一次按下为止；`move`、`leave` 照常经过工具模型，上下文的 `pointer` 跟着更新
 - 光标：拖动中 `grabbing`；按住修饰键、没有别的左键按下（如框选中）时 `grab`；否则是工具声明的光标。修饰键从文档的 `keydown` / `keyup` 和指针事件的 `ctrlKey` / `metaKey` 读出（点/框选不抢焦点，按键只能在文档上监听），窗口失焦时当作松开；光标变了才通知视图，视图就绪时写到画布上
 - 监听用一个 `AbortController` 的 `signal` 登记，释放时一起移除；回调里的错误交给视图的 `#guard`
+
+**鼠标的操作方式（ADR 0168）**：视图的选项 `mouseSchemes` 给出二维、三维各用哪种，不给时都是 `maplibre`（MapLibre 自带的）。`cesium` 由 `CesiumDrag` 负责，和地图一起创建、一起释放，和 `ModifierPan` 一样不认识引擎。
+
+- 适配器按当前种类：用 `cesium` 的种类关掉 `dragRotate`（MapLibre 6.12 的右键拖、Ctrl + 左键拖旋转和倾斜，按键不能改），换回 `maplibre` 时只打开自己关掉的。在应用工具（进入 ready、切换工具、漫游结束）和切换种类时应用；漫游接管时不动，漫游只恢复自己关掉的手势
+- 截下：视图就绪、当前种类用 `cesium`、漫游没有接管时，`CesiumDrag` 在画布容器的捕获阶段截下右键、中键、Ctrl + 左键的按下（`stopPropagation`，引擎和工具都收不到；中键还阻止浏览器的自动滚动）。当前工具把 Ctrl 用作临时拖动时 Ctrl + 左键让给 `ModifierPan`（`ctrlRotates`），它登记在 `ModifierPan` 之后
+- 拖动：移动超过 3 像素才算（同 MapLibre 的 `clickTolerance`）。右键往下拖放大、往上拖缩小，每 100 像素一级，适配器用 `easeTo({ zoom, around, duration: 0 })`，`around` 是按下的位置换算的经纬度，缩放时它不动；中键、Ctrl + 左键横向每像素 0.8°、往上拖抬起视角每像素 0.5°（同 MapLibre 的右键拖），用 `easeTo({ bearing, pitch, duration: 0 })`，绕视野中心。相机事件的来源都是 `user`；没有惯性
+- 结束：松开这个键；移动时 `buttons` 里没有它（在窗口外松开）；窗口失焦；不再按 Cesium 式（换了种类、漫游接管）；切换种类、切换工具、视图暂停（`cancel()`）
+- 右键菜单：按 Cesium 式时地图上的 `contextmenu` 都阻止默认行为（MapLibre 的旋转手势开着时也这样），不按时不管
 
 **渲染要素查询（5C.6a-1，ADR 0047 第 4 节）**：
 

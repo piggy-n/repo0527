@@ -1,3 +1,4 @@
+import type { MouseScheme } from '@mx/map-core';
 import { LAYER_HINTS, type LayerHint } from './layer-hints';
 
 function required(name: string, value: string | undefined): string {
@@ -30,6 +31,15 @@ function flag(name: string, value: string | undefined): boolean {
 // 未压缩格式的 SM2 公钥：04 加上 x、y 坐标各 64 位十六进制
 const SM2_PUBLIC_KEY_PATTERN = /^04[0-9a-f]{128}$/i;
 const TIANDITU_KEY_PATTERN = /^[0-9a-f]{32}$/i;
+
+// 鼠标的操作方式只能是这两种（ADR 0168）
+function mouseScheme(name: string, value: string | undefined): MouseScheme {
+  const text = required(name, value);
+  if (text === 'maplibre' || text === 'cesium') {
+    return text;
+  }
+  throw new Error(`环境变量 ${name} 只能是 maplibre 或 cesium，当前是 "${text}"`);
+}
 
 /** 天地图的配置；关闭天地图（内网部署）时 appConfig.tianditu 为 null */
 export interface TiandituConfig {
@@ -101,6 +111,11 @@ export const appConfig = {
   preferences: preferenceSwitches(),
   /** 图层行内提示显示哪几类：关掉的在图层行内、状态栏的条目和数据加载的明细里都不显示（ADR 0167） */
   layerHints: layerHintSwitches(),
+  /** 二维、三维各用哪种鼠标操作：maplibre 是右键拖旋转和倾斜，cesium 是右键拖缩放、中键拖旋转和倾斜（ADR 0168） */
+  mapMouse: Object.freeze({
+    '2d': mouseScheme('VITE_MAP_MOUSE_2D', import.meta.env.VITE_MAP_MOUSE_2D),
+    '3d': mouseScheme('VITE_MAP_MOUSE_3D', import.meta.env.VITE_MAP_MOUSE_3D)
+  }),
   /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
   resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
 } as const;

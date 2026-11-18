@@ -44,7 +44,8 @@ import type {
 import { MapLibreScene, type SceneModuleState } from './maplibre-scene';
 import { MapLibreRoam } from './roam/maplibre-roam';
 import type { SceneRendererLoader } from './scene-renderer';
-import { ModifierPan } from '../view/modifier-pan';
+import { CesiumDrag, MAPLIBRE_MOUSE, type MouseSchemes } from '../view/cesium-drag';
+import { type ClientPoint, ModifierPan } from '../view/modifier-pan';
 
 export interface MapLibreViewOptions<G extends string> {
   readonly session: MapSession<G>;
@@ -68,6 +69,8 @@ export interface MapLibreViewOptions<G extends string> {
   readonly loadSceneRenderer?: SceneRendererLoader;
   /** 下载瓦片集的索引；默认用 fetch，测试时换掉 */
   readonly loadJson?: LoadJson;
+  /** 二维、三维各用哪种鼠标操作（ADR 0168）；不给时都用 MapLibre 自带的 */
+  readonly mouseSchemes?: MouseSchemes;
 }
 
 /** 滚轮缩放的速率（ADR 0053 第 3 节）：wheel 是普通鼠标的滚轮，trackpad 是触控板，数值越小越慢 */
@@ -105,6 +108,7 @@ const MAX_PITCH_3D = 85;
 const DEFAULT_MAX_PITCH = 60;
 // MapLibre 默认的缩放上限：页面没给 maxZoom 时二维用它
 const DEFAULT_MAX_ZOOM = 22;
+const USER_MOVE = Object.freeze({ cause: 'user' as const });
 
 function isCameraCause(value: unknown): value is CameraCause {
   return typeof value === 'string' && CAMERA_CAUSES.includes(value);
@@ -185,6 +189,11 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly #map: MapLike | undefined;
   // 按住修饰键临时拖动（ADR 0056）；和地图一起创建
   readonly #pan: ModifierPan | undefined;
+  // 二维、三维各用哪种鼠标操作；Cesium 式的拖动和地图一起创建，按 MapLibre 自带的时它不接手（ADR 0168）
+  readonly #mouse: MouseSchemes;
+  readonly #cesiumDrag: CesiumDrag | undefined;
+  // 用 Cesium 式时关掉了 MapLibre 的旋转手势：换回 MapLibre 自带的时只打开自己关掉的
+  #rotateOff = false;
   readonly #onError: (error: unknown) => void;
   readonly #emitter = createNanoEvents<MapLibreViewEvents>();
   readonly #stack: DisposableStack;
@@ -244,10 +253,12 @@ export class MapLibreView<const G extends string> implements MapView {
     scrollZoomRates,
     sceneMaxZoom,
     loadSceneRenderer,
-    loadJson = fetchJson
+    loadJson = fetchJson,
+    mouseSchemes = MAPLIBRE_MOUSE
   }: MapLibreViewOptions<G>) {
     this.#session = session;
     this.#active = active;
+    this.#mouse = mouseSchemes;
     this.kinds = loadSceneRenderer ? ['2d', '3d'] : ['2d'];
     this.#maxPitch2d = mapOptions?.maxPitch ?? DEFAULT_MAX_PITCH;
     this.#maxZoom2d = mapOptions?.maxZoom ?? DEFAULT_MAX_ZOOM;
@@ -283,6 +294,7 @@ export class MapLibreView<const G extends string> implements MapView {
       // 例如不支持 WebGL2 时的 GPUInitializationError：不抛出，交给 whenReady 和 statechange 表达
       this.#map = undefined;
       this.#pan = undefined;
+      this.#cesiumDrag = undefined;
       this.#scene = undefined;
       this.#roam = undefined;
       this.#stack = stack.move();
@@ -303,6 +315,21 @@ export class MapLibreView<const G extends string> implements MapView {
             this.#applyCursor(map);
           }
         },
+        guard: callback => this.#guard(callback)
+      })
+    );
+    // 在临时拖动之后登记：同一个容器的捕获阶段按登记的先后，Ctrl 用作临时拖动时已经让给了它（ctrlRotates）
+    this.#cesiumDrag = stack.use(
+      new CesiumDrag({
+        container: map.getCanvasContainer(),
+        active: () => this.state === 'ready' && this.#mouse[this.#kind] === 'cesium' && this.#roam?.engaged !== true,
+        ctrlRotates: () => this.#session.tool.activeTool.panModifier !== 'ctrl',
+        zoom: (delta, around) => this.#zoomAround(map, delta, around),
+        rotate: (bearingDelta, pitchDelta) =>
+          map.easeTo(
+            { bearing: map.getBearing() + bearingDelta, pitch: map.getPitch() + pitchDelta, duration: 0 },
+            USER_MOVE
+          ),
         guard: callback => this.#guard(callback)
       })
     );
@@ -451,6 +478,7 @@ export class MapLibreView<const G extends string> implements MapView {
       return;
     }
     this.#pan?.cancel();
+    this.#cesiumDrag?.cancel();
     // 离开三维：漫游停下，地图还原、相机回到开始前（页面切二维前一般已经结束了漫游）
     if (kind !== '3d') {
       this.#guard(() => this.#roam?.suspend());
@@ -510,6 +538,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#assertAlive();
     this.#active = false;
     this.#pan?.cancel();
+    this.#cesiumDrag?.cancel();
     this.#roam?.pause();
     if (this.#state === 'ready') {
       // 还在进行的定位动画直接到终点，在暂停之前按 program 写回会话：暂停期间地图的移动不写回，
@@ -1004,6 +1033,30 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#setLimits(map);
     this.#applyProjection(map);
     this.#writeCamera(map, 'sync');
+    this.#applyMouse(map);
+  }
+
+  // 用 Cesium 式的种类关掉 MapLibre 的旋转手势（右键拖、Ctrl + 左键拖），换回时只打开自己关掉的。漫游接管时手势归漫游，
+  // 结束时它只恢复自己关掉的，再按当前工具应用时走到这里
+  #applyMouse(map: MapLike): void {
+    if (this.#roam?.engaged) {
+      return;
+    }
+    const cesium = this.#mouse[this.#kind] === 'cesium';
+    if (cesium && map.dragRotate.isEnabled()) {
+      map.dragRotate.disable();
+      this.#rotateOff = true;
+    } else if (!cesium && this.#rotateOff) {
+      map.dragRotate.enable();
+      this.#rotateOff = false;
+    }
+  }
+
+  // Cesium 式的右键拖缩放：按下的位置在缩放时不动；画外面、天空上的点也照样交给 MapLibre 换算
+  #zoomAround(map: MapLike, delta: number, around: ClientPoint): void {
+    const rect = map.getCanvas().getBoundingClientRect();
+    const { lng, lat } = map.unproject([around.x - rect.left, around.y - rect.top]);
+    map.easeTo({ zoom: map.getZoom() + delta, around: [lng, lat], duration: 0 }, USER_MOVE);
   }
 
   #maxPitch(): number {
@@ -1114,6 +1167,7 @@ export class MapLibreView<const G extends string> implements MapView {
   // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用；切换工具时结束临时拖动
   #onToolChange(): void {
     this.#pan?.cancel();
+    this.#cesiumDrag?.cancel();
     if (this.#state === 'ready' && this.#map !== undefined) {
       this.#applyTool(this.#map);
     }
@@ -1126,6 +1180,7 @@ export class MapLibreView<const G extends string> implements MapView {
       return;
     }
     const { gestures, persistent } = this.#session.tool.activeTool;
+    this.#applyMouse(map);
     this.#applyCursor(map);
     // 临时任务多由面板、工具栏上的按钮激活（也可能在加载期间），焦点还在按钮上，按键到不了地图；
     // 移到地图上，Esc 才能直接退出。常驻模式不移，进入页面时不会抢走焦点

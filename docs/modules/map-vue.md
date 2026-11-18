@@ -14,7 +14,7 @@
 | `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`whenSettled`、`useCamera`、相机操作、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
 | `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding；`revealOffset`：被挡住的位置挪进可视区域的平移量（纯函数） |
 | `MapCanvas.tsx` | `<MapCanvas>`：地图画布，挂载后创建视图、卸载时释放；同一个视图担任二维和三维 |
-| `runtime.ts` | `MAP_RUNTIME_PRELOAD`：app 提供"预加载"的函数，画布交给它要加载什么、它决定什么时候加载（ADR 0091）；三维引擎的描述 `SceneEngine`、能力 `SceneCapabilities`、`MAPLIBRE_ENGINE` 和注入键 `MAP_SCENE_ENGINE`（ADR 0147）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
+| `runtime.ts` | `MAP_RUNTIME_PRELOAD`：app 提供"预加载"的函数，画布交给它要加载什么、它决定什么时候加载（ADR 0091）；三维引擎的描述 `SceneEngine`、能力 `SceneCapabilities`、`MAPLIBRE_ENGINE` 和注入键 `MAP_SCENE_ENGINE`（ADR 0147）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器；`MAP_MOUSE_SCHEMES`：app 提供二维、三维各用哪种鼠标操作，画布交给视图，没有 provide 时都是 MapLibre 自带的（ADR 0168） |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 | `use-page-active.ts` | `usePageActive()`：所在页面是否在显示（见"页面缓存"） |
 | `use-shown-element-size.ts` | `useShownElementSize()`：页面停用期间量到的尺寸不采用（见"页面缓存"） |
@@ -125,7 +125,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 ## 三维引擎的注入（ADR 0147 第 1 节、ADR 0153）
 
-- map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），在这一层 `provide(MAP_SCENE_ENGINE, …)`、`MAP_RUNTIME_PRELOAD`、`MAP_ERROR_REPORTER`；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）。页面和拥有者不读引擎，照常放 `<MapCanvas>`，照常 `setDimension`、`bindScene`
+- map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），在这一层 `provide(MAP_SCENE_ENGINE, …)`、`MAP_RUNTIME_PRELOAD`、`MAP_ERROR_REPORTER`、`MAP_MOUSE_SCHEMES`（`.env` 的鼠标操作方式，ADR 0168）；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）。页面和拥有者不读引擎，照常放 `<MapCanvas>`，照常 `setDimension`、`bindScene`
 - 描述是对象 `{ capabilities, loadRenderer }`：`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它），由 `<MapCanvas>` 的视图在第一次切到三维（或预加载）时调用。map-vue 导出完整能力的 `MAPLIBRE_ENGINE`，没有 provide 时用它。测试可以注入假的 `loadRenderer`
 - 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别，`splats` 是能显示 LCC2 高斯泼溅（ADR 0149）。`MAPLIBRE_ENGINE` 三项都是 true，app 原样注入（2026-11-14 起不再收窄，ADR 0157，[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
 - app 注入的引擎（`createSceneEngine`）包一层 `loadRenderer`：打开三维时等设备档位准备好（读本浏览器的设定或 `scene-tier.json`、问留下崩溃标记的页面），再把预算来源交给 `createSceneRenderer`；预加载时 app 把它换成只下载模块、读配置的函数（ADR 0155，[config/scene-tier.md](../config/scene-tier.md)）

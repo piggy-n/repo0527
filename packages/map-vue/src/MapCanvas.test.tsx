@@ -9,6 +9,7 @@ import type {
   MapMoveEventLike,
   MapSession,
   MapTool,
+  MouseSchemes,
   PickResult,
   MapSubscription,
   RenderedFeatureLike,
@@ -22,7 +23,7 @@ import { defineComponent, inject, KeepAlive, nextTick, provide, ref, type Shallo
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
+import { MAP_MOUSE_SCHEMES, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
 import { useMap, useMapOverlay } from './use-map';
 
 type Projection = Parameters<MapLike['setProjection']>[0];
@@ -325,7 +326,12 @@ function setupCached(createMap: (options: MapLibreMapOptions) => FakeMap) {
 
 // 加载三维模块的次数由用例控制：fail 为真时下载失败
 function maplibrePage(
-  options: { fail?: boolean; preload?: (load: () => Promise<unknown>) => void; sceneMaxZoom?: number } = {}
+  options: {
+    fail?: boolean;
+    preload?: (load: () => Promise<unknown>) => void;
+    sceneMaxZoom?: number;
+    mouse?: MouseSchemes;
+  } = {}
 ) {
   const maps: FakeMap[] = [];
   const loads = { count: 0, fail: options.fail ?? false };
@@ -347,6 +353,9 @@ function maplibrePage(
       provide(MAP_SCENE_ENGINE, engine);
       if (options.preload) {
         provide(MAP_RUNTIME_PRELOAD, options.preload);
+      }
+      if (options.mouse) {
+        provide(MAP_MOUSE_SCHEMES, options.mouse);
       }
       return () => <Page />;
     })
@@ -928,6 +937,26 @@ describe('MapCanvas', () => {
       expect(map.viewState.value).toBe('initializing');
       expect(wrapper.get('[data-map-view-state]').attributes('style')).toBeUndefined();
       expect(map.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
+    });
+
+    it('鼠标操作方式按 app 注入的（ADR 0168）：三维用 Cesium 式时切到三维关掉 MapLibre 的旋转手势，切回二维打开', async () => {
+      const { maps, map } = maplibrePage({ mouse: { '2d': 'maplibre', '3d': 'cesium' } });
+      maps[0]?.fire('style.load');
+      await nextTick();
+      expect(maps[0]?.dragRotate.isEnabled()).toBe(true);
+
+      map.setDimension('3d');
+      expect(maps[0]?.dragRotate.isEnabled()).toBe(false);
+      map.setDimension('2d');
+      expect(maps[0]?.dragRotate.isEnabled()).toBe(true);
+    });
+
+    it('没有注入时二三维都是 MapLibre 自带的', async () => {
+      const { maps, map } = maplibrePage();
+      maps[0]?.fire('style.load');
+      await nextTick();
+      map.setDimension('3d');
+      expect(maps[0]?.dragRotate.isEnabled()).toBe(true);
     });
 
     it('三维的缩放上限交给视图：切到三维时用它，切回二维时回到地图选项的上限', async () => {

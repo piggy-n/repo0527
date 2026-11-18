@@ -1,6 +1,7 @@
 import type { SceneBudgetSource } from '@mx/map-core';
 import {
   MAP_ERROR_REPORTER,
+  MAP_MOUSE_SCHEMES,
   MAP_RUNTIME_PRELOAD,
   MAP_SCENE_ENGINE,
   MAPLIBRE_ENGINE,
@@ -8,6 +9,7 @@ import {
   type SceneEngine
 } from '@mx/map-vue';
 import { type Component, defineComponent, h, provide } from 'vue';
+import { appConfig } from '@/shared/config/app-config';
 import { reportMapError } from '@/shared/map/backend-request';
 import { SERVER_BASEMAPS, type ServerBasemaps } from '@/shared/map/basemap/server-basemaps';
 import {
@@ -61,7 +63,8 @@ const preloadScene = () => Promise.all([MAPLIBRE_ENGINE.loadRenderer(), pageScen
  * 随地图页的分块动态加载：map-vue 连带 maplibre-gl 不进入口包（ADR 0061）；路由的 props、页面缓存都照常经过这一层。
  * 地图错误的报告器也从这里提供：瓦片的 401 按登录过期处理，页面不用各写一遍。
  * 三维引擎和它的能力也在这里注入（ADR 0147 第 3 节），页面和拥有者只看能力；三维降档的提示从这里取（ADR 0155）；
- * 服务器底图的探测结果也从这里提供，底图的拥有者创建时就确定可选的底图（ADR 0165 第 4 节）
+ * 服务器底图的探测结果也从这里提供，底图的拥有者创建时就确定可选的底图（ADR 0165 第 4 节）；
+ * 二维、三维各用哪种鼠标操作按部署的 .env（ADR 0168）
  */
 export function withRuntimeLoader(page: Component, preload: MapRuntimePreloader, servers: ServerBasemaps): Component {
   return defineComponent({
@@ -72,6 +75,7 @@ export function withRuntimeLoader(page: Component, preload: MapRuntimePreloader,
       provide(MAP_SCENE_ENGINE, SCENE_ENGINE);
       provide(SCENE_TIER_NOTICE, pageSceneTier());
       provide(SERVER_BASEMAPS, servers);
+      provide(MAP_MOUSE_SCHEMES, appConfig.mapMouse);
       return () => h(page);
     }
   });

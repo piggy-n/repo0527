@@ -31,5 +31,7 @@ declare global {
     readonly VITE_LAYER_HINT_MINZOOM?: string;
     readonly VITE_LAYER_HINT_COVERING?: string;
     readonly VITE_RESOURCE_MIN_ZOOM_ENABLED?: string;
+    readonly VITE_MAP_MOUSE_2D?: string;
+    readonly VITE_MAP_MOUSE_3D?: string;
   }
 }

@@ -74,7 +74,7 @@ async function dragRight(map: MapLibreMap, button: 0 | 2, init: MouseEventInit =
   await twoFrames();
 }
 
-type ViewOptions = Pick<MapLibreViewOptions<'data'>, 'mapOptions' | 'sceneMaxZoom' | 'loadSceneRenderer'>;
+type ViewOptions = Pick<MapLibreViewOptions<'data'>, 'mapOptions' | 'sceneMaxZoom' | 'loadSceneRenderer' | 'mouseSchemes'>;
 
 // 每个用例自己的容器（尺寸写死）、会话和视图，结束时一起释放并移除容器：同一个文件的用例共用一个页面
 function setup(
@@ -532,6 +532,64 @@ describe('MapLibreView（真实的 MapLibre）', () => {
       await dragRight(ctx.map, 0, { ctrlKey: true });
 
       expect(ctx.map.getBearing()).not.toBe(0);
+    });
+  });
+
+  describe('Cesium 式的鼠标操作（ADR 0168）', () => {
+    const CESIUM = { options: { mouseSchemes: { '2d': 'cesium', '3d': 'cesium' } } } as const;
+    const BUTTON_FLAGS = { 0: 1, 1: 4, 2: 2 } as const;
+
+    // 在画布上从 from 按下，分五步拖到 to 再松开（画布内的坐标）
+    async function dragOn(map: MapLibreMap, button: 0 | 1 | 2, [x, y]: [number, number], [toX, toY]: [number, number]) {
+      const canvas = map.getCanvas();
+      const { left, top } = canvas.getBoundingClientRect();
+      const buttons = BUTTON_FLAGS[button];
+      const at = (px: number, py: number) => ({
+        bubbles: true,
+        cancelable: true,
+        button,
+        buttons,
+        clientX: left + px,
+        clientY: top + py
+      });
+      canvas.dispatchEvent(new MouseEvent('mousedown', at(x, y)));
+      for (const step of [1, 2, 3, 4, 5]) {
+        canvas.dispatchEvent(new MouseEvent('mousemove', at(x + ((toX - x) * step) / 5, y + ((toY - y) * step) / 5)));
+      }
+      await twoFrames();
+      canvas.dispatchEvent(new MouseEvent('mouseup', { ...at(toX, toY), buttons: 0 }));
+      await twoFrames();
+    }
+
+    it('右键往下拖 100 像素放大一级、不旋转，按下的地方留在原处；地图上没有浏览器的右键菜单', async () => {
+      using ctx = setup(CAMERA, undefined, CESIUM);
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+      const grabbed = lngLatOf(ctx.view.pick({ x: 200, y: 150 }));
+
+      await dragOn(ctx.map, 2, [200, 150], [200, 250]);
+
+      expect(ctx.map.getZoom()).toBeCloseTo(CAMERA.zoom + 1, 5);
+      expect([ctx.map.getBearing(), ctx.map.getPitch()]).toStrictEqual([0, 0]);
+      expect(ctx.session.camera.current.zoom).toBeCloseTo(CAMERA.zoom + 1, 5);
+      const at = grabbed && ctx.view.project(grabbed);
+      expect(at?.x).toBeCloseTo(200, 0);
+      expect(at?.y).toBeCloseTo(150, 0);
+      const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      ctx.map.getCanvas().dispatchEvent(menu);
+      expect(menu.defaultPrevented).toBe(true);
+    });
+
+    it('中键往上、往右拖：旋转并抬起视角；左键拖照旧平移', async () => {
+      using ctx = setup(CAMERA, undefined, CESIUM);
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+
+      await dragOn(ctx.map, 1, [400, 300], [450, 260]);
+      expect(ctx.map.getBearing()).toBeCloseTo(40, 5);
+      expect(ctx.map.getPitch()).toBeCloseTo(20, 5);
+
+      const grabbed = lngLatOf(ctx.view.pick({ x: 400, y: 300 }));
+      await dragOn(ctx.map, 0, [400, 300], [500, 300]);
+      expect(grabbed && ctx.view.project(grabbed).x).toBeCloseTo(500, 0);
     });
   });
 

@@ -245,3 +245,4 @@ export type {
   ScreenPoint
 } from './view/view-input';
 export { canTransition, type Deferred, deferred, type LiveViewState } from './view/view-lifecycle';
+export { MAPLIBRE_MOUSE, type MouseScheme, type MouseSchemes } from './view/cesium-drag';
