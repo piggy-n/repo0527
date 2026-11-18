@@ -1,4 +1,5 @@
 // 3D Tiles 索引的整理（ADR 0081 第 3 节，外部索引和误差的规则见 ADR 0148）：不依赖渲染引擎
+import { abortReason } from '@mx/utils';
 import { isMatrix, multiply } from './nav/nav-frame';
 
 /** 下载一个 JSON；signal 中止时以它的原因结束 */
@@ -201,15 +202,27 @@ function constrain(tile: PreparedTile, parentError: number): PreparedTile {
 
 /**
  * 读入并整理 3D Tiles 索引：外部索引的根节点换到引用它的位置、去掉数据目录外的空占位、拒绝目录外的引用和循环引用、
- * 修正几何误差，内容地址改成绝对地址；只读索引，不下载模型
+ * 修正几何误差，内容地址改成绝对地址；只读索引，不下载模型。一个索引失败整个就失败，其余进行中的下载随之中止
  */
 export async function prepareTileset(url: string, load: LoadJson, signal: AbortSignal): Promise<PreparedTileset> {
-  const context: Context = { directory: new URL('.', url).href, load, signal };
-  const json = await readTileset(url, context);
-  const [root] = await prepareTile(field(json, 'root', url), url, [url], context, false);
-  if (!root) {
-    throw new Error(`${url} 的根节点是空占位`);
+  signal.throwIfAborted();
+  // 同一层的外部索引一起下载：一个失败时中止其余的，不再占着连接和下载名额
+  const controller = new AbortController();
+  const stop = () => controller.abort(abortReason(signal));
+  signal.addEventListener('abort', stop, { once: true });
+  const context: Context = { directory: new URL('.', url).href, load, signal: controller.signal };
+  try {
+    const json = await readTileset(url, context);
+    const [root] = await prepareTile(field(json, 'root', url), url, [url], context, false);
+    if (!root) {
+      throw new Error(`${url} 的根节点是空占位`);
+    }
+    const constrained = constrain(root, root.geometricError);
+    return { ...json, geometricError: constrained.geometricError, root: constrained };
+  } catch (error) {
+    controller.abort(error);
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', stop);
   }
-  const constrained = constrain(root, root.geometricError);
-  return { ...json, geometricError: constrained.geometricError, root: constrained };
 }

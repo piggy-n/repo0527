@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { CameraState } from '../camera/camera-model';
+import { MAX_INDEX_DOWNLOADS } from './index-loader';
 import type { PreparedTileset } from './prepare-tileset';
 import type { SceneStatus, TilesetLayer } from './scene-content-model';
 import { SceneTilesetSync, type TilesetHost, type TilesetOptions } from './tileset-sync';
@@ -170,6 +171,49 @@ describe('SceneTilesetSync', () => {
 
     expect(host.options.get('white-a')?.show).toBe(false);
     expect(host.options.get('white-b')?.show).toBe(true);
+  });
+
+  it('同时加入几个外部索引很多的瓦片集：索引的下载不会超过浏览器未完成请求的上限，都能就绪', async () => {
+    // 浏览器（Chromium 每个渲染进程 2700 个）超过上限的请求立即以网络错误失败：这里按比例缩成 4 个瓦片集各 300 个索引、上限 500
+    const BROWSER_LIMIT = 500;
+    const EXTERNALS = 300;
+    let active = 0;
+    let maxActive = 0;
+    const loadJson = async (url: string) => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      try {
+        if (active > BROWSER_LIMIT) {
+          throw new TypeError('Failed to fetch');
+        }
+        await Promise.resolve();
+        const { pathname } = new URL(url);
+        if (pathname.endsWith('/tileset.json')) {
+          const children = Array.from({ length: EXTERNALS }, (_, index) => ({
+            boundingVolume: { sphere: [index, 0, 0, 1] },
+            geometricError: 5,
+            content: { uri: `block-${index}.json` }
+          }));
+          return { asset: { version: '1.1' }, geometricError: 10, root: { ...tilesetJson('').root, children } };
+        }
+        return tilesetJson(pathname.split('/').at(-1)?.replace('.json', '') ?? '');
+      } finally {
+        active--;
+      }
+    };
+    const { host, sync, states } = setup(loadJson);
+    const ids = ['xwq01', 'xwq02', 'xwq03', 'xwq06'];
+
+    sync.apply(ids.map(id => layer(id)));
+    await flush();
+    for (const id of ids) {
+      host.resolve(id);
+    }
+    await flush();
+
+    expect(states()).toStrictEqual({ xwq01: 'ready', xwq02: 'ready', xwq03: 'ready', xwq06: 'ready' });
+    // 四个瓦片集一共只占这么多个
+    expect(maxActive).toBe(MAX_INDEX_DOWNLOADS);
   });
 
   it('撤下、释放时中止进行中的加载，不再报告', async () => {

@@ -82,7 +82,7 @@
 - 没有页面测试的接线：页面把路线交给小地图、完整地图打开时空格不让路线走，只在真实页面上手动验证过
 - 三维状态回调不隔离监听方的异常：`SceneTilesetSync`、`SceneSplatSync`、`MapLibreScene` 的 `onStatus`，以及视图发出的 `scenestatuschange`、`roamstatuschange`；生产里唯一的监听方是 map-vue 上下文的 `shallowRef` 赋值，业务页面没有触发路径；另有 measure-3d 的 bench 页（`tools/measure-3d/page/bench.ts`）监听场景状态，就绪时在回调里调用 `flyTo`。要处理时在视图的事件发射处统一隔离，不只包 `SceneSplatSync`（2026-11-14 审查）
 - 请求状态的底图合成项：正在加载时较早一段的失败也算进 loaded + failed，进度会超过 100%（影像源上一轮失败 3 张，之后只打开地名 6 张：明细一开始是"3/6 张"，到 5 张时"8/6 张"，状态栏可能 133%）。位置在 `shared/map/request-status/request-status.ts` 的 `mergedActivity`（failed 对全部数据源求和）、`requestRowText`、`requestSummary`；修法：加载中的进度只用最近一段的失败数，较早的失败只用来标"有失败"和结束后的张数（ADR 0158）
-- 同时加入几个大的瓦片集会"加载失败"（2026-11-17 用户在 192.168.15.111 上同时勾新吴区01、02、03、06，都没加载出来，一个一个勾可以，没复现）：`prepareTileset` 在加入前把外部索引全部读完，同一层用 `Promise.all` 一起发，不限并发，没有超时和重试（`map-core/src/scene/prepare-tileset.ts`、`maplibre/maplibre-view.ts` 的 `fetchJson`）。四个模型的 top 文件直接引用的块索引实测 1140 + 980 + 961 + 711 = 3792 个，连子索引估计约 5700 个；单个模型同时挂着的请求最多 700～1300 个。推断四个加起来超过了 Chromium 每个渲染进程未完成请求的上限（源码里是 2700，Edge 的版本没核实），多出的请求以 `net::ERR_INSUFFICIENT_RESOURCES` 失败。一个索引失败，整个模型就记为失败，它其余的请求不中止，继续占着 HTTP/1.1 的 6 条连接（`scene/tileset-sync.ts` 的 `#prepareAndAdd`）；一次加几个时只飞向第一个（`useSceneModels.ts` 的 `add`）。粗略模拟是 1～2 个失败、其余排队很久，和"四个都没成功"还没对上。确认：在显卡机器的 Edge 开发者工具里，Network 筛 json，同时勾四个，看有没有这个错误、四行各显示"加载失败"还是一直转圈；两个同时勾（03 + 06）应该能成；失败的逐个点"重试"应该能成。方向（没做）：整理索引改用所有瓦片集共用的限量队列，或者几个瓦片集依次整理；单个索引失败时退避重试，模型失败时中止它其余的请求；长期改为按需加载外部索引（要重新核对 ADR 0148）；服务器给 `.json` 开 gzip
+- 外部索引多的瓦片集整理得慢：加入前要读完全部外部索引（ADR 0148），新吴区01、02、03、06 一共 5516 个、约 200 MB，四个一起在每个请求 20 ms 延迟下要约 29 秒，瓶颈是 HTTP/1.1 每台服务器 6 条连接（约 190 个/秒，[map-core](modules/map-core.md)"索引的下载"；超过浏览器请求上限的失败 2026-11-17 修了）。一次加几个时只飞向第一个（`useSceneModels.ts` 的 `add`）。索引的请求没有超时，服务器卡住一个请求，这个模型就一直在加载中。方向（没做）：服务器给 `.json` 开 gzip 或 HTTP/2；长期改为按需加载外部索引（要重新核对 ADR 0148）
 
 ## 临时处理（联调或重构时清理）
 
@@ -118,6 +118,7 @@
 - 综合分析驾驶舱只在软件 WebGL 上看过：显卡机器上的入场流畅度、指北针跟着拖动转、地图和图表的导出图片待用户验收（[land-space-dashboard](modules/land-space-dashboard.md)"验证记录"）
 - 测试服务器 `192.168.1.180` 的 `/opt/front/3dt/` 还是平铺的旧目录（用户 2026-11-11 先不整理）：给它发布 2026-11-11 以后的前端之前，按 `<市>/<类型>/<模型目录>/` 挪好目录，否则三维模型都加载失败（[deployment](deployment.md)"3DT 模型数据单独部署"）；挪好以后在 `tools/site/sites.json` 给它建站点，`site:check --suggest` 看它缺哪些（ADR 0164）
 - 内网 Windows 服务器 `192.168.15.111`（2026-11-17 接入，同日 `site:check 15-111` 全部通过：33 个模型、35 个入口、10 个 LCC2 的 Range）：同名模型和 153.194 上的是不是同一次导出没有核对过（LCC2 用 `YZT_3DT_PROXY` 重跑 `lcc2:register` 比 `placement`）
+- 同时加入新吴区四个模型（2026-11-17 修了超过浏览器请求上限的失败，只在开发机的 Chromium 156、Edge 157 无界面版上对 15.111 实测，[map-core](modules/map-core.md)"索引的下载"）：15.111 部署新构建后，在显卡机器的 Edge 里打开开发者工具，Network 筛 json，同时勾新吴区01、02、03、06，确认没有 `ERR_INSUFFICIENT_RESOURCES`、四行都从转圈变成就绪，记下用了多久
 - 15.111 上新接入的 17 个模型（`wx-xwq01`、`wx-xwq06`、`wx-white`、`sq-syq01`、`sq-syq02`、`sq-white`、`xz-m1`～`xz-m7`，名称用户 2026-11-17 看过以后定了）：屏幕误差 8 下放不放得下没测，没加 `measure:3d` 的场景；白膜的 glb 要求 `EXT_mesh_features`、`EXT_structural_metadata`，three 不认、属性用不上。还没接入的：`suzhou\3dtiles\suzhou_3DT`（没有根 `tileset.json`，371 个子目录）、北洞山楚王墓和楚王山4号的 LCC2（配准没通过，见上面"测试服务器上轨迹核对没通过"）；`地上_白模_苏州.gdb`、`地下_白模_苏州.gdb` 是 ESRI 地理数据库、不是 3D Tiles，用户定不接（[3dt-manifest](config/3dt-manifest.md)"现有模型的说明"）
 
 ## 待用户决定
