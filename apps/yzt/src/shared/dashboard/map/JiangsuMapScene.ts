@@ -31,6 +31,9 @@ import { playVisibleTimeline } from '../animation/timeline-clock';
 // 比例尺取样的两点在画布中心水平线上相距的 CSS 像素
 const VIEW_SAMPLE_PIXELS = 100;
 
+// 入场结束停下的视角：yaw 为 0 时正北朝上，只靠俯仰显出立体
+const REST_VIEW = { yaw: 0, pitch: 0.76, distance: 1 };
+
 // Three.js 生命周期只存在于独立地图容器中
 interface RegionObject {
   group: Group;
@@ -379,7 +382,7 @@ export class JiangsuMapScene implements Disposable {
       const timeline = this.timeline;
       this.timeline.to(
         this.view,
-        { yaw: 0.05, pitch: 0.76, distance: 1, duration: 2.15 * duration, ease: 'power2.inOut' },
+        { ...REST_VIEW, duration: 2.15 * duration, ease: 'power2.inOut' },
         0
       );
       this.timeline.to(
