@@ -24,7 +24,6 @@ import { RouteName } from '@/shared/router/route-names';
 import { modelKey } from '@/features/scene-models/layer-panel';
 import { CurrentMapLayerPanel } from '../../current-map/layer-panel/CurrentMapLayerPanel';
 import { useCurrentLayers } from '../../current-map/layer-panel/useCurrentLayers';
-import { useLayerHints } from '../../current-map/layer-panel/useLayerHints';
 import styles from './DevMapUiPage.module.scss';
 import { SAMPLE_CATALOG, SAMPLE_MODELS, SAMPLE_THUMBNAILS } from './samples';
 
@@ -46,8 +45,6 @@ const MapUiSamples = defineComponent({
     // 模型只进面板：没有画布，三维里也不加载；没有请求状态，行上不转圈
     const models = useSceneModels(map, SAMPLE_MODELS);
     const layerList = useCurrentLayers(layers, models);
-    // 行内提示的开关：样例不记偏好，开关只在这一页里有效
-    const hints = useLayerHints();
     const layout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const basemap = { ...useBasemap(), thumbnails: SAMPLE_THUMBNAILS };
@@ -110,7 +107,6 @@ const MapUiSamples = defineComponent({
               <div class={styles.resourceColumn}>
                 <CurrentMapLayerPanel
                   resources={layers}
-                  hints={hints}
                   current={layerList}
                   symbols={symbols}
                   layout={layout}

@@ -150,7 +150,8 @@ export function requestSummary(
   kinds: RequestKinds = ALL_REQUEST_KINDS
 ): RequestSummary {
   const pending = kinds.loading ? items.filter(isPending) : [];
-  const failed = kinds.failed ? items.filter(item => item.failed > 0) : [];
+  // 关掉加载中时，还在加载、已有失败的项也不算：明细里它在加载中一组，不在有失败一组
+  const failed = kinds.failed ? items.filter(item => item.failed > 0 && (kinds.loading || !isPending(item))) : [];
   if (pending.some(item => wasShown(item, now))) {
     const counted = pending.filter(item => (item.kind === 'tiles' || item.kind === 'blocks') && item.requested > 0);
     const requested = counted.reduce((sum, item) => sum + item.requested, 0);
@@ -165,7 +166,8 @@ export function requestSummary(
   if (failed.length > 0) {
     return { kind: 'failed', count: failed.length };
   }
-  if (!kinds.done) {
+  // 关掉加载完成时没有"已加载完成"；关掉加载中、还有在加载的时也不说完成
+  if (!kinds.done || (!kinds.loading && items.some(isPending))) {
     return { kind: 'hidden' };
   }
   const recent = items.some(

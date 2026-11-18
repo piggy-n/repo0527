@@ -13,7 +13,6 @@ import {
   isResourceBodyLayer,
   labelTargetOf,
   lowestLayerOf,
-  resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
   resourceLabelsGroup,
@@ -108,10 +107,8 @@ function layerOf(group: StyleGroup, code: string): LayerSpecification {
 }
 
 describe('ID 与地址', () => {
-  it('数据源和图层的 ID 以分组名为前缀，能反查资源', () => {
+  it('数据源和图层的 ID 以分组名为前缀', () => {
     expect(resourceSourceId('bgdc_dltb')).toBe('resources-bgdc_dltb');
-    expect(resourceCodeOfSource('resources-bgdc_dltb')).toBe('bgdc_dltb');
-    expect(resourceCodeOfSource('boundaries-city')).toBeNull();
   });
 
   it('瓦片的基础地址是绝对地址', () => {

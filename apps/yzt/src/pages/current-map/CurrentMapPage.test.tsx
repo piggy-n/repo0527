@@ -486,10 +486,6 @@ const XUANWU: ViewBounds = [118.778682, 32.017001, 118.90731, 32.107079];
 // 等定位相关的微任务和渲染都走完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
-// 行内提示浮层里一类的开关（ADR 0167）；all 是"全部"
-const hintSwitch = (hint: string) =>
-  required(document.querySelector<HTMLInputElement>(`[data-layer-hint="${hint}"] input`), `${hint} 的开关`);
-
 // 按文字或无障碍名称找按钮（基础组只有图标）；面板外壳的 Tab 和工具栏的按钮可能同名，不算 Tab
 function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) {
   const found = wrapper
@@ -1664,27 +1660,6 @@ describe('CurrentMapPage', () => {
     map.fire('sourcedata', parcelTile('2'));
   });
 
-  it('行内提示里关掉加载失败：资源行的失败图标和状态栏的条目一起不显示，打开后一起回来（ADR 0167）', async () => {
-    const { wrapper, map } = await readyPage();
-    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
-    await wrapper.get('[data-layer-hints]').trigger('click');
-    hintSwitch('failed').click();
-    await nextTick();
-
-    using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    map.fire('dataloading', parcelTile('1'));
-    map.fire('error', { error: new Error('Unable to parse the tile'), ...parcelTile('1') });
-    await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
-    await settle();
-    expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status]').exists()).toBe(false);
-    expect(wrapper.find('[data-request-chip]').exists()).toBe(false);
-
-    // 数据照常统计：打开以后行内和状态栏一起出现
-    hintSwitch('failed').click();
-    await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists()).toBe(true));
-    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
-  });
-
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {
     const guid = 'a'.repeat(32);
     const square: Polygon = {
@@ -2420,9 +2395,15 @@ describe('CurrentMapPage', () => {
 
   describe('偏好的开关（ADR 0140）', () => {
     const STORED = { version: 2, value: { selected: 'imagery', opacity: { vector: 1, imagery: 1, static: 1 } } };
-    const PREFERENCE_KEYS = ['basemap', 'boundaries', 'resource-layers', 'resource-symbols', 'resource-panel'].map(
-      name => `zhangsan/${name}`
-    );
+    const PREFERENCE_KEYS = [
+      'basemap',
+      'boundaries',
+      'resource-layers',
+      'resource-symbols',
+      'resource-panel',
+      'scene-models',
+      'current-layers'
+    ].map(name => `zhangsan/${name}`);
 
     // 已登录、存着影像底图；jsdom 没有 IndexedDB，偏好换成内存存储。appConfig 在模块加载时读取环境变量，要重新导入页面
     async function pageWithStoredImagery(env: Readonly<Record<string, string>> = {}) {
@@ -2482,13 +2463,13 @@ describe('CurrentMapPage', () => {
       expect(get).not.toHaveBeenCalledWith('zhangsan/basemap');
     });
 
-    it('所有开关打开：五项偏好都读取', async () => {
+    it('所有开关打开：七项偏好都读取', async () => {
       const { get } = await pageWithStoredImagery();
 
       PREFERENCE_KEYS.forEach(key => expect(get).toHaveBeenCalledWith(key));
     });
 
-    it('总开关关闭：五项偏好都不读，资源列表照常显示', async () => {
+    it('总开关关闭：七项偏好都不读，资源列表照常显示', async () => {
       const { wrapper, store, get } = await pageWithStoredImagery({ VITE_PREFERENCES_ENABLED: 'false' });
 
       await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));

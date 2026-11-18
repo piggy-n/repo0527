@@ -105,10 +105,9 @@ describe('withPending（ADR 0167）', () => {
     ]);
   });
 
-  it('没有还没到的项时返回原来的数组；这次移出的不再留着', () => {
+  it('没有还没到的项时返回原来的数组', () => {
     const next = [m('x')];
     expect(withPending(next, [m('x')], new Set([m('x')]))).toBe(next);
-    expect(withPending(next, [r('a'), m('x')], new Set([m('x')]), new Set([r('a')]))).toBe(next);
   });
 });
 

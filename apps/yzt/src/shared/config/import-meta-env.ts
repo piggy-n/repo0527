@@ -23,7 +23,13 @@ declare global {
     readonly VITE_PREFERENCE_RESOURCE_PANEL?: string;
     readonly VITE_PREFERENCE_SCENE_MODELS?: string;
     readonly VITE_PREFERENCE_CURRENT_LAYERS?: string;
-    readonly VITE_PREFERENCE_LAYER_HINTS?: string;
+    readonly VITE_LAYER_HINTS_ENABLED?: string;
+    readonly VITE_LAYER_HINT_LOADING?: string;
+    readonly VITE_LAYER_HINT_FAILED?: string;
+    readonly VITE_LAYER_HINT_DONE?: string;
+    readonly VITE_LAYER_HINT_CONFIG_ERROR?: string;
+    readonly VITE_LAYER_HINT_MINZOOM?: string;
+    readonly VITE_LAYER_HINT_COVERING?: string;
     readonly VITE_RESOURCE_MIN_ZOOM_ENABLED?: string;
   }
 }

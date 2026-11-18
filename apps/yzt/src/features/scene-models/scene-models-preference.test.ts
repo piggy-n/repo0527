@@ -37,16 +37,16 @@ const MAPLIBRE: SceneCapabilities = { styleLayers: true, identify: true, splats:
 const idleOperation = () => ({ signal: new AbortController().signal, run: () => undefined });
 
 // 只给拥有者要的上下文；清单由用例决定什么时候到
-function setup(store = createMemoryStore()) {
+function setup(store = createMemoryStore(), dimension: '2d' | '3d' = '2d') {
   const catalog = shallowRef<readonly SceneModel[] | undefined>(undefined);
   const map: SceneModelsContext = {
     sceneStatus: shallowRef<SceneStatus>(new Map()),
     sceneActivity: shallowRef<SceneActivities>(new Map()),
     roamStatus: shallowRef<RoamStatus | null>(null),
-    runCameraOperation: () => undefined,
-    beginCameraOperation: idleOperation,
+    runCameraOperation: vi.fn<SceneModelsContext['runCameraOperation']>(),
+    beginCameraOperation: vi.fn<SceneModelsContext['beginCameraOperation']>(idleOperation),
     sceneCapabilities: MAPLIBRE,
-    dimension: ref<'2d' | '3d'>('2d')
+    dimension: ref(dimension)
   };
   const effect = effectScope();
   const { scope } = createTestPreferenceScope(store);
@@ -54,7 +54,7 @@ function setup(store = createMemoryStore()) {
   if (!owner) {
     throw new Error('拥有者没有创建');
   }
-  return { owner, catalog, store, [Symbol.dispose]: () => effect.stop() };
+  return { owner, catalog, store, map, [Symbol.dispose]: () => effect.stop() };
 }
 
 beforeEach(() => {
@@ -124,6 +124,22 @@ describe('三维模型的拥有者：按账号记住（ADR 0167）', () => {
       version: 1,
       value: { added: ['white', 'city'], hidden: ['city'], effects: { white: 'window' } }
     });
+  });
+
+  it('三维里合并记下的不定位，用户加入的才飞过去', async () => {
+    using ctx = setup(
+      createMemoryStore({ [KEY]: { version: 1, value: { added: ['white'], hidden: [], effects: {} } } }),
+      '3d'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.catalog.value = CATALOG;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ctx.owner.added.value).toStrictEqual(['white']);
+    expect(ctx.map.beginCameraOperation).not.toHaveBeenCalled();
+    expect(ctx.map.runCameraOperation).not.toHaveBeenCalled();
+
+    ctx.owner.add(['city']);
+    expect(ctx.map.beginCameraOperation).toHaveBeenCalledOnce();
   });
 
   it('加入、隐藏、换效果后防抖写入；移出时换过的效果一起忘掉，再加入是默认的效果', async () => {

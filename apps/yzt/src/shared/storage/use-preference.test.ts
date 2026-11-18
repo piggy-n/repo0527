@@ -312,8 +312,7 @@ describe('usePreference：开关（ADR 0140）', () => {
     ['resource-symbols', 'VITE_PREFERENCE_RESOURCE_SYMBOLS'],
     ['resource-panel', 'VITE_PREFERENCE_RESOURCE_PANEL'],
     ['scene-models', 'VITE_PREFERENCE_SCENE_MODELS'],
-    ['current-layers', 'VITE_PREFERENCE_CURRENT_LAYERS'],
-    ['layer-hints', 'VITE_PREFERENCE_LAYER_HINTS']
+    ['current-layers', 'VITE_PREFERENCE_CURRENT_LAYERS']
   ] as const;
   const STORED = { version: 1, value: { count: 3 } };
 

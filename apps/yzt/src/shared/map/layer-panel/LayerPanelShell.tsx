@@ -60,8 +60,6 @@ export const LayerPanelShell = defineComponent({
     'update:currentView': (view: string) => typeof view === 'string'
   },
   slots: Object as SlotsType<{
-    /** 标题栏里收起按钮左边的工具，按钮用 headerButton 的样式 */
-    headerTools?: () => VNode[];
     catalogTools: () => VNode[];
     catalogFilter: () => VNode[];
     catalog: () => VNode[];
@@ -316,8 +314,7 @@ export const LayerPanelShell = defineComponent({
           <div ref={panel} class={styles.panelBox}>
             <MxPanel floating flush headerTone="muted" title={props.title} class={styles.panel}>
               {{
-                actions: () => [
-                  ...(slots.headerTools?.() ?? []),
+                actions: () => (
                   <button
                     type="button"
                     class={styles.collapse}
@@ -326,7 +323,7 @@ export const LayerPanelShell = defineComponent({
                   >
                     <SvgIcon name="panel-collapse" size={16} />
                   </button>
-                ],
+                ),
                 default: renderCore
               }}
             </MxPanel>

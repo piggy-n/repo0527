@@ -25,9 +25,7 @@
   }
 }
 
-// 标题栏右边的按钮：收起，以及页面放进来的工具（headerTools）
-.collapse,
-.headerButton {
+.collapse {
   display: inline-flex;
   align-items: center;
   justify-content: center;

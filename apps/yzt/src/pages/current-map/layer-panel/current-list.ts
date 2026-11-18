@@ -71,15 +71,14 @@ export function mergedOrder(
 
 /**
  * 操作后要记下的顺序（ADR 0167）：next 是这次操作后看得见的行，上次记下的顺序里还没到的（目录、清单没到）留在原来的
- * 位置，跟在它前面最近的那个还在的行后面；dropped 是这次移出的，不再留着
+ * 位置，跟在它前面最近的那个还在的行后面
  */
 export function withPending(
   next: readonly string[],
   previous: readonly string[],
-  present: ReadonlySet<string>,
-  dropped: ReadonlySet<string> = new Set()
+  present: ReadonlySet<string>
 ): readonly string[] {
-  const pending = previous.filter(key => !present.has(key) && !dropped.has(key) && !next.includes(key));
+  const pending = previous.filter(key => !present.has(key) && !next.includes(key));
   if (pending.length === 0) {
     return next;
   }

@@ -42,11 +42,6 @@ export function isResourceBodyLayer(code: string, layerId: string): boolean {
   return layerId === id || (layerId.startsWith(`${id}-`) && isBodyLayerSuffix(layerId.slice(id.length + 1)));
 }
 
-/** 数据源 ID 对应的资源；不是资源图层的数据源时为 null */
-export function resourceCodeOfSource(sourceId: string): string | null {
-  return sourceId.startsWith(ID_PREFIX) ? sourceId.slice(ID_PREFIX.length) : null;
-}
-
 /** 瓦片的基础地址：MapLibre 在 Worker 里请求瓦片，要绝对地址；后面直接拼瓦片集和 {z}/{x}/{y}，不经过 URL（会转义花括号） */
 export function resourceTileBase(apiBaseUrl: string, origin: string): string {
   return new URL(`${apiBaseUrl}/api/tiles/`, origin).href;

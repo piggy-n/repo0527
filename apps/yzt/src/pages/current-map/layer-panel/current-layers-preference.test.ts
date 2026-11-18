@@ -88,8 +88,10 @@ describe('图层的顺序：按账号记住（ADR 0167）', () => {
 
   it('只在加入、移出、移动时写入；恢复本身不写', async () => {
     using ctx = setup({ order: [r('bgdc_cjdcq'), r('bgdc_dltb')] });
+    const set = vi.spyOn(ctx.store, 'set');
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
-    expect(written(ctx.store)).toStrictEqual({ version: 1, value: { order: [r('bgdc_cjdcq'), r('bgdc_dltb')] } });
+    expect(ctx.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), r('bgdc_dltb')]);
+    expect(set).not.toHaveBeenCalled();
 
     ctx.current.add([m('x')]);
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
@@ -121,6 +123,20 @@ describe('图层的顺序：按账号记住（ADR 0167）', () => {
       version: 1,
       value: { order: [m('y'), r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')] }
     });
+  });
+
+  it('记下的顺序里还没到的行照样能加入：放在最上面，拥有者里也加上', async () => {
+    // 模型 y 记在顺序里，模型的记录里却没有它（比如别处移出了）；资源目录还没到
+    using ctx = setup({ order: [r('bgdc_cjdcq'), m('y'), m('x'), r('bgdc_dltb')], arrived: false });
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.added.value = ['x'];
+    ctx.restored.value = true;
+    ctx.current.add([m('y')]);
+    expect(ctx.added.value).toStrictEqual(['y', 'x']);
+    expect(ctx.current.keys.value).toStrictEqual([m('y'), m('x')]);
+
+    ctx.state.value = ARRIVED;
+    expect(ctx.current.keys.value).toStrictEqual([m('y'), r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
   });
 
   it('都到齐以后丢掉没有了的行（目录里删了、换了服务器）', async () => {

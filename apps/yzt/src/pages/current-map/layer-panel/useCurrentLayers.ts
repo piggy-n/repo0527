@@ -39,7 +39,8 @@ export const storedCurrentLayersSchema = z
 
 /**
  * 图层的平铺列表（ADR 0161、0167）：资源之间的先后在资源的拥有者里，模型之间的先后在模型的拥有者里，两者怎样穿插记在这里；
- * 三者都按账号记住。只在加入、移出、移动时记下顺序，恢复和目录到达引起的变化不算用户的操作
+ * 三者都按账号记住。顺序在加入、移出、移动时记下，恢复和目录到达引起的变化不算用户的操作；都到齐以后丢掉没有了的行
+ * 也写回去
  */
 export function useCurrentLayers(
   resources: ResourceOwner,
@@ -86,15 +87,16 @@ export function useCurrentLayers(
   );
 
   const add = (added: readonly string[]) => {
-    const before = fullOrder();
+    // 已经在的按拥有者里真有的行判断：记下的顺序里还没到的（目录、清单没到，或那一项的记录没了）照样能加入
     const fresh = [...new Set(added)].filter(
-      key => !before.includes(key) && (resourceCodeOfKey(key) !== null || modelIdOfKey(key) !== null)
+      key => !present.value.has(key) && (resourceCodeOfKey(key) !== null || modelIdOfKey(key) !== null)
     );
     if (fresh.length === 0) {
       return;
     }
     const ids = fresh.flatMap(key => modelIdOfKey(key) ?? []);
     const codes = fresh.flatMap(key => resourceCodeOfKey(key) ?? []);
+    const before = fullOrder().filter(key => !fresh.includes(key));
     if (ids.length > 0) {
       models.add(ids);
     }

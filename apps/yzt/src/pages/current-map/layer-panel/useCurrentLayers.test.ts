@@ -30,11 +30,9 @@ const CATALOG = buildCatalog([
 const r = (code: string) => `resource:${code}`;
 const m = (id: string) => `model:${id}`;
 
-// 两个拥有者只保留用到的部分，状态按真实的纯函数变化；arrived 为 false 时资源目录、模型清单都还没到
-function setup(arrived = true) {
-  const state = shallowRef<ResourceLayersState>(
-    arrived ? mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG) : EMPTY_RESOURCE_LAYERS
-  );
+// 两个拥有者只保留用到的部分，状态按真实的纯函数变化；资源目录、模型清单都已经到了（没到时的情形见偏好的测试）
+function setup() {
+  const state = shallowRef<ResourceLayersState>(mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG));
   const resources = {
     state,
     add: (codes: readonly string[], at?: number) => (state.value = withAdded(state.value, codes, at)),
@@ -44,10 +42,9 @@ function setup(arrived = true) {
   const added = shallowRef<readonly string[]>([]);
   const hidden = shallowRef<ReadonlySet<string>>(new Set());
   const catalog = shallowRef(['x', 'y', 'z'].map(id => ({ id }) as SceneModel));
-  const restored = shallowRef(arrived);
   const models = {
     models: computed(() => catalog.value),
-    restored: computed(() => restored.value),
+    restored: computed(() => true),
     added,
     hidden,
     add: (ids: readonly string[]) => (added.value = [...ids.filter(id => !added.value.includes(id)), ...added.value]),
@@ -59,7 +56,7 @@ function setup(arrived = true) {
     scope.run(() => useCurrentLayers(resources, models)),
     '图层的平铺列表'
   );
-  return { current, state, added, hidden, catalog, restored, [Symbol.dispose]: () => scope.stop() };
+  return { current, state, added, hidden, catalog, [Symbol.dispose]: () => scope.stop() };
 }
 
 describe('useCurrentLayers（ADR 0161、0167）', () => {

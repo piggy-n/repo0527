@@ -1,3 +1,5 @@
+import { LAYER_HINTS, type LayerHint } from './layer-hints';
+
 function required(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(`缺少环境变量 ${name}，请检查 apps/yzt 下的 .env 文件`);
@@ -58,9 +60,22 @@ function preferenceSwitches() {
     'resource-symbols': item('VITE_PREFERENCE_RESOURCE_SYMBOLS', import.meta.env.VITE_PREFERENCE_RESOURCE_SYMBOLS),
     'resource-panel': item('VITE_PREFERENCE_RESOURCE_PANEL', import.meta.env.VITE_PREFERENCE_RESOURCE_PANEL),
     'scene-models': item('VITE_PREFERENCE_SCENE_MODELS', import.meta.env.VITE_PREFERENCE_SCENE_MODELS),
-    'current-layers': item('VITE_PREFERENCE_CURRENT_LAYERS', import.meta.env.VITE_PREFERENCE_CURRENT_LAYERS),
-    'layer-hints': item('VITE_PREFERENCE_LAYER_HINTS', import.meta.env.VITE_PREFERENCE_LAYER_HINTS)
+    'current-layers': item('VITE_PREFERENCE_CURRENT_LAYERS', import.meta.env.VITE_PREFERENCE_CURRENT_LAYERS)
   };
+}
+
+// 图层行内提示（ADR 0167）：总开关和每一类的开关都为 true 才显示；总开关关闭时分项照样校验，拼错了不等到打开时才发现
+function layerHintSwitches(): ReadonlySet<LayerHint> {
+  const enabled = flag('VITE_LAYER_HINTS_ENABLED', import.meta.env.VITE_LAYER_HINTS_ENABLED);
+  const items: Readonly<Record<LayerHint, boolean>> = {
+    loading: flag('VITE_LAYER_HINT_LOADING', import.meta.env.VITE_LAYER_HINT_LOADING),
+    failed: flag('VITE_LAYER_HINT_FAILED', import.meta.env.VITE_LAYER_HINT_FAILED),
+    done: flag('VITE_LAYER_HINT_DONE', import.meta.env.VITE_LAYER_HINT_DONE),
+    'config-error': flag('VITE_LAYER_HINT_CONFIG_ERROR', import.meta.env.VITE_LAYER_HINT_CONFIG_ERROR),
+    minzoom: flag('VITE_LAYER_HINT_MINZOOM', import.meta.env.VITE_LAYER_HINT_MINZOOM),
+    covering: flag('VITE_LAYER_HINT_COVERING', import.meta.env.VITE_LAYER_HINT_COVERING)
+  };
+  return new Set(LAYER_HINTS.filter(hint => enabled && items[hint]));
 }
 
 /** 校验过的应用配置；自定义环境变量只在这里读取 */
@@ -84,6 +99,8 @@ export const appConfig = {
   pageStateReset: flag('VITE_PAGE_STATE_RESET', import.meta.env.VITE_PAGE_STATE_RESET),
   /** 各项偏好是否生效，已经合并了总开关；为 false 的不读不写（ADR 0140） */
   preferences: preferenceSwitches(),
+  /** 图层行内提示显示哪几类：关掉的在图层行内、状态栏的条目和数据加载的明细里都不显示（ADR 0167） */
+  layerHints: layerHintSwitches(),
   /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
   resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
 } as const;

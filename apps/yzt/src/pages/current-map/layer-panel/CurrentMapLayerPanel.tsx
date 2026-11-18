@@ -52,13 +52,12 @@ import { type PanelToolItem, PanelToolbar } from '@/shared/map/layer-panel/Panel
 import { revealInScroll } from '@/shared/map/layer-panel/scroll';
 import { OpacitySlider } from '@/shared/map/OpacitySlider';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
+import { LAYER_HINTS, type LayerHint } from '@/shared/config/layer-hints';
 import { COVER_OPACITY, type MoveAction, moveIndex, selectionAfterRemoval, steppedKey } from './current-list';
 import styles from './CurrentMapLayerPanel.module.scss';
 import { labelMenuEntries, type LabelRowState, labelToolItem } from './label-entries';
-import type { LayerHint } from './layer-hints';
-import { LayerHintsPopover } from './LayerHintsPopover';
+import { resourceStatusKindsOf } from './layer-hints';
 import type { CurrentLayers } from './useCurrentLayers';
-import type { LayerHints } from './useLayerHints';
 
 // 新加入的行滑入、定位到的行闪两下的时长，和样式里的动画一致
 const ENTER_MS = 900;
@@ -126,8 +125,8 @@ export const CurrentMapLayerPanel = defineComponent({
      * 名称后面是失败的图标
      */
     requests: { type: Object as PropType<RequestStatus>, default: undefined },
-    /** 行内提示的开关（ADR 0167）：给了时标题栏有"行内提示"，行内按它显示；不给时全开、没有入口 */
-    hints: { type: Object as PropType<LayerHints>, default: undefined },
+    /** 行内提示显示哪几类（ADR 0167，部署时在 .env 里配，appConfig.layerHints）；不给时全显示 */
+    hints: { type: Object as PropType<ReadonlySet<LayerHint>>, default: () => new Set(LAYER_HINTS) },
     /** 在图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
     reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null },
     /** 右侧"图例"页正在编辑的资源：图例浮层开着同一个资源时关掉，后打开编辑的一方为准（ADR 0157） */
@@ -727,7 +726,7 @@ export const CurrentMapLayerPanel = defineComponent({
     };
 
     // 用户关掉的提示不显示（ADR 0167）：转圈、瓦片失败已经按开关过滤，这里管模型的失败、状态图标和盖住模型
-    const hintShown = (hint: LayerHint) => props.hints?.shown.value.has(hint) ?? true;
+    const hintShown = (hint: LayerHint) => props.hints.has(hint);
     const renderRow = (key: string) => {
       const id = modelIdOfKey(key);
       if (id !== null) {
@@ -753,7 +752,7 @@ export const CurrentMapLayerPanel = defineComponent({
               level={level.value}
               loading={props.requests?.loadingKeys.value.has(key) ?? false}
               tileFailed={props.requests?.failedKeys.value.has(key) ?? false}
-              statusKinds={props.hints?.statusKinds.value}
+              statusKinds={resourceStatusKindsOf(props.hints)}
               covering={hintShown('covering') && coveringOf(code)}
               onLegend={() => {
                 const open = popover.value?.kind === 'legend' && selected.value === key;
@@ -987,7 +986,6 @@ export const CurrentMapLayerPanel = defineComponent({
         onUpdate:currentView={(id: string) => (currentView.value = catalogViewOf(id) ?? currentView.value)}
       >
         {{
-          headerTools: () => (props.hints ? [<LayerHintsPopover hints={props.hints} />] : []),
           catalogTools: () => [<PanelToolbar items={catalogTools.value} label="资源的操作" onAction={onCatalogTool} />],
           catalogFilter: () => [
             <ElInput

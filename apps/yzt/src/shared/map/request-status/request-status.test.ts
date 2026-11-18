@@ -151,6 +151,11 @@ describe('按类显示（ADR 0167）', () => {
     const kinds = { loading: false, failed: true, done: true };
     expect(requestSummary([slow, broken], NOW, false, kinds)).toStrictEqual({ kind: 'failed', count: 1 });
     expect(requestGroups([slow, broken], kinds).loading).toStrictEqual([]);
+    // 还在加载、已有失败的不算失败，和明细一致（它不在有失败一组）；还有在加载的时也不说完成，明细开着时同样
+    const pendingWithFailure = tiles('pending', { failed: 1, startedAt: NOW - 2000 });
+    expect(requestSummary([pendingWithFailure, recent], NOW, false, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([pendingWithFailure, recent], NOW, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestGroups([pendingWithFailure], kinds).failed).toStrictEqual([]);
   });
 
   it('关掉加载失败：条目不说失败、加载中不带红点，有失败的项也不算完成；明细没有有失败一组', () => {
