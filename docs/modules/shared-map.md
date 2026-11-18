@@ -371,7 +371,7 @@ const readout = useMapReadout(map);
 | `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度（拖到最小时资源留标题、搜索行、标签行和 3 行，共 208；图层留标题和 2 行，共 112，有标签行时加上它，三维里共 144，外壳把量到的标签行高度交给 `checkedExtra`）、在滚动区里露出一行（纯函数和小工具） |
 | `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 
-- 选中、浮层、菜单、三维里的筛选这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`），资源和模型平铺的顺序在页面的 `useCurrentLayers`（`pages/current-map/layer-panel`，ADR 0161：资源、模型各自的先后在拥有者里，怎样穿插记在这里，地图按它放模型层、点选按它取锚点；ADR 0167 起按账号记住，只在加入、移出、移动时写，后加入的放在最上面，目录、清单没到时操作也给还没到的项留着位置）；行内提示的开关在页面的 `useLayerHints`，面板的 `hints` 给了时标题栏有入口（外壳的 `headerTools` 插槽，按钮用 `headerButton` 的样式），行按它显示（ADR 0167）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
+- 选中、浮层、菜单、三维里的筛选这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`），资源和模型平铺的顺序在页面的 `useCurrentLayers`（`pages/current-map/layer-panel`，ADR 0161：资源、模型各自的先后在拥有者里，怎样穿插记在这里，地图按它放模型层、点选按它取锚点；ADR 0167 起按账号记住，在加入、移出、移动时写，都到齐以后丢掉没有了的行也写，后加入的放在最上面，目录、清单没到时操作也给还没到的项留着位置）；行内提示显示哪几类由页面按 `appConfig.layerHints`（`.env` 的开关，ADR 0167）给面板的 `hints`，不给时全显示。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
 - 页面给 `reveal` 一个新对象时，面板在图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行；页面先展开左侧面板）；`requests` 给出加载超过 0.4 秒的行，资源行和模型行在名称后面转圈（模型行的 `loading`，ADR 0162；失败和重试仍按 `stateOf`，关掉加载失败时不显示），这一轮结束、有失败的资源行显示"有瓦片加载失败"（`failedKeys`，ADR 0167）
 
 ## 请求状态（ADR 0158）
@@ -385,8 +385,8 @@ const requests = useRequestStatus(
     ...(map.dimension.value === '3d' ? modelRequests(models) : [])
   ],
   undefined,
-  // 显示哪几类：行内提示的开关（ADR 0167）；不给时全显示
-  () => hints.requestKinds.value
+  // 显示哪几类：行内提示的开关（.env，ADR 0167）；不给时全显示
+  () => requestKindsOf(appConfig.layerHints)
 );
 <MapStatusBar readout={readout} format={format}>
   {{

@@ -53,8 +53,7 @@ if (preferences) {
 | `useResourceSymbols` | `resource-symbols` | 每个资源的统一样式、样式方式（和默认方式不同、由调过的内容也推不出时才记）、分类样式各取值，都只记和默认（叠加了发布的默认符号）不同的字段（颜色已规范化），不存临时预览 | 读到后整体替换，空的部分去掉，目录里没有了的资源也保留；有一个字段越界、颜色解析不了，整条作废（ADR 0044、0154）；点的形状是后加的可选字段，版本仍是 1，没有它的旧数据是圆，形状的取值只能增加（ADR 0159）；标注的样式（`label`：字段、字体、字号、颜色、描边、放置、显示级别、压盖）同样是后加的可选字段，只记和默认不同的，没有它的旧数据用默认标注，字体、放置方式的取值只能增加（ADR 0160） |
 | `useResourcePanelLayout` | `resource-panel` | 资源图层面板是否收起、"图层"段（下段）的高度比例（ADR 0157） | 读到后整体替换 |
 | `useSceneModels` | `scene-models` | 加入的三维模型（图层里的先后）、隐藏的、白膜换过的效果（ADR 0167） | 清单到了才合并：清单里没有了的丢掉，效果只留白膜、清单里还有的；合并时不飞过去 |
-| `useCurrentLayers`（`pages/current-map/layer-panel`） | `current-layers` | 图层列表的顺序：资源和模型的键，从上到下（ADR 0167） | 只在加入、移出、移动时写；目录、清单都到了以后丢掉没有了的行，之前操作时给还没到的项留着位置 |
-| `useLayerHints`（`pages/current-map/layer-panel`） | `layer-hints` | 行内提示里关掉的几类（ADR 0167） | 认不出的忽略，以后加的种类默认开着 |
+| `useCurrentLayers`（`pages/current-map/layer-panel`） | `current-layers` | 图层列表的顺序：资源和模型的键，从上到下（ADR 0167） | 在加入、移出、移动时写；目录、清单都到了以后丢掉没有了的行（也写回去），之前操作时给还没到的项留着位置 |
 
 ## 开关（ADR 0140）
 
