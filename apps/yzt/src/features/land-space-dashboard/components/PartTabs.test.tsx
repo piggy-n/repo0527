@@ -103,11 +103,44 @@ describe('PartTabs', () => {
 });
 
 describe('revealScrollLeft', () => {
-  it('选中项在视野外时滚到它完整露出、离边缘留 12 像素，已经在视野里时不动', () => {
-    // 视野 [100, 300]
-    expect(revealScrollLeft(100, 200, 150, 60)).toBe(100);
-    expect(revealScrollLeft(100, 200, 40, 60)).toBe(28);
-    expect(revealScrollLeft(100, 200, 260, 80)).toBe(152);
-    expect(revealScrollLeft(100, 200, 5, 60)).toBe(0);
+  // 1920×1080 下交通干线便捷度的分项栏实测：综合、一级、二级、高速，可视宽 344，最大 scrollLeft 271
+  const TABS = [
+    { start: 0, end: 60 },
+    { start: 66, end: 245 },
+    { start: 251, end: 430 },
+    { start: 436, end: 615 }
+  ];
+
+  it('往左切回第一个分项时连同「综合」一起滚到头，不留半个「综合」', () => {
+    expect(revealScrollLeft(TABS, 1, 271, 344, -1)).toBe(0);
+  });
+
+  it('往左切到露不全的分项时它贴左边，左边缘不切到前一个', () => {
+    expect(revealScrollLeft(TABS, 2, 271, 344, -1)).toBe(251);
+  });
+
+  it('选中项已经完整、但移动方向那一侧切着半个分项时也对齐', () => {
+    // 视野 [50, 300] 切着第一个；往左切到完整露出的第二个，连同第一个一起放下
+    const evenTabs = [
+      { start: 0, end: 100 },
+      { start: 106, end: 206 },
+      { start: 212, end: 312 }
+    ];
+    expect(revealScrollLeft(evenTabs, 1, 50, 250, -1)).toBe(0);
+  });
+
+  it('往右切时选中项贴右边，放得下后面的分项时滚到最右', () => {
+    expect(revealScrollLeft(TABS, 2, 0, 344, 1)).toBe(86);
+    expect(revealScrollLeft(TABS, 3, 86, 344, 1)).toBe(271);
+  });
+
+  it('选中项完整、移动方向那一侧没有半个分项时不动', () => {
+    expect(revealScrollLeft(TABS, 1, 0, 700, 1)).toBe(0);
+    expect(revealScrollLeft(TABS, 2, 251, 344, -1)).toBe(251);
+  });
+
+  it('选中项本身放不下时对齐它靠移动方向的那一端', () => {
+    expect(revealScrollLeft(TABS, 2, 0, 150, -1)).toBe(251);
+    expect(revealScrollLeft(TABS, 2, 0, 150, 1)).toBe(280);
   });
 });

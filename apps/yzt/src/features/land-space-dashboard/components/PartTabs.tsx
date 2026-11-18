@@ -4,18 +4,43 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { LandSpacePart } from '../data/land-space-data';
 import styles from './PartTabs.module.scss';
 
-// 选中项离滚动区边缘留出的距离，看得出前后还有分项
-const EDGE = 12;
+/** 分项在滚动区内容里的起止位置 */
+export interface TabExtent {
+  readonly start: number;
+  readonly end: number;
+}
 
-/** 让 [start, start + width] 完整出现在滚动区里的 scrollLeft；已经在里面时不动 */
-export function revealScrollLeft(scrollLeft: number, viewWidth: number, start: number, width: number): number {
-  if (start - EDGE < scrollLeft) {
-    return Math.max(0, start - EDGE);
+// 滚动区边缘切到半个分项；容差半个像素，scrollLeft 可能带小数
+function cutAt(tabs: readonly TabExtent[], edge: number): boolean {
+  return tabs.some(tab => tab.start < edge - 0.5 && tab.end > edge + 0.5);
+}
+
+/** 选中项完整露出、移动方向那一侧的边缘不切到半个分项时的 scrollLeft；direction 是选中项移动的方向，0 表示不知道 */
+export function revealScrollLeft(
+  tabs: readonly TabExtent[],
+  index: number,
+  scrollLeft: number,
+  viewWidth: number,
+  direction: number
+): number {
+  const tab = tabs[index];
+  if (!tab) {
+    return scrollLeft;
   }
-  if (start + width + EDGE > scrollLeft + viewWidth) {
-    return start + width + EDGE - viewWidth;
+  const hidden = tab.start < scrollLeft - 0.5 || tab.end > scrollLeft + viewWidth + 0.5;
+  const leftward = direction < 0 || (direction === 0 && tab.start < scrollLeft);
+  const rightward = direction > 0 || (direction === 0 && !leftward);
+  const towardCut = (leftward && cutAt(tabs, scrollLeft)) || (rightward && cutAt(tabs, scrollLeft + viewWidth));
+  if (!hidden && !towardCut) {
+    return scrollLeft;
   }
-  return scrollLeft;
+  // 要滚时，移动方向那一侧对齐到整个分项，并尽量多放下那一侧的分项
+  if (leftward) {
+    const first = tabs.slice(0, index + 1).find(item => tab.end - item.start <= viewWidth);
+    return first?.start ?? tab.start;
+  }
+  const last = tabs.slice(index).findLast(item => item.end - tab.start <= viewWidth);
+  return Math.max(0, (last?.end ?? tab.end) - viewWidth);
 }
 
 const KEY_STEPS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1 };
@@ -43,22 +68,32 @@ export const PartTabs = defineComponent({
       return scroller.value?.querySelector<HTMLElement>('[aria-selected="true"]');
     }
 
-    // 选中项滚进视野，只滚分项栏自己，不带动外层的列表
-    function reveal(): void {
+    // 选中项滚进视野，只滚分项栏自己，不带动外层的列表；offsetLeft 相对滚动区（它是定位容器）
+    function reveal(direction: number): void {
       const view = scroller.value;
-      const tab = selectedTab();
-      if (!view || !tab) {
+      if (!view) {
         return;
       }
-      const left = revealScrollLeft(view.scrollLeft, view.clientWidth, tab.offsetLeft, tab.offsetWidth);
-      if (left !== view.scrollLeft) {
+      const tabs = [...view.querySelectorAll<HTMLElement>('[role="tab"]')].map(tab => ({
+        start: tab.offsetLeft,
+        end: tab.offsetLeft + tab.offsetWidth
+      }));
+      const left = revealScrollLeft(tabs, index.value, view.scrollLeft, view.clientWidth, direction);
+      if (Math.abs(left - view.scrollLeft) > 0.5) {
         view.scrollTo({ left, behavior: props.reducedMotion ? 'auto' : 'smooth' });
       }
     }
 
-    watch([() => props.selected, () => props.parts], reveal, { flush: 'post' });
+    const optionIndex = (id: string | null) => options.value.findIndex(option => option.id === id);
+    watch(
+      () => props.selected,
+      (selected, previous) => reveal(Math.sign(optionIndex(selected) - optionIndex(previous))),
+      { flush: 'post' }
+    );
+    watch(() => props.parts, () => reveal(0), { flush: 'post' });
 
-    // 按到头的按钮会停用、丢掉焦点，焦点交给选中的分项，键盘用户接着从分项栏往下走
+    // 按到头的按钮会停用、丢掉焦点，焦点交给选中的分项，键盘用户接着从分项栏往下走；
+    // 交焦点不让浏览器自己滚，否则会打断 reveal 的平滑滚动，停在选中项露不全的位置
     async function step(delta: number, event: MouseEvent): Promise<void> {
       const next = options.value[index.value + delta];
       if (!next) {
@@ -69,7 +104,7 @@ export const PartTabs = defineComponent({
       emit('select', next.id);
       await nextTick();
       if (hadFocus && button.disabled) {
-        selectedTab()?.focus();
+        selectedTab()?.focus({ preventScroll: true });
       }
     }
 
@@ -90,7 +125,7 @@ export const PartTabs = defineComponent({
       event.preventDefault();
       emit('select', next.id);
       await nextTick();
-      selectedTab()?.focus();
+      selectedTab()?.focus({ preventScroll: true });
     }
 
     return () => {
