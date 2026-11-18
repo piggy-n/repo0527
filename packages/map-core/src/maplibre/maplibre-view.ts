@@ -4,6 +4,7 @@ import { safeReporter } from '@mx/utils';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
+import { fetchJson } from '../scene/index-loader';
 import type { LoadJson } from '../scene/prepare-tileset';
 import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import { NO_SCENE_STATUS, type RoamStatus, type SceneStatus } from '../scene/scene-content-model';
@@ -170,15 +171,6 @@ function createMapLibreMap(options: MapLibreMapOptions): MapLike {
 
 function reportToConsole(error: unknown): void {
   console.error('[MapLibreView]', error);
-}
-
-async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(url, { signal });
-  if (!response.ok) {
-    throw new Error(`下载 ${url} 失败：${response.status}`);
-  }
-  const data: unknown = await response.json();
-  return data;
 }
 
 /**

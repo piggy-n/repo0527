@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { abortReason } from '@mx/utils';
 import { describe, expect, it, vi } from 'vitest';
 import { translation } from './nav/nav-frame';
 import { navigationLeaves } from './nav/nav-leaves';
@@ -400,6 +401,32 @@ describe('prepareTileset', () => {
     });
 
     expect(prepared.root.content).toStrictEqual({ uri: `${BASE}old.b3dm` });
+  });
+
+  it('一个外部索引下载失败：以它的原因结束，同一次整理里其余进行中的下载都中止', async () => {
+    const children = ['a', 'b', 'c'].map(name => ({ boundingVolume: SPHERE, geometricError: 5, content: { uri: `${name}.json` } }));
+    const files: Record<string, unknown> = {
+      [`${BASE}tileset.json`]: { root: { boundingVolume: SPHERE, geometricError: 100, children } }
+    };
+    const signals: AbortSignal[] = [];
+    const broken = new Error('下载 b.json 失败：404');
+    // a、c 一直挂着，直到被中止
+    const load: LoadJson = (url, signal) => {
+      if (url in files) {
+        return Promise.resolve(structuredClone(files[url]));
+      }
+      if (url.endsWith('b.json')) {
+        return Promise.reject(broken);
+      }
+      signals.push(signal);
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(abortReason(signal)));
+      });
+    };
+
+    await expect(prepareTileset(`${BASE}tileset.json`, load, new AbortController().signal)).rejects.toBe(broken);
+    expect(signals).toHaveLength(2);
+    expect(signals.map(signal => signal.aborted)).toStrictEqual([true, true]);
   });
 
   it('不是索引、下载失败、已中止时以原因结束', async () => {

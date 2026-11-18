@@ -1,4 +1,5 @@
 import type { CameraState } from '../camera/camera-model';
+import { createIndexLoader } from './index-loader';
 import { type LoadJson, type PreparedTileset, prepareTileset } from './prepare-tileset';
 import {
   NO_SCENE_STATUS,
@@ -60,7 +61,8 @@ const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
 
 /**
  * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），引擎实现 TilesetHost（ADR 0147 第 3 节）：
- * 地址、重试次数变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的
+ * 地址、重试次数变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的。
+ * 整理索引的下载经 createIndexLoader：所有瓦片集共用名额，暂时的失败重试
  */
 export class SceneTilesetSync implements Disposable {
   readonly #host: TilesetHost;
@@ -74,7 +76,8 @@ export class SceneTilesetSync implements Disposable {
 
   constructor({ host, loadJson, onStatus }: SceneTilesetSyncOptions) {
     this.#host = host;
-    this.#loadJson = loadJson;
+    // 所有瓦片集的索引共用下载名额：几个外部索引多的一起加入时不超过浏览器的请求上限（docs/modules/map-core.md"索引的下载"）
+    this.#loadJson = createIndexLoader(loadJson);
     this.#onStatus = onStatus;
   }
 
