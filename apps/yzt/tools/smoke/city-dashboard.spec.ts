@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 
 // 软件渲染时装饰动画让导出排队十几秒（docs/modules/city-dashboard.md），入场由浏览器测试覆盖
 test.use({ reducedMotion: 'reduce' });
@@ -16,7 +16,7 @@ test('驾驶舱需登录、独立懒加载，缺字体时地图详情及三类�
   await page.getByPlaceholder('请输入账号').fill('smoke');
   await page.getByPlaceholder('请输入密码').fill('smoke-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await expect(page.locator('[data-map-view-state]')).toHaveAttribute('data-map-view-state', 'ready');
   expect(scripts.some(url => url.includes('CityDashboardPage-'))).toBe(false);
   await page.goto('/city-dashboard');
@@ -67,7 +67,7 @@ test('没有 WebGL 时保留二维地图与导出', async ({ page }) => {
   await page.getByPlaceholder('请输入账号').fill('smoke');
   await page.getByPlaceholder('请输入密码').fill('smoke-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await page.goto('/city-dashboard');
   await expect(page.getByText('地图采用简化显示')).toBeVisible();
   await expect(page.getByRole('img', { name: '消防救援5分钟可达覆盖率二维分布图', exact: true })).toBeVisible();
@@ -84,7 +84,7 @@ test.describe('驾驶舱触屏与系统减少动画', () => {
     await page.getByPlaceholder('请输入账号').fill('smoke');
     await page.getByPlaceholder('请输入密码').fill('smoke-password');
     await page.getByRole('button', { name: '登录', exact: true }).click();
-    await expect(page).toHaveURL(/\/current-map$/);
+    await expect(page).toHaveURL(CURRENT_MAP_URL);
     await page.goto('/city-dashboard');
     await expect(page.locator('[data-dashboard-phase]')).toHaveAttribute('data-dashboard-phase', 'ready');
     await expect(page.locator('button[aria-haspopup="dialog"]')).toHaveCount(13);

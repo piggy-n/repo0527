@@ -37,6 +37,11 @@ describe('fetchSceneTierSetting', () => {
     expect(requests.every(url => url.searchParams.has('t'))).toBe(true);
   });
 
+  it.each(['auto', 'low', 'standard', 'high', 'workstation'] as const)('认得 %s', async tier => {
+    server.use(mock.get(FILE_URL, () => HttpResponse.json({ tier })));
+    await expect(fetchSceneTierSetting()).resolves.toBe(tier);
+  });
+
   it.each([
     ['文件缺失', () => new HttpResponse(null, { status: 404 })],
     ['nginx 回退成 index.html', () => HttpResponse.html('<!doctype html><title>现状图</title>')],

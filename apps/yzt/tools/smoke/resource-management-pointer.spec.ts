@@ -1,4 +1,4 @@
-import { expect, sessionToken, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, sessionToken, test } from './fixtures.ts';
 
 // 主要用鼠标、同时接着触屏或虚拟触控设备的环境。blink-settings 的取值是位掩码：粗指针 2、细指针 4；不能悬浮 1、能悬浮 2。
 // launchOptions 是浏览器进程的选项，只能写在文件顶层，所以单独一个文件；覆盖配置里的 args，要带上软件渲染
@@ -32,7 +32,7 @@ test('鼠标和粗指针设备并存时，目录操作仍跟随整行悬浮，�
   await page.getByPlaceholder('请输入账号').fill('smoke');
   await page.getByPlaceholder('请输入密码').fill('smoke-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await page.goto('/resource-management');
 
   const rowOf = (name: string) =>

@@ -70,6 +70,10 @@ describe('variants 的对照方案', () => {
       ['maplibre-tier-low-keep', 'low', true, 'MapLibre，低档（缓存上限 1 GB），上传后保留贴图'],
       ['maplibre-tier-high-keep', 'high', true, 'MapLibre，高档（缓存上限 6 GB），上传后保留贴图']
     ]);
+    expect(variants([], [], [], false, ['workstation']).map(item => [item.id, item.tier, item.label])).toEqual([
+      ['maplibre', undefined, 'MapLibre'],
+      ['maplibre-tier-workstation', 'workstation', 'MapLibre，工作站档（缓存上限 12 GB）']
+    ]);
     const runs = buildRuns(selectScenes(['jkq-z16-tilt']), variants([], [], [], false, ['high']), 1, [], true);
     expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
       'jkq-z16-tilt/maplibre/quality',

@@ -60,11 +60,14 @@ describe('parseOptions', () => {
     expect(() => parseOptions(['--cache-gb', 'big'])).toThrow('--cache-gb');
   });
 
-  it('设备档位：默认不对照，逗号或空格分隔，重复的只留一个，只认三档', () => {
+  it('设备档位：默认不对照，逗号或空格分隔，重复的只留一个，只认四档', () => {
     expect(parseOptions([]).tiers).toEqual([]);
     expect(parseOptions(['--tier', 'low,high']).tiers).toEqual(['low', 'high']);
     expect(parseOptions(['--tier', 'high high standard']).tiers).toEqual(['high', 'standard']);
+    expect(() => parseOptions(['--tier', 'workstation'])).not.toThrow();
+    expect(parseOptions(['--tier', 'high,workstation']).tiers).toEqual(['high', 'workstation']);
     expect(() => parseOptions(['--tier', 'ultra'])).toThrow('--tier');
+    expect(() => parseOptions(['--tier', 'auto'])).toThrow('--tier');
   });
 
   it('上传后释放贴图的对照、定位后放大一级：默认不加', () => {

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { BrowserContext, Page } from 'playwright/test';
 import { loadEnv } from 'vite';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 
 // 开关在构建时写进产物，这里和内网构建读同一份配置，验证产物实际的行为（ADR 0132）
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -37,7 +37,7 @@ async function openResources(context: BrowserContext, page: Page): Promise<reado
   await page.getByPlaceholder('请输入账号').fill('smoke');
   await page.getByPlaceholder('请输入密码').fill('smoke-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await expect(page.locator('[data-map-view-state]')).toHaveAttribute('data-map-view-state', 'ready');
 
   // 资源目录里选中两个资源，用标题上的"添加"加入当前地图（ADR 0157）

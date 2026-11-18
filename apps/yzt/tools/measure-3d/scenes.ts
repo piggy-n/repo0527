@@ -1,4 +1,4 @@
-import { SCENE_TIER_BUDGETS, type SceneTier } from '../../src/shared/config/scene-tier-options.ts';
+import { SCENE_TIER_BUDGETS, SCENE_TIER_NAMES, type SceneTier } from '../../src/shared/config/scene-tier-options.ts';
 import type { BenchCamera } from './bench-api.ts';
 
 // 场景和方案：同一个场景的各个方案用相同的相机和飞行路径（场景和路径来自 ADR 0147 的 PoC）
@@ -50,13 +50,12 @@ export const takesQualityRun = (variant: Variant): boolean =>
   !variant.keepImages &&
   (variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined || variant.tier !== undefined);
 
-const TIER_NAMES: Readonly<Record<SceneTier, string>> = { low: '低档', standard: '标准档', high: '高档' };
 const GIGABYTE = 1024 ** 3;
 
 /** 设备档位的方案：数值都从 app 的档位表取，标签写上缓存上限 */
 function tierVariant(tier: SceneTier): Variant {
   const limit = SCENE_TIER_BUDGETS[tier].cacheLimitBytes / GIGABYTE;
-  return { id: `maplibre-tier-${tier}`, label: `MapLibre，${TIER_NAMES[tier]}（缓存上限 ${limit} GB）`, tier };
+  return { id: `maplibre-tier-${tier}`, label: `MapLibre，${SCENE_TIER_NAMES[tier]}（缓存上限 ${limit} GB）`, tier };
 }
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样，zoom 是定位后放大一级（--zoom-in） */

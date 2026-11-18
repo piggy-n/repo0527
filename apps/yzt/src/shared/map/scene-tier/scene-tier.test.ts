@@ -1,44 +1,20 @@
 // @vitest-environment node
 import type { SceneBudget } from '@mx/map-core';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { z } from 'zod';
 import { SCENE_TIER_BUDGETS, type SceneTier, type SceneTierSetting } from '../../config/scene-tier-options';
 import { createDeviceStore, type DeviceStore } from '../../storage/device-store';
+import { MemoryStorage } from '../../storage/testing';
+import { applySceneTierQuery } from './browser-setting';
 import type { PingChannel } from './crash-markers';
 import { SceneTierSource } from './scene-tier';
 import type { PingMessage } from './scene-tier-ping-protocol';
 
 const DGPU = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11)';
 const IGPU = 'ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)';
-
-// 内存里的 localStorage
-class MemoryStorage implements Storage {
-  readonly #items = new Map<string, string>();
-
-  get length(): number {
-    return this.#items.size;
-  }
-
-  clear(): void {
-    this.#items.clear();
-  }
-
-  getItem(key: string): string | null {
-    return this.#items.get(key) ?? null;
-  }
-
-  key(index: number): string | null {
-    return [...this.#items.keys()][index] ?? null;
-  }
-
-  removeItem(key: string): void {
-    this.#items.delete(key);
-  }
-
-  setItem(key: string, value: string): void {
-    this.#items.set(key, value);
-  }
-}
+// 现场的工作站（ADR 0166）：按 ANGLE 的格式写的，没在现场的浏览器里读过
+const RTX4090 = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 (0x00002684) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+const QUADRO = 'ANGLE (NVIDIA, NVIDIA Quadro RTX 5000 Direct3D11 vs_5_0 ps_5_0, D3D11)';
 
 // 内存里的 BroadcastChannel：发给同一个频道的其他端，异步送达，不送给自己
 function createHub() {
@@ -123,28 +99,39 @@ const settled = (promise: Promise<unknown>) =>
   Promise.race([promise.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 0))]);
 
 const disposables: Disposable[] = [];
+// 定档时控制台的一行：不打印，用例按它断言
+let info: MockInstance<typeof console.info>;
+
+beforeEach(() => {
+  info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+});
 
 afterEach(() => {
   for (const disposable of disposables.splice(0)) {
     disposable[Symbol.dispose]();
   }
+  info.mockRestore();
 });
 
 interface PageOptions {
   readonly storage: Storage;
   readonly hub: ReturnType<typeof createHub>;
   readonly id: string;
-  /** null 是没读到 scene-tier.json */
+  /** 部署文件里的档位；null 是没读到 scene-tier.json */
   readonly setting?: SceneTierSetting | null;
+  /** 本浏览器的设定：这个页面启动时读到的 */
+  readonly browser?: SceneTierSetting;
   readonly answerTimeoutMs?: number;
+  readonly deviceMemory?: number;
 }
 
-// 一个页面：自己的档位来源，Worker 就绪后替它回答
-function openPage({ storage, hub, id, setting = 'auto', answerTimeoutMs = 20 }: PageOptions) {
+// 一个页面：自己的档位来源，Worker 就绪后替它回答；loads 记下读部署文件的次数
+function openPage({ storage, hub, id, setting = 'auto', browser, answerTimeoutMs = 20, deviceMemory }: PageOptions) {
   const store: DeviceStore = createDeviceStore(storage);
   const lifecycle = fakeLifecycle();
   let stopAnswering: (() => void) | undefined;
   const channel = hub.channel();
+  const loads = { count: 0 };
   const source = new SceneTierSource({
     store,
     channel,
@@ -152,14 +139,20 @@ function openPage({ storage, hub, id, setting = 'auto', answerTimeoutMs = 20 }: 
     startPing: async pageId => {
       stopAnswering = hub.answerFor(pageId);
     },
-    loadSetting: async () => setting,
+    loadSetting: async () => {
+      loads.count++;
+      return setting;
+    },
     pageId: id,
-    answerTimeoutMs
+    answerTimeoutMs,
+    deviceMemory,
+    browserSetting: browser
   });
   disposables.push(source);
   return {
     source,
     lifecycle,
+    loads,
     // 崩溃：页面和 Worker 都没了，标记留下
     crash() {
       stopAnswering?.();
@@ -192,21 +185,24 @@ async function open3d(source: SceneTierSource, renderer = DGPU): Promise<SceneBu
   return budget;
 }
 
-// 别的页面以高档崩溃过，这个页面打开三维发现了
-async function crashedOnce(restored = false) {
+// 别的页面以配置的档位（默认高档）崩溃过，这个页面打开三维发现了
+async function crashedOnce(restored = false, tier: SceneTier = 'high') {
   const context = setup();
-  context.leaveMarker('b', 'high', restored, 'high');
-  const page = openPage({ storage: context.storage, hub: context.hub, id: 'a', setting: 'high' });
+  context.leaveMarker('b', tier, restored, tier);
+  const page = openPage({ storage: context.storage, hub: context.hub, id: 'a', setting: tier });
   await open3d(page.source);
   return { ...context, ...page };
 }
 
 describe('SceneTierSource 的档位', () => {
   it.each([
-    ['auto、独显', 'auto', DGPU, 'standard'],
+    ['auto、6 GB 显存的独显（用户测试的 RTX 3060 Laptop）', 'auto', DGPU, 'standard'],
     ['auto、集显', 'auto', IGPU, 'low'],
     ['auto、读不到型号', 'auto', '', 'standard'],
+    ['auto、现场的 RTX 4090（24 GB）', 'auto', RTX4090, 'workstation'],
+    ['auto、现场的 Quadro RTX 5000（16 GB）', 'auto', QUADRO, 'workstation'],
     ['配置写了高档', 'high', IGPU, 'high'],
+    ['配置写了工作站档：没记上限时不压到高档', 'workstation', IGPU, 'workstation'],
     ['配置写了低档', 'low', DGPU, 'low']
   ] as const)('%s → %s 档', async (_, setting, renderer, tier) => {
     const { storage, hub } = setup();
@@ -248,6 +244,21 @@ describe('SceneTierSource 的档位', () => {
     source.contextLost();
 
     expect(budgets).toStrictEqual([SCENE_TIER_BUDGETS.standard, SCENE_TIER_BUDGETS.low]);
+  });
+
+  it('工作站档丢上下文：一次降一档，先到高档，不跳过', async () => {
+    const { storage, hub } = setup();
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'workstation' });
+    await open3d(source);
+    const budgets: SceneBudget[] = [];
+    source.subscribe(budget => budgets.push(budget));
+
+    source.contextLost();
+    source.contextLost();
+    source.contextLost();
+    source.contextLost();
+
+    expect(budgets).toStrictEqual([SCENE_TIER_BUDGETS.high, SCENE_TIER_BUDGETS.standard, SCENE_TIER_BUDGETS.low]);
   });
 });
 
@@ -345,6 +356,39 @@ describe('SceneTierSource 的崩溃标记', () => {
     expect(marker('b')).toBeUndefined();
     expect(hub.sent).toContainEqual({ kind: 'removed', id: 'b' });
     expect(record()).toStrictEqual({ configured: 'high', cap: 'standard', restorable: true, restoredBefore: false });
+  });
+
+  it('工作站档的页面崩了：标记、降档记录里的工作站档读得回来，降一档到高档，不跳到标准档', async () => {
+    const { storage, hub, marker, record } = setup();
+    const crashed = openPage({ storage, hub, id: 'b', setting: 'workstation' });
+    await open3d(crashed.source);
+    expect(marker('b')).toStrictEqual({ tier: 'workstation', configured: 'workstation', restored: false });
+    crashed.crash();
+
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'workstation' });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.high);
+    expect(source.notice.value).toStrictEqual({ restorable: true, restoredBefore: false });
+    expect(marker('b')).toBeUndefined();
+    expect(marker('a')).toStrictEqual({ tier: 'high', configured: 'workstation', restored: false });
+    expect(record()).toStrictEqual({ configured: 'workstation', cap: 'high', restorable: true, restoredBefore: false });
+    // 记的降档读得回来：以后的页面照样按高档，不再提示
+    const later = openPage({ storage, hub, id: 'c', setting: 'workstation' });
+    await expect(open3d(later.source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.high);
+    expect(later.source.notice.value).toBeNull();
+  });
+
+  it('部署从高档改成工作站档：高档时记的降档和标记都不算，按工作站档重新开始', async () => {
+    const { storage, hub, leaveMarker, marker, record } = setup();
+    leaveMarker('b', 'standard', false, 'high');
+    storage.setItem(
+      `yzt.device.${RECORD}`,
+      JSON.stringify({ configured: 'high', cap: 'standard', restorable: false, restoredBefore: true })
+    );
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'workstation' });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.workstation);
+    expect(source.notice.value).toBeNull();
+    expect(marker('b')).toBeUndefined();
+    expect(record()).toBeNull();
   });
 
   it('留下标记的页面在等回答时正常离开（删了键、Worker 没答上）：不算崩溃，不降档、不提示', async () => {
@@ -449,6 +493,20 @@ describe('SceneTierSource 的恢复', () => {
     expect(record()).toStrictEqual({ configured: 'high', cap: null, restorable: true, restoredBefore: true });
   });
 
+  it('工作站档崩溃后恢复：回到工作站档，记录读得回来，下一个页面也按工作站档', async () => {
+    const { storage, hub, source, marker, record } = await crashedOnce(false, 'workstation');
+    const budgets: SceneBudget[] = [];
+    source.subscribe(budget => budgets.push(budget));
+
+    source.restore();
+
+    expect(budgets).toStrictEqual([SCENE_TIER_BUDGETS.workstation]);
+    expect(marker('a')).toStrictEqual({ tier: 'workstation', configured: 'workstation', restored: true });
+    expect(record()).toStrictEqual({ configured: 'workstation', cap: null, restorable: true, restoredBefore: true });
+    const next = openPage({ storage, hub, id: 'c', setting: 'workstation' });
+    await expect(open3d(next.source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.workstation);
+  });
+
   it('恢复过的页面又崩：不再给恢复', async () => {
     const { source, record } = await crashedOnce(true);
     expect(source.notice.value).toStrictEqual({ restorable: false, restoredBefore: true });
@@ -515,5 +573,172 @@ describe('SceneTierSource 读不到配置时（null）', () => {
     await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.low);
     expect(source.notice.value).toStrictEqual({ restorable: true, restoredBefore: false });
     expect(marker('b')).toBeUndefined();
+  });
+});
+
+describe('SceneTierSource 的 auto 和内存', () => {
+  it.each([
+    ['不给内存（Firefox、Safari、http 下）：不压', undefined, 'workstation'],
+    ['32 GB：不压', 32, 'workstation'],
+    ['8 GB：分不出是不是旧版 Chrome 的封顶，不压', 8, 'workstation'],
+    ['16 GB（Chrome 147 起才报）：最多高档', 16, 'high'],
+    ['4 GB：最多标准档', 4, 'standard']
+  ] as const)('RTX 4090，%s', async (_, deviceMemory, tier) => {
+    const { storage, hub } = setup();
+    const { source } = openPage({ storage, hub, id: 'a', deviceMemory });
+    await expect(open3d(source, RTX4090)).resolves.toStrictEqual(SCENE_TIER_BUDGETS[tier]);
+  });
+
+  it('配置写了档位时不按内存压：内存只用在 auto', async () => {
+    const { storage, hub } = setup();
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'workstation', deviceMemory: 4 });
+    await expect(open3d(source, RTX4090)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.workstation);
+  });
+});
+
+describe('SceneTierSource 定档时控制台里的一行', () => {
+  it.each([
+    ['部署文件写 auto：型号和查到的显存', 'auto', QUADRO, '工作站档（auto：NVIDIA Quadro RTX 5000，16 GB）'],
+    ['部署文件写 auto：用户测试的笔记本', 'auto', DGPU, '标准档（auto：NVIDIA GeForce RTX 3060 Laptop GPU，6 GB）'],
+    ['部署文件写了档位', 'workstation', DGPU, '工作站档（部署文件）'],
+    ['读不到部署文件', null, RTX4090, '工作站档（读不到部署文件，按 auto：NVIDIA GeForce RTX 4090，24 GB）'],
+    ['集显', 'auto', IGPU, '低档（auto：集显「Intel(R) UHD Graphics 620」）'],
+    [
+      '显存表里没有',
+      'auto',
+      'ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+      '标准档（auto：显存表里没有「NVIDIA GeForce GTX 980」）'
+    ],
+    [
+      'Firefox 换成了代表型号',
+      'auto',
+      'ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar',
+      '标准档（auto：浏览器不给显卡型号「ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar」）'
+    ],
+    ['拿不到调试扩展', 'auto', 'WebKit WebGL', '标准档（auto：浏览器不给显卡型号「WebKit WebGL」）']
+  ] as const)('%s；定下以后再挂渲染器不再写', async (_, setting, renderer, line) => {
+    const { storage, hub } = setup();
+    const { source } = openPage({ storage, hub, id: 'a', setting });
+    await open3d(source, renderer);
+    source.resolve(renderer);
+
+    expect(info.mock.calls).toStrictEqual([[`[scene-tier] 三维档位：${line}`]]);
+  });
+
+  it('按内存压低了：写上内存', async () => {
+    const { storage, hub } = setup();
+    const { source } = openPage({ storage, hub, id: 'a', deviceMemory: 16 });
+    await open3d(source, RTX4090);
+    expect(info).toHaveBeenCalledWith(
+      '[scene-tier] 三维档位：高档（auto：NVIDIA GeForce RTX 4090，24 GB；内存 16 GB，最多高档）'
+    );
+  });
+
+  it('这台设备崩溃后降过档：写降下来的档位和原来的', async () => {
+    await crashedOnce(false, 'workstation');
+    expect(info).toHaveBeenCalledWith('[scene-tier] 三维档位：高档（部署文件；这台设备崩溃后降过档，原来是工作站档）');
+  });
+
+  it('本浏览器的设定：写来源，auto 也写', async () => {
+    const { storage, hub } = setup();
+    const store = createDeviceStore(storage);
+    const low = applySceneTierQuery('?scene-tier=low', store);
+    await open3d(openPage({ storage, hub, id: 'a', setting: 'workstation', browser: low }).source);
+    const auto = applySceneTierQuery('?scene-tier=auto', store);
+    await open3d(openPage({ storage, hub, id: 'b', setting: 'workstation', browser: auto }).source, QUADRO);
+
+    expect(info.mock.calls).toStrictEqual([
+      ['[scene-tier] 三维档位：低档（本浏览器设定）'],
+      ['[scene-tier] 三维档位：工作站档（本浏览器设定 auto：NVIDIA Quadro RTX 5000，16 GB）']
+    ]);
+  });
+});
+
+describe('SceneTierSource 和本浏览器的设定（地址栏的 scene-tier）', () => {
+  it.each([
+    ['auto', 'workstation'],
+    ['low', 'low'],
+    ['standard', 'standard'],
+    ['high', 'high'],
+    ['workstation', 'workstation']
+  ] as const)('设定 %s：代替部署文件（低档），不读部署文件 → %s', async (value, tier) => {
+    const { storage, hub } = setup();
+    const browser = applySceneTierQuery(`?scene-tier=${value}`, createDeviceStore(storage));
+    const { source, loads } = openPage({ storage, hub, id: 'a', setting: 'low', browser });
+    await expect(open3d(source, QUADRO)).resolves.toStrictEqual(SCENE_TIER_BUDGETS[tier]);
+    expect(loads.count).toBe(0);
+  });
+
+  it('只按这个页面启动时读到的设定：别的标签页后来记下的不用（地址栏显示的就是实际用的）', async () => {
+    const { storage, hub } = setup();
+    const browser = applySceneTierQuery('', createDeviceStore(storage));
+    applySceneTierQuery('?scene-tier=workstation', createDeviceStore(storage));
+    const { source, loads } = openPage({ storage, hub, id: 'a', setting: 'low', browser });
+    await expect(open3d(source, QUADRO)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.low);
+    expect(loads.count).toBe(1);
+  });
+
+  it('设定可以比部署文件低：部署文件写工作站档，这个浏览器设成低档', async () => {
+    const { storage, hub } = setup();
+    const browser = applySceneTierQuery('?scene-tier=low', createDeviceStore(storage));
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'workstation', browser });
+    await expect(open3d(source, RTX4090)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.low);
+  });
+
+  it('default 清掉设定，回到部署文件', async () => {
+    const { storage, hub } = setup();
+    const store = createDeviceStore(storage);
+    applySceneTierQuery('?scene-tier=low', store);
+    const browser = applySceneTierQuery('?scene-tier=default', store);
+    const { source, loads } = openPage({ storage, hub, id: 'a', setting: 'workstation', browser });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.workstation);
+    expect(loads.count).toBe(1);
+  });
+
+  it('不认得的值：警告一次，设定不变', async () => {
+    const { storage, hub } = setup();
+    const store = createDeviceStore(storage);
+    applySceneTierQuery('?scene-tier=high', store);
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const browser = applySceneTierQuery('?scene-tier=ultra', store);
+    expect(warn).toHaveBeenCalledOnce();
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'low', browser });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.high);
+  });
+
+  it('改了设定和改部署文件一样：原来记的降档、别的页面的旧标记都不算，按新的设定重新开始', async () => {
+    const { storage, hub, leaveMarker, marker, record } = setup();
+    // 部署文件是高档时崩溃过、降到了标准档，别的页面还留着高档时的标记
+    storage.setItem(
+      `yzt.device.${RECORD}`,
+      JSON.stringify({ configured: 'high', cap: 'standard', restorable: true, restoredBefore: false })
+    );
+    leaveMarker('b', 'high', false, 'high');
+    const browser = applySceneTierQuery('?scene-tier=workstation', createDeviceStore(storage));
+
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'high', browser });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.workstation);
+    expect(source.notice.value).toBeNull();
+    expect(record()).toBeNull();
+    expect(marker('b')).toBeUndefined();
+    expect(marker('a')).toStrictEqual({ tier: 'workstation', configured: 'workstation', restored: false });
+  });
+
+  it('设定下崩溃：降档按设定记；清掉设定、回到不同的部署文件时也清掉', async () => {
+    const { storage, hub, record } = setup();
+    const store = createDeviceStore(storage);
+    const browser = applySceneTierQuery('?scene-tier=workstation', store);
+    const crashed = openPage({ storage, hub, id: 'b', setting: 'high', browser });
+    await open3d(crashed.source);
+    crashed.crash();
+
+    const after = openPage({ storage, hub, id: 'a', setting: 'high', browser });
+    await expect(open3d(after.source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.high);
+    expect(record()).toMatchObject({ configured: 'workstation', cap: 'high' });
+
+    const cleared = applySceneTierQuery('?scene-tier=default', store);
+    const back = openPage({ storage, hub, id: 'c', setting: 'standard', browser: cleared });
+    await expect(open3d(back.source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.standard);
+    expect(record()).toBeNull();
   });
 });

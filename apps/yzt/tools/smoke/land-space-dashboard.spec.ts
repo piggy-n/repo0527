@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Download, Page } from 'playwright/test';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 
 // 软件渲染时装饰动画让导出排队十几秒（docs/modules/city-dashboard.md），入场由浏览器测试覆盖
 test.use({ reducedMotion: 'reduce' });
@@ -9,7 +9,7 @@ async function login(page: Page): Promise<void> {
   await page.getByPlaceholder('请输入账号').fill('smoke');
   await page.getByPlaceholder('请输入密码').fill('smoke-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
 }
 
 // PNG 编码可解码且宽高非零，覆盖空白画布和下载生命周期

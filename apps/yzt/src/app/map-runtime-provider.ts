@@ -15,6 +15,7 @@ import {
   SCENE_TIER_NOTICE,
   type SceneTierSource
 } from '@/shared/map/scene-tier/scene-tier';
+import { pageSceneTierSetting } from './scene-tier-setting';
 
 /** 三维引擎要的档位来源：预算、读配置、打开三维前的崩溃检查 */
 export type PageSceneTier = SceneBudgetSource & Pick<SceneTierSource, 'prepare' | 'loadSetting'>;
@@ -45,9 +46,9 @@ export function scenePreloader(
 
 let sceneTier: SceneTierSource | undefined;
 
-// 一个页面一个：崩溃标记按页面记，所有地图页的三维共用。第一个地图页打开时才建
+// 一个页面一个：崩溃标记按页面记，所有地图页的三维共用。第一个地图页打开时才建；本浏览器的设定和现状底图的地址用同一个值
 function pageSceneTier(): SceneTierSource {
-  sceneTier ??= createSceneTierSource();
+  sceneTier ??= createSceneTierSource(pageSceneTierSetting);
   return sceneTier;
 }
 

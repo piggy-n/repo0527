@@ -97,7 +97,7 @@ if (preferences) {
 - 键带存储自己的前缀 `yzt.device.`，和会话（`yzt.session`）等别的数据分开；`keys(prefix)` 列出某个前缀的键，不带这个前缀
 - 值存成 JSON，读出时按调用方给的 zod schema 校验；JSON 坏了、格式不对时当作没有，顺手删掉
 - 浏览器禁用存储、空间满时读写都安静地失败，读出时是没有：这台设备记不住，按没记过处理
-- 使用方：`shared/map/scene-tier`（[config/scene-tier.md](../config/scene-tier.md)"崩溃标记"）
+- 使用方：`shared/map/scene-tier`：崩溃标记、降档记录（[config/scene-tier.md](../config/scene-tier.md)"崩溃标记"），本浏览器的三维档位设定 `scene-tier:setting`（ADR 0166，同一页"本浏览器的设定"：启动时读地址栏写入，要同步读，也不分用户）
 
 ## idb-keyval 的用法注意
 
