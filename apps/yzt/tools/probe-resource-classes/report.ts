@@ -50,6 +50,8 @@ export const CURRENT_RULE_FIELDS: Readonly<Record<string, string>> = {
   csxhjctb_syfwya: 'cc',
   csxhjctb_syfwyp: 'cc',
   csxhjctb_czzza: 'cc',
+  csxhjctb_cya: 'cc',
+  csxhjctb_cyp: 'cc',
   csxhjctb_jtysydp: 'type',
   csxhjctb_xzcsgxgzyda: 'type',
   csxhjctb_yjbna: 'type',

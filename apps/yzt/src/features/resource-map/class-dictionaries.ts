@@ -70,6 +70,9 @@ export const COMMERCE_TYPES = fromPalette(['05H101', '零售商业场所'], ['05
 
 export const HOUSING_TYPES = fromPalette(['070101', '商品住房（地上）'], ['070102', '保障性住房（地上）']);
 
+// 产业面、产业点共用（2026-11-17 探查 192.168.15.111，只有 2026 年有数据）
+export const INDUSTRY_SPACE_TYPES = fromPalette(['060101', '工业空间'], ['050801', '仓储空间'], ['08H228', '研发设计空间']);
+
 // 水域类别（ccn）：蓝色系，水域线层只有河流、水渠
 export const WATER_TYPES: readonly ClassEntry[] = [
   { value: '河流', label: '河流', color: '#1E88E5' },

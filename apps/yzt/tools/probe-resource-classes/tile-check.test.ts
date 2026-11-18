@@ -190,7 +190,7 @@ describe('--tile-check 的写法', () => {
 
   it('rules 是全部有分类规则的资源', () => {
     const targets = parseTileCheckTargets('rules');
-    expect(targets).toHaveLength(51);
+    expect(targets).toHaveLength(53);
     expect(targets).toContainEqual({ code: 'bgdc_dltb_czc', field: 'dlbm' });
   });
 

@@ -1,7 +1,7 @@
 // 标注可选的字段（ADR 0160）：目录接口不给字段清单，按 code 登记，一个资源一行。只列这个资源瓦片里实际有的、
 // 业务上看得懂的属性：名称、类型这类，和业务上常看的编码、编号（地类编码、图斑编号、路线编号、批准文号）；机器用的标识码、
 // 单位代码、面积、日期不列。第一个是默认字段；字段来自 2026-11-01 的探查（probe:resource-classes 的属性抽样，
-// 年份取各资源最新的一年）。没有登记的资源不提供标注
+// 年份取各资源最新的一年），2026-11-17 在 192.168.15.111 上新增的资源同样按探查登记。没有登记的资源不提供标注
 
 /** 一个可选的字段 */
 export interface LabelFieldOption {
@@ -46,7 +46,10 @@ const FIELD_NAMES: Readonly<Record<string, string>> = {
   hlmc: '河流名称',
   xjxzqmc: '县级行政区名称',
   hpmc: '湖泊名称',
-  skmc: '水库名称'
+  skmc: '水库名称',
+  name_center: '研发中心名称',
+  qymc: '企业名称',
+  lx: '行业'
 };
 
 // 字段，或 [字段, 这个资源里的叫法]
@@ -67,12 +70,16 @@ const ROWS: readonly (readonly [code: string, fields: readonly FieldRow[]])[] = 
   ['bgdc_yjjbnttb', ['dlmc', 'zldwmc', 'tbbh']],
   ['bgdc_zrbhd', ['bhqmc', 'bhqjb']],
   ['csxhjctb_bzssa', ['name', 'type', 'ccn', 'dlmc']],
+  ['csxhjctb_cqfwa', ['xzqmc']],
   ['csxhjctb_cqjcfwa', ['xzqmc', 'csmc']],
+  ['csxhjctb_cya', [['type', '行业'], 'ccn', 'dlmc']],
+  ['csxhjctb_cyp', [['type', '行业'], 'ccn', 'dlmc']],
   ['csxhjctb_czzza', ['ccn', 'dlmc']],
   ['csxhjctb_dltbbha', ['bfccn']],
   ['csxhjctb_dltbbhp', ['bfccn']],
   ['csxhjctb_dxkja', ['name', 'use', 'type']],
   ['csxhjctb_dxkjl', ['name', 'use', 'type']],
+  ['csxhjctb_dxkjp', ['name', 'use', 'type']],
   ['csxhjctb_fljga', ['name', 'ccn', 'dlmc']],
   ['csxhjctb_fljgp', ['name', 'ccn', 'dlmc']],
   ['csxhjctb_gyssa', ['name', 'ccn', 'type', 'dlmc']],
@@ -115,6 +122,9 @@ const ROWS: readonly (readonly [code: string, fields: readonly FieldRow[]])[] = 
   ['lcsh_hmtb', ['dlmc']],
   ['lcsh_sdtb', ['dlmc', 'zldwmc', 'tbbh']],
   ['lcsh_sltb', ['dlmc', 'zldwmc', 'tbbh']],
+  ['sydc_cya', ['name', ['type', '行业'], 'ccn', 'dlmc']],
+  ['sydc_cyp', ['name_center', 'name', ['type', '行业']]],
+  ['sydc_cypall', ['qymc', 'lx']],
   ['szy_hl_fs', ['hlmc', 'xjxzqmc']],
   ['szy_hl_ks', ['hlmc', 'xjxzqmc']],
   ['szy_hp_fs', ['hpmc']],
