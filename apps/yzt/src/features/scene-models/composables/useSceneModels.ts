@@ -115,7 +115,7 @@ export interface SceneModels {
   readonly hasCatalog: ComputedRef<boolean>;
   /** 清单到了，记下的模型也合并进来了（ADR 0167）：这之后 added 里没有的就是没有加入，不是还没恢复 */
   readonly restored: ComputedRef<boolean>;
-  /** 加入当前地图的模型（ADR 0157）：当前图层里的先后，新加入的在最前；三维里加入即加载 */
+  /** 加入当前地图的模型（ADR 0157）：当前图层里的先后，新加入的在最前，按账号记住（ADR 0167）；三维里加入即加载 */
   readonly added: Readonly<ShallowRef<readonly string[]>>;
   /** 隐藏的模型：三维内容里不显示，数据留着，再显示时不重新下载 */
   readonly hidden: Readonly<ShallowRef<ReadonlySet<string>>>;

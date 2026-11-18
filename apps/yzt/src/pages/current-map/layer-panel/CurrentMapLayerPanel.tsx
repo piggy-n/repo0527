@@ -318,7 +318,7 @@ export const CurrentMapLayerPanel = defineComponent({
       selected.value = key;
     };
 
-    // 加入（ADR 0161）：模型放在最上面，资源放在最上面那个模型的下面；列表里最上面的新行被选中、滚到它，新行滑入。
+    // 加入（ADR 0167）：后加入的不论模型还是资源都放在最上面；列表里最上面的新行被选中、滚到它，新行滑入。
     // 筛选着、新行会被筛掉时回到"全部"
     const addKeys = (keys: readonly string[]) => {
       const added = keys.flatMap(key =>

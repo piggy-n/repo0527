@@ -371,18 +371,23 @@ const readout = useMapReadout(map);
 | `popover-placement.ts`、`panel-split.ts`、`scroll.ts` | 浮层的位置、上下两段的高度（拖到最小时资源留标题、搜索行、标签行和 3 行，共 208；图层留标题和 2 行，共 112，有标签行时加上它，三维里共 144，外壳把量到的标签行高度交给 `checkedExtra`）、在滚动区里露出一行（纯函数和小工具） |
 | `layer-row.module.scss` | 行的公共部分：符号（24 × 22）、名称、紧跟名称的状态、行尾的框（宽 56）、移除、加载中的转圈 |
 
-- 选中、浮层、菜单、三维里的筛选这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`），资源和模型平铺的顺序在页面的 `useCurrentLayers`（`pages/current-map/layer-panel`，ADR 0161：资源、模型各自的先后在拥有者里，怎样穿插只记在这里、不持久化，地图按它放模型层、点选按它取锚点）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
-- 页面给 `reveal` 一个新对象时，面板在图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行；页面先展开左侧面板）；`requests` 给出加载超过 0.4 秒的行，资源行和模型行在名称后面转圈（模型行的 `loading`，ADR 0162；失败和重试仍按 `stateOf`）
+- 选中、浮层、菜单、三维里的筛选这些界面状态在 `CurrentMapLayerPanel` 里，不持久化；图层的状态在拥有者里（`useResourceLayers`、`useSceneModels`），资源和模型平铺的顺序在页面的 `useCurrentLayers`（`pages/current-map/layer-panel`，ADR 0161：资源、模型各自的先后在拥有者里，怎样穿插记在这里，地图按它放模型层、点选按它取锚点；ADR 0167 起按账号记住，只在加入、移出、移动时写，后加入的放在最上面，目录、清单没到时操作也给还没到的项留着位置）；行内提示的开关在页面的 `useLayerHints`，面板的 `hints` 给了时标题栏有入口（外壳的 `headerTools` 插槽，按钮用 `headerButton` 的样式），行按它显示（ADR 0167）。工具栏和菜单按选中项的键（`resource:`、`model:` 前缀）把操作交给对应的拥有者
+- 页面给 `reveal` 一个新对象时，面板在图层里选中这一行、滚到中间、闪两下（请求状态的明细里点了一行；页面先展开左侧面板）；`requests` 给出加载超过 0.4 秒的行，资源行和模型行在名称后面转圈（模型行的 `loading`，ADR 0162；失败和重试仍按 `stateOf`，关掉加载失败时不显示），这一轮结束、有失败的资源行显示"有瓦片加载失败"（`failedKeys`，ADR 0167）
 
 ## 请求状态（ADR 0158）
 
 ```tsx
 // 页面 setup：来源从各拥有者推导；条目放在状态栏的 after 插槽里
-const requests = useRequestStatus(() => [
-  ...resourceRequests(resources.state.value, map.sourceActivity.value),
-  // 模型带读完索引以后这一轮的加载（models.activityOf，ADR 0162）
-  ...(map.dimension.value === '3d' ? modelRequests(models) : [])
-]);
+const requests = useRequestStatus(
+  () => [
+    ...resourceRequests(resources.state.value, map.sourceActivity.value),
+    // 模型带读完索引以后这一轮的加载（models.activityOf，ADR 0162）
+    ...(map.dimension.value === '3d' ? modelRequests(models) : [])
+  ],
+  undefined,
+  // 显示哪几类：行内提示的开关（ADR 0167）；不给时全显示
+  () => hints.requestKinds.value
+);
 <MapStatusBar readout={readout} format={format}>
   {{
     // onSelect：先展开左侧面板（changeLeftCollapsed(false)），再给资源图层面板一个新的 reveal
@@ -403,8 +408,8 @@ const requests = useRequestStatus(() => [
 
 - 来源 `RequestSource`：瓦片是一个或几个数据源这一轮的请求（上下文的 `sourceActivity`，几个合成一项用 `mergedActivity`）；模型是读索引的加载中、就绪、失败，加上读完以后这一轮的加载（拥有者的 `activityOf`，来自上下文的 `sceneActivity`，ADR 0162）。`useRequestStatus` 把它们整理成明细的各项，模型按读索引的状态变化记下开始、结束的时间
 - 模型的一项由 `modelRequestItem` 推导，种类（`RequestItem.kind`）说明在等什么：`model`（读索引、失败）、`blocks`（瓦片集的块，加载中写"12/40 块"，这一轮结束写"40 块"，有失败写"N 块失败"、不带重试）、`detail`（高斯泼溅当前视角的细节，写"当前视角细节 62%"，没有块数，结束写"已完成"）；读完索引后没请求过块的写"已完成"。相机动着暂缓请求的块也算这一轮。读完索引后渲染器在下一次选瓦片时才请求或暂缓，两段相隔不到 `MODEL_SETTLE`（0.3 秒）算同一段；读完、还没有块时也等这么久才算结束，但没显示出来的读索引最多等到开始后 `SHOW_DELAY`，行内转圈不闪；这一段开始以前就结束的一轮是上次显示时的，不算
-- 时钟只在有加载、刚结束时每 250 毫秒走一格，只在 `RequestStatusChip` 里读，不带动页面重渲染；`loadingKeys`（加载超过 0.4 秒的项）内容不变时是同一个集合，用它的行不跟着时钟重渲染
-- 条目和明细的规则是纯函数：`requestSummary`（加载中、几项失败、已加载完成、不显示；百分比按二维瓦片的张数和瓦片集的块数合起来算，泼溅的比例不算进去）、`requestGroups`、`requestRowText`；常量 `SHOW_DELAY`（0.4 秒）、`DONE_HOLD`（1.5 秒）、`SLOW_AFTER`（5 秒）
+- 时钟只在有加载、刚结束时每 250 毫秒走一格，只在 `RequestStatusChip` 里读，不带动页面重渲染；`loadingKeys`（加载超过 0.4 秒的项）、`failedKeys`（这一轮结束、有失败的项，行内的失败用它，ADR 0167）内容不变时是同一个集合，用它的行不跟着时钟重渲染
+- 条目和明细的规则是纯函数：`requestSummary`（加载中、几项失败、已加载完成、不显示；百分比按二维瓦片的张数和瓦片集的块数合起来算，泼溅的比例不算进去）、`requestGroups`、`requestRowText`；关掉的一类（`RequestKinds`，ADR 0167）在条目和明细里都不算，都关掉时不显示；常量 `SHOW_DELAY`（0.4 秒）、`DONE_HOLD`（1.5 秒）、`SLOW_AFTER`（5 秒）
 - 条目自己拦截鼠标（状态栏不拦截）；明细用 `useLightDismiss`，点外面、Esc 关闭
 - 明细的位置是纯函数 `requestPopoverPlacement`（视口坐标）：左边离面板右边 8，面板变窄、收起成竖条、窄屏被挤掉时跟着竖条走；右边放不下（手机宽度展开着面板）时向左移、盖住面板，区域比 340 窄时同宽；底边离状态栏 8，最高 420，上边放不下时变矮。组件只在明细开着时量面板、区域和条目的上边，面板、区域的尺寸和窗口变了、页面激活时重新放；不跟着条目左右移（经纬度的宽度会变，用户 2026-11-16）
 

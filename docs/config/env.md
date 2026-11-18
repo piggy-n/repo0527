@@ -45,6 +45,9 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_RESOURCE_LAYERS` | `true` | 同上 | 资源图层的加入、勾选（显隐）、透明度、顺序、年份和标注的显隐（`resource-layers`；没有 `added` 的老偏好按勾选算、没有 `labeled` 的不显示标注，版本不变，ADR 0157、0160） |
 | `VITE_PREFERENCE_RESOURCE_SYMBOLS` | `true` | 同上 | 资源图层的符号样式和标注的样式（`resource-symbols`）。关闭时用户看到的是发布的默认符号和标注（ADR 0154、0160），调的样式不保存 |
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
+| `VITE_PREFERENCE_SCENE_MODELS` | `true` | 同上 | 图层里的三维模型：加入、显隐、白膜的效果（`scene-models`，ADR 0167） |
+| `VITE_PREFERENCE_CURRENT_LAYERS` | `true` | 同上 | 图层列表的顺序：资源和模型怎样穿插（`current-layers`，ADR 0167） |
+| `VITE_PREFERENCE_LAYER_HINTS` | `true` | 同上 | 行内提示的开关，同时管数据加载的明细（`layer-hints`，ADR 0167） |
 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `false` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，各级都请求瓦片，低级别的瓦片可能有十几 MB。**现在暂时关着：** 用户 2026-11-04 确定先不打开（`88c4a99` 改成 `false`），层级表和部署的文件都不生效；层级表和实测的瓦片大小也还对不上（水域面层不在表里，永久基本农田图斑的 8 级偏低）。打开前按 [backlog](../backlog.md)"最小显示级别"两条重测层级，再在真实后端上换一次文件确认 |
 
 三维引擎不再用变量选择：Cesium 引擎已移除，`VITE_MAP_3D_ENGINE` 跟着删掉，三维只有 MapLibre + Three.js（ADR 0153）。三维里显示资源图层、点/框选识别，由 app 注入的能力决定，没有开关（ADR 0157）。
