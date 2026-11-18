@@ -21,6 +21,9 @@ declare global {
     readonly VITE_PREFERENCE_RESOURCE_LAYERS?: string;
     readonly VITE_PREFERENCE_RESOURCE_SYMBOLS?: string;
     readonly VITE_PREFERENCE_RESOURCE_PANEL?: string;
+    readonly VITE_PREFERENCE_SCENE_MODELS?: string;
+    readonly VITE_PREFERENCE_CURRENT_LAYERS?: string;
+    readonly VITE_PREFERENCE_LAYER_HINTS?: string;
     readonly VITE_RESOURCE_MIN_ZOOM_ENABLED?: string;
   }
 }

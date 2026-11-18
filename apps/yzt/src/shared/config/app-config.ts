@@ -56,7 +56,10 @@ function preferenceSwitches() {
     boundaries: item('VITE_PREFERENCE_BOUNDARIES', import.meta.env.VITE_PREFERENCE_BOUNDARIES),
     'resource-layers': item('VITE_PREFERENCE_RESOURCE_LAYERS', import.meta.env.VITE_PREFERENCE_RESOURCE_LAYERS),
     'resource-symbols': item('VITE_PREFERENCE_RESOURCE_SYMBOLS', import.meta.env.VITE_PREFERENCE_RESOURCE_SYMBOLS),
-    'resource-panel': item('VITE_PREFERENCE_RESOURCE_PANEL', import.meta.env.VITE_PREFERENCE_RESOURCE_PANEL)
+    'resource-panel': item('VITE_PREFERENCE_RESOURCE_PANEL', import.meta.env.VITE_PREFERENCE_RESOURCE_PANEL),
+    'scene-models': item('VITE_PREFERENCE_SCENE_MODELS', import.meta.env.VITE_PREFERENCE_SCENE_MODELS),
+    'current-layers': item('VITE_PREFERENCE_CURRENT_LAYERS', import.meta.env.VITE_PREFERENCE_CURRENT_LAYERS),
+    'layer-hints': item('VITE_PREFERENCE_LAYER_HINTS', import.meta.env.VITE_PREFERENCE_LAYER_HINTS)
   };
 }
 

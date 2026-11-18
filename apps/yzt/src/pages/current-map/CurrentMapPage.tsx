@@ -133,9 +133,9 @@ export const CurrentMapPage = defineComponent({
     const readout = useMapReadout(map);
     // 三维模型（ADR 0081）：资源目录里列出模型，二维里也能加入（ADR 0157），所以进页面就读清单
     const sceneModelsQuery = useSceneModelsQuery(true);
-    const models = useSceneModels(map, sceneModelsQuery.data);
+    const models = useSceneModels(map, sceneModelsQuery.data, { preferences });
     // 图层里平铺的资源和模型（ADR 0161）：顺序就是叠放，面板显示和操作，地图按它放模型层
-    const layerList = useCurrentLayers(resources, models);
+    const layerList = useCurrentLayers(resources, models, { preferences });
     // 地图数据的请求状态（ADR 0158）：资源图层、三维里的模型、底图（几个数据源合成一项）；状态栏右边的条目和当前图层的
     // 行内转圈用同一份。接口请求不算，它们各自有加载状态
     const requests = useRequestStatus(() => {

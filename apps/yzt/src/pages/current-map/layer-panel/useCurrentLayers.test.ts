@@ -30,9 +30,11 @@ const CATALOG = buildCatalog([
 const r = (code: string) => `resource:${code}`;
 const m = (id: string) => `model:${id}`;
 
-// 两个拥有者只保留用到的部分，状态按真实的纯函数变化
-function setup() {
-  const state = shallowRef<ResourceLayersState>(mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG));
+// 两个拥有者只保留用到的部分，状态按真实的纯函数变化；arrived 为 false 时资源目录、模型清单都还没到
+function setup(arrived = true) {
+  const state = shallowRef<ResourceLayersState>(
+    arrived ? mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG) : EMPTY_RESOURCE_LAYERS
+  );
   const resources = {
     state,
     add: (codes: readonly string[], at?: number) => (state.value = withAdded(state.value, codes, at)),
@@ -42,8 +44,10 @@ function setup() {
   const added = shallowRef<readonly string[]>([]);
   const hidden = shallowRef<ReadonlySet<string>>(new Set());
   const catalog = shallowRef(['x', 'y', 'z'].map(id => ({ id }) as SceneModel));
+  const restored = shallowRef(arrived);
   const models = {
     models: computed(() => catalog.value),
+    restored: computed(() => restored.value),
     added,
     hidden,
     add: (ids: readonly string[]) => (added.value = [...ids.filter(id => !added.value.includes(id)), ...added.value]),
@@ -55,64 +59,76 @@ function setup() {
     scope.run(() => useCurrentLayers(resources, models)),
     '图层的平铺列表'
   );
-  return { current, state, added, hidden, catalog, [Symbol.dispose]: () => scope.stop() };
+  return { current, state, added, hidden, catalog, restored, [Symbol.dispose]: () => scope.stop() };
 }
 
-describe('useCurrentLayers（ADR 0161）', () => {
+describe('useCurrentLayers（ADR 0161、0167）', () => {
   it('进页面时没有模型：列表就是资源的先后，没有资源画在模型上面', () => {
     using env = setup();
     expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb')]);
     expect(env.current.overModels.value).toStrictEqual([]);
   });
 
-  it('新加入的模型在最上面，新加入的资源在最上面那个模型的下面；同一批里先放模型', () => {
+  it('后加入的压在最上面，不论模型还是资源（用户 2026-11-17，ADR 0167）', () => {
     using env = setup();
     env.current.add([m('x')]);
-    expect(env.current.keys.value).toStrictEqual([m('x'), r('bgdc_dltb')]);
+    env.current.add([m('y')]);
+    env.current.add([m('z')]);
+    expect(env.current.keys.value).toStrictEqual([m('z'), m('y'), m('x'), r('bgdc_dltb')]);
 
-    env.current.add([r('bgdc_cjdcq'), m('y')]);
-    expect(env.current.keys.value).toStrictEqual([m('y'), r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
-    // 资源的拥有者里也是这个先后（地图按它画）
+    // 已经有几个模型时加资源：在最上面，不夹在模型中间
+    env.current.add([r('bgdc_cjdcq')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('z'), m('y'), m('x'), r('bgdc_dltb')]);
+    // 资源的拥有者里也是这个先后（地图按它画）；在最上面就盖住模型
     expect(addedCodes(env.state.value)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb']);
+    expect(env.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
   });
 
-  it('挪到模型上面的资源画在模型上面；之后新加入的资源放在模型下面，不盖住模型', () => {
+  it('一次加入几项：整批放在最上面，批内保持给出的先后；已经在的不动', () => {
+    using env = setup();
+    env.current.add([r('bgdc_cjdcq'), m('x'), r('csxhjctb_hydl'), r('bgdc_dltb')]);
+    expect(env.current.keys.value).toStrictEqual([
+      r('bgdc_cjdcq'),
+      m('x'),
+      r('csxhjctb_hydl'),
+      r('bgdc_dltb')
+    ]);
+    expect(addedCodes(env.state.value)).toStrictEqual(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
+  });
+
+  it('后加入的模型压在原来盖住模型的资源上面', () => {
     using env = setup();
     env.current.add([m('x')]);
     env.current.move(r('bgdc_dltb'), 0);
     expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb'), m('x')]);
     expect(env.current.overModels.value).toStrictEqual(['bgdc_dltb']);
 
-    env.current.add([r('csxhjctb_hydl')]);
-    expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb'), m('x'), r('csxhjctb_hydl')]);
-    expect(addedCodes(env.state.value)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
-    expect(env.current.overModels.value).toStrictEqual(['bgdc_dltb']);
+    env.current.add([m('y')]);
+    expect(env.current.keys.value).toStrictEqual([m('y'), r('bgdc_dltb'), m('x')]);
+    expect(env.current.overModels.value).toStrictEqual([]);
   });
 
-  it('再加入模型时，之前放下的行不换位置；最上面的模型换了，画在模型上面的跟着变', () => {
+  it('移出后再加入当作新加入，放在最上面', () => {
     using env = setup();
     env.current.add([m('x'), r('bgdc_cjdcq')]);
-    env.current.move(r('bgdc_cjdcq'), 0);
-    expect(env.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
-
-    env.current.add([m('y')]);
-    expect(env.current.keys.value).toStrictEqual([m('y'), r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
-    expect(env.current.overModels.value).toStrictEqual([]);
+    env.current.remove([r('bgdc_dltb')]);
+    env.current.add([r('bgdc_dltb')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb'), m('x'), r('bgdc_cjdcq')]);
   });
 
   it('筛选时按看得见的行挪，模型之间的先后交给模型的拥有者', () => {
     using env = setup();
     env.current.add([m('x'), m('y')]);
     env.current.add([r('bgdc_cjdcq')]);
-    expect(env.current.keys.value).toStrictEqual([m('x'), r('bgdc_cjdcq'), m('y'), r('bgdc_dltb')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('x'), m('y'), r('bgdc_dltb')]);
 
     // 只看模型：y 挪到第一行，放到 x 的正上方
     env.current.move(m('y'), 0, [m('x'), m('y')]);
-    expect(env.current.keys.value).toStrictEqual([m('y'), m('x'), r('bgdc_cjdcq'), r('bgdc_dltb')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('y'), m('x'), r('bgdc_dltb')]);
     expect(env.added.value).toStrictEqual(['y', 'x']);
     // 只看资源：地类图斑上移，放到村级调查区的正上方，模型不动
     env.current.move(r('bgdc_dltb'), 0, [r('bgdc_cjdcq'), r('bgdc_dltb')]);
-    expect(env.current.keys.value).toStrictEqual([m('y'), m('x'), r('bgdc_dltb'), r('bgdc_cjdcq')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb'), r('bgdc_cjdcq'), m('y'), m('x')]);
   });
 
   it('有显示着的模型：没有模型、模型都隐藏着时没有', () => {

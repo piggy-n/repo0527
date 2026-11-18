@@ -48,9 +48,9 @@ export function steppedKey(keys: readonly string[], key: string, delta: number):
 }
 
 /**
- * 平铺的图层（ADR 0161）：资源之间的先后按资源的拥有者（记在偏好里），模型之间按模型的拥有者，两者怎样穿插按上次的顺序。
- * 上次没有的模型放在最上面，上次没有的资源放在最上面那个模型的下面（没有模型时在最上面），一次来几个时保持拥有者里的先后；
- * 和上次一样时返回上次的数组
+ * 平铺的图层（ADR 0161、0167）：资源之间的先后按资源的拥有者，模型之间按模型的拥有者，两者怎样穿插按上次的顺序（记在偏好里）。
+ * 不是用户加入、自己出现的（恢复的记录、晚到的目录）接在最后，先模型后资源，各按拥有者的先后；用户加入的由 add 直接放在
+ * 最上面，不经过这里。上次的顺序里还没到的跳过。和上次一样时返回上次的数组
  */
 export function mergedOrder(
   previous: readonly string[],
@@ -60,8 +60,7 @@ export function mergedOrder(
   const present = new Set([...layers, ...models]);
   const kept = previous.filter(key => present.has(key));
   const known = new Set(kept);
-  const slots = [...models.filter(key => !known.has(key)), ...kept];
-  slots.splice(slots.findIndex(isModelKey) + 1, 0, ...layers.filter(key => !known.has(key)));
+  const slots = [...kept, ...models.filter(key => !known.has(key)), ...layers.filter(key => !known.has(key))];
   // 位置按穿插，内容按各自拥有者的先后
   let layer = 0;
   let model = 0;
@@ -70,15 +69,34 @@ export function mergedOrder(
   return same ? previous : merged;
 }
 
+/**
+ * 操作后要记下的顺序（ADR 0167）：next 是这次操作后看得见的行，上次记下的顺序里还没到的（目录、清单没到）留在原来的
+ * 位置，跟在它前面最近的那个还在的行后面；dropped 是这次移出的，不再留着
+ */
+export function withPending(
+  next: readonly string[],
+  previous: readonly string[],
+  present: ReadonlySet<string>,
+  dropped: ReadonlySet<string> = new Set()
+): readonly string[] {
+  const pending = previous.filter(key => !present.has(key) && !dropped.has(key) && !next.includes(key));
+  if (pending.length === 0) {
+    return next;
+  }
+  // 按上次的先后逐个放回：前面已经放回的也算锚点，连着几个还没到的保持原来的先后
+  const result = [...next];
+  for (const key of pending) {
+    const index = previous.indexOf(key);
+    const anchor = previous.slice(0, index).findLast(item => result.includes(item));
+    result.splice(anchor === undefined ? 0 : result.indexOf(anchor) + 1, 0, key);
+  }
+  return result;
+}
+
 /** 画在模型上面的资源的键（ADR 0161）：排在最上面那个模型上面的，从上到下；没有模型时没有 */
 export function layersAboveModels(keys: readonly string[]): readonly string[] {
   const top = keys.findIndex(isModelKey);
   return top === -1 ? [] : keys.slice(0, top);
-}
-
-/** 新加入的资源在资源里的位置（ADR 0161）：最上面那个模型的下面，也就是排在它上面的资源个数；没有模型时是 0 */
-export function layerInsertIndex(keys: readonly string[]): number {
-  return layersAboveModels(keys).length;
 }
 
 /**

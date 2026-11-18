@@ -119,7 +119,10 @@ export default defineConfig(({ mode }) => {
         VITE_PREFERENCE_BOUNDARIES: 'true',
         VITE_PREFERENCE_RESOURCE_LAYERS: 'true',
         VITE_PREFERENCE_RESOURCE_SYMBOLS: 'true',
-        VITE_PREFERENCE_RESOURCE_PANEL: 'true'
+        VITE_PREFERENCE_RESOURCE_PANEL: 'true',
+        VITE_PREFERENCE_SCENE_MODELS: 'true',
+        VITE_PREFERENCE_CURRENT_LAYERS: 'true',
+        VITE_PREFERENCE_LAYER_HINTS: 'true'
       },
       // 两个项目继承上面的插件、别名和 Sass 配置（ADR 0040）
       projects: [

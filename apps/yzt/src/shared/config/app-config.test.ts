@@ -65,7 +65,10 @@ describe('appConfig', () => {
       ['boundaries', 'VITE_PREFERENCE_BOUNDARIES'],
       ['resource-layers', 'VITE_PREFERENCE_RESOURCE_LAYERS'],
       ['resource-symbols', 'VITE_PREFERENCE_RESOURCE_SYMBOLS'],
-      ['resource-panel', 'VITE_PREFERENCE_RESOURCE_PANEL']
+      ['resource-panel', 'VITE_PREFERENCE_RESOURCE_PANEL'],
+      ['scene-models', 'VITE_PREFERENCE_SCENE_MODELS'],
+      ['current-layers', 'VITE_PREFERENCE_CURRENT_LAYERS'],
+      ['layer-hints', 'VITE_PREFERENCE_LAYER_HINTS']
     ] as const;
     const ALL_ON = Object.fromEntries(ITEMS.map(([name]) => [name, true]));
     const ALL_OFF = Object.fromEntries(ITEMS.map(([name]) => [name, false]));

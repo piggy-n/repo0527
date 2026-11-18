@@ -413,7 +413,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(document.querySelector('[data-panel-menu]')).toBeNull();
   });
 
-  it('三维模型在目录最后、按市分组；加入后和资源平铺：模型放在最上面，资源放在最上面那个模型的下面，选中最上面的新行（ADR 0161）', async () => {
+  it('三维模型在目录最后、按市分组；加入后和资源平铺：后加入的整批在最上面、批内按目录的先后，选中最上面的新行（ADR 0167）', async () => {
     const { wrapper, models, owner } = await mountPanel();
     await tool(wrapper, 'expand-all').trigger('click');
     const keys = wrapper.findAll('[data-catalog-node]').map(item => item.attributes('data-catalog-node'));
@@ -426,22 +426,22 @@ describe('CurrentMapLayerPanel', () => {
     expect(models.added.value).toStrictEqual(['white']);
     // 没有组，一个列表
     expect(wrapper.findAll('[role="listbox"]')).toHaveLength(1);
-    expect(rowKeys(wrapper)).toStrictEqual(['model:white', 'resource:csxhjctb_lrdl', 'resource:bgdc_dltb']);
-    expect(selectedRow(wrapper)).toBe('model:white');
+    expect(rowKeys(wrapper)).toStrictEqual(['resource:csxhjctb_lrdl', 'model:white', 'resource:bgdc_dltb']);
+    expect(selectedRow(wrapper)).toBe('csxhjctb_lrdl');
 
-    // 地类图斑挪到模型上面以后，再加的资源还是放在模型下面（默认不盖住模型）
+    // 地类图斑置顶以后再加资源：新加的在最上面（用户 2026-11-17）
     await row(wrapper, 'bgdc_dltb').trigger('click');
     await tool(wrapper, 'move-top').trigger('click');
     await node(wrapper, 'bgdc_cjdcq').trigger('click');
     await tool(wrapper, 'add').trigger('click');
     expect(rowKeys(wrapper)).toStrictEqual([
-      'resource:bgdc_dltb',
-      'model:white',
       'resource:bgdc_cjdcq',
-      'resource:csxhjctb_lrdl'
+      'resource:bgdc_dltb',
+      'resource:csxhjctb_lrdl',
+      'model:white'
     ]);
     // 资源的拥有者里也是这个先后，地图按它画
-    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_lrdl']);
+    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_lrdl']);
     expect(selectedRow(wrapper)).toBe('bgdc_cjdcq');
   });
 

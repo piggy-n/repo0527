@@ -26,8 +26,16 @@ import {
   toValue,
   watch
 } from 'vue';
+import type { PreferenceScope } from '@/shared/storage/preference-scope';
+import { usePreference } from '@/shared/storage/use-preference';
 import type { SceneModel } from '../catalog';
 import { type IndoorMap, indoorMapOf } from '../indoor-map/indoor-map';
+import {
+  restoredSceneModels,
+  type StoredSceneModels,
+  storedSceneModelsSchema,
+  toStoredSceneModels
+} from '../scene-models-preference';
 import { type RouteTrack, routePlayer, trackPoints } from '../indoor-map/route-track';
 import {
   buildFraction,
@@ -96,6 +104,8 @@ export interface SceneModelsOptions {
   readonly loadSplatNavigation?: LoadSplatNavigation;
   /** 第三人称的人物模型的绝对地址；默认随应用部署的 Cesium Man */
   readonly avatarUrl?: string;
+  /** 偏好范围：给了就按账号记住加入的模型、显隐和白膜的效果（ADR 0167）；开发页不传 */
+  readonly preferences?: PreferenceScope | null;
 }
 
 export interface SceneModels {
@@ -103,6 +113,8 @@ export interface SceneModels {
   readonly models: ComputedRef<readonly SceneModel[]>;
   /** 清单已经到了：区分"还没有目录"和"目录是空的" */
   readonly hasCatalog: ComputedRef<boolean>;
+  /** 清单到了，记下的模型也合并进来了（ADR 0167）：这之后 added 里没有的就是没有加入，不是还没恢复 */
+  readonly restored: ComputedRef<boolean>;
   /** 加入当前地图的模型（ADR 0157）：当前图层里的先后，新加入的在最前；三维里加入即加载 */
   readonly added: Readonly<ShallowRef<readonly string[]>>;
   /** 隐藏的模型：三维内容里不显示，数据留着，再显示时不重新下载 */
@@ -120,7 +132,7 @@ export interface SceneModels {
    * 不看已经加入了几个；二维里只进列表，切到三维时也不飞
    */
   readonly add: (ids: readonly string[]) => void;
-  /** 移出当前地图：效果、重试次数、导航网格一起忘掉，在它里面的漫游一并结束；不动相机 */
+  /** 移出当前地图：换过的效果、重试次数、导航网格一起忘掉，在它里面的漫游一并结束；不动相机 */
   readonly remove: (ids: readonly string[]) => void;
   /** 显示、隐藏已加入的模型；隐藏时放弃飞向它，在它里面的漫游一并结束 */
   readonly setVisible: (id: string, visible: boolean) => void;
@@ -206,7 +218,8 @@ export function useSceneModels(
   {
     loadNavigation = defaultLoadNavigation,
     loadSplatNavigation = defaultLoadSplatNavigation,
-    avatarUrl = walkAvatarUrl()
+    avatarUrl = walkAvatarUrl(),
+    preferences = null
   }: SceneModelsOptions = {}
 ): SceneModels {
   const models = computed(() =>
@@ -235,6 +248,40 @@ export function useSceneModels(
   let walkView: WalkView = 'first';
   // 每个模型上次走的路线：从步行换回路线、再次漫游时接着用
   const lastRoutes = new Map<string, string>();
+
+  // 记下的模型（ADR 0167）：偏好读到了（没存过、开关关着、读取失败时是 null）先放在这里，清单到了再合并；
+  // 合并之前列表里没有模型，合并时不飞过去
+  const recalled = shallowRef<{ readonly stored: StoredSceneModels | null } | null>(
+    preferences ? null : { stored: null }
+  );
+  const merged = shallowRef(false);
+  if (preferences) {
+    usePreference(preferences, {
+      name: 'scene-models',
+      version: 1,
+      schema: storedSceneModelsSchema,
+      snapshot: () => toStoredSceneModels({ added: added.value, hidden: hidden.value, effects: effects.value }),
+      restore: stored => {
+        recalled.value = { stored };
+      }
+    });
+  }
+  watch(
+    () => [recalled.value, hasCatalog.value] as const,
+    ([recall, catalogReady]) => {
+      if (!recall || !catalogReady || merged.value) {
+        return;
+      }
+      if (recall.stored) {
+        const record = restoredSceneModels(recall.stored, models.value);
+        added.value = record.added;
+        hidden.value = record.hidden;
+        effects.value = record.effects;
+      }
+      merged.value = true;
+    },
+    { immediate: true }
+  );
 
   const modelOf = (id: string): SceneModel => {
     const model = models.value.find(item => item.id === id);
@@ -295,7 +342,10 @@ export function useSceneModels(
     if ([...gone].some(id => hidden.value.has(id))) {
       hidden.value = new Set([...hidden.value].filter(id => !gone.has(id)));
     }
-    // 移出时这些模型的效果、重试次数、导航网格一起忘掉
+    // 移出时这些模型换过的效果、重试次数、导航网格一起忘掉：再加入时是默认的效果
+    if ([...gone].some(id => effects.value.has(id))) {
+      effects.value = new Map([...effects.value].filter(([modelId]) => !gone.has(modelId)));
+    }
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => !gone.has(modelId)));
     // 重试次数按瓦片集 ID 记；高斯泼溅没有瓦片集，按模型 ID 记
     const attemptIds = new Set(
@@ -795,6 +845,7 @@ export function useSceneModels(
   return {
     models,
     hasCatalog,
+    restored: computed(() => merged.value),
     added: shallowReadonly(added),
     hidden: shallowReadonly(hidden),
     stateOf: id => (added.value.includes(id) ? loadStateOf(statusOf(modelOf(id))) : 'loading'),

@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  layerInsertIndex,
   layersAboveModels,
   mergedOrder,
   moveIndex,
   movedOrder,
   selectionAfterRemoval,
-  steppedKey
+  steppedKey,
+  withPending
 } from './current-list';
 
 const KEYS = ['a', 'b', 'c', 'd'];
@@ -54,11 +54,10 @@ describe('steppedKey', () => {
   });
 });
 
-describe('mergedOrder', () => {
-  it('第一次：没有模型时就是资源的先后；模型都在最上面，资源在它们下面', () => {
+describe('mergedOrder（ADR 0167）', () => {
+  it('第一次（没有记下的顺序）：模型在上、资源在下，各按拥有者的先后', () => {
     expect(mergedOrder([], [r('a'), r('b')], [])).toStrictEqual([r('a'), r('b')]);
-    // 资源放在最上面那个模型的下面
-    expect(mergedOrder([], [r('a'), r('b')], [m('x'), m('y')])).toStrictEqual([m('x'), r('a'), r('b'), m('y')]);
+    expect(mergedOrder([], [r('a'), r('b')], [m('x'), m('y')])).toStrictEqual([m('x'), m('y'), r('a'), r('b')]);
   });
 
   it('按上次的穿插，资源、模型各自的先后按拥有者', () => {
@@ -73,37 +72,51 @@ describe('mergedOrder', () => {
     ]);
   });
 
-  it('新的模型放在最上面；新的资源放在最上面那个模型的下面，和拥有者里插入的位置一致', () => {
+  it('不是用户加入、自己出现的（恢复、晚到的目录）接在最后，先模型后资源，不挤动已有的行', () => {
     const previous = [r('a'), m('x'), r('b')];
-    expect(mergedOrder(previous, [r('a'), r('b')], [m('y'), m('x')])).toStrictEqual([
+    expect(mergedOrder(previous, [r('a'), r('b'), r('c')], [m('x'), m('y')])).toStrictEqual([
+      r('a'),
+      m('x'),
+      r('b'),
       m('y'),
-      r('a'),
-      m('x'),
-      r('b')
-    ]);
-    // 资源的拥有者把新的 c 插在第 1 位（模型上面有 1 个资源）
-    expect(mergedOrder(previous, [r('a'), r('c'), r('b')], [m('x')])).toStrictEqual([
-      r('a'),
-      m('x'),
-      r('c'),
-      r('b')
+      r('c')
     ]);
   });
 
-  it('去掉了的行不再出现；和上次一样时返回上次的数组', () => {
+  it('上次的顺序里还没到的、去掉了的跳过；和上次一样时返回上次的数组', () => {
     const previous = [r('a'), m('x'), r('b')];
     expect(mergedOrder(previous, [r('b')], [m('x')])).toStrictEqual([m('x'), r('b')]);
     expect(mergedOrder(previous, [r('a'), r('b')], [m('x')])).toBe(previous);
   });
 });
 
-describe('layersAboveModels、layerInsertIndex', () => {
-  it('最上面那个模型上面的资源；没有模型时没有，新资源插在第 0 位', () => {
+describe('withPending（ADR 0167）', () => {
+  it('还没到的项留在原来的位置：跟在它前面最近的那个还在的行后面，连着几个保持先后', () => {
+    const previous = [r('a'), m('x'), r('b'), r('c'), m('y')];
+    // 资源目录还没到：a、b、c 都不在；用户加了模型 z
+    const present = new Set([m('x'), m('y'), m('z')]);
+    expect(withPending([m('z'), m('x'), m('y')], previous, present)).toStrictEqual([
+      r('a'),
+      m('z'),
+      m('x'),
+      r('b'),
+      r('c'),
+      m('y')
+    ]);
+  });
+
+  it('没有还没到的项时返回原来的数组；这次移出的不再留着', () => {
+    const next = [m('x')];
+    expect(withPending(next, [m('x')], new Set([m('x')]))).toBe(next);
+    expect(withPending(next, [r('a'), m('x')], new Set([m('x')]), new Set([r('a')]))).toBe(next);
+  });
+});
+
+describe('layersAboveModels', () => {
+  it('最上面那个模型上面的资源；没有模型时没有', () => {
     expect(layersAboveModels([r('a'), r('b'), m('x'), r('c'), m('y')])).toStrictEqual([r('a'), r('b')]);
     expect(layersAboveModels([m('x'), r('a')])).toStrictEqual([]);
     expect(layersAboveModels([r('a'), r('b')])).toStrictEqual([]);
-    expect(layerInsertIndex([r('a'), r('b'), m('x'), r('c')])).toBe(2);
-    expect(layerInsertIndex([r('a'), r('b')])).toBe(0);
   });
 });
 
