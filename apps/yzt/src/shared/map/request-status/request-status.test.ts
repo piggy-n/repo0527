@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SceneActivity } from '@mx/map-core';
 import {
   DONE_HOLD,
+  failedRequestKeys,
   mergedActivity,
   MODEL_SETTLE,
   type ModelPhase,
@@ -139,6 +140,51 @@ const blocks = (startedAt: number, finishedAt: number | null = null): SceneActiv
 });
 // 100 开始读索引，1100 读完
 const ready: ModelPhase = { state: 'ready', startedAt: 100, finishedAt: 1100 };
+
+describe('按类显示（ADR 0167）', () => {
+  const NOW = 10_000;
+  const slow = tiles('slow', { startedAt: NOW - 2000 });
+  const broken = tiles('broken', { failed: 2, loaded: 8, finishedAt: NOW - 100 });
+  const recent = tiles('recent', { loaded: 10, startedAt: NOW - 2000, finishedAt: NOW - 100 });
+
+  it('关掉加载中：条目不显示加载中，接着看失败；明细没有加载中一组', () => {
+    const kinds = { loading: false, failed: true, done: true };
+    expect(requestSummary([slow, broken], NOW, false, kinds)).toStrictEqual({ kind: 'failed', count: 1 });
+    expect(requestGroups([slow, broken], kinds).loading).toStrictEqual([]);
+  });
+
+  it('关掉加载失败：条目不说失败、加载中不带红点，有失败的项也不算完成；明细没有有失败一组', () => {
+    const kinds = { loading: true, failed: false, done: true };
+    expect(requestSummary([slow, broken], NOW, false, kinds)).toStrictEqual({
+      kind: 'loading',
+      count: 1,
+      ratio: 0,
+      withFailures: 0
+    });
+    const failedLong = { ...broken, startedAt: NOW - 2000 };
+    expect(requestSummary([failedLong], NOW, false, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([failedLong, recent], NOW, false, kinds)).toStrictEqual({ kind: 'done' });
+    expect(requestGroups([broken, recent], kinds)).toStrictEqual({ loading: [], failed: [], done: [recent] });
+  });
+
+  it('关掉加载完成：没有"已加载完成"，明细开着时也不留；明细没有已完成一组', () => {
+    const kinds = { loading: true, failed: true, done: false };
+    expect(requestSummary([recent], NOW, false, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([recent], NOW, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestGroups([recent, broken], kinds).done).toStrictEqual([]);
+  });
+
+  it('都关掉时条目不显示，明细三组都是空的', () => {
+    const kinds = { loading: false, failed: false, done: false };
+    expect(requestSummary([slow, broken, recent], NOW, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestGroups([slow, broken, recent], kinds)).toStrictEqual({ loading: [], failed: [], done: [] });
+  });
+
+  it('有失败、已经结束的项：行内的加载失败用它，加载中的不算', () => {
+    const pendingWithFailure = tiles('pending', { failed: 1 });
+    expect(failedRequestKeys([slow, broken, recent, pendingWithFailure])).toStrictEqual(new Set(['broken']));
+  });
+});
 
 describe('modelRequestItem', () => {
   it('读索引、失败按读索引的阶段', () => {

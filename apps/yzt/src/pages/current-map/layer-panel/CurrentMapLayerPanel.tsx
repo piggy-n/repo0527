@@ -55,7 +55,10 @@ import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus
 import { COVER_OPACITY, type MoveAction, moveIndex, selectionAfterRemoval, steppedKey } from './current-list';
 import styles from './CurrentMapLayerPanel.module.scss';
 import { labelMenuEntries, type LabelRowState, labelToolItem } from './label-entries';
+import type { LayerHint } from './layer-hints';
+import { LayerHintsPopover } from './LayerHintsPopover';
 import type { CurrentLayers } from './useCurrentLayers';
+import type { LayerHints } from './useLayerHints';
 
 // 新加入的行滑入、定位到的行闪两下的时长，和样式里的动画一致
 const ENTER_MS = 900;
@@ -118,8 +121,13 @@ export const CurrentMapLayerPanel = defineComponent({
     collapsed: { type: Boolean, default: false },
     /** 手机宽度：浮层盖在面板下段上 */
     sheet: { type: Boolean, default: false },
-    /** 地图数据的请求状态（ADR 0158、0162）：资源行和模型行加载超过 0.4 秒时名称后面转圈 */
+    /**
+     * 地图数据的请求状态（ADR 0158、0162、0167）：资源行和模型行加载超过 0.4 秒时名称后面转圈，资源这一轮有瓦片失败时
+     * 名称后面是失败的图标
+     */
     requests: { type: Object as PropType<RequestStatus>, default: undefined },
+    /** 行内提示的开关（ADR 0167）：给了时标题栏有"行内提示"，行内按它显示；不给时全开、没有入口 */
+    hints: { type: Object as PropType<LayerHints>, default: undefined },
     /** 在图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
     reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null },
     /** 右侧"图例"页正在编辑的资源：图例浮层开着同一个资源时关掉，后打开编辑的一方为准（ADR 0157） */
@@ -718,6 +726,8 @@ export const CurrentMapLayerPanel = defineComponent({
         : (modelOf(id)?.name ?? key);
     };
 
+    // 用户关掉的提示不显示（ADR 0167）：转圈、瓦片失败已经按开关过滤，这里管模型的失败、状态图标和盖住模型
+    const hintShown = (hint: LayerHint) => props.hints?.shown.value.has(hint) ?? true;
     const renderRow = (key: string) => {
       const id = modelIdOfKey(key);
       if (id !== null) {
@@ -727,6 +737,7 @@ export const CurrentMapLayerPanel = defineComponent({
             id={id}
             scene={scene.value}
             loading={props.requests?.loadingKeys.value.has(key) ?? false}
+            failureShown={hintShown('failed')}
             onRemove={() => removeKeys([key])}
           />
         ];
@@ -741,7 +752,9 @@ export const CurrentMapLayerPanel = defineComponent({
               code={code}
               level={level.value}
               loading={props.requests?.loadingKeys.value.has(key) ?? false}
-              covering={coveringOf(code)}
+              tileFailed={props.requests?.failedKeys.value.has(key) ?? false}
+              statusKinds={props.hints?.statusKinds.value}
+              covering={hintShown('covering') && coveringOf(code)}
               onLegend={() => {
                 const open = popover.value?.kind === 'legend' && selected.value === key;
                 choose(key);
@@ -974,6 +987,7 @@ export const CurrentMapLayerPanel = defineComponent({
         onUpdate:currentView={(id: string) => (currentView.value = catalogViewOf(id) ?? currentView.value)}
       >
         {{
+          headerTools: () => (props.hints ? [<LayerHintsPopover hints={props.hints} />] : []),
           catalogTools: () => [<PanelToolbar items={catalogTools.value} label="资源的操作" onAction={onCatalogTool} />],
           catalogFilter: () => [
             <ElInput

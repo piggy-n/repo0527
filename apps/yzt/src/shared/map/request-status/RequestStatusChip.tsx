@@ -42,8 +42,11 @@ export const RequestStatusChip = defineComponent({
   setup(props, { emit }) {
     const root = ref<HTMLElement>();
     const open = ref(false);
-    const summary = computed(() => requestSummary(props.status.items.value, props.status.now.value, open.value));
-    const groups = computed(() => requestGroups(props.status.items.value));
+    // 关掉的一类不在条目和明细里（ADR 0167）
+    const summary = computed(() =>
+      requestSummary(props.status.items.value, props.status.now.value, open.value, props.status.kinds.value)
+    );
+    const groups = computed(() => requestGroups(props.status.items.value, props.status.kinds.value));
     // 条目不显示了（没有在加载、没有失败）且明细关着：什么也不留
     watch(
       () => summary.value.kind,

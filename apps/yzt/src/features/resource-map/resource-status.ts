@@ -2,7 +2,7 @@ export interface ResourceStatusInput {
   readonly checked: boolean;
   /** 目录校验不通过（ADR 0041 第 4 节） */
   readonly configError: boolean;
-  /** 当前视图里至少有一张瓦片加载失败（ADR 0041 第 5 节） */
+  /** 这一轮加载结束、有瓦片失败：和状态栏的数据加载明细是同一份，下一轮请求开始时清掉（ADR 0167） */
   readonly tileError: boolean;
   readonly minzoom: number | undefined;
   /** 当前的缩放级别 */
@@ -12,8 +12,13 @@ export interface ResourceStatusInput {
 /** 严重程度的级别：错误（红色实心圆）、警告（橙色实心三角）、说明（灰色放大镜） */
 export type ResourceStatusLevel = 'error' | 'warning' | 'info';
 
+/** 状态的种类：页面按用户的提示设置决定显示哪几种（ADR 0167） */
+export const RESOURCE_STATUS_KINDS = ['config-error', 'tile-error', 'minzoom'] as const;
+
+export type ResourceStatusKind = (typeof RESOURCE_STATUS_KINDS)[number];
+
 export interface ResourceStatus {
-  readonly kind: 'config-error' | 'tile-error' | 'minzoom';
+  readonly kind: ResourceStatusKind;
   readonly level: ResourceStatusLevel;
   readonly text: string;
 }

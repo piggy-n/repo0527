@@ -7,7 +7,7 @@ import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { legendEntry } from '../legend';
-import { resourceStatuses } from '../resource-status';
+import { RESOURCE_STATUS_KINDS, type ResourceStatusKind, resourceStatuses } from '../resource-status';
 import { LegendPreview } from './LegendPreview';
 import { ResourceStatusIcon } from './ResourceStatusIcon';
 
@@ -31,8 +31,15 @@ export const ResourceLayerRow = defineComponent({
     level: { type: Number, required: true },
     /** 瓦片在加载、已经超过 0.4 秒：和状态栏的请求状态用同一份（ADR 0158） */
     loading: { type: Boolean, default: false },
+    /** 这一轮加载结束、有瓦片失败：和状态栏的请求状态用同一份（ADR 0167） */
+    tileFailed: { type: Boolean, default: false },
     /** 三维里画在模型上面、接近不透明的面：名称后面一个"盖住模型"的图标（ADR 0161），由页面判断 */
-    covering: { type: Boolean, default: false }
+    covering: { type: Boolean, default: false },
+    /** 显示哪几种状态图标：用户在提示设置里关掉的不显示（ADR 0167） */
+    statusKinds: {
+      type: Array as PropType<readonly ResourceStatusKind[]>,
+      default: () => RESOURCE_STATUS_KINDS
+    }
   },
   emits: {
     legend: () => true,
@@ -52,10 +59,10 @@ export const ResourceLayerRow = defineComponent({
       const statuses = resourceStatuses({
         checked: shown.checked,
         configError: props.layers.configErrors.value.has(props.code),
-        tileError: props.layers.tileErrors.value.has(props.code),
+        tileError: props.tileFailed,
         minzoom: props.layers.minzoomOf(props.code),
         zoom: props.level
-      });
+      }).filter(status => props.statusKinds.includes(status.kind));
       const years = item.years.toReversed();
       return [
         <ElTooltip {...MAP_TOOLTIP_PROPS} content="图例" placement="top">

@@ -3,17 +3,24 @@ import type { SceneActivity } from '@mx/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, shallowRef } from 'vue';
 import { required } from '../../testing/required';
-import { type RequestSource, requestSummary } from './request-status';
+import { ALL_REQUEST_KINDS, type RequestKinds, type RequestSource, requestSummary } from './request-status';
 import { useRequestStatus } from './useRequestStatus';
 
-// 时钟和来源都由用例控制；定时器用假的
+// 时钟、来源和显示哪几类都由用例控制；定时器用假的
 function setup(initial: readonly RequestSource[] = []) {
   vi.useFakeTimers();
   let time = 0;
   const sources = shallowRef<readonly RequestSource[]>(initial);
+  const kinds = shallowRef<RequestKinds>(ALL_REQUEST_KINDS);
   const scope = effectScope();
   const status = required(
-    scope.run(() => useRequestStatus(() => sources.value, () => time)),
+    scope.run(() =>
+      useRequestStatus(
+        () => sources.value,
+        () => time,
+        () => kinds.value
+      )
+    ),
     '作用域没有运行'
   );
   const advance = async (ms: number) => {
@@ -21,15 +28,15 @@ function setup(initial: readonly RequestSource[] = []) {
     vi.advanceTimersByTime(ms);
     await nextTick();
   };
-  return { status, sources, advance, [Symbol.dispose]: () => scope.stop() };
+  return { status, sources, kinds, advance, [Symbol.dispose]: () => scope.stop() };
 }
 
-const tiles = (key: string, startedAt: number, finishedAt: number | null = null): RequestSource => ({
+const tiles = (key: string, startedAt: number, finishedAt: number | null = null, failed = 0): RequestSource => ({
   kind: 'tiles',
   key,
   name: key,
   icon: 'geometry-polygon',
-  activity: { requested: 4, loaded: finishedAt === null ? 1 : 4, failed: 0, startedAt, finishedAt }
+  activity: { requested: 4, loaded: finishedAt === null ? 1 : 4 - failed, failed, startedAt, finishedAt }
 });
 
 const model = (
@@ -70,6 +77,23 @@ describe('useRequestStatus', () => {
     const stopped = ctx.status.now.value;
     await ctx.advance(1000);
     expect(ctx.status.now.value).toBe(stopped);
+  });
+
+  it('行内的转圈、失败按显示哪几类：关掉加载中没有转圈，关掉加载失败没有失败；失败的是这一轮结束、有失败的（ADR 0167）', async () => {
+    using ctx = setup([tiles('a', 0)]);
+    ctx.kinds.value = { ...ALL_REQUEST_KINDS, loading: false };
+    await ctx.advance(500);
+    expect(ctx.status.loadingKeys.value.size).toBe(0);
+    ctx.kinds.value = ALL_REQUEST_KINDS;
+    await nextTick();
+    expect([...ctx.status.loadingKeys.value]).toStrictEqual(['a']);
+
+    ctx.sources.value = [tiles('a', 0, 600, 1)];
+    await nextTick();
+    expect([...ctx.status.failedKeys.value]).toStrictEqual(['a']);
+    ctx.kinds.value = { ...ALL_REQUEST_KINDS, failed: false };
+    await nextTick();
+    expect(ctx.status.failedKeys.value.size).toBe(0);
   });
 
   it('模型按状态变化记下时间：进入加载中时开始，就绪、失败时结束；状态不变时时间不变', async () => {

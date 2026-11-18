@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { NO_SOURCE_ERRORS, type SourceErrors, type ViewKind } from '@mx/map-core';
+import type { ViewKind } from '@mx/map-core';
 import type { SceneCapabilities } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, nextTick, shallowRef, watch } from 'vue';
@@ -29,21 +29,20 @@ const CATALOG = catalogOf(DLTB, CJDCQ, HYDL);
 const HIDDEN_IN_SCENE: SceneCapabilities = { styleLayers: false, identify: false, splats: true };
 const MAPLIBRE_LIKE: SceneCapabilities = { styleLayers: true, identify: true, splats: true };
 
-// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制。三维引擎的能力默认是不画样式图层的引擎，
+// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录和维度由测试控制。三维引擎的能力默认是不画样式图层的引擎，
 // 测 hiddenInScene 的推导；app 注入的同 MAPLIBRE_LIKE（ADR 0157）
 function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = HIDDEN_IN_SCENE) {
   const scope = effectScope();
   const catalog = shallowRef<ResourceCatalog | undefined>(undefined);
-  const sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
   const dimension = shallowRef<ViewKind>('2d');
   const errors: unknown[] = [];
   const onError = (error: unknown) => errors.push(error);
   const resolved: ResourceLayersOptions = { catalog, tileBase: TILE_BASE, onError, ...options };
-  const owner = scope.run(() => useResourceLayers({ sourceErrors, dimension, sceneCapabilities }, resolved));
+  const owner = scope.run(() => useResourceLayers({ dimension, sceneCapabilities }, resolved));
   if (!owner) {
     throw new Error('拥有者没有创建');
   }
-  return { owner, catalog, sourceErrors, dimension, errors, [Symbol.dispose]: () => scope.stop() };
+  return { owner, catalog, dimension, errors, [Symbol.dispose]: () => scope.stop() };
 }
 
 async function loaded(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = HIDDEN_IN_SCENE) {
@@ -238,18 +237,6 @@ describe('useResourceLayers', () => {
     expect([...ctx.owner.configErrors.value.keys()]).toStrictEqual(['bgdc_dltb']);
     expect(ctx.errors).toHaveLength(1);
     expect(String(ctx.errors[0])).toContain('bgdc_dltb');
-  });
-
-  it('瓦片加载失败：从上下文的数据源错误按前缀推导，其他分组的数据源不算', async () => {
-    using ctx = await loaded();
-    expect(ctx.owner.tileErrors.value).toStrictEqual(new Set());
-
-    ctx.sourceErrors.value = new Map([
-      ['resources-csxhjctb_hydl', new Error('Unable to parse the tile')],
-      ['boundaries-city', new Error('404')]
-    ]);
-
-    expect(ctx.owner.tileErrors.value).toStrictEqual(new Set(['csxhjctb_hydl']));
   });
 
   it('推导读符号的覆盖和预览，只有它们变化时也重新推导', async () => {

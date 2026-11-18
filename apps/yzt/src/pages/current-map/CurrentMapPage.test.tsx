@@ -486,6 +486,10 @@ const XUANWU: ViewBounds = [118.778682, 32.017001, 118.90731, 32.107079];
 // 等定位相关的微任务和渲染都走完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// 行内提示浮层里一类的开关（ADR 0167）；all 是"全部"
+const hintSwitch = (hint: string) =>
+  required(document.querySelector<HTMLInputElement>(`[data-layer-hint="${hint}"] input`), `${hint} 的开关`);
+
 // 按文字或无障碍名称找按钮（基础组只有图标）；面板外壳的 Tab 和工具栏的按钮可能同名，不算 Tab
 function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) {
   const found = wrapper
@@ -1619,7 +1623,7 @@ describe('CurrentMapPage', () => {
     expect(updates.get('CurrentLayerList')).toBe(1);
   });
 
-  it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
+  it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上，和数据加载的明细是同一份（ADR 0059、0167）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
     expect(wrapper.find('[data-current-row="resource:csxhjctb_lrdl"]').exists()).toBe(false);
@@ -1629,25 +1633,56 @@ describe('CurrentMapPage', () => {
     // 数据源的错误照样上报（默认打印到控制台）
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const tileError = new Error('Unable to parse the tile');
-    map.fire('error', { error: tileError, sourceId: 'resources-bgdc_dltb' });
-    await nextTick();
-    // 图标是更严重的瓦片加载失败，名称下面不再多一行
+    map.fire('dataloading', parcelTile('1'));
+    map.fire('error', { error: tileError, ...parcelTile('1') });
+    // 这一轮结束、有失败：图标是瓦片加载失败，名称下面不再多一行；明细里同样是失败
+    await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists()).toBe(true));
     const dltb = layerRow(wrapper, 'bgdc_dltb').get('[role="img"]');
-    expect(dltb.attributes('data-status')).toBe('tile-error');
     expect(dltb.attributes('aria-label')).toBe('有瓦片加载失败');
     expect(layerRow(wrapper, 'bgdc_dltb').text()).not.toContain('瓦片');
+    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
     expect(consoleError).toHaveBeenCalledWith('[map-vue]', tileError);
 
     // 级别不够的资源又有瓦片加载失败：图标换成更严重的，提示里两条都在
-    map.fire('error', { error: tileError, sourceId: 'resources-csxhjctb_lrdl' });
-    await nextTick();
-    const lrdl = layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]');
-    expect(lrdl.attributes('data-status')).toBe('tile-error');
-    expect(lrdl.attributes('aria-label')).toBe('有瓦片加载失败；放大至第 9 级显示');
+    const lrdlTile = { ...parcelTile('3'), sourceId: 'resources-csxhjctb_lrdl' };
+    map.fire('dataloading', lrdlTile);
+    map.fire('error', { error: tileError, ...lrdlTile });
+    await vi.waitFor(() =>
+      expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe(
+        '有瓦片加载失败；放大至第 9 级显示'
+      )
+    );
+    expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('data-status')).toBe('tile-error');
 
     map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('有瓦片加载失败');
+
+    // 下一轮请求开始时和明细一起清掉
+    map.fire('dataloading', parcelTile('2'));
+    await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status]').exists()).toBe(false));
+    map.fire('sourcedata', parcelTile('2'));
+  });
+
+  it('行内提示里关掉加载失败：资源行的失败图标和状态栏的条目一起不显示，打开后一起回来（ADR 0167）', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+    await wrapper.get('[data-layer-hints]').trigger('click');
+    hintSwitch('failed').click();
+    await nextTick();
+
+    using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    map.fire('dataloading', parcelTile('1'));
+    map.fire('error', { error: new Error('Unable to parse the tile'), ...parcelTile('1') });
+    await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+    await settle();
+    expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status]').exists()).toBe(false);
+    expect(wrapper.find('[data-request-chip]').exists()).toBe(false);
+
+    // 数据照常统计：打开以后行内和状态栏一起出现
+    hintSwitch('failed').click();
+    await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists()).toBe(true));
+    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
   });
 
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {

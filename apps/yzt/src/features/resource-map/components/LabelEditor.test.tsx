@@ -1,4 +1,3 @@
-import { NO_SOURCE_ERRORS } from '@mx/map-core';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker, ElSelect, ElSlider, ElSwitch } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -30,7 +29,6 @@ function mountEditor(code = 'csxhjctb_xxp') {
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(
       {
-        sourceErrors: shallowRef(NO_SOURCE_ERRORS),
         dimension: shallowRef('2d'),
         sceneCapabilities: { styleLayers: true, identify: true, splats: true }
       },

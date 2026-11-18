@@ -1,13 +1,22 @@
 import { computed, type ComputedRef, onScopeDispose, type Ref, shallowRef, watch } from 'vue';
 import {
+  ALL_REQUEST_KINDS,
   DONE_HOLD,
+  failedRequestKeys,
   isPending,
   type ModelPhase,
   modelRequestItem,
   type RequestItem,
+  type RequestKinds,
   type RequestSource,
   SHOW_DELAY
 } from './request-status';
+
+// 集合的内容一样：内容没变时还用原来的对象，用它的行不跟着重渲染
+const sameKeys = (
+  previous: ReadonlySet<string> | undefined,
+  next: ReadonlySet<string>
+): previous is ReadonlySet<string> => previous?.size === next.size && [...next].every(key => previous.has(key));
 
 /** 时钟走一格的间隔（毫秒）：加载超过 0.4 秒才显示、"已加载完成"留 1.5 秒、等了几秒都按它刷新 */
 const TICK = 250;
@@ -17,8 +26,12 @@ export interface RequestStatus {
   readonly items: ComputedRef<readonly RequestItem[]>;
   /** 当前时间（同 performance.now）：有在加载的、刚结束的时每 250 毫秒走一格，空闲时不走 */
   readonly now: Readonly<Ref<number>>;
-  /** 显示着加载中的项（加载超过 0.4 秒），面板图层列表的行内转圈用同一份 */
+  /** 显示着加载中的项（加载超过 0.4 秒），面板图层列表的行内转圈用同一份；关掉加载中时是空的 */
   readonly loadingKeys: ComputedRef<ReadonlySet<string>>;
+  /** 明细里有失败、已经结束的项，行内的"加载失败"用同一份（ADR 0167）；关掉加载失败时是空的 */
+  readonly failedKeys: ComputedRef<ReadonlySet<string>>;
+  /** 显示哪几类：条目和明细按它过滤（ADR 0167） */
+  readonly kinds: ComputedRef<RequestKinds>;
 }
 
 /**
@@ -27,8 +40,10 @@ export interface RequestStatus {
  */
 export function useRequestStatus(
   sources: () => readonly RequestSource[],
-  clock: () => number = () => performance.now()
+  clock: () => number = () => performance.now(),
+  shownKinds: () => RequestKinds = () => ALL_REQUEST_KINDS
 ): RequestStatus {
+  const kinds = computed(shownKinds);
   const now = shallowRef(clock());
   const modelTimes = shallowRef<ReadonlyMap<string, ModelPhase>>(new Map());
 
@@ -98,11 +113,17 @@ export function useRequestStatus(
 
   // 集合的内容没变时还是同一个对象：时钟每走一格都会重算，用它的行不跟着重渲染
   const loadingKeys = computed((previous?: ReadonlySet<string>): ReadonlySet<string> => {
-    const next = new Set(
-      items.value.filter(item => isPending(item) && now.value - item.startedAt > SHOW_DELAY).map(item => item.key)
-    );
-    return previous?.size === next.size && [...next].every(key => previous.has(key)) ? previous : next;
+    const next = kinds.value.loading
+      ? new Set(
+          items.value.filter(item => isPending(item) && now.value - item.startedAt > SHOW_DELAY).map(item => item.key)
+        )
+      : new Set<string>();
+    return sameKeys(previous, next) ? previous : next;
+  });
+  const failedKeys = computed((previous?: ReadonlySet<string>): ReadonlySet<string> => {
+    const next = kinds.value.failed ? failedRequestKeys(items.value) : new Set<string>();
+    return sameKeys(previous, next) ? previous : next;
   });
 
-  return { items, now, loadingKeys };
+  return { items, now, loadingKeys, failedKeys, kinds };
 }

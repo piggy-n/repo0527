@@ -110,6 +110,18 @@ export function modelRequestItem(
   };
 }
 
+/**
+ * 显示哪几类（ADR 0167）：加载中、加载失败、加载完成。关掉的一类在状态栏的条目、明细、行内都不显示，数据照常统计；
+ * 由页面按用户的提示设置给出
+ */
+export interface RequestKinds {
+  readonly loading: boolean;
+  readonly failed: boolean;
+  readonly done: boolean;
+}
+
+export const ALL_REQUEST_KINDS: RequestKinds = { loading: true, failed: true, done: true };
+
 /** 状态栏的条目：空闲时不显示 */
 export type RequestSummary =
   | { readonly kind: 'hidden' }
@@ -128,11 +140,17 @@ const wasShown = (item: RequestItem, now: number): boolean => (item.finishedAt ?
 
 /**
  * 状态栏的条目（原型 DESIGN.v1"请求状态"）：有加载超过 0.4 秒的时显示加载中、几项和完成的比例；没有在显示的加载、有失败时
- * 显示几项失败，直到下一轮请求把失败清掉；显示过的加载结束后 1.5 秒内显示"已加载完成"；明细开着时至少显示"已加载完成"
+ * 显示几项失败，直到下一轮请求把失败清掉；显示过的加载结束后 1.5 秒内显示"已加载完成"；明细开着时至少显示"已加载完成"。
+ * 关掉的一类不算（ADR 0167）：都关掉时不显示
  */
-export function requestSummary(items: readonly RequestItem[], now: number, open = false): RequestSummary {
-  const pending = items.filter(isPending);
-  const failed = items.filter(item => item.failed > 0);
+export function requestSummary(
+  items: readonly RequestItem[],
+  now: number,
+  open = false,
+  kinds: RequestKinds = ALL_REQUEST_KINDS
+): RequestSummary {
+  const pending = kinds.loading ? items.filter(isPending) : [];
+  const failed = kinds.failed ? items.filter(item => item.failed > 0) : [];
   if (pending.some(item => wasShown(item, now))) {
     const counted = pending.filter(item => (item.kind === 'tiles' || item.kind === 'blocks') && item.requested > 0);
     const requested = counted.reduce((sum, item) => sum + item.requested, 0);
@@ -147,24 +165,35 @@ export function requestSummary(items: readonly RequestItem[], now: number, open 
   if (failed.length > 0) {
     return { kind: 'failed', count: failed.length };
   }
+  if (!kinds.done) {
+    return { kind: 'hidden' };
+  }
   const recent = items.some(
-    item => item.finishedAt !== null && wasShown(item, now) && now - item.finishedAt < DONE_HOLD
+    item => item.finishedAt !== null && item.failed === 0 && wasShown(item, now) && now - item.finishedAt < DONE_HOLD
   );
   return recent || open ? { kind: 'done' } : { kind: 'hidden' };
 }
 
-/** 明细的三组：加载中、有失败（已经结束的）、已完成；组内按开始的先后 */
-export function requestGroups(items: readonly RequestItem[]): {
+/** 明细的三组：加载中、有失败（已经结束的）、已完成；组内按开始的先后。关掉的一类是空的（ADR 0167） */
+export function requestGroups(
+  items: readonly RequestItem[],
+  kinds: RequestKinds = ALL_REQUEST_KINDS
+): {
   readonly loading: readonly RequestItem[];
   readonly failed: readonly RequestItem[];
   readonly done: readonly RequestItem[];
 } {
   const sorted = items.toSorted((a, b) => a.startedAt - b.startedAt);
   return {
-    loading: sorted.filter(isPending),
-    failed: sorted.filter(item => !isPending(item) && item.failed > 0),
-    done: sorted.filter(item => !isPending(item) && item.failed === 0)
+    loading: kinds.loading ? sorted.filter(isPending) : [],
+    failed: kinds.failed ? sorted.filter(item => !isPending(item) && item.failed > 0) : [],
+    done: kinds.done ? sorted.filter(item => !isPending(item) && item.failed === 0) : []
   };
+}
+
+/** 明细里有失败、已经结束的项（ADR 0167）：行内的"加载失败"用同一份，下一轮请求开始时清掉 */
+export function failedRequestKeys(items: readonly RequestItem[]): ReadonlySet<string> {
+  return new Set(items.filter(item => !isPending(item) && item.failed > 0).map(item => item.key));
 }
 
 /** 明细里一行的状态 */

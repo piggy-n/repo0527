@@ -54,6 +54,7 @@ import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 import { CurrentMapLayerPanel } from './layer-panel/CurrentMapLayerPanel';
 import { useCurrentLayers } from './layer-panel/useCurrentLayers';
+import { useLayerHints } from './layer-panel/useLayerHints';
 import { mapPageLayout } from './map-page-layout';
 
 // 功能标签、独立详情和底图分开管理，功能与详情同列上下排列（ADR 0070）
@@ -136,21 +137,30 @@ export const CurrentMapPage = defineComponent({
     const models = useSceneModels(map, sceneModelsQuery.data, { preferences });
     // 图层里平铺的资源和模型（ADR 0161）：顺序就是叠放，面板显示和操作，地图按它放模型层
     const layerList = useCurrentLayers(resources, models, { preferences });
+    // 图层行内提示的开关（用户 2026-11-17，ADR 0167）：同时管数据加载的条目和明细
+    const hints = useLayerHints({ preferences });
     // 地图数据的请求状态（ADR 0158）：资源图层、三维里的模型、底图（几个数据源合成一项）；状态栏右边的条目和当前图层的
-    // 行内转圈用同一份。接口请求不算，它们各自有加载状态
-    const requests = useRequestStatus(() => {
-      const activities = map.sourceActivity.value;
-      const basemapActivity = mergedActivity(
-        [...activities].flatMap(([sourceId, activity]) => (sourceId.startsWith('basemap') ? [activity] : []))
-      );
-      const sources: RequestSource[] = [
-        ...resourceRequests(resources.state.value, activities),
-        ...(map.dimension.value === '3d' ? modelRequests(models) : [])
-      ];
-      return basemapActivity
-        ? [...sources, { kind: 'tiles', key: 'basemap', name: '底图', icon: 'nav-current-map', activity: basemapActivity }]
-        : sources;
-    });
+    // 行内转圈、失败用同一份，关掉的一类都不显示（ADR 0167）。接口请求不算，它们各自有加载状态
+    const requests = useRequestStatus(
+      () => {
+        const activities = map.sourceActivity.value;
+        const basemapActivity = mergedActivity(
+          [...activities].flatMap(([sourceId, activity]) => (sourceId.startsWith('basemap') ? [activity] : []))
+        );
+        const sources: RequestSource[] = [
+          ...resourceRequests(resources.state.value, activities),
+          ...(map.dimension.value === '3d' ? modelRequests(models) : [])
+        ];
+        return basemapActivity
+          ? [
+              ...sources,
+              { kind: 'tiles', key: 'basemap', name: '底图', icon: 'nav-current-map', activity: basemapActivity }
+            ]
+          : sources;
+      },
+      undefined,
+      () => hints.requestKinds.value
+    );
     // 请求状态的明细里点了一行：在当前图层里选中它
     const revealed = shallowRef<{ readonly key: string } | null>(null);
     // 明细贴着左侧面板所在的一列、放在四周留白以内（用户 2026-11-16）；交给条目的是同一对函数，重渲染时不换
@@ -369,6 +379,7 @@ export const CurrentMapPage = defineComponent({
           layout={panelLayout}
           models={models}
           requests={requests}
+          hints={hints}
           reveal={revealed.value}
           legendYield={legendEditingCode.value}
           status={status}

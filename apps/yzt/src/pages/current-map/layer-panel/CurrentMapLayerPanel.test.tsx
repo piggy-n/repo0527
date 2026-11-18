@@ -1,6 +1,6 @@
 import type { CameraState, SceneStatus } from '@mx/map-core';
 import { type MapContext, provideMap } from '@mx/map-vue';
-import { type DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
+import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, effectScope, nextTick, shallowRef, watchEffect } from 'vue';
@@ -13,11 +13,13 @@ import { sceneManifestSchema } from '@/features/scene-models/api';
 import { buildModelCatalog } from '@/features/scene-models/catalog';
 import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSelect';
 import { type SceneModels, useSceneModels } from '@/features/scene-models/composables/useSceneModels';
+import { ALL_REQUEST_KINDS } from '@/shared/map/request-status/request-status';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { required } from '@/shared/testing/required';
 import { LayerPopover } from '@/shared/map/layer-panel/LayerPopover';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
 import { type CurrentLayers, useCurrentLayers } from './useCurrentLayers';
+import { type LayerHints, useLayerHints } from './useLayerHints';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -82,18 +84,22 @@ async function mountPanel({
   let models: SceneModels | undefined;
   let current: CurrentLayers | undefined;
   let context: MapContext | undefined;
+  let layerHints: LayerHints | undefined;
   const legendCodes: (string | null)[] = [];
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const onRetryModels = vi.fn<() => void>();
   const onRetry = vi.fn<() => void>();
   const catalog = shallowRef<ResourceCatalog | undefined>(catalogReady ? CATALOG : undefined);
   const catalogStatus = shallowRef(status);
-  // 请求状态只用到行内转圈的集合；页面在明细里点了一行时换一个新对象
+  // 请求状态只用到行内转圈、失败的集合；页面在明细里点了一行时换一个新对象
   const loadingKeys = shallowRef<ReadonlySet<string>>(new Set());
+  const failedKeys = shallowRef<ReadonlySet<string>>(new Set());
   const requests: RequestStatus = {
     items: computed(() => []),
     now: shallowRef(0),
-    loadingKeys: computed(() => loadingKeys.value)
+    loadingKeys: computed(() => loadingKeys.value),
+    failedKeys: computed(() => failedKeys.value),
+    kinds: computed(() => ALL_REQUEST_KINDS)
   };
   const reveal = shallowRef<{ readonly key: string } | null>(null);
   const legendYield = shallowRef<string | null>(null);
@@ -104,6 +110,8 @@ async function mountPanel({
     const layout = useResourcePanelLayout();
     const sceneModels = useSceneModels({ ...map, sceneStatus }, MODELS);
     const list = useCurrentLayers(layers, sceneModels);
+    const hints = useLayerHints();
+    layerHints = hints;
     owner = layers;
     models = sceneModels;
     current = list;
@@ -119,6 +127,7 @@ async function mountPanel({
         status={catalogStatus.value}
         onRetry={onRetry}
         requests={requests}
+        hints={hints}
         reveal={reveal.value}
         legendYield={legendYield.value}
         onLegendCode={(code: string | null) => legendCodes.push(code)}
@@ -128,7 +137,7 @@ async function mountPanel({
   });
   const wrapper = mount(Page, { attachTo: document.body });
   await nextTick();
-  if (!owner || !models || !current || !context) {
+  if (!owner || !models || !current || !context || !layerHints) {
     throw new Error('页面没有创建拥有者');
   }
   return {
@@ -144,10 +153,16 @@ async function mountPanel({
     catalog,
     catalogStatus,
     loadingKeys,
+    failedKeys,
+    hints: layerHints,
     reveal,
     legendYield
   };
 }
+
+// 行内提示浮层里一类的开关（ADR 0167）；all 是"全部"
+const hintSwitch = (hint: string) =>
+  required(document.querySelector<HTMLInputElement>(`[data-layer-hint="${hint}"] input`), `${hint} 的开关`);
 
 const node = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-catalog-node="resource:${code}"]`);
 const row = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-current-row="resource:${code}"]`);
@@ -779,6 +794,45 @@ describe('CurrentMapLayerPanel', () => {
     await node(wrapper, 'bgdc_dltb').trigger('dblclick');
     expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
+  });
+
+  it('标题栏的行内提示：按类开关，关掉的在行内不显示；瓦片失败和数据加载用同一份（用户 2026-11-17，ADR 0167）', async () => {
+    const { wrapper, models, map, sceneStatus, failedKeys, hints } = await mountPanel();
+    models.add(['white']);
+    map.setDimension('3d');
+    sceneStatus.value = new Map([['white/plain', { state: 'failed', error: new Error('404') }]]);
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'move-top').trigger('click');
+    failedKeys.value = new Set(['resource:bgdc_dltb']);
+    await nextTick();
+    const failure = () => row(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists();
+    const modelFailure = () =>
+      wrapper.get('[data-current-row="model:white"]').find('[aria-label="加载失败"]').exists();
+    expect([failure(), modelFailure(), coverOf(wrapper, 'bgdc_dltb')]).toStrictEqual([true, true, true]);
+
+    const entry = wrapper.get('[data-layer-hints]');
+    expect(entry.attributes('aria-label')).toBe('行内提示');
+    await entry.trigger('click');
+    // 关掉加载失败、盖住模型：资源的失败图标、模型的失败和重试、盖住模型都不显示
+    hintSwitch('failed').click();
+    hintSwitch('covering').click();
+    await nextTick();
+    expect(hints.requestKinds.value.failed).toBe(false);
+    expect([failure(), modelFailure(), coverOf(wrapper, 'bgdc_dltb')]).toStrictEqual([false, false, false]);
+    expect(entry.attributes('aria-label')).toBe('行内提示（关掉了 2 类）');
+    // 全部：部分关着时半选，点了全开
+    expect(required(document.querySelector('[data-layer-hint="all"] .el-checkbox__input'), '全部').className).toContain('is-indeterminate');
+    hintSwitch('all').click();
+    await nextTick();
+    expect([failure(), modelFailure(), coverOf(wrapper, 'bgdc_dltb')]).toStrictEqual([true, true, true]);
+
+    // 按 Esc 关上，焦点回到入口
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await nextTick();
+    await vi.waitFor(() =>
+      expect(new DOMWrapper(required(document.querySelector('[data-layer-hints-popover]'), '行内提示')).isVisible()).toBe(false)
+    );
+    expect(document.activeElement).toBe(entry.element);
   });
 
   it('三维里画在模型上面、接近不透明的面，名称后面一个"盖住模型"的图标，说明调低透明度（S4，ADR 0161）', async () => {

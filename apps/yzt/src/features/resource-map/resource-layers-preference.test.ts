@@ -1,4 +1,3 @@
-import { NO_SOURCE_ERRORS } from '@mx/map-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import { createMemoryStore, type KeyValueStore } from '@/shared/storage/key-value-store';
@@ -41,7 +40,6 @@ function setup(store: KeyValueStore, catalog: ResourceCatalog | null = CATALOG) 
   const owner = effect.run(() =>
     useResourceLayers(
       {
-        sourceErrors: shallowRef(NO_SOURCE_ERRORS),
         dimension: shallowRef('2d'),
         sceneCapabilities: { styleLayers: false, identify: false, splats: false }
       },

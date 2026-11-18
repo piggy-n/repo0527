@@ -28,7 +28,6 @@ import {
   withAdded,
   withMoved,
   withRemoved,
-  resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
   resourceLabelsGroup,
@@ -52,8 +51,6 @@ export interface ResourceLayers {
   readonly state: Readonly<ShallowRef<ResourceLayersState>>;
   /** 目录变化时校验不通过的资源和原因：它们不进入推导，随目录变化，不随视图清除 */
   readonly configErrors: ComputedRef<ReadonlyMap<string, readonly string[]>>;
-  /** 当前视图里至少有一张瓦片加载失败的资源，不表示整个资源不可用；随数据源移除、视图重建或替换清除 */
-  readonly tileErrors: ComputedRef<ReadonlySet<string>>;
   /** 最小显示级别，面板结合当前的缩放级别提示"放大至第 N 级显示"；没有限制时为 undefined */
   readonly minzoomOf: (code: string) => number | undefined;
   /** 以下操作遇到目录里没有的资源都抛错 */
@@ -142,7 +139,7 @@ const NO_RESOURCES: StyleGroup = Object.freeze({ sources: Object.freeze({}), lay
 
 /** 创建资源图层的拥有者，在 provideMap 所在组件的 setup 中调用 */
 export function useResourceLayers(
-  map: Pick<MapContext, 'sourceErrors' | 'dimension' | 'sceneCapabilities'>,
+  map: Pick<MapContext, 'dimension' | 'sceneCapabilities'>,
   options: ResourceLayersOptions
 ): ResourceLayers {
   const tileBase = options.tileBase ?? resourceTileBase(appConfig.apiBaseUrl, window.location.origin);
@@ -195,15 +192,6 @@ export function useResourceLayers(
     { immediate: true }
   );
 
-  const tileErrors = computed(
-    () =>
-      new Set(
-        [...map.sourceErrors.value.keys()].flatMap(sourceId => {
-          const code = resourceCodeOfSource(sourceId);
-          return code === null ? [] : [code];
-        })
-      )
-  );
 
   // 改一个资源的显示状态；值没变时 change 返回原来的对象，状态不替换
   const update = (code: string, change: (display: ResourceDisplay, resource: Resource) => ResourceDisplay) => {
@@ -280,7 +268,6 @@ export function useResourceLayers(
   return {
     state: shallowReadonly(state),
     configErrors,
-    tileErrors,
     minzoomOf: code => catalog.value?.resources.get(code)?.minzoom,
     add,
     remove,

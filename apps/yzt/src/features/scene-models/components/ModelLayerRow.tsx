@@ -28,7 +28,9 @@ export const ModelLayerRow = defineComponent({
     /** 正在显示三维：二维里模型不加载，不显示状态，不能漫游 */
     scene: { type: Boolean, required: true },
     /** 加载超过 0.4 秒（请求状态的 loadingKeys，读索引和读完以后这一轮都算，ADR 0162）：名称后面转圈 */
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    /** 显示加载失败的图标和"重试"：用户在提示设置里关掉"加载失败"时不显示（ADR 0167） */
+    failureShown: { type: Boolean, default: true }
   },
   emits: {
     remove: () => true
@@ -49,7 +51,7 @@ export const ModelLayerRow = defineComponent({
           </ElIcon>
         );
       }
-      if (state === 'failed') {
+      if (state === 'failed' && props.failureShown) {
         return [
           <ElTooltip {...MAP_TOOLTIP_PROPS} content="加载失败" placement="top">
             <span class={styles.error} role="img" aria-label="加载失败" tabindex={0}>

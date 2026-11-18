@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, shallowRef } from 'vue';
-import type { RequestItem } from './request-status';
+import { ALL_REQUEST_KINDS, type RequestItem } from './request-status';
 import { RequestStatusChip } from './RequestStatusChip';
 import type { RequestStatus } from './useRequestStatus';
 
@@ -26,7 +26,9 @@ function mountChip(initial: readonly RequestItem[], now = 1000) {
   const status: RequestStatus = {
     items: computed(() => items.value),
     now: clock,
-    loadingKeys: computed(() => new Set<string>())
+    loadingKeys: computed(() => new Set<string>()),
+    failedKeys: computed(() => new Set<string>()),
+    kinds: computed(() => ALL_REQUEST_KINDS)
   };
   const wrapper = mount(RequestStatusChip, {
     props: { status, selectable: (key: string) => key !== 'basemap' },
