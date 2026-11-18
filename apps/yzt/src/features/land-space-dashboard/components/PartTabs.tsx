@@ -10,12 +10,24 @@ export interface TabExtent {
   readonly end: number;
 }
 
-// 滚动区边缘切到半个分项；容差半个像素，scrollLeft 可能带小数
-function cutAt(tabs: readonly TabExtent[], edge: number): boolean {
-  return tabs.some(tab => tab.start < edge - 0.5 && tab.end > edge + 0.5);
+// 边缘切出的半个分项露出不到这么宽时只是一条边，看不出字
+const SLIVER = 24;
+
+// 位置的容差半个像素：分项的位置取整数的 offsetLeft、offsetWidth，scrollLeft 在缩放的屏幕上可能带小数
+function inside(tab: TabExtent, left: number, viewWidth: number): boolean {
+  return tab.start >= left - 0.5 && tab.end <= left + viewWidth + 0.5;
 }
 
-/** 选中项完整露出、移动方向那一侧的边缘不切到半个分项时的 scrollLeft；direction 是选中项移动的方向，0 表示不知道 */
+// 滚动区的这条边缘切到的分项露出的宽度，没切到时为 0
+function cutWidth(tabs: readonly TabExtent[], edge: number, side: 'left' | 'right'): number {
+  const tab = tabs.find(item => item.start < edge - 0.5 && item.end > edge + 0.5);
+  if (!tab) {
+    return 0;
+  }
+  return side === 'left' ? tab.end - edge : edge - tab.start;
+}
+
+/** 切换后滚动区的 scrollLeft，规则见 docs/modules/land-space-dashboard.md 的分项栏；direction 是选中项移动的方向，0 表示不知道 */
 export function revealScrollLeft(
   tabs: readonly TabExtent[],
   index: number,
@@ -24,23 +36,43 @@ export function revealScrollLeft(
   direction: number
 ): number {
   const tab = tabs[index];
-  if (!tab) {
+  const last = tabs.at(-1);
+  if (!tab || !last) {
     return scrollLeft;
   }
-  const hidden = tab.start < scrollLeft - 0.5 || tab.end > scrollLeft + viewWidth + 0.5;
+  const clamp = (left: number) => Math.min(Math.max(0, last.end - viewWidth), Math.max(0, left));
   const leftward = direction < 0 || (direction === 0 && tab.start < scrollLeft);
-  const rightward = direction > 0 || (direction === 0 && !leftward);
-  const towardCut = (leftward && cutAt(tabs, scrollLeft)) || (rightward && cutAt(tabs, scrollLeft + viewWidth));
-  if (!hidden && !towardCut) {
-    return scrollLeft;
+  // 选中项本身放不下时对齐它靠移动方向的那一端
+  if (tab.end - tab.start > viewWidth) {
+    return clamp(leftward ? tab.start : tab.end - viewWidth);
   }
-  // 要滚时，移动方向那一侧对齐到整个分项，并尽量多放下那一侧的分项
-  if (leftward) {
-    const first = tabs.slice(0, index + 1).find(item => tab.end - item.start <= viewWidth);
-    return first?.start ?? tab.start;
-  }
-  const last = tabs.slice(index).findLast(item => item.end - tab.start <= viewWidth);
-  return Math.max(0, (last?.end ?? tab.end) - viewWidth);
+  // 移动方向那一侧的分项
+  const ahead = leftward ? tabs.slice(0, index) : tabs.slice(index + 1);
+  // 候选：不动、选中项居中、每个分项贴左边或贴右边；居中的那个总能放下选中项
+  const centered = clamp(Math.round((tab.start + tab.end - viewWidth) / 2));
+  const candidates = [scrollLeft, centered, ...tabs.flatMap(item => [item.start, item.end - viewWidth])]
+    .map(clamp)
+    .filter(left => inside(tab, left, viewWidth))
+    .map(left => {
+      const atLeft = cutWidth(tabs, left, 'left');
+      const atRight = cutWidth(tabs, left + viewWidth, 'right');
+      return {
+        left,
+        // 最窄的窄条比 SLIVER 窄多少，没有窄条时为 0
+        sliver: SLIVER - Math.min(SLIVER, ...[atLeft, atRight].filter(cut => cut > 0)),
+        towardCut: (leftward ? atLeft : atRight) > 0,
+        shown: ahead.filter(item => inside(item, left, viewWidth)).length,
+        moved: Math.abs(left - scrollLeft)
+      };
+    });
+  // 依次比较：窄条、移动方向那一侧切没切到分项、那一侧完整放下几个、滚多远
+  candidates.sort((a, b) =>
+    a.sliver - b.sliver ||
+    Number(a.towardCut) - Number(b.towardCut) ||
+    b.shown - a.shown ||
+    a.moved - b.moved
+  );
+  return candidates[0]?.left ?? centered;
 }
 
 const KEY_STEPS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1 };
@@ -68,6 +100,9 @@ export const PartTabs = defineComponent({
       return scroller.value?.querySelector<HTMLElement>('[aria-selected="true"]');
     }
 
+    // 平滑滚动的终点：滚动停下前按终点判断，否则途中再切换会按半路的位置算，滚动接着走到旧终点、切掉选中项
+    let scrollTarget: number | undefined;
+
     // 选中项滚进视野，只滚分项栏自己，不带动外层的列表；offsetLeft 相对滚动区（它是定位容器）
     function reveal(direction: number): void {
       const view = scroller.value;
@@ -78,10 +113,24 @@ export const PartTabs = defineComponent({
         start: tab.offsetLeft,
         end: tab.offsetLeft + tab.offsetWidth
       }));
-      const left = revealScrollLeft(tabs, index.value, view.scrollLeft, view.clientWidth, direction);
-      if (Math.abs(left - view.scrollLeft) > 0.5) {
+      const from = scrollTarget ?? view.scrollLeft;
+      const left = revealScrollLeft(tabs, index.value, from, view.clientWidth, direction);
+      if (Math.abs(left - from) > 0.5) {
+        scrollTarget = props.reducedMotion ? undefined : left;
         view.scrollTo({ left, behavior: props.reducedMotion ? 'auto' : 'smooth' });
       }
+    }
+
+    // 滚到终点时不再有终点；scrollend 还管被拖动、滚轮打断的平滑滚动
+    function onScroll(): void {
+      const view = scroller.value;
+      if (view && scrollTarget !== undefined && Math.abs(view.scrollLeft - scrollTarget) < 1) {
+        scrollTarget = undefined;
+      }
+    }
+
+    function onScrollend(): void {
+      scrollTarget = undefined;
     }
 
     const optionIndex = (id: string | null) => options.value.findIndex(option => option.id === id);
@@ -151,6 +200,8 @@ export const PartTabs = defineComponent({
             role="tablist"
             aria-label={props.label}
             onKeydown={event => void onKeydown(event)}
+            onScroll={onScroll}
+            onScrollend={onScrollend}
           >
             {options.value.map((option, position) => (
               <button
