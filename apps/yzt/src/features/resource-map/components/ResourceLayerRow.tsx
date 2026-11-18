@@ -35,7 +35,7 @@ export const ResourceLayerRow = defineComponent({
     tileFailed: { type: Boolean, default: false },
     /** 三维里画在模型上面、接近不透明的面：名称后面一个"盖住模型"的图标（ADR 0161），由页面判断 */
     covering: { type: Boolean, default: false },
-    /** 显示哪几种状态图标：用户在提示设置里关掉的不显示（ADR 0167） */
+    /** 显示哪几种状态图标：部署时在 .env 里关掉的不显示（ADR 0167） */
     statusKinds: {
       type: Array as PropType<readonly ResourceStatusKind[]>,
       default: () => RESOURCE_STATUS_KINDS

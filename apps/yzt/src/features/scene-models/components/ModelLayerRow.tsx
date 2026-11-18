@@ -29,7 +29,7 @@ export const ModelLayerRow = defineComponent({
     scene: { type: Boolean, required: true },
     /** 加载超过 0.4 秒（请求状态的 loadingKeys，读索引和读完以后这一轮都算，ADR 0162）：名称后面转圈 */
     loading: { type: Boolean, default: false },
-    /** 显示加载失败的图标和"重试"：用户在提示设置里关掉"加载失败"时不显示（ADR 0167） */
+    /** 显示加载失败的图标和"重试"：部署时在 .env 里关掉"加载失败"时不显示（ADR 0167） */
     failureShown: { type: Boolean, default: true }
   },
   emits: {

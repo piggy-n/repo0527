@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { LAYER_HINTS } from './layer-hints';
 
 // appConfig 在模块加载时读取环境变量，所以每个用例都要重新加载模块
 async function loadAppConfig() {
@@ -101,6 +102,54 @@ describe('appConfig', () => {
       await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 true 或 false`);
 
       vi.stubEnv('VITE_PREFERENCES_ENABLED', 'false');
+      await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 true 或 false`);
+
+      vi.stubEnv(variable, '');
+      await expect(loadAppConfig()).rejects.toThrow(`缺少环境变量 ${variable}`);
+    });
+  });
+
+  describe('图层行内提示的开关（ADR 0167）', () => {
+    const HINTS = [
+      ['loading', 'VITE_LAYER_HINT_LOADING'],
+      ['failed', 'VITE_LAYER_HINT_FAILED'],
+      ['done', 'VITE_LAYER_HINT_DONE'],
+      ['config-error', 'VITE_LAYER_HINT_CONFIG_ERROR'],
+      ['minzoom', 'VITE_LAYER_HINT_MINZOOM'],
+      ['covering', 'VITE_LAYER_HINT_COVERING']
+    ] as const;
+    const ALL = HINTS.map(([hint]) => hint);
+
+    it('都打开时六类都显示；每一类都有自己的变量', async () => {
+      expect(ALL).toStrictEqual([...LAYER_HINTS]);
+      expect([...(await loadAppConfig()).layerHints]).toStrictEqual(ALL);
+    });
+
+    it.each(HINTS)('%s 的开关关闭时只少这一类', async (hint, variable) => {
+      vi.stubEnv(variable, 'false');
+
+      expect([...(await loadAppConfig()).layerHints]).toStrictEqual(ALL.filter(item => item !== hint));
+    });
+
+    it('总开关关闭时一类也不显示，分项开关打开也一样', async () => {
+      vi.stubEnv('VITE_LAYER_HINTS_ENABLED', 'false');
+
+      expect([...(await loadAppConfig()).layerHints]).toStrictEqual([]);
+    });
+
+    it('总开关只能是 true 或 false，不能为空', async () => {
+      vi.stubEnv('VITE_LAYER_HINTS_ENABLED', 'off');
+      await expect(loadAppConfig()).rejects.toThrow('VITE_LAYER_HINTS_ENABLED 只能是 true 或 false');
+
+      vi.stubEnv('VITE_LAYER_HINTS_ENABLED', '');
+      await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_LAYER_HINTS_ENABLED');
+    });
+
+    it.each(HINTS)('%s 的开关写错时加载即报错，总开关关闭时也一样', async (_, variable) => {
+      vi.stubEnv(variable, 'yes');
+      await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 true 或 false`);
+
+      vi.stubEnv('VITE_LAYER_HINTS_ENABLED', 'false');
       await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 true 或 false`);
 
       vi.stubEnv(variable, '');

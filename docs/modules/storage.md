@@ -1,6 +1,6 @@
 # shared/storage：偏好的持久化
 
-> 状态：5C.3 完成键值存储、偏好的范围和共用的恢复与写入流程；使用方是底图（`shared/map/basemap`）、边界（`shared/map/boundary`）和资源图层（`features/resource-map`），现状底图页装配。决策见 [ADR 0042](../adr/0042-preference-persistence.md)；开关见 [ADR 0140](../adr/0140-preference-switches.md)。
+> 状态：5C.3 完成键值存储、偏好的范围和共用的恢复与写入流程；使用方是底图（`shared/map/basemap`）、边界（`shared/map/boundary`）、资源图层（`features/resource-map`）、三维模型（`features/scene-models`）和现状底图的图层顺序（`pages/current-map/layer-panel` 的 `useCurrentLayers`，ADR 0167），现状底图页装配。决策见 [ADR 0042](../adr/0042-preference-persistence.md)；开关见 [ADR 0140](../adr/0140-preference-switches.md)。
 
 需要跨刷新、跨次打开保留的偏好（勾选了哪些资源、选了哪种底图等）存在 IndexedDB。拥有者不直接调用 idb-keyval 或 localStorage，而是接收页面提供的偏好范围，用共用的流程恢复和写入；登录会话仍存 localStorage（ADR 0015）。
 

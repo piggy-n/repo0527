@@ -81,9 +81,10 @@ describe('useCurrentLayers（ADR 0161、0167）', () => {
     expect(env.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
   });
 
-  it('一次加入几项：整批放在最上面，批内保持给出的先后；已经在的不动', () => {
+  it('一次加入几项：整批放在最上面，批内保持给出的先后；已经在的留在原处', () => {
     using env = setup();
-    env.current.add([r('bgdc_cjdcq'), m('x'), r('csxhjctb_hydl'), r('bgdc_dltb')]);
+    // 地类图斑已经在：夹在这一批的中间也不跟着上去
+    env.current.add([r('bgdc_cjdcq'), r('bgdc_dltb'), m('x'), r('csxhjctb_hydl')]);
     expect(env.current.keys.value).toStrictEqual([
       r('bgdc_cjdcq'),
       m('x'),

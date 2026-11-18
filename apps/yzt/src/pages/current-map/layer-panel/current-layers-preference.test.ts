@@ -125,6 +125,49 @@ describe('图层的顺序：按账号记住（ADR 0167）', () => {
     });
   });
 
+  it('资源目录先到、记下的模型还没恢复：不当作没有了，恢复以后照旧穿插', async () => {
+    using ctx = setup({ order: [r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')], arrived: false });
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.state.value = ARRIVED;
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(ctx.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), r('bgdc_dltb')]);
+    expect(written(ctx.store)).toStrictEqual({
+      version: 1,
+      value: { order: [r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')] }
+    });
+
+    ctx.added.value = ['x'];
+    ctx.restored.value = true;
+    expect(ctx.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
+    expect(ctx.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
+  });
+
+  it('目录没到时移出：还没到的资源留着原来的位置', async () => {
+    using ctx = setup({ order: [r('bgdc_cjdcq'), m('x'), m('y'), r('bgdc_dltb')], arrived: false });
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.added.value = ['x', 'y'];
+    ctx.restored.value = true;
+    ctx.current.remove([m('x')]);
+    expect(ctx.added.value).toStrictEqual(['y']);
+
+    ctx.state.value = ARRIVED;
+    expect(ctx.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('y'), r('bgdc_dltb')]);
+    expect(ctx.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
+  });
+
+  it('目录没到时移动：还没到的资源留着原来的位置', async () => {
+    using ctx = setup({ order: [r('bgdc_cjdcq'), m('x'), m('y'), r('bgdc_dltb')], arrived: false });
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.added.value = ['x', 'y'];
+    ctx.restored.value = true;
+    ctx.current.move(m('y'), 0);
+    expect(ctx.added.value).toStrictEqual(['y', 'x']);
+
+    ctx.state.value = ARRIVED;
+    expect(ctx.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('y'), r('bgdc_dltb'), m('x')]);
+    expect(ctx.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
+  });
+
   it('记下的顺序里还没到的行照样能加入：放在最上面，拥有者里也加上', async () => {
     // 模型 y 记在顺序里，模型的记录里却没有它（比如别处移出了）；资源目录还没到
     using ctx = setup({ order: [r('bgdc_cjdcq'), m('y'), m('x'), r('bgdc_dltb')], arrived: false });

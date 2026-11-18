@@ -112,7 +112,7 @@ export function modelRequestItem(
 
 /**
  * 显示哪几类（ADR 0167）：加载中、加载失败、加载完成。关掉的一类在状态栏的条目、明细、行内都不显示，数据照常统计；
- * 由页面按用户的提示设置给出
+ * 由页面按部署的开关（appConfig.layerHints）给出
  */
 export interface RequestKinds {
   readonly loading: boolean;
@@ -173,7 +173,9 @@ export function requestSummary(
   const recent = items.some(
     item => item.finishedAt !== null && item.failed === 0 && wasShown(item, now) && now - item.finishedAt < DONE_HOLD
   );
-  return recent || open ? { kind: 'done' } : { kind: 'hidden' };
+  // 明细开着时留着条目；有项、但关掉的几类把它们都藏了时不留，免得明细是空的
+  const shown = items.length === 0 || Object.values(requestGroups(items, kinds)).some(group => group.length > 0);
+  return recent || (open && shown) ? { kind: 'done' } : { kind: 'hidden' };
 }
 
 /** 明细的三组：加载中、有失败（已经结束的）、已完成；组内按开始的先后。关掉的一类是空的（ADR 0167） */

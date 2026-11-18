@@ -217,6 +217,14 @@ async function arrangeHints(hints?: ReadonlySet<LayerHint>) {
   await nextTick();
   return panel.wrapper;
 }
+// 失败模型的右键菜单里有没有"重新加载"；看完按 Esc 关上
+async function retryInMenu(wrapper: VueWrapper) {
+  await wrapper.get('[data-current-row="model:white"]').trigger('contextmenu');
+  const shown = document.querySelector('[data-menu-item="retry"]') !== null;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await nextTick();
+  return shown;
+}
 const hintsShown = (wrapper: VueWrapper) => [
   row(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists(),
   wrapper.get('[data-current-row="model:white"]').find('[aria-label="加载失败"]').exists(),
@@ -809,12 +817,14 @@ describe('CurrentMapLayerPanel', () => {
   });
 
   it('行内提示按部署的开关（.env）显示：关掉的一类在行内不显示；瓦片失败和数据加载用同一份（用户 2026-11-17，ADR 0167）', async () => {
-    expect(hintsShown(await arrangeHints())).toStrictEqual([true, true, true, true]);
-    // 关掉加载失败、盖住模型：资源的失败图标、模型的失败和重试、盖住模型都不显示；没有入口可以在界面上打开
+    const all = await arrangeHints();
+    expect(hintsShown(all)).toStrictEqual([true, true, true, true]);
+    expect(await retryInMenu(all)).toBe(true);
+    // 关掉加载失败、盖住模型：资源的失败图标、模型的失败和重试（行内和右键菜单）、盖住模型都不显示
     const off = new Set(LAYER_HINTS.filter(hint => hint !== 'failed' && hint !== 'covering'));
     const wrapper = await arrangeHints(off);
     expect(hintsShown(wrapper)).toStrictEqual([false, false, false, false]);
-    expect(wrapper.find('[data-layer-hints]').exists()).toBe(false);
+    expect(await retryInMenu(wrapper)).toBe(false);
   });
 
   it('三维里画在模型上面、接近不透明的面，名称后面一个"盖住模型"的图标，说明调低透明度（S4，ADR 0161）', async () => {

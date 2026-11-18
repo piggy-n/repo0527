@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, shallowRef } from 'vue';
-import { ALL_REQUEST_KINDS, type RequestItem } from './request-status';
+import { ALL_REQUEST_KINDS, type RequestItem, type RequestKinds } from './request-status';
 import { RequestStatusChip } from './RequestStatusChip';
 import type { RequestStatus } from './useRequestStatus';
 
@@ -20,15 +20,16 @@ const item = (key: string, extra: Partial<RequestItem> = {}): RequestItem => ({
 });
 
 // 状态由用例直接改
-function mountChip(initial: readonly RequestItem[], now = 1000) {
+function mountChip(initial: readonly RequestItem[], now = 1000, shown: RequestKinds = ALL_REQUEST_KINDS) {
   const items = shallowRef(initial);
   const clock = shallowRef(now);
+  const kinds = shallowRef(shown);
   const status: RequestStatus = {
     items: computed(() => items.value),
     now: clock,
     loadingKeys: computed(() => new Set<string>()),
     failedKeys: computed(() => new Set<string>()),
-    kinds: computed(() => ALL_REQUEST_KINDS)
+    kinds: computed(() => kinds.value)
   };
   const wrapper = mount(RequestStatusChip, {
     props: { status, selectable: (key: string) => key !== 'basemap' },
@@ -215,6 +216,35 @@ describe('RequestStatusChip', () => {
 
     await wrapper.get('[data-request-chip]').trigger('click');
     expect(FakeResizeObserver.watching(panel)).toBe(false);
+  });
+
+  it('关掉加载失败（ADR 0167）：条目不说失败，明细没有有失败一组；都以失败结束时明细跟着关上', async () => {
+    const shown = { loading: true, failed: false, done: true };
+    const { wrapper, items, clock } = mountChip([item('a'), item('b', { failed: 1, loaded: 5 })], 1000, shown);
+    const chip = wrapper.get('[data-request-chip]');
+    expect(chip.text()).toBe('正在加载 2 项 · 50%');
+    expect(chip.find('[aria-label="1 项有失败"]').exists()).toBe(false);
+
+    items.value = [item('a', { loaded: 10, finishedAt: 900 }), item('b', { failed: 1, loaded: 9, finishedAt: 900 })];
+    clock.value = 1000;
+    await nextTick();
+    await wrapper.get('[data-request-chip]').trigger('click');
+    expect(wrapper.get('[data-request-popover]').findAll('li').map(row => row.text())).toStrictEqual([
+      '已完成',
+      'a 的名称10 张'
+    ]);
+
+    items.value = [item('b', { failed: 1, loaded: 9, finishedAt: 900 })];
+    await nextTick();
+    await nextTick();
+    expect(wrapper.find('[data-request-status]').exists()).toBe(false);
+  });
+
+  it('三类都关掉时条目不出现', async () => {
+    const shown = { loading: false, failed: false, done: false };
+    const { wrapper } = mountChip([item('a'), item('b', { failed: 2, loaded: 8, finishedAt: 900 })], 1000, shown);
+    await nextTick();
+    expect(wrapper.find('[data-request-status]').exists()).toBe(false);
   });
 
   it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {

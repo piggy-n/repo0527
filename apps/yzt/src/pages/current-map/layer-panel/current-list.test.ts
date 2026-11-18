@@ -93,7 +93,7 @@ describe('mergedOrder（ADR 0167）', () => {
 describe('withPending（ADR 0167）', () => {
   it('还没到的项留在原来的位置：跟在它前面最近的那个还在的行后面，连着几个保持先后', () => {
     const previous = [r('a'), m('x'), r('b'), r('c'), m('y')];
-    // 资源目录还没到：a、b、c 都不在；用户加了模型 z
+    // 资源目录还没到：a、b、c 都不在；这次操作后看得见的是模型 z、x、y
     const present = new Set([m('x'), m('y'), m('z')]);
     expect(withPending([m('z'), m('x'), m('y')], previous, present)).toStrictEqual([
       r('a'),

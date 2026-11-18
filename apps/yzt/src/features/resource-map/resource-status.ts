@@ -12,7 +12,7 @@ export interface ResourceStatusInput {
 /** 严重程度的级别：错误（红色实心圆）、警告（橙色实心三角）、说明（灰色放大镜） */
 export type ResourceStatusLevel = 'error' | 'warning' | 'info';
 
-/** 状态的种类：页面按用户的提示设置决定显示哪几种（ADR 0167） */
+/** 状态的种类：页面按部署的开关（.env）决定显示哪几种（ADR 0167） */
 export const RESOURCE_STATUS_KINDS = ['config-error', 'tile-error', 'minzoom'] as const;
 
 export type ResourceStatusKind = (typeof RESOURCE_STATUS_KINDS)[number];

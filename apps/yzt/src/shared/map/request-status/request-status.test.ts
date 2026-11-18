@@ -170,6 +170,9 @@ describe('按类显示（ADR 0167）', () => {
     expect(requestSummary([failedLong], NOW, false, kinds)).toStrictEqual({ kind: 'hidden' });
     expect(requestSummary([failedLong, recent], NOW, false, kinds)).toStrictEqual({ kind: 'done' });
     expect(requestGroups([broken, recent], kinds)).toStrictEqual({ loading: [], failed: [], done: [recent] });
+    // 明细开着、项都以失败结束：明细里一组也没有，条目不留（明细跟着关上），不显示空的明细
+    expect(requestSummary([failedLong], NOW, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([], NOW, true, kinds)).toStrictEqual({ kind: 'done' });
   });
 
   it('关掉加载完成：没有"已加载完成"，明细开着时也不留；明细没有已完成一组', () => {

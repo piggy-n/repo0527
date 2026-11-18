@@ -488,6 +488,8 @@ export const CurrentMapLayerPanel = defineComponent({
       scene.value && !props.models.hidden.value.has(id) && props.models.stateOf(id) === 'ready';
     const modelFailed = (id: string) =>
       scene.value && !props.models.hidden.value.has(id) && props.models.stateOf(id) === 'failed';
+    // 菜单里的"重新加载"跟着加载失败的提示（ADR 0167）：部署时关掉了，和行内的重试一起不出现
+    const retryShown = (id: string) => props.hints.has('failed') && modelFailed(id);
 
     // ---------- 工具栏
     const catalogTools = computed((): PanelToolItem[] => {
@@ -648,7 +650,7 @@ export const CurrentMapLayerPanel = defineComponent({
               } satisfies PanelMenuEntry
             ]
           : []),
-        ...(id !== null && modelFailed(id)
+        ...(id !== null && retryShown(id)
           ? [{ key: 'retry', label: '重新加载', icon: 'undo' } satisfies PanelMenuEntry]
           : []),
         'divider',
@@ -725,8 +727,10 @@ export const CurrentMapLayerPanel = defineComponent({
         : (modelOf(id)?.name ?? key);
     };
 
-    // 用户关掉的提示不显示（ADR 0167）：转圈、瓦片失败已经按开关过滤，这里管模型的失败、状态图标和盖住模型
+    // 部署时关掉的提示不显示（.env，ADR 0167）：转圈、瓦片失败已经按开关过滤，这里管模型的失败、状态图标和盖住模型
     const hintShown = (hint: LayerHint) => props.hints.has(hint);
+    // 同一个数组交给每一行：每次渲染都新建的话，资源行跟着列表一起重渲染
+    const statusKinds = computed(() => resourceStatusKindsOf(props.hints));
     const renderRow = (key: string) => {
       const id = modelIdOfKey(key);
       if (id !== null) {
@@ -752,7 +756,7 @@ export const CurrentMapLayerPanel = defineComponent({
               level={level.value}
               loading={props.requests?.loadingKeys.value.has(key) ?? false}
               tileFailed={props.requests?.failedKeys.value.has(key) ?? false}
-              statusKinds={resourceStatusKindsOf(props.hints)}
+              statusKinds={statusKinds.value}
               covering={hintShown('covering') && coveringOf(code)}
               onLegend={() => {
                 const open = popover.value?.kind === 'legend' && selected.value === key;
