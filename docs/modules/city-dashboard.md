@@ -561,3 +561,7 @@ Chrome 实际复查 2560×1440、1920×1080、1366×768、1440×600、390×844�
 - 粒子、雾带、薄雾和星环的 CSS 动画在地图入场时就开始，那时它们在 `visibility: hidden` 里，Chrome 不把它们交给合成线程（compositeFailed 1<<17），就绪后主线程仍每秒醒来更新它们，但不再重绘
 - 地图入场刚开始时三个字体各占主线程 120～140ms 解码（`DecodeFont`），已记进 backlog 的字体项
 - 测量脚本和原始 trace 没有入库（当时放在 worktree 的 `local/measure/dashboard-entrance/`）
+
+## 地图静止视角改为正北朝上（2026-11-17）
+
+用户要求两个驾驶舱的地图默认朝向正北：入场结束停下的视角从 yaw 0.05 改为 0（`shared/dashboard/map/JiangsuMapScene.ts` 的 `REST_VIEW`，pitch 0.76、distance 1 不变），此前北约偏右 4°。入场仍从 yaw -0.42 转过来，拖动的范围不变；城市标签按新的投影避让，位置有几像素的变化

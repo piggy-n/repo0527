@@ -472,7 +472,7 @@
 }
 
 // 右上角的叠加元素（指北针）：固定大小的方块，和标题同一行、垂直居中；标题右侧让出它的宽度
-$top-right-size: calc(44px * var(--ui-scale, 1));
+$top-right-size: calc(52px * var(--ui-scale, 1));
 
 .topRight {
   position: absolute;
@@ -563,14 +563,14 @@ $top-right-size: calc(44px * var(--ui-scale, 1));
     padding: 8px;
     gap: 8px;
   }
-  // 窄屏的标题行只有约 36 像素高，指北针跟着缩小
+  // 窄屏的标题行只有约 36 像素高，指北针和标题行等高
   .topRight {
-    top: calc(18px * var(--ui-scale, 1) + (var(--map-heading-height, 50px) - 32px) / 2);
-    width: 32px;
-    height: 32px;
+    top: calc(18px * var(--ui-scale, 1) + (var(--map-heading-height, 50px) - 36px) / 2);
+    width: 36px;
+    height: 36px;
   }
   .heading.headingAside {
-    right: calc(3% + 32px + 8px);
+    right: calc(3% + 36px + 8px);
   }
   // 时间轴占满宽度，比例尺放到图例上方右侧
   .bottomRight {

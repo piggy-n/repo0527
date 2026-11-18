@@ -54,7 +54,7 @@ function reading(wrapper: VueWrapper, name: 'north' | 'scale'): number {
 }
 
 // 地面的北向在屏幕上的顺时针角（正交投影的近似）：北向在相机右向量和上向量上的分量。
-// 透视和让省域居中的视口偏移让实测值比它大不到 1°（静止视角 4.3° 对 4.2°，拖动后 35.9° 对 35.0°）
+// 透视和让省域居中的视口偏移让实测值比它大不到 1°（拖动后 32.4° 对 31.5°）；静止视角 yaw 为 0，实测正好是 0°
 function northAt(yaw: number, pitch: number): number {
   return Math.atan2(Math.sin(yaw), Math.sin(pitch) * Math.cos(yaw)) * 180 / Math.PI;
 }
@@ -69,6 +69,11 @@ async function settledNorth(wrapper: VueWrapper): Promise<number> {
     expect(stable).toBe(true);
   }, { interval: 100 });
   return previous;
+}
+
+// 指北针 svg 行内样式里的旋转角；角度为 0 时 SvgIcon 不写 transform
+function rotation(svg: SVGSVGElement): number {
+  return Number(/rotate\((.+)deg\)/.exec(svg.style.transform)?.[1] ?? 0);
 }
 
 function overlaps(a: DOMRect, b: DOMRect): boolean {
@@ -92,8 +97,9 @@ describe('地图的指北针和比例尺', () => {
       slots: probes
     });
     await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'), { timeout: 10000 });
+    // 静止视角正北朝上
     const resting = await settledNorth(wrapper);
-    expect(Math.abs(resting - northAt(0.05, 0.76))).toBeLessThan(1);
+    expect(Math.abs(resting)).toBeLessThan(0.5);
     expect(sampled).toHaveBeenCalled();
     // 江苏东西约 600 千米，900 × 700 的地图在三维里实测约 705 米每像素
     const metersPerPixel = reading(wrapper, 'scale');
@@ -111,7 +117,7 @@ describe('地图的指北针和比例尺', () => {
     target.dispatchEvent(new PointerEvent('pointermove', { ...init, clientX: left + width / 2 - 100 }));
     target.dispatchEvent(new PointerEvent('pointerup', { ...init, buttons: 0, clientX: left + width / 2 - 100 }));
     await vi.waitFor(() => expect(reading(wrapper, 'north')).toBeGreaterThan(20));
-    expect(Math.abs(await settledNorth(wrapper) - northAt(0.45, 0.76))).toBeLessThan(1.5);
+    expect(Math.abs(await settledNorth(wrapper) - northAt(0.4, 0.76))).toBeLessThan(1.5);
 
     loseContext(wrapper);
     await vi.waitFor(() => expect(wrapper.text()).toContain('地图采用简化显示'));
@@ -183,8 +189,9 @@ describe('地图的指北针和比例尺', () => {
     const legend = rect('[aria-label="地图数值分级"]');
     expect(overlaps(compass, heading)).toBe(false);
     expect(compass.left).toBeGreaterThan(heading.right);
-    expect(compass.top).toBeGreaterThanOrEqual(heading.top);
-    expect(compass.bottom).toBeLessThanOrEqual(heading.bottom + 1);
+    // 和标题行垂直居中对齐，可以比标题行略高（设计稿里也是），不出地图区域
+    expect(Math.abs((compass.top + compass.bottom) / 2 - (heading.top + heading.bottom) / 2)).toBeLessThanOrEqual(1);
+    expect(compass.top).toBeGreaterThanOrEqual(map.top);
     expect(overlaps(scaleBar, timeline)).toBe(false);
     expect(overlaps(scaleBar, legend)).toBe(false);
     expect(scaleBar.left >= timeline.right).toBe(!aboveLegend);
@@ -196,9 +203,10 @@ describe('地图的指北针和比例尺', () => {
     // 比例尺连同单位都在量到的空位里
     const corner = required(wrapper.get('[aria-label^="比例尺"]').element.parentElement, '右下角').getBoundingClientRect();
     expect(scaleBar.left).toBeGreaterThanOrEqual(corner.left - 1);
-    // 旋转只写在指北针里面的 svg 上
+    // 入场停下后指北针不转：静止视角正北朝上（旋转只写在 svg 上，见 DashboardCompass.test.tsx）
+    await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'));
     const svg = wrapper.get('[aria-label="指北针"] svg').element as SVGSVGElement;
-    expect(svg.style.transform).toMatch(/^rotate\(/);
+    await vi.waitFor(() => expect(Math.abs(rotation(svg))).toBeLessThan(0.5));
     expect((wrapper.get('[aria-label="指北针"]').element as HTMLElement).style.transform).toBe('');
   }, 20000);
 });

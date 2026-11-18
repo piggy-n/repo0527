@@ -160,7 +160,7 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 
 | 插槽 | 参数 | 位置 |
 |---|---|---|
-| `topRight` | `view` | 右上角、和地图标题同一行：44 × 44（乘 `--ui-scale`，≤720px 时 32 × 32）的方块，在标题行里垂直居中；标题右侧让出这个方块，"地图采用简化显示"移到标题行下面 |
+| `topRight` | `view` | 右上角、和地图标题同一行：52 × 52（乘 `--ui-scale`，≤720px 时 36 × 36，和窄屏的标题行等高）的方块，和标题行垂直居中，可以比标题行高、上下各伸出一半：单行标题时 1920×1080 下基本等高（52 对 51.5px），721～1180px 宽时约高 6px，2560×1440 约高 7px，3840×2160 约高 17px；标题右侧让出这个方块，"地图采用简化显示"移到标题行下面 |
 | `bottomRight` | `{ view, maxWidth }` | 右下角、时间轴右侧的空位：宽度按时间轴的宽度用 CSS 算（至多 220px × `--ui-scale`），`maxWidth` 是 ResizeObserver 量到的这个宽度；高度为 0、内容从底边向上伸出，量宽度时不会因为放进比例尺再触发一轮。≤720px 时时间轴占满宽度，这里放到图例上方右侧（按量到的图例高度） |
 
 - 两个位置都写 `data-enter="legend"`，跟图例、时间轴一起入场；入场的变换写在位置的盒子上，指北针的旋转只写在里面的 `<svg>` 上，互不覆盖。不用这两个插槽时地图外壳的 DOM、类名和样式与原来相同
@@ -169,7 +169,7 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 - `DashboardScaleBar`：`metersPerPixel`、`maxWidth`。`scale-bar.ts` 的 `scaleBar()` 从 1、2、4、5、8、10、20、40、50、80、100、120、160、200、400 千米里选整体宽度不超过 `maxWidth` 的最长总长度 L（整体宽度算上两端伸出去的刻度文字和单位，文字宽按字号估：数字 0.6 个字宽、汉字 1 个），1 千米都放不下时同样的数改用米；分四段，深蓝、白交替，刻度 0、L/4、L/2、3L/4、L，相邻文字放不下时只写 0、L/2、L，再放不下只写两端；末尾写"千米"或"米"。字号 `max(12px, 14px × --ui-scale)`，量单位的宽度时读一次实际字号。1920×1080 下约是"0 20 40 60 80 千米"，1366×768、1280×720 下约是"0 20 40 千米"
 - 只有用了这两个插槽中的一个，`useDashboardMap` 才算朝向和比例（`trackView`，每次加载地图时读一次），换算模块 `map-view.ts`（带着 `geographiclib-geodesic`）也只在这时和市界一起动态加载，原驾驶舱的分块里没有它；加载失败时 `view` 一直是 null，地图照常显示：
   - 三维：场景的 `SceneCallbacks.onView` 在相机、尺寸或地图厚度变化时（与标签同一次渲染，扫光、悬停不发）给出 `SceneView`：`north` 是地图中心顶面一点和它往北（形状坐标 +y）一点投影到屏幕后的顺时针角；`sample` 是画布中心水平线上相距 100 CSS 像素的两点用射线打到顶面、换回 `mapGroup` 的形状坐标。不传 `onView` 时场景不做这些计算
-  - 换算（`map-view.ts`）：`DashboardRegions.unproject(x, y)` 把形状坐标反算回经纬度（`prepareRegions` 的墨卡托投影、缩放和中心），`geographiclib-geodesic`（直接导入，不经 `@mx/map-core` 的入口）量两点的椭球面距离，除以 100 得到每像素米数。静止视角（yaw 0.05、pitch 0.76）下北约偏右 4°
+  - 换算（`map-view.ts`）：`DashboardRegions.unproject(x, y)` 把形状坐标反算回经纬度（`prepareRegions` 的墨卡托投影、缩放和中心），`geographiclib-geodesic`（直接导入，不经 `@mx/map-core` 的入口）量两点的椭球面距离，除以 100 得到每像素米数。静止视角（yaw 0、pitch 0.76）正北朝上，指北针不转；拖动改变 yaw 后跟着转
   - 二维降级：`northDegrees` 为 0；比例用 ECharts 的 `convertToPixel` 量中心纬度上相距 0.5° 的两点在图上的距离，创建和缩放后各量一次
 - 三维的比例是画布中心附近的，透视下近处（下方）比远处大；指北针的角度也取地图中心
 
@@ -193,6 +193,6 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 ## 测试
 
 - 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom；卡片和详情的图例位置）、`detail-labels`、`palette`、`charts/useChartDetail`、`charts/useChartDownload`（jsdom，出图和保存换成假函数）、`map/map-export`、`map/config`、`map/geometry`（市界、标签避让、形状坐标反算）、`map/scale-bar`、`map/map-view` 等
-- 组件（jsdom）：`ChartActions`、`ChartCard`、`ChartDetailDialog`、`DashboardPlot` 的键盘与悬停方式、`filters`、`DashboardShell`、`DashboardTimeline`、`useDashboardTooltip`
-- 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`map/map-overlay.browser.test.tsx`（指北针的角度跟着拖动变、二维降级正北、每像素米数的范围、不用角上插槽时不取样，1920×1080、1366×768、1280×720 和 ≤720 的地图尺寸下指北针、比例尺与标题、时间轴、图例不重叠）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 和综合分析驾驶舱的 `LandSpaceView` 浏览器测试覆盖外壳和筛选、图表、地图的组合
+- 组件（jsdom）：`ChartActions`、`ChartCard`、`ChartDetailDialog`、`DashboardPlot` 的键盘与悬停方式、`filters`、`DashboardShell`、`DashboardTimeline`、`DashboardCompass`（旋转只写在 svg 上）、`useDashboardTooltip`
+- 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`map/map-overlay.browser.test.tsx`（静止视角正北、指北针的角度跟着拖动变、二维降级正北、每像素米数的范围、不用角上插槽时不取样，1920×1080、1366×768、1280×720 和 ≤720 的地图尺寸下指北针、比例尺与标题、时间轴、图例不重叠，入场停下后指北针不转）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 和综合分析驾驶舱的 `LandSpaceView` 浏览器测试覆盖外壳和筛选、图表、地图的组合
 - 原驾驶舱的回归：拆分前后用同一段临时测试把 96 个指标的卡片和详情配置、地图图例写成 JSON，逐字节比较（生成写法在 `local/land-space/baseline-generator.test.ts.txt`，不入库）
