@@ -22,7 +22,8 @@
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
 | `scene/route-play.ts` | 路线漫游每帧怎么推进（`routeAdvance`：转弯时放慢；`routeTurn`：平滑、转头限速），播放（`RouteRoamer`）和估算共用；`RouteTimeline`：按这个规则模拟一遍，给出全程和剩余的秒数（ADR 0156 第 5 节） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点（点上写了眼高的按它插值，矮墓道用，ADR 0156）、脚下的地板和朝向；`smoothAngle`（ADR 0083） |
-| `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引的根节点换到引用它的位置、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081、0148；导航网格也要用，从 map-cesium 移来，ADR 0085） |
+| `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引的根节点换到引用它的位置、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入，一个索引失败时中止其余的下载（ADR 0081、0148；导航网格也要用，从 map-cesium 移来，ADR 0085） |
+| `scene/index-loader.ts` | `createIndexLoader`：整理索引的下载，经它的下载共用名额、暂时的失败退避重试；`fetchJson`：默认的下载，状态码不是 2xx 时以 `HttpStatusError` 结束（见下面"索引的下载"） |
 | `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`ply.ts` LCC2 碰撞网格的解析（ADR 0156）、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系（瓦片集的和泼溅的）、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
@@ -137,7 +138,7 @@ session[Symbol.dispose]();
 - 会话的 `scene`：`{ tilesets, splats?, underground, isolatedSplat?, roam? }`（`isolatedSplat` 是漫游时隔离的那份泼溅，必须加载着、不能和 `underground` 同时有，ADR 0156 R.5），和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化。`splats` 是 LCC2 高斯泼溅（ADR 0149：`.lcc2` 索引的地址、配准后的 `placement`、显示、重试次数），没有时不写；只有能力声明 `splats` 的引擎画它
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；泼溅的地址是绝对地址、`attempt` 是非负整数、摆放的四个值是有限的数且纬度在 ±90 以内，泼溅和瓦片集的 ID 合在一起不重复（状态在同一份 `SceneStatus` 里），钻地只能指向瓦片集；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
-- 三维的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°，算上球心的椭球高：视线穿过球心，不是球心脚下的地面；有悬浮面板留白时球心会偏离可视区中心，模型越高偏得越多），缩放级和距离的换算是 `camera/camera-distance.ts`。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
+- 三维的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`；所有瓦片集整理索引的下载共用一个 `createIndexLoader`（下面"索引的下载"）。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°，算上球心的椭球高：视线穿过球心，不是球心脚下的地面；有悬浮面板留白时球心会偏离可视区中心，模型越高偏得越多），缩放级和距离的换算是 `camera/camera-distance.ts`。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
 - `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession
@@ -368,6 +369,16 @@ const tile = await reader.read('/basemap/imagery/', 10, 849, 415, signal);
 - 从哪里导入：app 从 `@mx/map-core` 的入口导入，只在动态加载的分块里用（`app/map-runtime.ts`、探测）。map-core 没有写 `sideEffects: false`，入口还导出了导入 maplibre-gl 的 `MapLibreView`，入口包里不要直接用这些值，构建产物检查会拦下进了入口包的 maplibre-gl；不另设子路径
 - 读取器只认第一代紧凑缓存、每个 bundle 128 × 128；缓存的切法（Web 墨卡托、256 像素、级别号就是 z）是使用方的前提，读取器不检查
 
+### 索引的下载
+
+- 加入瓦片集之前，`prepareTileset` 要把外部索引全部读完（ADR 0148），同一层的一起下载。倾斜摄影的外部索引很多：新吴区01、02、03、06 各 1240、1326、1529、1421 个，一共 5516 个、约 200 MB；单独整理一个时同时未完成的请求最多约 1000 个
+- Chromium 每个渲染进程最多 2700 个未完成的请求，超出的立即以 `net::ERR_INSUFFICIENT_RESOURCES` 失败（`fetch` 抛 `TypeError`）。以前下载不限并发，几个模型一起加就超了，一个索引失败整个模型记为失败。2026-11-17 对 15.111 复现：用浏览器自带的网络模拟给每个请求加 20 ms 延迟，同时整理这四个，Chromium 156 三个失败，Edge 157 四个都失败（同时未完成最多 2699 个）；不加延迟时这台机器到服务器约 4 ms，请求回得快，堆不到上限。Playwright 的请求拦截（`page.route`）会让请求在浏览器里多挂一会儿，不加延迟也超，不能拿它当证据
+- `SceneTilesetSync` 的所有瓦片集共用一个 `createIndexLoader`：同时最多 `MAX_INDEX_DOWNLOADS`（16）个，先到先下。HTTP/1.1 下浏览器对一台服务器只开 6 条连接，名额再多也只是在浏览器里排队。同一份实测（20 ms 延迟、四个一起）：6 个 31.1 秒、16 个 29.1 秒、64 个 28.7 秒，吞吐和单独整理一个时一样（约 190 个/秒）；不加延迟 10.3 秒，不限并发时是 11.1 秒。名额只管整理索引，模型的 glb 由瓦片库自己的队列下载
+- 暂时的失败（网络错误、5xx、408、429）等 0.5 秒、2 秒各重试一次（`INDEX_RETRY_DELAYS`），等的时候不占名额；404 和内容错误不重试。状态码只认 `fetchJson` 的 `HttpStatusError`，别的下载函数抛的错误只有 `TypeError` 会重试
+- 一个索引最终失败，`prepareTileset` 中止同一次整理里其余的下载（排队的离开队伍、让出名额），整个瓦片集记为失败，行里的"重试"重新整理。撤下、释放时同样中止
+- 导航网格（`features/scene-models` 的 `loadNavigation`）直接调用 `prepareTileset`，不经这个下载器：能漫游的模型索引少
+- 复现的做法：在服务器上的任意一个索引页面里（同源，不用登录）把 `prepareTileset`、`createIndexLoader` 打包注入，用 CDP 的 `Network.emulateNetworkConditions` 加延迟，对几个模型同时整理，数同时未完成的请求和失败的原因
+
 ### app 的地图运行时与开发页
 
 - `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl`、Worker 数量、maplibre-gl 的 CSS 和紧凑缓存的协议（`addProtocol`，ADR 0165），可以重复调用，只在第一次生效。Worker 数量是 `min(4, max(1, ⌊核数 / 2⌋))`（`workerCountFor`，ADR 0041 第 7 节）：Chrome 下 MapLibre 默认只有 1 个，5C.1b 实测 4 个时全选快约 40%，再多主线程更卡；要在第一张地图创建 Worker 池之前设置；路由用 `withMapRuntime(loadPage)` 包装地图页，同时加载运行时、页面和服务器底图的探测结果（ADR 0061、0165）
@@ -441,6 +452,7 @@ const tile = await reader.read('/basemap/imagery/', 10, 849, 415, signal);
 | 会话 | `diffStyle`、`StyleModel`、`CameraModel`、`MapSession` | 纯 TS，jsdom |
 | 第三人称 | `WalkRig` 的臂长伸缩与防穿墙、人称切换、转身、调远近，`seeThroughAvatar`，`WalkCycle` | 纯 TS，Node |
 | 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
+| 索引的下载 | `createIndexLoader`（名额、先到先下、排队时中止、哪些失败重试、等重试时中止）、`fetchJson`；`SceneTilesetSync` 同时加四个各带 300 个外部索引的瓦片集，假的下载超过 500 个同时进行就失败（按比例模拟浏览器的上限）；`prepareTileset` 一个失败时中止其余的下载 | 纯 TS，Node（重试用假定时器） |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
 | `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图；声明了 Ctrl 的工具按住 Ctrl 拖动是平移、不旋转，右键拖动照常旋转（对照："移动"里按住 Ctrl 拖动是 MapLibre 的旋转） | Chromium 无界面版，软件渲染 |
@@ -456,6 +468,7 @@ const tile = await reader.read('/basemap/imagery/', 10, 849, 415, signal);
 - 假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`
 - "释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认
 - 等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败
+- 索引的下载（2026-11-17）：同时加四个瓦片集、一个失败时中止其余下载这两条先在旧代码上失败（1 个就绪 3 个失败；其余下载没中止），和对 15.111 的实测一致。改坏 9 处（名额不交给排队的、不限名额、都不重试、5xx 不重试、404 也重试、等重试时和排队时不理中止、失败时不中止其余的、瓦片集不共用下载器），全部由断言发现。起初"404 也重试"以超时失败，"等重试时不理中止"没被发现（延迟过后拿名额时才发现中止，只是晚了 0.5 秒）：改成和必然更晚结束的等待赛跑，等重试时中止要不推进时间就结束
 - 状态转换用穷举短序列测试（5C.0e）：8 种事件（`style.load`、加载错误、提交、提交被拒绝而整体重建、暂停、恢复、引擎坏掉即之后的 `setStyle` 抛错、释放），两种创建方式（显示、暂停）下长度为 4 的全部 8192 个序列，每一步之后检查：状态与失败原因一致、引擎失败后不离开 `failed`、`failed` 时 `whenReady()` 已以失败结束、每次 `statechange` 都在测试自己的转换表里、释放后状态是 `disposed` 且不再操作地图、没有报告非法转换。只检查长度 4 就够：较短的序列都是某个长度 4 序列的前缀，每一步之后都检查过。还断言走到过的转换正好是表里的 10 条加上加载中、就绪时的引擎失败，证明事件足够强（暂停期间的引擎失败要 6 步，不在其中）。约 1.6 秒
 - 序列逐个执行，每一步之后走完 6 轮微任务（会话通知、加载失败后排进微任务的重新加载）；Promise 是否已结束用"已结束的 Promise 的回调先于后登记的微任务执行"来判断，不用定时器
 - 同一轮里交错的事件（5C.0e 之后补上）：上面的测试每一步之后都走完微任务，提交和 `style.load` 永远落不到同一轮里，所以漏掉了上面的回归。另一组把"走完微任务"也当作一个事件：先用 8 段前缀把视图带到不同的起点（加载中、就绪、暂停、运行中重建、首次加载失败、重建失败、引擎失败、失败后重新加载），两种创建方式下从每个起点穷举长度 3 的后缀，共 11664 个序列，约 2.6 秒。同步的不变量每一步都查，`whenReady()` 只在走完微任务之后查。它在修复前的代码上找到了更短的路径：首次加载失败 → 被拒绝的提交（通知还在排队）→ 加载完成，状态停在 `failed`，`whenReady()` 却已经是新一轮、还没有结果
