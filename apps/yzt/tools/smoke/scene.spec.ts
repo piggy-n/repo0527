@@ -1,5 +1,5 @@
 import type { Locator, Page } from 'playwright/test';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 import { roomB3dm, roomManifest, roomTileset, splatFiles } from './scene-model.ts';
 import { SCENE_TIER_SETTINGS } from './scene-tiers.ts';
 
@@ -116,7 +116,7 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
 
   await page.goto('/login');
   await login(page);
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await measured(page, 'login-to-map:settled', 45_000);
   // 二维第一次画面稳定以后，浏览器空闲时预加载三维模块（ADR 0091 的做法）：点"三维"之前就请求了 map-three 的分块
   await expect.poll(() => wasRequested(/\/assets\/map-three-[\w-]+\.js$/), { message: '预加载 map-three' }).toBe(true);
@@ -282,7 +282,7 @@ test('三维降档：上次崩溃的页面留下标记，打开三维时提示�
 
   await page.goto('/login');
   await login(page);
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await measured(page, 'login-to-map:settled', 45_000);
   // 二维时不提示，也不问别的页面：崩溃检查等到真的打开三维
   await expect(page.locator('[data-map-status="scene-tier"]')).toHaveCount(0);
@@ -310,4 +310,44 @@ test('三维降档：上次崩溃的页面留下标记，打开三维时提示�
     restorable: true,
     restoredBefore: true
   });
+});
+
+// 本浏览器的三维档位（ADR 0166）：没登录时带着 ?scene-tier= 打开，跳到登录页再进来也记得；现状底图的地址显示这个设定，
+// 打开三维时控制台写一行定下的档位和来源；default 清掉设定
+test('地址栏的 scene-tier：登录跳转后记得，现状底图显示设定，打开三维时控制台写定下的档位', async ({ page }) => {
+  test.setTimeout(120_000);
+  const lines: string[] = [];
+  const cleared: string[] = [];
+  page.on('console', message => {
+    if (message.text().startsWith('[scene-tier] 三维档位')) {
+      lines.push(message.text());
+    }
+    if (message.text().includes('清掉了本浏览器的设定')) {
+      cleared.push(message.text());
+    }
+  });
+  const stored = () => page.evaluate<string | null>(`localStorage.getItem('yzt.device.scene-tier:setting')`);
+
+  await page.goto('/current-map?scene-tier=high');
+  await expect(page).toHaveURL(/\/login$/);
+  expect(await stored()).toBe('"high"');
+  await login(page);
+  await expect(page).toHaveURL(/\/current-map\?scene-tier=high$/);
+  await measured(page, 'login-to-map:settled', 45_000);
+  await page.getByRole('button', { name: '三维', exact: true }).click();
+  await expect.poll(() => lines, { timeout: 60_000 }).toStrictEqual(['[scene-tier] 三维档位：高档（本浏览器设定）']);
+
+  // 下一次不带参数打开，地址仍显示记下的设定
+  await page.goto('/current-map');
+  await expect(page).toHaveURL(/\/current-map\?scene-tier=high$/);
+  expect(await stored()).toBe('"high"');
+
+  // default 清掉了已有的设定，控制台说明原来是什么
+  expect(cleared).toStrictEqual([]);
+  await page.goto('/current-map?scene-tier=default');
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
+  expect(await stored()).toBeNull();
+  await expect.poll(() => cleared).toStrictEqual([
+    '[scene-tier] 地址栏的 scene-tier=default 清掉了本浏览器的设定（原来是 high），回到部署文件'
+  ]);
 });

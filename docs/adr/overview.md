@@ -19,6 +19,7 @@
 | 公网与内网 | 两套构建模式，差异只写在 `.env.intranet`，代码只读 `appConfig` | 0032 | [env](../config/env.md) |
 | 部署站点 | 三维模型清单只有一份全集；每台服务器是一个站点，只记它缺哪些模型（`tools/site/sites.json`）；构建时用进程环境变量 `YZT_SITE` 选站点，去掉缺的模型写进产物，不设时发布全集；`site:check` 核对服务器 | 0164 | [3dt-manifest](../config/3dt-manifest.md)、[deployment](../deployment.md) |
 | 服务器底图 | 内网服务器随带的 ArcGIS 紧凑缓存不转换、不进产物和站点：nginx 每套一个 `/basemap/<前缀>/`，浏览器用 Range 直接读；进入地图页前探测这台有哪几套，没有的不显示；开发时 `local/basemap/` 或 `YZT_BASEMAP_PROXY` | 0165 | [deployment](../deployment.md)、[shared-map](../modules/shared-map.md)、[local-files](../config/local-files.md) |
+| 三维的设备档位 | 四档：低、标准、高、工作站（12 GB，给 16 GB 显存的工作站）。部署方在发布目录的 `scene-tier.json` 选档，仓库发布 `auto`：软件渲染、集显给低，独显按型号查显存表（同名记最小的、笔记本分开、整个名字相等才算），16 GB 以上工作站、8 GB 以上高、其余和查不到的标准，有内存读数时按它压低（0166 修改了 ADR 0155 第 3 节的"只往下调"）；一台浏览器可以用地址栏的 `?scene-tier=` 自己设定档位（记住，可高可低，`default` 清掉），现状底图的地址总带着它；定档时控制台写一行档位和依据。地图部分的细节见地图架构总览 | 0155、0166 | [scene-tier](../config/scene-tier.md)、[deployment](../deployment.md) |
 | 未入库的文件 | 集中到仓库根目录的 `local/`，worktree 用 `YZT_LOCAL_DIR` 指回主目录 | 0141 | [local-files](../config/local-files.md) |
 | 文档 | 规则分 `AGENTS.md` 和 `.claude/rules/`；过程记录归档；待办只有一份；难回退、跨模块的决定才写 ADR | 0142 | [docs/README](../README.md) |
 

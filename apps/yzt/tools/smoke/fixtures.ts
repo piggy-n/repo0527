@@ -10,6 +10,9 @@ export function sessionToken(): string {
   return `${header}.${payload}.signature`;
 }
 
+/** 现状底图的地址：总带着三维档位的参数，新的浏览器上下文没有本浏览器的设定，是 default（ADR 0166） */
+export const CURRENT_MAP_URL = /\/current-map\?scene-tier=default$/;
+
 /** 每例使用独立上下文，所有业务接口在浏览器中拦截，不访问后端或公网 */
 export const test = base.extend<{ localBackend: undefined }>({
   localBackend: [async ({ context, page, baseURL }, use) => {

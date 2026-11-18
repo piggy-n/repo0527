@@ -1,5 +1,5 @@
 import type { Locator, Page } from 'playwright/test';
-import { expect, test as base } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test as base } from './fixtures.ts';
 
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
 
@@ -72,7 +72,7 @@ async function login(page: Page) {
   await page.getByPlaceholder('请输入账号').fill('smoke');
   await page.getByPlaceholder('请输入密码').fill('smoke-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
 }
 
 async function boxOf(locator: Locator) {

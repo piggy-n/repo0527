@@ -109,6 +109,7 @@ const { user, displayName } = storeToRefs(session);
 - 重定向都带 `replace: true`：例如在现状底图点了没有权限的页面，重定向回现状底图时不会在历史记录里多留一条
 - 守卫里调用 `useSessionStore()`：`main.ts` 中 pinia 先于 router 安装，首次导航开始时已经可以取到 store
 - 登录后不回到原来要访问的页面，而是进入角色首页，与旧项目一致
+- 鉴权守卫之后还有一个守卫：`app/router/scene-tier-query.ts` 的 `installSceneTierQuery`。地址栏的 `?scene-tier=` 在路由的模块导入 `app/scene-tier-setting.ts` 时就读了（首次导航之前），记下本浏览器的三维档位，所以跳到登录页不会丢；守卫让进入现状底图的导航带上这个页面读到的设定，改的是导航目标，沿用原来的 push 或 replace。守卫只和启动时读到的值比，不重新读存储：别的标签页改了设定时，后退、前进到这个页面自己写下的记录不会被改写（vue-router 在后退、前进时遇到守卫改写会另 push 一条）（ADR 0166，[config/scene-tier.md](../config/scene-tier.md)"本浏览器的设定"）
 
 ## 导航失败的恢复（ADR 0064）
 

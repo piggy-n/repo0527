@@ -1,5 +1,5 @@
 import type { Locator, Page } from 'playwright/test';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 
 // 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts）；冒烟不导入应用源码，这里按值比较
 const LAND_COLORS = [[0xf3, 0xf1, 0xe9]];
@@ -95,7 +95,7 @@ test('静态底图：内网默认选中，二三维都画得出来，能一键�
 
   await page.goto('/login');
   await login(page);
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await measured(page, 'login-to-map:settled', 45_000);
   await expect(page.locator('[data-map-status]')).toHaveCount(0);
 
@@ -146,7 +146,7 @@ test('静态底图的标注：默认关闭、不下载，打开后二三维都�
 
   await page.goto('/login');
   await login(page);
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await measured(page, 'login-to-map:settled', 45_000);
   const flat = page.locator('.maplibregl-canvas');
   const card = page.locator('button[aria-label^="底图："]');

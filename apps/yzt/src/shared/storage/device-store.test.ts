@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { SCENE_TIERS } from '../config/scene-tier-options';
 import { createDeviceStore } from './device-store';
 
-const markSchema = z.object({ tier: z.enum(['low', 'standard', 'high']) });
+const markSchema = z.object({ tier: z.enum(SCENE_TIERS) });
 
 afterEach(() => {
   localStorage.clear();
@@ -33,9 +34,9 @@ const brokenStorage = {
 describe('createDeviceStore', () => {
   it('同步写进 localStorage，读出时按 schema 校验；键带自己的前缀，和别的数据分开', () => {
     const store = createDeviceStore(localStorage);
-    store.set('scene-tier:page:a1', { tier: 'high' });
-    expect(store.get('scene-tier:page:a1', markSchema)).toEqual({ tier: 'high' });
-    expect(localStorage.getItem('yzt.device.scene-tier:page:a1')).toBe('{"tier":"high"}');
+    store.set('scene-tier:page:a1', { tier: 'workstation' });
+    expect(store.get('scene-tier:page:a1', markSchema)).toEqual({ tier: 'workstation' });
+    expect(localStorage.getItem('yzt.device.scene-tier:page:a1')).toBe('{"tier":"workstation"}');
     store.remove('scene-tier:page:a1');
     expect(store.get('scene-tier:page:a1', markSchema)).toBeUndefined();
   });

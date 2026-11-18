@@ -14,7 +14,7 @@
 |---|---|
 | `map-status.ts` | `describeMapStatus(viewState, failure)`：由视图状态和失败原因推导要显示的内容（纯函数） |
 | `MapStatusNotice.tsx` | 加载中与失败的提示：中间的卡片、上方的警告条（设计稿 5D.7）；三维崩溃降档的提示（ADR 0155） |
-| `scene-tier/` | 三维的设备档位：显卡分类、崩溃标记、替页面回答的 Worker、预算来源 `SceneTierSource`（[config/scene-tier.md](../config/scene-tier.md)） |
+| `scene-tier/` | 三维的设备档位：显卡分类、显存表和 auto、本浏览器的设定（地址栏的 `?scene-tier=`）、崩溃标记、替页面回答的 Worker、预算来源 `SceneTierSource`（[config/scene-tier.md](../config/scene-tier.md)） |
 | `jiangsu.ts` | 江苏省的范围 `JIANGSU_BOUNDS`、创建地图时的相机 `JIANGSU_CAMERA`、缩放范围 `JIANGSU_ZOOM_RANGE` |
 | `backend-request.ts` | 业务地图画布的选项 `JIANGSU_MAP_OPTIONS`：缩放范围，以及只给发往后端的瓦片请求带 token 的 `transformRequest`；地图错误的报告器 `reportMapError`：瓦片的 401 按登录过期处理 |
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |

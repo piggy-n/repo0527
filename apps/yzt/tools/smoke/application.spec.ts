@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from 'playwright/test';
 import { loadEnv } from 'vite';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 
 // 开关在构建时写进产物，这里和内网构建读同一份配置，验证产物实际的行为（ADR 0114、0140）
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -45,7 +45,7 @@ async function login(page: Page): Promise<void> {
 
 /** 就绪取自视图状态，不能用延迟出现的“加载中”是否隐藏判断 */
 async function readyMap(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await expect(page.locator('[data-map-view-state]')).toHaveAttribute('data-map-view-state', 'ready');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
   await expect(page.locator('[data-map-status]')).toHaveCount(0);

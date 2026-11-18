@@ -35,7 +35,7 @@
 
 | 开关 | 文件 | 默认 | 作用 | ADR |
 |---|---|---|---|---|
-| `SCENE_TIER_BUDGETS` | `scene-tier-options.ts` | 低 1 GB、标准 2 GB、高 6 GB（到它不再加载，淘汰到一半），每帧上传 16 MB，泼溅 300 万 | 三维各档的预算；部署方只在 `scene-tier.json` 里选档，数值改代码（[scene-tier.md](scene-tier.md)） | 0155 |
+| `SCENE_TIER_BUDGETS` | `scene-tier-options.ts` | 低 1 GB、标准 2 GB、高 6 GB（到它不再加载，淘汰到一半），工作站 12 GB（淘汰到 9 GB），每帧上传 16 MB，泼溅 300 万 | 三维各档的预算；部署方只在 `scene-tier.json` 里选档，数值改代码（[scene-tier.md](scene-tier.md)） | 0155、0166 |
 | `SERVER_BASEMAP_OPTIONS`、`SERVER_BASEMAP_PROBE_TILE`、`SERVER_BASEMAP_PROBE_TIMEOUT` | `server-basemap-options.ts` | 标准、影像、黑色、极夜蓝 4 套，前缀 `standard`、`imagery`、`black`、`night-blue`，7～18 级，范围取 `conf.cdi` 向外取整；探测读 z10 的 849/415，最多等 3 秒 | 内网服务器可能有的底图：每台服务器有哪几套进入地图页前探测（nginx 配了哪几个前缀），影像叠静态地名，三套矢量的地名印在图上；在面板里的位置是 `basemap-style.ts` 的 `INTRANET_ORDER` | 0165 |
 
 以前的两个在 2026-11-11 去掉了：`SCENE_OPTIONS` 随 ADR 0153 删除，`STATIC_BASEMAP_OPTIONS.cityColors` 由用户决定取消、全省固定一种陆地色（见 ADR 0134 的状态行）。以后要加时按下面的"新增一个开关时放哪"新建文件，在这里登记一行。
@@ -49,7 +49,7 @@
 | 文件 | 发布位置 | 仓库里的来源 | 作用 | ADR |
 |---|---|---|---|---|
 | 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json`（全集）；构建时设了部署站点 `YZT_SITE` 的，去掉 `apps/yzt/tools/site/sites.json` 里这台服务器缺的模型 | 资源图层面板的目录里列出哪些三维模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明和按站点发布见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149、0164 |
-| 三维的设备档位 | `dist/scene-tier.json` | `apps/yzt/public/scene-tier.json` | 瓦片缓存、每帧上传、泼溅预算用哪一档：`auto`、`low`、`standard`、`high`，读不到时按 `auto`；逐项说明见 [scene-tier.md](scene-tier.md) | 0155 |
+| 三维的设备档位 | `dist/scene-tier.json` | `apps/yzt/public/scene-tier.json` | 瓦片缓存、每帧上传、泼溅预算用哪一档：`auto`（按型号查显存定档，仓库发布的就是它）、`low`、`standard`、`high`、`workstation`，读不到时按 `auto`；一个浏览器可以用地址栏的 `?scene-tier=` 自己设定、代替这个文件；逐项说明见 [scene-tier.md](scene-tier.md) | 0155、0166 |
 | 资源的最小显示级别 | `dist/resource-min-zooms.json` | `apps/yzt/src/features/resource-map/resource-min-zooms.json` | 每个资源放大到几级才显示；读不到或格式不对时用构建时带上的，`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不读 | 0132、0137 |
 
 ## 开发和工具用的环境变量

@@ -1,6 +1,6 @@
 import type { Page } from 'playwright/test';
 import { createServer, type ServerResponse } from 'node:http';
-import { expect, test as base } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test as base } from './fixtures.ts';
 
 // 测试登录令牌的编码，不包含真实凭据
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -181,7 +181,7 @@ async function enter(page: Page) {
   await page.getByPlaceholder('请输入账号').fill('resource-test');
   await page.getByPlaceholder('请输入密码').fill('resource-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await page.goto('/resource-management');
 }
 
@@ -461,7 +461,7 @@ test('多尺寸布局、长名称、目录抽屉及窄屏弹窗', async ({ page 
 test('普通用户不能进入管理员页面，不发目录或列表请求', async ({ page, resourceBackend }) => {
   resourceBackend.role = 'user';
   await enter(page);
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await expect(page.getByPlaceholder('请输入资源名称')).toHaveCount(0);
   expect(resourceBackend.pages).toEqual([]);
   expect(resourceBackend.reads).toEqual([]);

@@ -15,3 +15,32 @@ export function createTestPreferenceScope(store: KeyValueStore = createMemorySto
   };
   return { scope, errors, end: () => lifetime.abort() };
 }
+
+/** 内存里的 localStorage：设备级存储（createDeviceStore）的测试用，node 环境里也能用 */
+export class MemoryStorage implements Storage {
+  readonly #items = new Map<string, string>();
+
+  get length(): number {
+    return this.#items.size;
+  }
+
+  clear(): void {
+    this.#items.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.#items.get(key) ?? null;
+  }
+
+  key(index: number): string | null {
+    return [...this.#items.keys()][index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.#items.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.#items.set(key, value);
+  }
+}

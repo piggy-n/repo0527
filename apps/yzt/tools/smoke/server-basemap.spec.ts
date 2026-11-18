@@ -1,6 +1,6 @@
 import { crc32, deflateSync } from 'node:zlib';
 import type { Locator, Page } from 'playwright/test';
-import { expect, test } from './fixtures.ts';
+import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 
 // 服务器底图（ADR 0165）：真实瓦片是数据方的，不入库，冒烟自己生成第一代紧凑缓存（ADR 0165 第 6 节）。
 // 每套一种纯色，每个 bundle 的每个槽都指向同一块瓦片；冒烟不导入应用源码，格式按 map-core 的读取器另写一遍
@@ -209,7 +209,7 @@ test('服务器底图：探测到的按顺序出现，二维默认标准，三�
 
   await page.goto('/login');
   await login(page);
-  await expect(page).toHaveURL(/\/current-map$/);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
   await measured(page, 'login-to-map:settled', 45_000);
   await expect(page.locator('[data-map-status]')).toHaveCount(0);
 

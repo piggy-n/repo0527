@@ -61,7 +61,7 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 
 ## 预加载（3C.2）
 
-同 ADR 0091 的做法：`MapCanvas` 在二维第一次画面稳定以后，把注入的三维引擎的 `loadRenderer` 交给 app 注入的 `MAP_RUNTIME_PRELOAD`（app 换成只下载模块、读 `scene-tier.json` 的函数，崩溃检查留到真的打开三维，[config/scene-tier.md](../config/scene-tier.md)），浏览器空闲时下载 map-three 和 three（约 120 KB + 585 KB，压缩前），省流量模式跳过。等待期间切到三维、画布卸载时作废。
+同 ADR 0091 的做法：`MapCanvas` 在二维第一次画面稳定以后，把注入的三维引擎的 `loadRenderer` 交给 app 注入的 `MAP_RUNTIME_PRELOAD`（app 换成只下载模块、读档位配置（本浏览器的设定或 `scene-tier.json`）的函数，崩溃检查留到真的打开三维，[config/scene-tier.md](../config/scene-tier.md)），浏览器空闲时下载 map-three 和 three（约 120 KB + 585 KB，压缩前），省流量模式跳过。等待期间切到三维、画布卸载时作废。
 
 ## 渲染
 

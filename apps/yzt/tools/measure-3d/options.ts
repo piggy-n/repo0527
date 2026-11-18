@@ -28,9 +28,9 @@ export const HELP = `三维（MapLibre 引擎，@mx/map-three）的性能实测�
   --cache-gb <列表>      另外对照的瓦片缓存上限（GB），到它不再加载、淘汰到它的一半，如 4,6；
                          产品默认是 2（1 GB 起淘汰），就是 MapLibre 那个方案，不用再写。每一档多跑一遍画质，
                          截图和产品默认值的比
-  --tier <列表>          另外对照的设备档位（ADR 0155）：low、standard、high，如 low,high。缓存的两个上限、每帧上传、
-                         泼溅的总预算都按 app 的档位表（src/shared/config/scene-tier-options.ts）；标准档现在和
-                         产品默认值的 MapLibre 方案一样。和 --cache-gb 一样每一档多跑一遍画质
+  --tier <列表>          另外对照的设备档位（ADR 0155、0166）：low、standard、high、workstation，如 low,high。
+                         缓存的两个上限、每帧上传、泼溅的总预算都按 app 的档位表（src/shared/config/scene-tier-options.ts）；
+                         标准档现在和产品默认值的 MapLibre 方案一样。和 --cache-gb 一样每一档多跑一遍画质
   --keep-images          产品默认值和 --cache-gb、--tier 的每一档各加一个"上传后保留贴图"的对照（只跑 perf）：
                          产品默认释放内存里的贴图，比渲染进程和 GPU 进程的内存（ADR 0155 第 5 节）
   --zoom-in              产品默认值和 --cache-gb、--tier 的每一档多跑一遍"定位后放大一级"：加载稳定后放大一级，
