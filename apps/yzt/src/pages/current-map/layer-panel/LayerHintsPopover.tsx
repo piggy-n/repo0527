@@ -1,8 +1,9 @@
 import { usePageActive } from '@mx/map-vue';
 import { ElCheckbox, ElPopover } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, watch } from 'vue';
+import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import shellStyles from '@/shared/map/layer-panel/LayerPanelShell.module.scss';
+import { POPOVER_GAP } from '@/shared/map/layer-panel/popover-placement';
 import { useLightDismiss } from '@/shared/map/popover/useLightDismiss';
 import { LAYER_HINT_GROUPS, LAYER_HINT_TEXTS, LAYER_HINTS, type LayerHint } from './layer-hints';
 import type { LayerHints } from './useLayerHints';
@@ -31,6 +32,12 @@ export const LayerHintsPopover = defineComponent({
       }
     });
     const off = computed(() => LAYER_HINTS.length - props.hints.shown.value.size);
+    // 浮层开在面板右边、顶部和面板对齐，同图层的其他浮层（popover-placement 的 POPOVER_GAP）：对着整个面板，不对着铃铛
+    const anchor = shallowRef<HTMLElement>();
+    const toggle = () => {
+      anchor.value = reference.value?.closest<HTMLElement>('[data-layer-panel]') ?? reference.value;
+      open.value = !open.value;
+    };
     const close = () => {
       open.value = false;
       reference.value?.focus({ preventScroll: true });
@@ -59,15 +66,27 @@ export const LayerHintsPopover = defineComponent({
 
     return () => {
       const label = off.value === 0 ? '行内提示' : `行内提示（关掉了 ${off.value} 类）`;
-      return (
+      return [
+        <button
+          ref={reference}
+          type="button"
+          class={[shellStyles.headerButton, off.value > 0 && styles.partial]}
+          aria-label={label}
+          aria-haspopup="dialog"
+          title={label}
+          data-layer-hints
+          onClick={toggle}
+        >
+          <SvgIcon name="header-bell" size={16} />
+        </button>,
         <ElPopover
-          trigger="click"
-          triggerKeys={[]}
+          virtualTriggering
+          virtualRef={anchor.value}
           placement="right-start"
           fallbackPlacements={['bottom-end', 'bottom']}
           strategy="fixed"
           width={260}
-          offset={12}
+          offset={POPOVER_GAP}
           showArrow={false}
           persistent={false}
           popperStyle={{ padding: 0 }}
@@ -75,20 +94,6 @@ export const LayerHintsPopover = defineComponent({
           onUpdate:visible={ignoreVisibility}
         >
           {{
-            reference: () => (
-              <button
-                ref={reference}
-                type="button"
-                class={[shellStyles.headerButton, off.value > 0 && styles.partial]}
-                aria-label={label}
-                aria-haspopup="dialog"
-                title={label}
-                data-layer-hints
-                onClick={() => (open.value = !open.value)}
-              >
-                <SvgIcon name="header-bell" size={16} />
-              </button>
-            ),
             default: () => (
               <div ref={content} class={styles.content} role="dialog" aria-label="行内提示" data-layer-hints-popover>
                 <div class={styles.head}>
@@ -113,7 +118,7 @@ export const LayerHintsPopover = defineComponent({
             )
           }}
         </ElPopover>
-      );
+      ];
     };
   }
 });
