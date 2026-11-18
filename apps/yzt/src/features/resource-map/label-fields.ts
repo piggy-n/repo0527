@@ -49,7 +49,8 @@ const FIELD_NAMES: Readonly<Record<string, string>> = {
   skmc: '水库名称',
   name_center: '研发中心名称',
   qymc: '企业名称',
-  lx: '行业'
+  lx: '行业',
+  qylx: '企业类型'
 };
 
 // 字段，或 [字段, 这个资源里的叫法]
@@ -116,15 +117,16 @@ const ROWS: readonly (readonly [code: string, fields: readonly FieldRow[]])[] = 
   ['csxhjctb_yjbna', ['name', 'type']],
   ['csxhjctb_yljga', ['name', 'type', 'ccn', 'grade', 'dlmc']],
   ['csxhjctb_yljgp', ['name', 'type', 'ccn', 'grade', 'dlmc']],
+  ['cydc_cya', ['name', ['type', '行业'], 'ccn', 'dlmc']],
+  ['cydc_cyp', ['name_center', 'name', ['type', '行业']]],
+  ['cydc_cypall', ['qymc', 'lx']],
+  ['cydc_sel', ['qymc', ['sshy', '行业'], 'qylx']],
   ['gtkjgh_czkfbj', ['ghfqmc', 'xzqmc']],
   ['gtkjgh_stbhhx', ['hxmc', 'hxlx', 'zrbhdmc', 'xzqmc']],
   ['lcsh_cdtb', ['dlmc']],
   ['lcsh_hmtb', ['dlmc']],
   ['lcsh_sdtb', ['dlmc', 'zldwmc', 'tbbh']],
   ['lcsh_sltb', ['dlmc', 'zldwmc', 'tbbh']],
-  ['sydc_cya', ['name', ['type', '行业'], 'ccn', 'dlmc']],
-  ['sydc_cyp', ['name_center', 'name', ['type', '行业']]],
-  ['sydc_cypall', ['qymc', 'lx']],
   ['szy_hl_fs', ['hlmc', 'xjxzqmc']],
   ['szy_hl_ks', ['hlmc', 'xjxzqmc']],
   ['szy_hp_fs', ['hpmc']],
