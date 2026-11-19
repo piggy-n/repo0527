@@ -34,9 +34,45 @@ const resourceCategorySchema: z.ZodType<ResourceTreeCategory> = z.object({
   }
 });
 
+// 只用来分出分类和图层，字段由上面的 schema 校验
+const rawNodesSchema = z.array(z.unknown());
+const rawNodeSchema = z.looseObject({ children: rawNodesSchema.optional() });
+
+// 去掉校验不过的图层节点，记进 dropped；分类节点、不是对象的节点原样留给 schema，结构不对时整棵树仍然不合格
+function dropInvalidLayers(nodes: readonly unknown[], dropped: unknown[]): unknown[] {
+  return nodes.flatMap(node => {
+    const raw = rawNodeSchema.safeParse(node);
+    if (!raw.success) {
+      return [node];
+    }
+    if (raw.data.children !== undefined) {
+      return [{ ...raw.data, children: dropInvalidLayers(raw.data.children, dropped) }];
+    }
+    if (resourceLayerSchema.safeParse(node).success) {
+      return [node];
+    }
+    dropped.push(node);
+    return [];
+  });
+}
+
+// 后端登记不全的图层（2026-11-18 192.168.1.180 上 bgdc_dltb_czc 的 geoType 是 null）只跳过这一个，不让整棵树失败
+const resourceTreeSchema = z.preprocess((data: unknown) => {
+  const nodes = rawNodesSchema.safeParse(data);
+  if (!nodes.success) {
+    return data;
+  }
+  const dropped: unknown[] = [];
+  const tree = dropInvalidLayers(nodes.data, dropped);
+  if (dropped.length > 0) {
+    console.warn('[resource-map] 资源树里有登记不全的图层，先不显示', dropped);
+  }
+  return tree;
+}, z.array(resourceCategorySchema));
+
 /** 现状底图的资源树（ADR 0041）：顶层是基础库、公共库、主题库、三区三线四个分组；失败由资源列表显示并重试，不弹全局提示 */
 export function fetchResourceTree(signal?: AbortSignal) {
-  return http.get('/resource-map/base/tree', { schema: z.array(resourceCategorySchema), signal, silent: true });
+  return http.get('/resource-map/base/tree', { schema: resourceTreeSchema, signal, silent: true });
 }
 
 /**

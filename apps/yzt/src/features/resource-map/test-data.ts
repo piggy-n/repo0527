@@ -1,11 +1,11 @@
 // 测试用的资源树，结构与 2026-10-11 实测的返回一致（顶层分组 code 为 null、三区三线有 code、空分类、按年份重复的图层记录、
 // schema 不声明的 resource 字段、各资源所在的分类）；只取真实数据的一部分
 
-// 接口原样的结构：几何类型不限定，测试可以放进不合法的数据
+// 接口原样的结构：几何类型不限定（可以是 null），测试可以放进不合法的数据
 interface RawLayer {
   code: string;
   name: string;
-  geoType: string;
+  geoType: string | null;
   resource: string;
   yearList: number[];
 }

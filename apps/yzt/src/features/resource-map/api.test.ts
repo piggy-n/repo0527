@@ -4,6 +4,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
+import { required } from '@/shared/testing/required';
 import { fetchFeatureDetail, fetchResourceMinZooms, fetchResourceTree, guidCondition, queryFeaturesAt } from './api';
 import { builtInMinZooms } from './min-zooms';
 import { resourceTreeData, resourceTreeResponse } from './test-data';
@@ -109,20 +110,38 @@ describe('fetchResourceTree', () => {
     expect(tree[0]?.children[1]).toStrictEqual({ code: null, name: '海洋资源', children: [] });
   });
 
-  it('几何类型不在 Polygon、Line、Point 之内：格式不符', async () => {
+  it.each([
+    ['几何类型是 null（2026-11-18 192.168.1.180 的 bgdc_dltb_czc）', { geoType: null }],
+    ['几何类型不在 Polygon、Line、Point 之内', { geoType: 'MultiPolygon' }],
+    ['年份列表为空', { yearList: [] }]
+  ])('%s：只跳过这个图层，打一条警告，别的资源照常', async (_, broken) => {
+    mockTree();
+    const expected = await fetchResourceTree();
     const data = resourceTreeData();
-    data[2]?.children.push({ code: 'x', name: '未知', geoType: 'MultiPolygon', resource: '三区三线', yearList: [2026] });
+    const land = required(data[0]?.children[0], '基础库下的土地资源');
+    if (!('children' in land)) {
+      throw new Error('土地资源应当是分类');
+    }
+    const layer = { code: 'bgdc_dltb_czc', name: 'DLTB_CZC', geoType: 'Polygon', resource: '土地资源', yearList: [2021] };
+    const invalid = { ...layer, ...broken };
+    land.children.splice(1, 0, invalid);
     mockTree(resourceTreeResponse(data));
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    await expect(fetchResourceTree()).rejects.toMatchObject({ kind: 'invalid-response' });
+    await expect(fetchResourceTree()).resolves.toStrictEqual(expected);
+    expect(warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('资源树'), [invalid]);
   });
 
-  it('年份列表为空：格式不符', async () => {
-    const data = resourceTreeData();
-    data[2]?.children.push({ code: 'x', name: '空', geoType: 'Polygon', resource: '三区三线', yearList: [] });
+  it.each([
+    ['分类的 children 不是数组', [{ code: null, name: '基础库', children: null }]],
+    ['分类里有不是对象的节点', [{ code: null, name: '基础库', children: ['bgdc_dltb'] }]],
+    ['不是数组', { code: null, name: '基础库', children: [] }]
+  ])('%s：结构不对，整棵树格式不符', async (_, data) => {
     mockTree(resourceTreeResponse(data));
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     await expect(fetchResourceTree()).rejects.toMatchObject({ kind: 'invalid-response' });
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('业务码不是 200：抛出 ApiError，不弹全局提示（失败由资源列表显示并重试）', async () => {
