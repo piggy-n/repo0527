@@ -253,7 +253,7 @@ pnpm --filter yzt measure:3d --only jkq-z16-tilt --repeat 1 --upload-mb none --c
 **执行了什么**：Node 运行 `tools/site/cli.ts`（核对在 `check.ts`，组合在 `compose.ts`，站点在 `sites.json`、由 `sites.ts` 校验）。入口一起请求、按清单的先后打印，GET 只读响应头就断开，不下载内容。
 
 **注意事项**：
-- 站点名见 `tools/site/sites.json`（现在是 `15-111`、`153-194`）；地址默认用站点的 `origin`，`--origin <地址>` 指定别的（前端部署在子路径下时连路径一起写）；`--timeout <秒>` 是每个请求的超时，默认 15
+- 站点名见 `tools/site/sites.json`（现在是 `15-111`、`153-194`、`1-180`）；地址默认用站点的 `origin`，`--origin <地址>` 指定别的（前端部署在子路径下时连路径一起写）；`--timeout <秒>` 是每个请求的超时，默认 15
 - 本机连不到 `192.168.153.194`，要在能访问它的机器上运行
 - 站点名写错、连不上服务器时只打印一行原因
 

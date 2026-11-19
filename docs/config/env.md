@@ -34,7 +34,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `PROXY_TARGET` | `http://192.168.1.180:18010` | 只在 `vite.config.ts` | 开发服务器与 `vite preview` 的代理目标 |
 | `VITE_AI_API_BASE_URL` | `/ai-backend` | `vite.config.ts`（代理前缀）、`appConfig.aiApiBaseUrl` | AI 对话后端的基础地址。AI 后端是另一个服务（Bearer 鉴权、没有信封），同样走同源代理，见 [modules/ai-chat.md](../modules/ai-chat.md) |
 | `AI_PROXY_TARGET` | `http://localhost:8090` | 只在 `vite.config.ts` | AI 后端的代理目标，沿用旧项目的本机开发地址，尚未联调 |
-| `YZT_3DT_PROXY` | 不设 | `vite.config.ts` 和工具脚本 | 设了（如 `http://192.168.153.194:5173`）时开发服务器把 `/3dt/` 整个代理到那台服务器，本地的 `local/3dt/` 不再映射；在显卡机器上测三维时用，`measure:3d`、`lcc2:register` 也从它取模型。这个示例地址是内网服务器，按新的目录层级放着清单里的全部模型；测试服务器 `192.168.1.180:5173` 还是原来平铺的目录（2026-11-11）。只在进程的环境变量里设，不写进 `.env`：工具脚本读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（[local-files.md](local-files.md)） |
+| `YZT_3DT_PROXY` | 不设 | `vite.config.ts` 和工具脚本 | 设了（如 `http://192.168.153.194:5173`）时开发服务器把 `/3dt/` 整个代理到那台服务器，本地的 `local/3dt/` 不再映射；在显卡机器上测三维时用，`measure:3d`、`lcc2:register` 也从它取模型。这个示例地址是内网服务器，按新的目录层级放着清单里的全部模型；测试服务器 `192.168.1.180:5173` 2026-11-18 也整理成了这个层级，但只有一部分模型（站点 `1-180`）。只在进程的环境变量里设，不写进 `.env`：工具脚本读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（[local-files.md](local-files.md)） |
 | `YZT_BASEMAP_PROXY` | 不设 | 只在 `vite.config.ts` | 服务器底图（ADR 0165）：设了（如 `http://192.168.15.111:5173`）时开发服务器和 `vite preview` 把 `/basemap/` 整个代理到那台服务器，本地的 `local/basemap/` 不再映射。只在进程的环境变量里设，见下文"不放进 `.env` 的变量" |
 | `YZT_SITE` | 不设 | 只在 `vite.config.ts`（`process.env`） | 部署站点（ADR 0164），如 `15-111`：构建时三维模型清单去掉这台服务器缺的模型再写进产物，不设时发布全集。只认进程环境变量，见下文"不放进 `.env` 的变量" |
 | `VITE_PAGE_STATE_RESET` | `true` | `appConfig.pageStateReset`、`AppLayout` | 离开页面后是否重置（ADR 0114，提交的取值见 ADR 0138）。`false` 时现状底图、指标 AI 计算切走再回来保留上次的状态；`true` 时不缓存页面，每次进入都是初始状态。只管页面缓存，偏好是否恢复看下面的开关（ADR 0140） |
