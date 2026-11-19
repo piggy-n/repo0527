@@ -22,7 +22,12 @@ async function main(): Promise<void> {
   const defaultsFile = resolve(APP_DIR, DEFAULTS_FILE);
   const { module } = await runnerImport<{ importSymbolDefaults: ImportSymbolDefaults }>(
     resolve(APP_DIR, IMPORT_MODULE),
-    { root: APP_DIR, logLevel: 'error' }
+    {
+      root: APP_DIR,
+      logLevel: 'error',
+      // runnerImport 不加载 vite.config.ts，应用的路径别名仍需从 tsconfig 读取
+      resolve: { tsconfigPaths: true }
+    }
   );
   const result = module.importSymbolDefaults({
     exported,

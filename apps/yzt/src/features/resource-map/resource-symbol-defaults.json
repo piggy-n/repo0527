@@ -1,29 +1,49 @@
 {
   "csxhjctb_bzssa": {
     "uniform": {
-      "fillColor": "rgba(215, 201, 165, 1)"
+      "fillColor": "rgba(215, 201, 165, 1)",
+      "outlineColor": "rgba(215, 201, 165, 1)"
     },
     "mode": "uniform"
   },
   "csxhjctb_cqnfwjza": {
     "uniform": {
-      "fillColor": "rgba(206, 168, 117, 1)"
+      "fillColor": "rgba(206, 168, 117, 1)",
+      "outlineColor": "rgba(206, 168, 117, 1)"
     }
   },
   "csxhjctb_cya": {
     "uniform": {
-      "fillColor": "rgba(217, 67, 63, 1)"
-    }
+      "fillColor": "rgba(217, 67, 63, 1)",
+      "outlineColor": "rgba(217, 67, 63, 1)"
+    },
+    "mode": "uniform"
   },
   "csxhjctb_czzza": {
     "uniform": {
-      "fillColor": "rgba(254, 233, 185, 1)"
+      "fillColor": "rgba(254, 233, 185, 1)",
+      "outlineColor": "rgba(254, 233, 185, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_fljga": {
+    "uniform": {
+      "fillColor": "rgba(252, 201, 180, 1)",
+      "outlineColor": "rgba(252, 201, 180, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_gyssa": {
+    "uniform": {
+      "fillColor": "rgba(203, 124, 103, 1)",
+      "outlineColor": "rgba(203, 124, 103, 1)"
     },
     "mode": "uniform"
   },
   "csxhjctb_gyylda": {
     "uniform": {
-      "fillColor": "rgba(127, 153, 130, 1)"
+      "fillColor": "rgba(127, 153, 130, 1)",
+      "outlineColor": "rgba(127, 153, 130, 1)"
     },
     "mode": "uniform"
   },
@@ -37,6 +57,13 @@
         "fillColor": "rgba(95, 160, 218, 1)"
       }
     }
+  },
+  "csxhjctb_jtfwcza": {
+    "uniform": {
+      "fillColor": "rgba(227, 160, 35, 1)",
+      "outlineColor": "rgba(227, 160, 35, 1)"
+    },
+    "mode": "uniform"
   },
   "csxhjctb_jtysydp": {
     "uniform": {
@@ -62,9 +89,17 @@
     },
     "mode": "uniform"
   },
+  "csxhjctb_syfwya": {
+    "uniform": {
+      "fillColor": "rgba(249, 178, 129, 1)",
+      "outlineColor": "rgba(249, 178, 129, 1)"
+    },
+    "mode": "uniform"
+  },
   "csxhjctb_tyhda": {
     "uniform": {
-      "fillColor": "rgba(185, 192, 165, 1)"
+      "fillColor": "rgba(185, 192, 165, 1)",
+      "outlineColor": "rgba(185, 192, 165, 1)"
     }
   },
   "csxhjctb_tyhdp": {
@@ -73,15 +108,37 @@
       "fillColor": "rgba(217, 67, 63, 1)"
     }
   },
+  "csxhjctb_whhda": {
+    "uniform": {
+      "fillColor": "rgba(213, 175, 153, 1)",
+      "outlineColor": "rgba(213, 175, 153, 1)"
+    }
+  },
   "csxhjctb_wycga": {
     "uniform": {
-      "fillColor": "rgba(213, 175, 153, 1)"
+      "fillColor": "rgba(213, 175, 153, 1)",
+      "outlineColor": "rgba(213, 175, 153, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_xxa": {
+    "uniform": {
+      "fillColor": "rgba(214, 188, 159, 1)",
+      "outlineColor": "rgba(214, 188, 159, 1)"
+    },
+    "mode": "uniform"
+  },
+  "csxhjctb_xzcsgxgzyda": {
+    "uniform": {
+      "fillColor": "rgba(209, 210, 212, 1)",
+      "outlineColor": "rgba(209, 210, 212, 1)"
     },
     "mode": "uniform"
   },
   "csxhjctb_yljga": {
     "uniform": {
-      "fillColor": "rgba(249, 204, 223, 1)"
+      "fillColor": "rgba(249, 204, 223, 1)",
+      "outlineColor": "rgba(249, 204, 223, 1)"
     },
     "mode": "uniform"
   }
