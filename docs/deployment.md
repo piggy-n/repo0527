@@ -180,19 +180,11 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://<主机>/basemap/nothing/conf.x
 
 ### 后端新增资源或重新切片以后
 
-资源目录来自后端，新资源不改前端也会出现在资源图层面板里，但只有默认样式：按在树里的顺序取一种颜色、不按属性分类，不限最小显示级别，不能开标注（ADR 0041、0123、0132、0160）。要分类、限级别、开标注，先用只读的探查脚本 `pnpm --filter yzt probe:resource-classes` 看清后端的字段和取值（[commands.md](commands.md)），人工确认后再改代码。脚本要连后端和登录 token，由能连后端的人在自己的终端运行：设好 `YZT_PROBE_TOKEN`（取法见 `--help`），用 `--base-url=http://<后端>:18010` 给出后端地址（不带 `/backend`），结果写在 `local/probe/resource-classes/`（不入库）。后端共用、默认 2 个并发，全部资源要跑很久，新增时用 `--codes=<资源code>` 只跑新的。
+资源目录来自后端，新资源不改前端也会出现在资源图层面板里，但只有默认样式：按在树里的顺序取一种颜色、不按属性分类，不限最小显示级别，不能开标注（ADR 0041、0123、0132、0160）。要分类、开标注、限级别，先用只读的探查脚本 `pnpm --filter yzt probe:resource-classes` 采样后端的字段和取值，人工确认后再改代码、重新构建发布。完整的步骤（建输出目录、采样、找出新资源和新年份、分类和标注怎么选、改哪些文件、新年份的覆盖检查）见 [config/resource-registry.md](config/resource-registry.md)。
 
-| 步骤 | 做什么 | 结果和后续 |
-|---|---|---|
-| 1. 探查 | `probe:resource-classes --codes=<资源code>` | `candidates.csv`、`summary.md`：每个字段的取值和分布（抽样），各级别瓦片里留下了哪些字段；`raw/` 里有瓦片里的图层名（`sourceLayers`） |
-| 2. 人工确认 | 看 `candidates.csv`，定按哪个字段分类、每个取值叫什么 | 取值的业务含义要找业务方确认 |
-| 3. 全量枚举 | `--enumerate=<资源code>:<字段> --refresh --timeout=600`：排除已经见过的取值再查，直到查不出新值 | `distinct-values.json`：抽样漏掉的取值都会出来，确认图例列全了。千万行的表一次查询要几分钟，`--timeout` 要调大（森林、荒漠 2026-11-02 在 120 秒时超时，还是抽样的结果） |
-| 4. 改代码 | `features/resource-map/class-dictionaries.ts` 加取值、名称、颜色；`style-registry.ts` 登记一行；`style-registry.test.ts` 的 `RULE_CODES` 和 `tools/probe-resource-classes/report.ts` 的 `CURRENT_RULE_FIELDS` 补上这个资源；要标注时在 `label-fields.ts` 登记瓦片里有的字段；瓦片里的图层名和瓦片集名（`<code>_<年份>`）不一样时加进 `style-registry.ts` 的 `SOURCE_LAYER_EXCEPTIONS`，否则地图上什么也不画 | 按级别 1 检查，重新构建、发布（规则见 `.claude/rules/resource-map.md`） |
-| 5. 最小显示级别 | `--tile-cost --codes=<资源code>` | 建议的 `resource-min-zooms.json`，确认后按下面"调整资源的最小显示级别"替换，不用重新构建 |
-| 6. 低级别颜色不一致时 | `--tile-check=<资源code>` | `tile-check.md`：判断是不是切片时把要素合并成了一个，是的话交给切片方，前端不绕 |
-
+- 探查要连后端和登录的 token，由能连后端的人在自己的终端运行；每台后端一个输出目录 `local/probe/resource-classes-<站点>/`（不入库），同一台后端再探查时只请求新的瓦片集
 - 只换了一种资源的配色或样式、不加分类时，不用探查：在页面上调好图例样式，用 `symbols:import` 作为默认符号发布（[commands.md](commands.md)、[modules/storage.md](modules/storage.md)"发布的默认符号"）
-- 后端删了取值或者改了字段名时同样重跑 1、3 两步：图例只列资源实际有的类别（ADR 0124），多出来的取值归入"其他"
+- 同一级别的瓦片颜色不一致时用 `--tile-check=<资源code>` 判断是不是切片把要素合并了，是的话交给切片方，前端不绕
 
 ### 调整资源的最小显示级别
 

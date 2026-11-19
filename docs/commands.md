@@ -261,7 +261,7 @@ pnpm --filter yzt measure:3d --only jkq-z16-tilt --repeat 1 --upload-mb none --c
 
 **作用**：只读探查现状底图的资源：每个瓦片集有哪些字段、取值和分布，各瓦片级别保留了哪些字段；给出候选的分类字段和要交给切片的字段清单。
 
-**什么时候用**：评估哪些资源能按属性分类、新增或重新切片之后核对字段时。
+**什么时候用**：评估哪些资源能按属性分类、新增或重新切片之后核对字段时。后端加了资源、换了后端时的完整步骤（建输出目录、找出新资源和新年份、分类和标注怎么选、覆盖检查）见 [config/resource-registry.md](config/resource-registry.md)。
 
 **执行了什么**：Node 直接运行 `tools/probe-resource-classes/cli.ts`，请求资源树、`/api/query/attr/page`（每个表最多抽 4 页，超过 200 万行只读第一页）和 `/api/tiles`（南京、苏州、徐州、扬州，默认 7、9、11、14 级）。结果写进 `local/probe/resource-classes/`（不入库，`--out` 可以改）：`candidates.csv`（业务确认）、`slicing-requirements.csv`（交给切片）、`summary.md`、`report.json`，`raw/` 是按瓦片集的缓存，中断后重新运行会跳过已完成的。
 
