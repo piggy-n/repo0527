@@ -18,6 +18,7 @@ import { ALL_REQUEST_KINDS } from '@/shared/map/request-status/request-status';
 import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { required } from '@/shared/testing/required';
 import { LayerPopover } from '@/shared/map/layer-panel/LayerPopover';
+import { PanelToolbar } from '@/shared/map/layer-panel/PanelToolbar';
 import { CurrentMapLayerPanel } from './CurrentMapLayerPanel';
 import { type CurrentLayers, useCurrentLayers } from './useCurrentLayers';
 
@@ -279,7 +280,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(currentOrder(wrapper)).toStrictEqual(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
     expect(selectedRow(wrapper)).toBe('bgdc_cjdcq');
     expect(owner.state.value.displays.get('csxhjctb_hydl')).toMatchObject({ added: true, checked: true });
-    // 都加过了：添加不可用、写原因，移除可用
+    // 都加过了：添加不可用，移除可用
     expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('true');
     expect(tool(wrapper, 'remove').attributes('aria-disabled')).toBe('false');
 
@@ -291,6 +292,37 @@ describe('CurrentMapLayerPanel', () => {
     await node(wrapper, 'csxhjctb_hydl').trigger('click');
     await nextTick();
     expect(currentOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_cjdcq', 'bgdc_dltb']);
+  });
+
+  it('多选时右键选中里的项：菜单作用于整个选中，标题的批量按钮写出能做几项、做不了的原因；右键选中以外的项清空多选、只作用于它；定位的说明是回车（用户 2026-11-22）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    await tool(wrapper, 'expand-all').trigger('click');
+    await node(wrapper, 'bgdc_dltb').trigger('click', { ctrlKey: true });
+    await node(wrapper, 'bgdc_cjdcq').trigger('click', { ctrlKey: true });
+    await node(wrapper, 'csxhjctb_hydl').trigger('click', { ctrlKey: true });
+    const catalogTools = () => required(wrapper.findAllComponents(PanelToolbar)[0], '资源的工具栏').props('items');
+    expect(catalogTools()).toContainEqual(expect.objectContaining({ key: 'add', tip: '添加 2 项', disabled: false }));
+    expect(catalogTools()).toContainEqual(expect.objectContaining({ key: 'remove', tip: '移除 1 项', disabled: false }));
+
+    await node(wrapper, 'bgdc_cjdcq').trigger('contextmenu');
+    expect(menuItem('add').textContent).toContain('添加 2 项');
+    expect(menuItem('remove').textContent).not.toContain('项');
+    expect(locateItem()?.textContent).toContain('回车');
+    menuItem('add').click();
+    await nextTick();
+    expect(owner.state.value.displays.get('bgdc_cjdcq')?.added).toBe(true);
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.added).toBe(true);
+    expect(catalogTools()).toContainEqual(
+      expect.objectContaining({ key: 'add', tip: '选中的都已添加', disabled: true })
+    );
+
+    await node(wrapper, 'csxhjctb_lrdl').trigger('contextmenu');
+    expect(menuItem('add').textContent).not.toContain('项');
+    expect(wrapper.find('[data-tool="add"]').exists()).toBe(false);
+    menuItem('add').click();
+    await nextTick();
+    expect(owner.state.value.displays.get('csxhjctb_lrdl')?.added).toBe(true);
+    expect(currentOrder(wrapper)[0]).toBe('csxhjctb_lrdl');
   });
 
   it('移除选中的行：选中相邻的，目录里的资源仍在；全部移除后是空状态，工具栏不可用', async () => {

@@ -5,7 +5,7 @@
 export interface CatalogSelection {
   /** 选中的节点 */
   readonly keys: ReadonlySet<string>;
-  /** Shift 连选的起点：最后一次单选或加选的节点 */
+  /** Shift 连选的起点：最后一次单击、加选，或方向键移到的项 */
   readonly anchor: string | null;
   /** 键盘焦点所在的节点（roving tabindex） */
   readonly focus: string | null;

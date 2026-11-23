@@ -222,7 +222,7 @@ describe('CatalogTree', () => {
     expect(announcement()).toBe('已移除 2 项');
   });
 
-  it('分类的按钮点完停在结果上：按钮不见了，双击的第二下落在这一列上不展开、不收起', async () => {
+  it('分类的按钮点完停在结果上：按钮不见了，双击的第二下落在这一列上不展开、不收起；停留放开以后第二下落在新按钮上也不操作', async () => {
     const { events, expanded, row } = mountTree({ accept: true });
 
     await row('land').get('[data-node-action="add"]').trigger('click');
@@ -231,9 +231,40 @@ describe('CatalogTree', () => {
     await row('land').get('[class*="end"]').trigger('click');
     expect(expanded.value.has('land')).toBe(true);
     expect(events).toStrictEqual([['add', 'b']]);
+
+    // 两下之间指针出了这一行：按钮回来、换成移除，按系统双击间隔的第二下不移除整类
+    await row('land').trigger('pointerleave', { pointerType: 'mouse' });
+    const remove = row('land').get('[data-node-action="remove"]');
+    await doubleClickSecond(remove.element);
+    expect(events).toStrictEqual([['add', 'b']]);
+    await remove.trigger('click');
+    expect(events).toStrictEqual([['add', 'b'], ['remove', 'a', 'b']]);
   });
 
-  it('键盘：上下只移焦点，Shift 加上下连选；空格切换（按住的重复不算），Ctrl 加空格加选；回车定位已添加的；Esc 清空多选', async () => {
+  it('还在闪时这一行又变了：换一个同样的动画，从头再闪一次', async () => {
+    vi.useFakeTimers();
+    const { row } = mountTree({ accept: true });
+    const flashClass = () => row('b').classes().find(name => name.includes('acted'));
+
+    await row('b').trigger('keydown', { key: ' ' });
+    await flushPromises();
+    const first = flashClass();
+    await vi.advanceTimersByTimeAsync(300);
+    await row('b').trigger('keydown', { key: ' ' });
+    await flushPromises();
+    const second = flashClass();
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(second).not.toBe(first);
+
+    // 第一次的计时到了不提前去掉，从第二次起算 0.9 秒
+    await vi.advanceTimersByTimeAsync(600);
+    expect(flashClass()).toBe(second);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(flashClass()).toBeUndefined();
+  });
+
+  it('键盘：上下只移焦点，Shift 加上下连选；空格切换（按住的重复不算），Ctrl、⌘ 加空格加选，Shift 加空格连选；回车定位已添加的；Esc 清空多选', async () => {
     const { selection, expanded, events, row } = mountTree();
 
     await row('land').trigger('keydown', { key: 'ArrowDown' });
@@ -254,6 +285,11 @@ describe('CatalogTree', () => {
     await row('b').trigger('keydown', { key: ' ', repeat: true });
     await row('a').trigger('keydown', { key: ' ', ctrlKey: true });
     expect(selectedKeys(selection.value)).toStrictEqual(['a']);
+    await row('a').trigger('keydown', { key: ' ', metaKey: true });
+    expect(selectedKeys(selection.value)).toStrictEqual([]);
+    // Shift 加空格从起点（刚加选的 a）连选到这一项，只改选中
+    await row('b').trigger('keydown', { key: ' ', shiftKey: true });
+    expect(selectedKeys(selection.value)).toStrictEqual(['a', 'b']);
     await row('a').trigger('keydown', { key: 'Enter' });
     await row('b').trigger('keydown', { key: 'Enter' });
     expect(events).toStrictEqual([['add', 'b'], ['locate', 'a']]);
@@ -293,10 +329,24 @@ describe('CatalogTree', () => {
     const root = () => wrapper.get('[role="tree"]').element.parentElement;
     const hasClass = (name: string) => [...(root()?.classList ?? [])].some(item => item.includes(name));
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }));
+    const modifiers: [string, KeyboardEventInit][] = [
+      ['Control', { ctrlKey: true }],
+      ['Meta', { metaKey: true }],
+      ['Shift', { shiftKey: true }]
+    ];
+    for (const [key, init] of modifiers) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, ...init }));
+      await flushPromises();
+      expect(hasClass('modifying'), key).toBe(true);
+      document.dispatchEvent(new KeyboardEvent('keyup', { key }));
+      await flushPromises();
+      expect(hasClass('modifying'), key).toBe(false);
+    }
+
+    // 按着修饰键切走窗口、收不到松开：回来移动鼠标就更正
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
     await flushPromises();
-    expect(hasClass('modifying')).toBe(true);
-    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+    document.dispatchEvent(new MouseEvent('mousemove'));
     await flushPromises();
     expect(hasClass('modifying')).toBe(false);
 

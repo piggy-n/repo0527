@@ -66,7 +66,8 @@
 }
 
 // 光标：没添加的是带加号的箭头，已添加的是手形（没有表示"移除"的系统光标，由淡红底和叉说明）；分类单击是展开、收起。
-// 点完停留时、按住 Ctrl、⌘、Shift 准备多选时、搜索时不能收起的分类是普通箭头
+// 普通箭头只给单击无效或不是添加、移除的地方：项点完停留时、按住 Ctrl、⌘、Shift 准备多选时，分类点完停留时的行尾，
+// 搜索时不能收起的分类
 .leaf {
   cursor: copy;
 }
@@ -79,8 +80,9 @@
   cursor: pointer;
 }
 
-.held,
-.modifying .row,
+.leaf.held,
+.held .end,
+.modifying .leaf,
 .searching .branch {
   cursor: default;
 }
@@ -146,9 +148,14 @@
   }
 }
 
-// 添加或移除过的行闪一下（用户 2026-11-22）：浅蓝底淡出，和图层里新加入的行一样
+// 添加或移除过的行闪一下（用户 2026-11-22）：浅蓝底淡出，和图层里新加入的行一样。还在闪时又变了换成 actedAgain：
+// 内容一样、名字不同的动画，才会从头再闪
 .acted {
   animation: catalog-acted 0.9s ease-out;
+}
+
+.actedAgain {
+  animation: catalog-acted-again 0.9s ease-out;
 }
 
 @keyframes catalog-acted {
@@ -158,8 +165,16 @@
   }
 }
 
+@keyframes catalog-acted-again {
+  0%,
+  30% {
+    background-color: var(--color-primary-alpha-28);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .acted {
+  .acted,
+  .actedAgain {
     animation: none;
   }
 }
@@ -169,7 +184,8 @@
   font-weight: var(--font-weight-semibold);
 }
 
-// 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；2026-11-22 起只有多选（批量）才有
+// 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；2026-11-22 起只在 Ctrl、⌘、Shift 选中的行上出现
+// （选中两项以上标题才有批量按钮），悬停时保持选中的底色，只靠行尾和光标预告
 .selected {
   background-color: var(--color-primary-bg);
 

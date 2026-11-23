@@ -166,20 +166,25 @@ export const CatalogTree = defineComponent({
     // 行最后一次是用什么按下的：触屏的停留按时间放开
     let pressType = 'mouse';
 
-    // 闪一下的行：每一行记最后一次操作，较早的计时到了不提前去掉
-    const actedBy = new Map<string, object>();
-    const acted = shallowRef<ReadonlySet<string>>(new Set());
+    // 闪一下的行：每一行记最后一次操作，较早的计时到了不提前去掉。还在闪时又变了，换成另一个同样的动画（again），
+    // 动画名变了才会从头再闪一次
+    const actedBy = new Map<string, { readonly batch: object; readonly again: boolean }>();
+    const acted = shallowRef<ReadonlyMap<string, boolean>>(new Map());
+    const syncActed = () => (acted.value = new Map([...actedBy].map(([key, { again }]) => [key, again])));
     const flashRows = (keys: readonly string[]) => {
       const batch = {};
-      keys.forEach(key => actedBy.set(key, batch));
-      acted.value = new Set(actedBy.keys());
+      keys.forEach(key => {
+        const previous = actedBy.get(key);
+        actedBy.set(key, { batch, again: previous ? !previous.again : false });
+      });
+      syncActed();
       later(ACTED_MS, () => {
         keys.forEach(key => {
-          if (actedBy.get(key) === batch) {
+          if (actedBy.get(key)?.batch === batch) {
             actedBy.delete(key);
           }
         });
-        acted.value = new Set(actedBy.keys());
+        syncActed();
       });
     };
 
@@ -310,15 +315,16 @@ export const CatalogTree = defineComponent({
       } else if (event.key === 'ArrowLeft' && node.kind === 'branch' && !props.searching) {
         toggleExpanded(node.key, false);
       } else if (event.key === ' ' || event.key === 'Enter') {
-        // 空格在项上同单击（Ctrl / ⌘ 加空格是加选），按住不放的重复不再切换；回车是定位
+        // 空格在项上同单击（Ctrl / ⌘ 加空格是加选，Shift 加空格是连选，只改选中），按住不放的重复不再切换；回车是定位
+        const toggle = event.ctrlKey || event.metaKey;
         if (node.kind === 'branch') {
           if (!props.searching) {
             toggleExpanded(node.key);
           }
         } else if (event.key === 'Enter') {
           locate(node.key);
-        } else if (event.ctrlKey || event.metaKey) {
-          select(node.key, { toggle: true });
+        } else if (toggle || event.shiftKey) {
+          select(node.key, { toggle, range: event.shiftKey });
         } else if (!event.repeat) {
           toggleLeaf(node, 'keyboard');
         }
@@ -370,6 +376,10 @@ export const CatalogTree = defineComponent({
                 onMousedown={(event: MouseEvent) => event.preventDefault()}
                 onClick={(event: MouseEvent) => {
                   event.stopPropagation();
+                  // 同项的单击：两下之间指针出了这一行、停留已经放开时，双击的第二下也不再操作
+                  if (event.detail > 1) {
+                    return;
+                  }
                   void act(canAdd ? 'add' : 'remove', keys, node, pressType);
                 }}
               >
@@ -393,7 +403,7 @@ export const CatalogTree = defineComponent({
             node.kind === 'leaf' && node.added && styles.added,
             selected && styles.selected,
             isHeld && styles.held,
-            acted.value.has(node.key) && styles.acted
+            acted.value.has(node.key) && (acted.value.get(node.key) ? styles.actedAgain : styles.acted)
           ]}
           role="treeitem"
           aria-level={depth + 1}
