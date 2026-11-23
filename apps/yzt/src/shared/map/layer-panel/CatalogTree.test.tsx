@@ -329,19 +329,18 @@ describe('CatalogTree', () => {
     const root = () => wrapper.get('[role="tree"]').element.parentElement;
     const hasClass = (name: string) => [...(root()?.classList ?? [])].some(item => item.includes(name));
 
-    const modifiers: [string, KeyboardEventInit][] = [
-      ['Control', { ctrlKey: true }],
-      ['Meta', { metaKey: true }],
-      ['Shift', { shiftKey: true }]
-    ];
-    for (const [key, init] of modifiers) {
+    // 按下时有、松开后没有
+    const pressAndRelease = async (key: string, init: KeyboardEventInit) => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key, ...init }));
       await flushPromises();
-      expect(hasClass('modifying'), key).toBe(true);
+      const pressed = hasClass('modifying');
       document.dispatchEvent(new KeyboardEvent('keyup', { key }));
       await flushPromises();
-      expect(hasClass('modifying'), key).toBe(false);
-    }
+      return [pressed, hasClass('modifying')];
+    };
+    expect(await pressAndRelease('Control', { ctrlKey: true })).toStrictEqual([true, false]);
+    expect(await pressAndRelease('Meta', { metaKey: true })).toStrictEqual([true, false]);
+    expect(await pressAndRelease('Shift', { shiftKey: true })).toStrictEqual([true, false]);
 
     // 按着修饰键切走窗口、收不到松开：回来移动鼠标就更正
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
