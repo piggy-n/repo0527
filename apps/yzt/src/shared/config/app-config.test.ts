@@ -45,6 +45,20 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('VITE_PAGE_STATE_RESET 只能是 true 或 false');
   });
 
+  it('二维、三维各一套已添加的资源跟随开关；开关只能是 true 或 false，不能漏写（ADR 0169）', async () => {
+    vi.stubEnv('VITE_LAYERS_PER_DIMENSION', 'true');
+    expect((await loadAppConfig()).layersPerDimension).toBe(true);
+
+    vi.stubEnv('VITE_LAYERS_PER_DIMENSION', 'false');
+    expect((await loadAppConfig()).layersPerDimension).toBe(false);
+
+    vi.stubEnv('VITE_LAYERS_PER_DIMENSION', 'TRUE');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_LAYERS_PER_DIMENSION 只能是 true 或 false');
+
+    vi.stubEnv('VITE_LAYERS_PER_DIMENSION', '');
+    await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_LAYERS_PER_DIMENSION');
+  });
+
   it('资源的最小显示级别跟随开关；开关只能是 true 或 false（ADR 0132）', async () => {
     vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'true');
     expect((await loadAppConfig()).resourceMinZoomEnabled).toBe(true);

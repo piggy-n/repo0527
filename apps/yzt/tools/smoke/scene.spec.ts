@@ -1,7 +1,13 @@
+import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from 'playwright/test';
+import { loadEnv } from 'vite';
 import { CURRENT_MAP_URL, expect, test } from './fixtures.ts';
 import { roomB3dm, roomManifest, roomTileset, splatFiles } from './scene-model.ts';
 import { SCENE_TIER_SETTINGS } from './scene-tiers.ts';
+
+// 开关在构建时写进产物，这里和内网构建读同一份配置（ADR 0169）
+const appRoot = fileURLToPath(new URL('../..', import.meta.url));
+const perDimension = loadEnv('intranet', appRoot, 'VITE_').VITE_LAYERS_PER_DIMENSION === 'true';
 
 // 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts），同 static-basemap.spec.ts；冒烟不导入应用源码
 const LAND_COLORS = [[0xf3, 0xf1, 0xe9]];
@@ -120,6 +126,17 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
   await measured(page, 'login-to-map:settled', 45_000);
   // 二维第一次画面稳定以后，浏览器空闲时预加载三维模块（ADR 0091 的做法）：点"三维"之前就请求了 map-three 的分块
   await expect.poll(() => wasRequested(/\/assets\/map-three-[\w-]+\.js$/), { message: '预加载 map-three' }).toBe(true);
+  // 二维、三维各一套已添加的资源时（ADR 0169）二维的资源目录只有资源、没有标签；共用一套时有标签，三维模型是最后一个分类
+  const catalog = page.locator('[data-panel-section="catalog"]');
+  if (perDimension) {
+    await expect.poll(() => wasRequested(/\/3dt\/manifest\.json$/), { message: '读模型清单' }).toBe(true);
+    await expect(catalog).toContainText('没有找到资源');
+    await expect(catalog.locator('[data-catalog-view]')).toHaveCount(0);
+    await expect(catalog.locator('[data-catalog-node^="model"]')).toHaveCount(0);
+  } else {
+    await expect(catalog.locator('[data-catalog-node="model-root"]')).toBeVisible();
+    await expect(catalog.locator('[data-catalog-view]')).toHaveCount(3);
+  }
   const flat = page.locator('.maplibregl-canvas');
   const original = await flat.elementHandle();
   if (!original) {
@@ -129,6 +146,8 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
   try {
     await page.getByRole('button', { name: '三维', exact: true }).click();
     await measured(page, 'switch-to-3d:settled', 60_000);
+    // 三维里资源段照旧有三个标签（ADR 0169）
+    await expect(catalog.locator('[data-catalog-view]')).toHaveCount(3);
     await expect(page.locator('[data-map-status]')).toHaveCount(0);
     // 同一块画布担任三维（ADR 0147 第 2 节）
     await expect(flat).toBeVisible();

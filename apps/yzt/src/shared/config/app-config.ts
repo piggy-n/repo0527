@@ -116,6 +116,11 @@ export const appConfig = {
     '2d': mouseScheme('VITE_MAP_MOUSE_2D', import.meta.env.VITE_MAP_MOUSE_2D),
     '3d': mouseScheme('VITE_MAP_MOUSE_3D', import.meta.env.VITE_MAP_MOUSE_3D)
   }),
+  /**
+   * 现状底图的二维、三维各自一套已添加的资源（ADR 0169）：为 true 时互相隔离，二维的资源目录不列出三维模型、没有"全部、二维资源、
+   * 三维模型"的标签；为 false 时二三维共用一套
+   */
+  layersPerDimension: flag('VITE_LAYERS_PER_DIMENSION', import.meta.env.VITE_LAYERS_PER_DIMENSION),
   /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
   resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
 } as const;

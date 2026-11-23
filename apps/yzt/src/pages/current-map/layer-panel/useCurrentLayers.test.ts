@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { computed, effectScope, shallowRef } from 'vue';
+import type { ViewKind } from '@mx/map-core';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
 import { buildCatalog } from '@/features/resource-map/catalog';
+import type { ResourceLayerSetId } from '@/features/resource-map/composables/useResourceLayers';
 import {
   addedCodes,
   EMPTY_RESOURCE_LAYERS,
@@ -30,15 +32,35 @@ const CATALOG = buildCatalog([
 const r = (code: string) => `resource:${code}`;
 const m = (id: string) => `model:${id}`;
 
-// 两个拥有者只保留用到的部分，状态按真实的纯函数变化；资源目录、模型清单都已经到了（没到时的情形见偏好的测试）
-function setup() {
+// 资源的一套已添加，状态按真实的纯函数变化；资源目录已经到了
+function fakeSet() {
   const state = shallowRef<ResourceLayersState>(mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG));
-  const resources = {
+  return {
     state,
     add: (codes: readonly string[], at?: number) => (state.value = withAdded(state.value, codes, at)),
     remove: (codes: readonly string[]) => (state.value = withRemoved(state.value, codes)),
     moveLayer: (code: string, to: number) => (state.value = withMoved(state.value, code, to))
   };
+}
+
+// 两个拥有者只保留用到的部分；资源目录、模型清单都已经到了（没到时的情形见偏好的测试）。perDimension 时二维、三维各一套，
+// 由 dimension 选当前的那一套（ADR 0169）
+function setup({ perDimension = false } = {}) {
+  const shared = fakeSet();
+  const flat = fakeSet();
+  const dimension = shallowRef<ViewKind>('2d');
+  const resources = {
+    perDimension,
+    currentSet: computed((): ResourceLayerSetId => {
+      if (!perDimension) {
+        return 'shared';
+      }
+      return dimension.value;
+    }),
+    forSet: (set: ResourceLayerSetId) => (set === '2d' ? flat : shared)
+  };
+  // 共用的、分开时三维的那一套
+  const { state } = shared;
   const added = shallowRef<readonly string[]>([]);
   const hidden = shallowRef<ReadonlySet<string>>(new Set());
   const catalog = shallowRef(['x', 'y', 'z'].map(id => ({ id }) as SceneModel));
@@ -56,7 +78,7 @@ function setup() {
     scope.run(() => useCurrentLayers(resources, models)),
     '图层的平铺列表'
   );
-  return { current, state, added, hidden, catalog, [Symbol.dispose]: () => scope.stop() };
+  return { current, state, flat: flat.state, dimension, added, hidden, catalog, [Symbol.dispose]: () => scope.stop() };
 }
 
 describe('useCurrentLayers（ADR 0161、0167）', () => {
@@ -147,5 +169,61 @@ describe('useCurrentLayers（ADR 0161、0167）', () => {
 
     env.catalog.value = [{ id: 'x' } as SceneModel];
     expect(env.current.keys.value).toStrictEqual([]);
+  });
+
+  it('二三维共用一套时二维里照样有模型，两维的列表一样', () => {
+    using env = setup();
+    env.current.add([m('x')]);
+    expect(env.current.holdsModels.value).toBe(true);
+    expect(env.current.keys.value).toStrictEqual([m('x'), r('bgdc_dltb')]);
+
+    env.dimension.value = '3d';
+    expect(env.current.holdsModels.value).toBe(true);
+    expect(env.current.keys.value).toStrictEqual([m('x'), r('bgdc_dltb')]);
+  });
+});
+
+describe('useCurrentLayers：二维、三维各一套（ADR 0169）', () => {
+  it('二维里是只有资源的列表，三维里照常穿插模型；加入、移出、移动只改当前那一套', () => {
+    using env = setup({ perDimension: true });
+    env.dimension.value = '3d';
+    env.current.add([m('x')]);
+    env.current.add([r('bgdc_cjdcq')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
+    expect(env.current.holdsModels.value).toBe(true);
+    expect(env.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
+    expect(env.current.shownModel.value).toBe(true);
+
+    env.dimension.value = '2d';
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb')]);
+    expect(env.current.holdsModels.value).toBe(false);
+    expect(env.current.overModels.value).toStrictEqual([]);
+    expect(env.current.shownModel.value).toBe(false);
+
+    env.current.add([r('csxhjctb_hydl'), r('bgdc_cjdcq')]);
+    expect(env.current.keys.value).toStrictEqual([r('csxhjctb_hydl'), r('bgdc_cjdcq'), r('bgdc_dltb')]);
+    env.current.move(r('bgdc_dltb'), 0);
+    env.current.remove([r('csxhjctb_hydl')]);
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb'), r('bgdc_cjdcq')]);
+    expect(addedCodes(env.flat.value)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq']);
+    // 三维那一套和模型都没动
+    expect(addedCodes(env.state.value)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb']);
+    expect(env.added.value).toStrictEqual(['x']);
+
+    env.dimension.value = '3d';
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')]);
+  });
+
+  it('二维里加入模型抛错，什么也不改；移出模型的键忽略，三维里的模型还在', () => {
+    using env = setup({ perDimension: true });
+    env.dimension.value = '3d';
+    env.current.add([m('x')]);
+    env.dimension.value = '2d';
+
+    expect(() => env.current.add([r('bgdc_cjdcq'), m('y')])).toThrow('二维的图层里只有资源');
+    expect(env.current.keys.value).toStrictEqual([r('bgdc_dltb')]);
+    env.current.remove([m('x')]);
+
+    expect(env.added.value).toStrictEqual(['x']);
   });
 });

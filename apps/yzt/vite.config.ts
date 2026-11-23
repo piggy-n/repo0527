@@ -130,7 +130,8 @@ export default defineConfig(({ mode }) => {
         VITE_LAYER_HINT_MINZOOM: 'true',
         VITE_LAYER_HINT_COVERING: 'true',
         VITE_MAP_MOUSE_2D: 'maplibre',
-        VITE_MAP_MOUSE_3D: 'cesium'
+        VITE_MAP_MOUSE_3D: 'cesium',
+        VITE_LAYERS_PER_DIMENSION: 'false'
       },
       // 两个项目继承上面的插件、别名和 Sass 配置（ADR 0040）
       projects: [

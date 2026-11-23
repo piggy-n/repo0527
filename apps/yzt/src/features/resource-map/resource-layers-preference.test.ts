@@ -1,3 +1,4 @@
+import type { ViewKind } from '@mx/map-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import { createMemoryStore, type KeyValueStore } from '@/shared/storage/key-value-store';
@@ -32,24 +33,22 @@ function stored(displays: Record<string, unknown>, order: string[]) {
 
 const HIDDEN = { checked: false, opacity: 0.9, year: 2022 };
 
-// 拥有者连同偏好的范围；目录由用例决定什么时候到，null 表示还没到
-function setup(store: KeyValueStore, catalog: ResourceCatalog | null = CATALOG) {
+// 拥有者连同偏好的范围；目录由用例决定什么时候到，null 表示还没到；perDimension 同页面的开关（ADR 0169）
+function setup(store: KeyValueStore, catalog: ResourceCatalog | null = CATALOG, perDimension = false) {
   const effect = effectScope();
   const source = shallowRef(catalog ?? undefined);
+  const dimension = shallowRef<ViewKind>('2d');
   const { scope } = createTestPreferenceScope(store);
   const owner = effect.run(() =>
     useResourceLayers(
-      {
-        dimension: shallowRef('2d'),
-        sceneCapabilities: { styleLayers: false, identify: false, splats: false }
-      },
-      { catalog: source, tileBase: 'http://localhost/tiles/', preferences: scope }
+      { dimension, sceneCapabilities: { styleLayers: true, identify: true, splats: false } },
+      { catalog: source, tileBase: 'http://localhost/tiles/', preferences: scope, perDimension }
     )
   );
   if (!owner) {
     throw new Error('资源图层的拥有者没有创建');
   }
-  return { owner, source, [Symbol.dispose]: () => effect.stop() };
+  return { owner, source, dimension, [Symbol.dispose]: () => effect.stop() };
 }
 
 const layerIds = (owner: ReturnType<typeof useResourceLayers>) => owner.deriveGroup().layers.map(({ id }) => id);
@@ -90,6 +89,16 @@ describe('资源图层偏好的校验', () => {
       false,
       false
     ]);
+  });
+
+  it('三维那一套（scene，ADR 0169）：可以没有；有时同样要自洽，不自洽时整条不通过', () => {
+    const value = { displays: { a: display }, order: ['a'] };
+
+    expect(storedResourceLayersSchema.safeParse({ ...value, scene: value }).success).toBe(true);
+    expect(storedResourceLayersSchema.safeParse({ ...value, scene: { ...value, batchYear: 2023 } }).success).toBe(true);
+    expect(storedResourceLayersSchema.safeParse({ ...value, scene: { displays: { a: display }, order: [] } }).success).toBe(
+      false
+    );
   });
 });
 
@@ -276,3 +285,106 @@ describe('资源图层的偏好', () => {
     });
   });
 });
+
+describe('资源图层的偏好：二维、三维各一套（ADR 0169）', () => {
+  const SHARED = {
+    csxhjctb_hydl: { added: true, checked: true, opacity: 0.5, year: 2023 },
+    bgdc_dltb: { added: false, checked: false, opacity: 1, year: 2022 },
+    bgdc_cjdcq: { added: false, checked: false, opacity: 1, year: 2024 }
+  };
+  const ORDER = ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq'];
+
+  it('分开以后第一次进来（存下的没有 scene）：三维复制现在共用的那一套；之后各改各的，顶层写二维、scene 写三维', async () => {
+    const store = createMemoryStore({
+      [KEY]: { version: 1, value: { displays: SHARED, order: ORDER, batchYear: 2023 } }
+    });
+    using ctx = setup(store, CATALOG, true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl']);
+    ctx.dimension.value = '3d';
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')).toMatchObject({ added: true, opacity: 0.5 });
+    expect(ctx.owner.batchYear.value).toBe(2023);
+
+    ctx.owner.add(['bgdc_dltb']);
+    ctx.owner.setOpacity('csxhjctb_hydl', 0.8);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+
+    expect(store.entries.get(KEY)).toMatchObject({
+      version: 1,
+      value: {
+        displays: { csxhjctb_hydl: { opacity: 0.5 }, bgdc_dltb: { added: false } },
+        order: ORDER,
+        batchYear: 2023,
+        scene: {
+          displays: { csxhjctb_hydl: { opacity: 0.8 }, bgdc_dltb: { added: true } },
+          order: ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_cjdcq'],
+          batchYear: 2023
+        }
+      }
+    });
+  });
+
+  it('存下的有 scene：三维按它还原，批量年份也按套；二维的顶层不受影响', async () => {
+    const scene = {
+      displays: {
+        ...SHARED,
+        csxhjctb_hydl: { ...SHARED.csxhjctb_hydl, added: false },
+        bgdc_cjdcq: { added: true, checked: true, opacity: 0.2, year: 2023 }
+      },
+      order: ['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb'],
+      batchYear: 2024
+    };
+    const store = createMemoryStore({
+      [KEY]: { version: 1, value: { displays: SHARED, order: ORDER, batchYear: null, scene } }
+    });
+    using ctx = setup(store, CATALOG, true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl']);
+    expect(ctx.owner.batchYear.value).toBeNull();
+    ctx.dimension.value = '3d';
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_cjdcq']);
+    expect(ctx.owner.state.value.displays.get('bgdc_cjdcq')).toMatchObject({ opacity: 0.2, year: 2023 });
+    expect(ctx.owner.batchYear.value).toBe(2024);
+  });
+
+  it('新用户（没有存过）：二三维都按默认加入地类图斑', async () => {
+    using ctx = setup(createMemoryStore(), CATALOG, true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+    ctx.dimension.value = '3d';
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+  });
+
+  it('不分开时：顶层照常是共用的一套；读到的 scene 原样写回，再分开时还在；没有 scene 时写入的也没有', async () => {
+    const scene = { displays: SHARED, order: ['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl'], batchYear: 2024 };
+    const store = createMemoryStore({ [KEY]: { version: 1, value: { displays: SHARED, order: ORDER, scene } } });
+    {
+      using ctx = setup(store);
+      await vi.advanceTimersByTimeAsync(0);
+      ctx.dimension.value = '3d';
+      ctx.owner.add(['bgdc_dltb']);
+      await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    }
+    expect(store.entries.get(KEY)).toMatchObject({
+      value: { displays: { bgdc_dltb: { added: true } }, order: ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_cjdcq'], scene }
+    });
+
+    const fresh = createMemoryStore();
+    using ctx = setup(fresh);
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.owner.add(['bgdc_cjdcq']);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(Object.keys(storedValue(fresh))).toStrictEqual(['displays', 'order', 'batchYear']);
+  });
+});
+
+function storedValue(store: ReturnType<typeof createMemoryStore>): object {
+  const entry = store.entries.get(KEY);
+  const value: unknown = typeof entry === 'object' && entry !== null && 'value' in entry ? entry.value : null;
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('没有写入资源图层的偏好');
+  }
+  return value;
+}

@@ -412,3 +412,96 @@ describe('useResourceLayers', () => {
     expect(hidden && 'filter' in hidden ? JSON.stringify(hidden.filter) : '').toContain('"!="');
   });
 });
+
+describe('useResourceLayers：二维、三维各一套（ADR 0169）', () => {
+  it('不分开（默认）：只有 shared，二三维读写同一套，换维度时状态不换', async () => {
+    using ctx = await loaded({}, MAPLIBRE_LIKE);
+    expect(ctx.owner.perDimension).toBe(false);
+    expect(ctx.owner.currentSet.value).toBe('shared');
+    expect(ctx.owner.forSet('shared').state.value).toBe(ctx.owner.state.value);
+    expect(() => ctx.owner.forSet('3d')).toThrow('资源图层没有 3d 这一套');
+
+    ctx.owner.add(['csxhjctb_hydl']);
+    const before = ctx.owner.state.value;
+    ctx.dimension.value = '3d';
+
+    expect(ctx.owner.currentSet.value).toBe('shared');
+    expect(ctx.owner.state.value).toBe(before);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl']);
+  });
+
+  it('分开时两套都按默认值合并；在一维里加入、显隐、透明度、年份、标注、移动、批量年份都不影响另一维', async () => {
+    using ctx = await loaded({ perDimension: true }, MAPLIBRE_LIKE);
+    expect(ctx.owner.perDimension).toBe(true);
+    expect(ctx.owner.currentSet.value).toBe('2d');
+    expect(() => ctx.owner.forSet('shared')).toThrow('资源图层没有 shared 这一套');
+    expect(ctx.owner.forSet('3d').state.value.catalog).toBe(CATALOG);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+
+    ctx.owner.add(['csxhjctb_hydl', 'bgdc_cjdcq']);
+    ctx.owner.setVisible('bgdc_dltb', false);
+    ctx.owner.setOpacity('csxhjctb_hydl', 0.3);
+    ctx.owner.setYear('csxhjctb_hydl', 2023);
+    ctx.owner.setLabeled('bgdc_cjdcq', true);
+    ctx.owner.moveLayer('bgdc_cjdcq', 0);
+    ctx.owner.setYearForAll(2024);
+    const flat = ctx.owner.state.value;
+
+    ctx.dimension.value = '3d';
+
+    expect(ctx.owner.currentSet.value).toBe('3d');
+    expect(ctx.owner.state.value).toBe(ctx.owner.forSet('3d').state.value);
+    expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+    expect([...ctx.owner.state.value.displays.values()].filter(display => display.added)).toHaveLength(1);
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')).toStrictEqual({
+      added: false,
+      checked: false,
+      opacity: 1,
+      year: 2025,
+      labeled: false
+    });
+    expect(ctx.owner.batchYear.value).toBeNull();
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+
+    // 三维里的操作只改三维那一套，回到二维还是原来的
+    ctx.owner.setOpacity('bgdc_dltb', 0.5);
+    ctx.owner.setYearForAll(2023);
+    ctx.dimension.value = '2d';
+
+    expect(ctx.owner.state.value).toBe(flat);
+    expect(ctx.owner.batchYear.value).toBe(2024);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_cjdcq']);
+    expect(ctx.owner.forSet('3d').state.value.displays.get('bgdc_dltb')).toMatchObject({ opacity: 0.5, year: 2022 });
+  });
+
+  it('分开时按套读写，不管当前维度：二维里改三维那一套，当前的状态和推导不变', async () => {
+    using ctx = await loaded({ perDimension: true }, MAPLIBRE_LIKE);
+    const flat = ctx.owner.state.value;
+    const scene = ctx.owner.forSet('3d');
+
+    scene.add(['csxhjctb_hydl']);
+    scene.moveLayer('csxhjctb_hydl', 1);
+    scene.remove(['bgdc_dltb']);
+
+    expect(ctx.owner.state.value).toBe(flat);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+    expect(scene.state.value.displays.get('csxhjctb_hydl')?.added).toBe(true);
+    expect(scene.state.value.displays.get('bgdc_dltb')?.added).toBe(false);
+    ctx.owner.forSet('2d').add(['bgdc_cjdcq']);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-bgdc_cjdcq']);
+  });
+
+  it('分开时目录只校验一次、配置错误只报一次；换维度不重新校验', async () => {
+    const validate = vi.fn<typeof invalidLanduse>(invalidLanduse);
+    using ctx = await loaded({ perDimension: true, validate }, MAPLIBRE_LIKE);
+    const calls = validate.mock.calls.length;
+
+    ctx.dimension.value = '3d';
+    ctx.dimension.value = '2d';
+    void ctx.owner.configErrors.value;
+
+    expect(validate).toHaveBeenCalledTimes(calls);
+    expect(ctx.errors).toHaveLength(1);
+    expect(layerIds(ctx.owner)).toStrictEqual([]);
+  });
+});

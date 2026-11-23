@@ -780,6 +780,26 @@ async function switchTo(wrapper: ReturnType<typeof mountPage>['wrapper'], label:
   await settle();
 }
 
+// 当前图层里从上到下的行
+function currentRows(wrapper: PageWrapper): (string | undefined)[] {
+  return wrapper.findAll('[data-current-row]').map(item => item.attributes('data-current-row'));
+}
+
+// 地图上资源分组的图层
+function drawnResources(page: ReturnType<typeof mountPage>): string[] {
+  return required(page.session(), '没有创建地图会话')
+    .style.current.layers.map(({ id }) => id)
+    .filter(id => groupOf(id) === 'resources');
+}
+
+// 在资源目录里选中这个资源，用工具栏加入
+async function addResource(wrapper: PageWrapper, code: string) {
+  await vi.waitFor(() => resourceRow(wrapper, code));
+  await resourceRow(wrapper, code).trigger('click');
+  await wrapper.get('[data-tool="add"]').trigger('click');
+  await settle();
+}
+
 // 三维：页面的会话，和让瓦片集就绪的函数（等三维视图下载 tileset.json、交给渲染器，就绪的状态传到页面）
 function sceneOf(page: ReturnType<typeof mountPage>) {
   const session = required(page.session(), '没有创建地图会话');
@@ -2488,6 +2508,45 @@ describe('CurrentMapPage', () => {
 
       await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="resource:bgdc_dltb"]').exists()).toBe(true));
       expect(get).not.toHaveBeenCalledWith('zhangsan/resource-layers');
+    });
+  });
+
+  describe('二维、三维各一套已添加的资源（ADR 0169）', () => {
+    // 开关在模块加载时读取，要重新导入页面
+    it('开关打开：二维的目录没有标签、不列模型；二维、三维的列表和地图上的资源各是各的，切回来还在', async () => {
+      vi.stubEnv('VITE_LAYERS_PER_DIMENSION', 'true');
+      const requests = mockManifest();
+      const page = await readyPage(await freshModules());
+      const { wrapper } = page;
+      await vi.waitFor(() => expect(requests()).toBe(1));
+      await addResource(wrapper, 'csxhjctb_hydl');
+      expect(wrapper.find('[data-catalog-view]').exists()).toBe(false);
+      expect(wrapper.find('[data-catalog-node^="model-"]').exists()).toBe(false);
+      expect(currentRows(wrapper)).toStrictEqual(['resource:csxhjctb_hydl', 'resource:bgdc_dltb']);
+      expect(drawnResources(page)).toContain('resources-csxhjctb_hydl');
+
+      await switchTo(wrapper, '三维');
+      expect(wrapper.find('[data-catalog-view="models"]').exists()).toBe(true);
+      expect(currentRows(wrapper)).toStrictEqual(['resource:bgdc_dltb']);
+      expect(drawnResources(page)).not.toContain('resources-csxhjctb_hydl');
+      await addModel(wrapper, 'sz-station');
+      expect(currentRows(wrapper)).toStrictEqual(['model:sz-station', 'resource:bgdc_dltb']);
+
+      await switchTo(wrapper, '二维');
+      expect(currentRows(wrapper)).toStrictEqual(['resource:csxhjctb_hydl', 'resource:bgdc_dltb']);
+      expect(drawnResources(page)).toContain('resources-csxhjctb_hydl');
+      expect(wrapper.find('[data-catalog-node^="model-"]').exists()).toBe(false);
+    });
+
+    it('开关关闭（test.env）：同以前，二维的目录有标签、最后是三维模型；二维里加入的资源三维里也有', async () => {
+      mockManifest();
+      const { wrapper } = await readyPage();
+      await vi.waitFor(() => expect(wrapper.find('[data-catalog-node="model-root"]').exists()).toBe(true));
+      expect(wrapper.find('[data-catalog-view="all"]').exists()).toBe(true);
+      await addResource(wrapper, 'csxhjctb_hydl');
+
+      await switchTo(wrapper, '三维');
+      expect(currentRows(wrapper)).toStrictEqual(['resource:csxhjctb_hydl', 'resource:bgdc_dltb']);
     });
   });
 
