@@ -131,6 +131,7 @@ packages/icons/
 | `apps/yzt/src/assets/icons/*.svg` | 规范化后的图标文件 |
 | `apps/yzt/src/shared/icons/icons.json` | 生成的注册表：`{ 名字: { viewBox, attrs?, body } }` |
 | `apps/yzt/src/shared/icons/SvgIcon.ts` | `createIconComponent(icons)` 得到的项目图标组件、`IconName`、`iconNames` |
+| `apps/yzt/src/shared/icons/icon-image.ts` | 画进画布用：`iconMarkup(name, size, color?)` 拼出和 SvgIcon 属性相同的 SVG 文本，`loadIconImage` 把它解码成图片（驾驶舱导出图片里的指北针）；页面上仍用 SvgIcon |
 | `apps/yzt/tools/icons/paths.ts` | 图标目录与注册表的位置，插件和检查测试共用 |
 | `apps/yzt/tools/icons/icons.test.ts` | CI 中的检查 |
 

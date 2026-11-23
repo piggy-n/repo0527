@@ -55,29 +55,47 @@ export function titleLines(title: string, maxWidth: number, measure: (text: stri
   return lines;
 }
 
+/** 导出图片的像素是 CSS 尺寸的 2 倍 */
+export const EXPORT_RATIO = 2;
+
+const TITLE_FONT = '900 24px "City Dashboard Serif", serif';
+const TITLE_LINE = 34;
+
+/** 导出图片顶上的标题栏：按宽度换行后的各行和标题栏的高度（CSS 像素） */
+export function titleBand(
+  context: CanvasRenderingContext2D,
+  title: string,
+  maxWidth: number
+): { readonly lines: readonly string[]; readonly height: number } {
+  context.font = TITLE_FONT;
+  const lines = titleLines(title, Math.max(1, maxWidth), text => context.measureText(text).width);
+  return { lines, height: Math.max(60, 32 + lines.length * TITLE_LINE) };
+}
+
+/** 在标题栏里居中写各行，centerX 是标题栏中线（CSS 像素） */
+export function drawTitle(context: CanvasRenderingContext2D, lines: readonly string[], centerX: number): void {
+  context.font = TITLE_FONT;
+  context.fillStyle = '#0F4FA6';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  lines.forEach((line, index) => context.fillText(line, centerX, 16 + (index + 0.5) * TITLE_LINE));
+}
+
 export function imageWithTitle(image: HTMLCanvasElement, title: string, background = '#ECF6FE'): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
   if (!context || !image.width || !image.height) {
     throw new Error('无法创建图片画布');
   }
-  const ratio = 2;
-  const width = image.width / ratio;
-  const font = '900 24px "City Dashboard Serif", serif';
-  context.font = font;
-  const lines = titleLines(title, Math.max(1, width - 40), text => context.measureText(text).width);
-  const headingHeight = Math.max(60, 32 + lines.length * 34);
+  const width = image.width / EXPORT_RATIO;
+  const heading = titleBand(context, title, width - 40);
   canvas.width = image.width;
-  canvas.height = image.height + Math.ceil(headingHeight * ratio);
-  context.scale(ratio, ratio);
+  canvas.height = image.height + Math.ceil(heading.height * EXPORT_RATIO);
+  context.scale(EXPORT_RATIO, EXPORT_RATIO);
   context.fillStyle = background;
-  context.fillRect(0, 0, width, canvas.height / ratio);
-  context.font = font;
-  context.fillStyle = '#0F4FA6';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  lines.forEach((line, index) => context.fillText(line, width / 2, 16 + (index + 0.5) * 34));
-  context.drawImage(image, 0, headingHeight, width, image.height / ratio);
+  context.fillRect(0, 0, width, canvas.height / EXPORT_RATIO);
+  drawTitle(context, heading.lines, width / 2);
+  context.drawImage(image, 0, heading.height, width, image.height / EXPORT_RATIO);
   return canvas;
 }
 

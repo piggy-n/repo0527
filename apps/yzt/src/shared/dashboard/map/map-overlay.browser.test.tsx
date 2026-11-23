@@ -2,14 +2,17 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import { Ray } from 'three';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { page } from 'vitest/browser';
+import { defineComponent } from 'vue';
 import { requireIndicator } from '../../city-indicators/catalog';
 import { indicatorValue } from '../../city-indicators/indicator-value';
 import { required } from '../../testing/required';
 import { DASHBOARD_CITIES } from '../cities';
 import { createMapClassification } from '../map-classification';
+import { mapLegendLevels } from './config';
 import { DashboardCompass } from './DashboardCompass';
 import { DashboardMap } from './DashboardMap';
 import { DashboardScaleBar } from './DashboardScaleBar';
+import { useExportPart } from './export-parts';
 import type { MapCornerScope, MapView } from './types';
 
 const hosts: HTMLElement[] = [];
@@ -78,6 +81,60 @@ function rotation(svg: SVGSVGElement): number {
 
 function overlaps(a: DOMRect, b: DOMRect): boolean {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+// 拦下保存：拿到交给浏览器下载的图片，不真的下载；导出失败时地图上出现错误提示，带着它的文字失败，15 秒没结束也失败
+function interceptDownload(root: Element): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const created = vi.spyOn(URL, 'createObjectURL').mockImplementation(blob => {
+      resolve(blob as Blob);
+      return 'blob:map-export';
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const observer = new MutationObserver(() => {
+      const alert = root.querySelector('[role="alert"]');
+      if (alert) {
+        reject(new Error(`导出失败：${alert.textContent ?? ''}`));
+      }
+    });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    const timer = setTimeout(() => reject(new Error('导出没有结束')), 15000);
+    onTestFinished(() => {
+      created.mockRestore();
+      click.mockRestore();
+      observer.disconnect();
+      clearTimeout(timer);
+    });
+  });
+}
+
+async function imagePixels(blob: Blob): Promise<ImageData> {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = required(canvas.getContext('2d'), '2D 上下文');
+  context.drawImage(bitmap, 0, 0);
+  return context.getImageData(0, 0, bitmap.width, bitmap.height);
+}
+
+// 区域（图片像素）里有没有和 color 每个通道相差不超过 tolerance 的像素
+function hasColor(
+  image: ImageData,
+  area: { x: number; y: number; width: number; height: number },
+  color: string,
+  tolerance = 1
+): boolean {
+  const target = [1, 3, 5].map(index => Number.parseInt(color.slice(index, index + 2), 16));
+  for (let y = area.y; y < area.y + area.height; y++) {
+    for (let x = area.x; x < area.x + area.width; x++) {
+      const offset = (y * image.width + x) * 4;
+      if (target.every((value, channel) => Math.abs(image.data[offset + channel] - value) <= tolerance)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function loseContext(wrapper: VueWrapper): void {
@@ -208,5 +265,58 @@ describe('地图的指北针和比例尺', () => {
     const svg = wrapper.get('[aria-label="指北针"] svg').element as SVGSVGElement;
     await vi.waitFor(() => expect(Math.abs(rotation(svg))).toBeLessThan(0.5));
     expect((wrapper.get('[aria-label="指北针"]').element as HTMLElement).style.transform).toBe('');
+  }, 20000);
+
+  it('下载的图片带图例、指北针和比例尺，比例按截图那一刻的地图尺寸算', async () => {
+    // 和比例尺一起放在右下角，记录导出时取到的比例，不画进图片
+    const captured: number[] = [];
+    const ScaleProbe = defineComponent({
+      props: { metersPerPixel: { type: Number, required: true } },
+      setup(props) {
+        useExportPart(() => {
+          captured.push(props.metersPerPixel);
+          return null;
+        });
+        return () => <i data-test="scale" data-value={props.metersPerPixel} />;
+      }
+    });
+    const props = mapProps();
+    const wrapper = mount(DashboardMap, {
+      attachTo: host(),
+      props,
+      attrs: { style: 'width:900px;height:700px' },
+      slots: {
+        topRight: (view: MapView | null) => <DashboardCompass rotation={view?.northDegrees ?? 0} />,
+        bottomRight: ({ view, maxWidth }: MapCornerScope) => view
+          ? [
+            <DashboardScaleBar metersPerPixel={view.metersPerPixel} maxWidth={maxWidth} />,
+            <ScaleProbe metersPerPixel={view.metersPerPixel} />
+          ]
+          : []
+      }
+    });
+    await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'), { timeout: 10000 });
+    await vi.waitFor(() => expect(wrapper.find('[aria-label^="比例尺"]').exists()).toBe(true));
+    const before = reading(wrapper, 'scale');
+
+    // 地图变矮后紧接着下载：截图时场景按新尺寸重画，比例变大（相机按高度取景），角上的比例尺这时还没重绘
+    const saving = interceptDownload(wrapper.element as HTMLElement);
+    (wrapper.element as HTMLElement).style.height = '450px';
+    (wrapper.get('[aria-label="下载当前地图"]').element as HTMLButtonElement).click();
+    const image = await imagePixels(await saving);
+    const after = reading(wrapper, 'scale');
+    expect(after / before).toBeGreaterThan(1.2);
+    expect(captured).toEqual([after]);
+
+    // 图片宽度是地图宽度的 2 倍；底栏（下面 130 像素）左侧有每一档图例的色块，右侧有比例尺的深蓝
+    expect(image.width).toBe(1800);
+    const footer = { y: image.height - 260, height: 260 };
+    const missing = mapLegendLevels(props.classification, props.indicator)
+      .filter(level => !hasColor(image, { x: 0, width: 400, ...footer }, level.color))
+      .map(level => level.label);
+    expect(missing).toEqual([]);
+    expect(hasColor(image, { x: 1800 - 480, width: 480, ...footer }, '#0E4894')).toBe(true);
+    // 标题栏右侧有指北针的蓝色指针（缩放后有插值，放宽到 12）
+    expect(hasColor(image, { x: 1800 - 160, y: 0, width: 160, height: 132 }, '#1674E8', 12)).toBe(true);
   }, 20000);
 });
