@@ -23,15 +23,16 @@ shared/dashboard/
 ├─ charts/                runtime、options、radar-options、axis-scale、palette、detail-labels、warm-up、chart-export、useChartFonts、
 │                         useChartDetail、useChartDownload、
 │                         DashboardPlot、ChartCard、ChartActions、ChartDetailDialog、TooltipTable（charts.module.scss）
-├─ export/                image-export（加标题、保存）、useImageExport（防重复、等字体、取消）
+├─ export/                image-export（标题栏、加标题、保存）、useImageExport（防重复、等字体、取消）
 ├─ map/                   JiangsuMapScene（Three.js）、fallback（ECharts 二维降级）、DashboardMap、DashboardTimeline、useDashboardMap、
-│                         DashboardCompass、DashboardScaleBar、scale-bar、map-view（指北针和比例尺）等
+│                         DashboardCompass、DashboardScaleBar、scale-bar、map-view（指北针和比例尺）、
+│                         map-export（导出图片的标签、图例和排版）、export-parts、overlay-export（叠加元素画进导出图片）等
 └─ tooltip/               useDashboardTooltip、TooltipLayer
 ```
 
 ## 边界
 
-- 依赖 `shared` 里的 `perf`（LoadTrace）、`icons`（SvgIcon）、`map/region`（市界几何 `sharedRegionBoundaryLoader`、区划目录 `JIANGSU_CITIES`）、`file-transfer`（保存图片），测试另用 `testing`、`city-indicators`（测试数据）；包和库有 `@mx/ui`、`@mx/utils`、Vue、`@vueuse/core`、ECharts、GSAP、Element Plus，地图另有 three、d3-geo、d3-polygon、`@turf/simplify`、`geographiclib-geodesic`（比例尺的距离，按需动态加载）。不导入任何 feature（`boundaries` 检查）
+- 依赖 `shared` 里的 `perf`（LoadTrace）、`icons`（SvgIcon，导出图片里的指北针用 `loadIconImage`）、`map/region`（市界几何 `sharedRegionBoundaryLoader`、区划目录 `JIANGSU_CITIES`）、`file-transfer`（保存图片），测试另用 `testing`、`city-indicators`（测试数据）；包和库有 `@mx/ui`、`@mx/utils`、Vue、`@vueuse/core`、ECharts、GSAP、Element Plus，地图另有 three、d3-geo、d3-polygon、`@turf/simplify`、`geographiclib-geodesic`（比例尺的距离，按需动态加载）。不导入任何 feature（`boundaries` 检查）
 - `three` 只在 `map/**` 里用：`.oxlintrc.json` 的 three 例外除了 `packages/map-three` 和 `app/`，只放开 `shared/dashboard/map/**`，两个驾驶舱的 feature 和 `shared/dashboard` 的其他目录都不能导入（见 [oxlintrc](../config/oxlintrc.md)）
 - 驾驶舱专属的样式只在这里和 feature 里，不改全局 Element 主题；下拉传送到 body 的用组件专属的 popper 类（如 `YearFilter` 的 `yearPopper`）
 - 配色：驾驶舱大屏沿用旧版的固定配色（深蓝 `#0e4894`、主蓝 `#438efb` 等），样式里直接写色值、不走全局的颜色令牌，和字体一样是驾驶舱局部的例外（见 [fonts](../design/fonts.md)"驾驶舱局部标题字体"）；新加的样式取驾驶舱已有的色值，不另起一套
@@ -151,8 +152,21 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 - `showValues=false`：三维标签只有名称（`aria-label`"{城市}，查看详情"），避让按一行名称的高度算（`layoutMapLabels` 的第四个参数），二维降级的标签只写名称，导出图片只画名称、画在标签中心（`drawMapLabels(snapshot, indicator, false)`），过渡中不逐帧更新显示的数值。标签的避让在场景发布位置时算，`showValues` 按页面固定，中途切换要等下一次相机或尺寸变化才重排
 - `notice`：标题下方居中的状态提示（`role="status"`，跟标题一起入场）
 - 图例：`classification` 没有档位（没有一个城市有值）时不显示图例框
-- 导出文件名 `江苏省-{年}-{指标名}`，导出图片不含图例、时间轴和叠加元素
+- 导出文件名 `江苏省-{年}-{指标名}`，图片见下面的"导出图片"
 - 三维失败或 WebGL 丢失时用同一份市界降为 ECharts 二维（"地图采用简化显示"）
+
+### 导出图片
+
+标题栏右侧的下载按钮把地图存成 PNG（`map-export.ts` 的 `mapImage`，像素是 CSS 尺寸的 2 倍），版式 2026-11-23 用户选定：
+
+- 上面是标题栏（标题按宽度换行，同图表的导出），有右上角的叠加元素（指北针）时放在标题栏右侧、垂直居中，48 × 48，标题两侧都让出它的宽度、仍在整幅宽度上居中
+- 中间是地图像素和城市标签（`drawMapLabels`），宽度就是地图的宽度
+- 下面是底栏，不压地图：图例在左（与页面上的图例同样的框、色块和文字，取 `--ui-scale` 为 1 时的尺寸），右下角的叠加元素（比例尺）在右、底边对齐，至多 220 像素宽，放不下时不画；底栏高度是两者里高的那个加上下各 12 像素。没有图例也没有右下角元素时没有底栏，和原来的导出相同（如原驾驶舱没有数据时）
+- 时间轴、提示、"地图采用简化显示"、`notice` 和页面上的装饰底纹不进图片
+
+角上的叠加元素自己负责画进图片：`MapCorner` 用 `provideExportParts` 收集放在里面的元素，元素在 setup 里调 `useExportPart(capture)` 登记、卸载时撤销（`export-parts.ts`），所以页面上放了什么，图片里就有什么，调用方不用另外传开关。`capture` 在点下载时同步调用、取当时的 props，返回 `ExportPart`（可以是 Promise，如指北针要解码图标）；字体就绪后按留给它的宽高 `layout`，放不下时返回 null。`DashboardCompass` 和 `DashboardScaleBar` 的画法在 `overlay-export.ts`：指北针把 `dashboard-compass-color` 解码成图片（`shared/icons` 的 `loadIconImage`），按点下载时的 `rotation` 转，带页面上同样的圆形投影；比例尺用 `scaleBar()` 和画布实测的文字宽度按底栏里的宽度重新选长度（可能和页面上的长度不同，比例相同），刻度、单位、色带的样式同页面。
+
+截图时场景会按当前相机和尺寸重画一次（`capture()` 先 `resize()` 再 `render()`），朝向和比例可能在这一刻才变，而角上的内容要等 Vue 下一次更新才拿到新的 `view`：所以截图后先 `await nextTick()` 让角上的内容重绘，再调各个 `capture`，图片里的指北针、比例尺和地图像素是同一刻的（`map-overlay.browser.test.tsx` 里地图变矮后紧接着下载的用例，去掉这一步时取到的是变矮前的比例）。
 
 ### 指北针和比例尺（角上的叠加插槽）
 
@@ -192,7 +206,7 @@ downloads.download({ indicator, years, detail: false, option, size: cardPlotSize
 
 ## 测试
 
-- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom；卡片和详情的图例位置）、`detail-labels`、`palette`、`charts/useChartDetail`、`charts/useChartDownload`（jsdom，出图和保存换成假函数）、`map/map-export`、`map/config`、`map/geometry`（市界、标签避让、形状坐标反算）、`map/scale-bar`、`map/map-view` 等
+- 纯逻辑：`calculations`、`map-classification`、`format`、`charts/radar-options`（提示框要建元素，用 jsdom；卡片和详情的图例位置）、`detail-labels`、`palette`、`charts/useChartDetail`、`charts/useChartDownload`（jsdom，出图和保存换成假函数）、`map/map-export`（标签、导出图片的排版和图例）、`map/overlay-export`（导出图片里的比例尺）、`map/config`、`map/geometry`（市界、标签避让、形状坐标反算）、`map/scale-bar`、`map/map-view` 等
 - 组件（jsdom）：`ChartActions`、`ChartCard`、`ChartDetailDialog`、`DashboardPlot` 的键盘与悬停方式、`filters`、`DashboardShell`、`DashboardTimeline`、`DashboardCompass`（旋转只写在 svg 上）、`useDashboardTooltip`
-- 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`map/map-overlay.browser.test.tsx`（静止视角正北、指北针的角度跟着拖动变、二维降级正北、每像素米数的范围、不用角上插槽时不取样，1920×1080、1366×768、1280×720 和 ≤720 的地图尺寸下指北针、比例尺与标题、时间轴、图例不重叠，入场停下后指北针不转）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 和综合分析驾驶舱的 `LandSpaceView` 浏览器测试覆盖外壳和筛选、图表、地图的组合
+- 浏览器：`map/map.browser.test.tsx`（真实三维和二维降级，含不显示数值）、`map/map-overlay.browser.test.tsx`（静止视角正北、指北针的角度跟着拖动变、二维降级正北、每像素米数的范围、不用角上插槽时不取样，1920×1080、1366×768、1280×720 和 ≤720 的地图尺寸下指北针、比例尺与标题、时间轴、图例不重叠，入场停下后指北针不转，下载的图片底栏有每档图例的色块和比例尺、标题栏右侧有指北针，比例按截图那一刻的地图尺寸算）、`charts/radar-options.browser.test.tsx`（雷达在真实引擎里）、`charts/warm-up.browser.test.ts`；原驾驶舱的 `DashboardEntrance`、`DashboardCharts` 和综合分析驾驶舱的 `LandSpaceView` 浏览器测试覆盖外壳和筛选、图表、地图的组合
 - 原驾驶舱的回归：拆分前后用同一段临时测试把 96 个指标的卡片和详情配置、地图图例写成 JSON，逐字节比较（生成写法在 `local/land-space/baseline-generator.test.ts.txt`，不入库）

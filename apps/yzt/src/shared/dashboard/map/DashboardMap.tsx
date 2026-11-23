@@ -1,28 +1,32 @@
-import { computed, defineComponent, ref, watch, type PropType, type SlotsType, type VNode } from 'vue';
+import { computed, defineComponent, nextTick, ref, watch, type PropType, type SlotsType, type VNode } from 'vue';
 import { useElementSize, useResizeObserver } from '@vueuse/core';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { formatValue } from '../calculations';
 import type { MapClassification } from '../map-classification';
 import type { IndicatorMeta } from '../model';
 import { useImageExport } from '../export/useImageExport';
-import { imageWithTitle, saveImage } from '../export/image-export';
+import { saveImage } from '../export/image-export';
 import fonts from '../shell/DashboardFonts.module.scss';
 import chartStyles from '../charts/charts.module.scss';
 import type { MapCornerScope, MapLabel, MapValues, MapView } from './types';
 import { useDashboardMap } from './useDashboardMap';
-import { drawMapLabels } from './map-export';
+import { drawMapLabels, mapImage } from './map-export';
+import { captureExportParts, provideExportParts, type ExportPartCapture } from './export-parts';
 import { mapLegendLevels } from './config';
 import { DashboardTimeline } from './DashboardTimeline';
 import { DashboardMapFrame } from './DashboardMapFrame';
 import styles from './DashboardMap.module.scss';
 
-// 角上的叠加内容单独成一个组件：朝向和比例逐帧变化时只重绘它，不重绘整个地图外壳
+// 角上的叠加内容单独成一个组件：朝向和比例逐帧变化时只重绘它，不重绘整个地图外壳；
+// 放在里面的叠加元素（指北针、比例尺）向它登记自己在导出图片里的画法
 const MapCorner = defineComponent({
   name: 'DashboardMapCorner',
   props: {
-    render: { type: Function as PropType<() => VNode[] | undefined>, required: true }
+    render: { type: Function as PropType<() => VNode[] | undefined>, required: true },
+    parts: { type: Object as PropType<Set<ExportPartCapture>>, required: true }
   },
   setup(props) {
+    provideExportParts(props.parts);
     return () => props.render();
   }
 });
@@ -111,18 +115,34 @@ export const DashboardMap = defineComponent({
       }
     );
     const levels = computed(() => mapLegendLevels(props.classification, props.indicator));
+    // 两个角上的叠加元素在导出图片里的画法
+    const exportParts = { topRight: new Set<ExportPartCapture>(), bottomRight: new Set<ExportPartCapture>() };
 
-    /** 导出内容取点击时的快照，不受等待字体期间的筛选变化影响 */
+    /** 导出内容取点击时的快照，不受等待字体期间的筛选变化和拖动影响；图片里有图例和角上的叠加元素 */
     async function download(): Promise<void> {
       const exportTitle = props.title;
       const indicator = props.indicator;
       const showValues = props.showValues;
+      const legendLevels = levels.value;
       const filename = `江苏省-${props.activeYear}-${indicator.name}`;
       const blob = await exporting.run('map', async signal => {
         const snapshot = map.capture();
-        await exporting.waitForFonts(signal);
+        // 截图时场景按当前相机重画，朝向和比例可能刚变：等角上的内容按它重绘一次，再取叠加元素的画法
+        await nextTick();
+        signal.throwIfAborted();
+        const [, topParts, bottomParts] = await Promise.all([
+          exporting.waitForFonts(signal),
+          captureExportParts(exportParts.topRight),
+          captureExportParts(exportParts.bottomRight)
+        ]);
+        signal.throwIfAborted();
         drawMapLabels(snapshot, indicator, showValues);
-        return imageWithTitle(snapshot.canvas, exportTitle, '#D3EFFD');
+        return mapImage(snapshot.canvas, {
+          title: exportTitle,
+          legend: legendLevels,
+          topRight: topParts,
+          bottomRight: bottomParts
+        });
       });
       if (blob) {
         saveImage(blob, filename);
@@ -275,12 +295,13 @@ export const DashboardMap = defineComponent({
           {/* 角上的叠加元素跟图例一起入场；场景还没算出朝向和比例时 view 为 null */}
           {slots.topRight && (
             <div class={styles.topRight} data-enter="legend">
-              <MapCorner render={() => slots.topRight?.(map.view.value)} />
+              <MapCorner parts={exportParts.topRight} render={() => slots.topRight?.(map.view.value)} />
             </div>
           )}
           {slots.bottomRight && (
             <div ref={bottomRight} class={styles.bottomRight} data-enter="legend">
               <MapCorner
+                parts={exportParts.bottomRight}
                 render={() => slots.bottomRight?.({ view: map.view.value, maxWidth: bottomRightWidth.value })}
               />
             </div>

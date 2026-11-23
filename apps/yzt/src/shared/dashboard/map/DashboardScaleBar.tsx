@@ -1,5 +1,7 @@
 import { computed, defineComponent, ref } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
+import { useExportPart } from './export-parts';
+import { scaleBarExportPart } from './overlay-export';
 import { SCALE_UNIT_GAP, scaleBar } from './scale-bar';
 import styles from './overlay.module.scss';
 
@@ -9,7 +11,7 @@ function textWidth(text: string, fontSize: number): number {
   return (digits * 0.6 + text.length - digits) * fontSize;
 }
 
-/** 比例尺：深蓝、白交替的四段，上面写刻度，末尾写单位；按 maxWidth 选总长度 */
+/** 比例尺：深蓝、白交替的四段，上面写刻度，末尾写单位；按 maxWidth 选总长度；放在地图角上时一起画进导出图片 */
 export const DashboardScaleBar = defineComponent({
   name: 'DashboardScaleBar',
   props: {
@@ -19,6 +21,7 @@ export const DashboardScaleBar = defineComponent({
     maxWidth: { type: Number, required: true }
   },
   setup(props) {
+    useExportPart(() => scaleBarExportPart(props.metersPerPixel));
     const unit = ref<HTMLElement>();
     const fontSize = ref(14);
     // 字号随 --ui-scale 变，单位的宽度跟着变；量到时读一次字号
