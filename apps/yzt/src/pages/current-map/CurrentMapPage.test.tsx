@@ -1003,7 +1003,19 @@ describe('CurrentMapPage', () => {
 
   it('状态栏：比例尺和鼠标所在的经纬度，写法跟着坐标定位面板；鼠标离开画布时是中心；没有版权控件（ADR 0053 第 5 节）', async () => {
     const { wrapper, map } = await readyPage();
-    const status = () => wrapper.get('[data-map-status-bar]').element.firstElementChild?.textContent;
+    const bar = () => required(wrapper.get('[data-map-status-bar]').element.firstElementChild, '状态栏');
+    // 看得见的文字；留位用的看不见的部分（最宽的比例尺、鼠标在画布上时的"中心"）另外列出
+    const hiddenParts = () => [...bar().querySelectorAll('[aria-hidden="true"]')].map(element => element.textContent);
+    const status = () => {
+      const shown = bar().cloneNode(true);
+      if (!(shown instanceof Element)) {
+        throw new Error('状态栏不是元素');
+      }
+      for (const element of shown.querySelectorAll('[aria-hidden="true"]')) {
+        element.remove();
+      }
+      return shown.textContent;
+    };
     expect(map.options.attributionControl).toBe(false);
 
     // 假地图每 100 像素 1 度：画布中间相距 100 像素的两点在北纬 32° 相距约 94.6 千米，比例尺取 50 千米
@@ -1016,6 +1028,8 @@ describe('CurrentMapPage', () => {
     await new Promise(resolve => requestAnimationFrame(resolve));
     await nextTick();
     expect(status()).toBe(`50 km${formatLngLat([120, 31.5], 'dms')}`);
+    // 比例尺按最宽的留位，"中心"不显示时也占位：后面的请求状态不跟着左右移（用户 2026-11-22）
+    expect(hiddenParts()).toStrictEqual(['200 km', '视点高度 8888 km', '中心']);
 
     await button(wrapper, '坐标定位').trigger('click');
     await wrapper.get('input[value="decimal"]').setValue();
@@ -1555,7 +1569,7 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
   });
 
-  it('请求状态（ADR 0158）：瓦片加载超过 0.4 秒时状态栏右边出现条目、行内转圈；点开明细、点一行在当前图层里选中；都到了以后已加载完成', async () => {
+  it('请求状态（ADR 0158）：瓦片加载超过 0.4 秒时行内转圈、0.8 秒时状态栏右边出现条目；点开明细、点一行在当前图层里选中；都到了以后已加载完成', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
     map.fire('dataloading', parcelTile('1'));
@@ -1654,10 +1668,14 @@ describe('CurrentMapPage', () => {
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('有瓦片加载失败');
 
-    // 下一轮请求开始时和明细一起清掉
+    // 失败留到下一轮结束（用户 2026-11-22）：下一轮开始时行内、条目都不变，没有失败地结束后和明细一起清掉
     map.fire('dataloading', parcelTile('2'));
-    await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status]').exists()).toBe(false));
+    await settle();
+    expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists()).toBe(true);
+    expect(wrapper.get('[data-request-chip]').text()).toBe('2 项加载失败');
     map.fire('sourcedata', parcelTile('2'));
+    await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status]').exists()).toBe(false));
+    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
   });
 
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {

@@ -60,6 +60,21 @@
   border-top: 0;
 }
 
+// 留位（reserve）：读数和最宽的样子叠在同一格里，格子按宽的那个，读数贴左边
+.reserved {
+  display: inline-grid;
+  flex: none;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+
+// 只占位置、看不见：最宽的样子，鼠标在画布上时的"中心"
+.sample {
+  visibility: hidden;
+}
+
 // 量尺：三种排法各排一份，量出宽度；不占位置、看不见，宽度按内容
 .rulers {
   position: absolute;

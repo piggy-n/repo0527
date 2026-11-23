@@ -98,6 +98,7 @@ async function mountPanel({
   const requests: RequestStatus = {
     items: computed(() => []),
     now: shallowRef(0),
+    display: shallowRef(null),
     loadingKeys: computed(() => loadingKeys.value),
     failedKeys: computed(() => failedKeys.value),
     kinds: computed(() => ALL_REQUEST_KINDS)

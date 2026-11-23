@@ -3,15 +3,20 @@ import type { IconName } from '../../icons/SvgIcon';
 
 // 地图数据的请求状态（ADR 0158）：状态栏右边的条目和点开的明细，二维瓦片按数据源、三维模型按模型；接口请求不算
 
-/** 加载超过这么久才显示（毫秒）：快的请求不打扰 */
-export const SHOW_DELAY = 400;
-/** 显示过的加载结束后，"已加载完成"留多久（毫秒） */
+/** 图层名称后面的转圈：加载超过这么久才显示（毫秒），快的请求不打扰 */
+export const INLINE_DELAY = 400;
+/** 状态栏的条目：有加载超过这么久才出现（毫秒，用户 2026-11-22 从 0.4 秒改成 0.8 秒） */
+export const CHIP_DELAY = 800;
+/**
+ * 条目显示着的加载都结束后，"已加载完成"留多久（毫秒）：结束不早于出现，所以条目出现以后至少留这么久（用户 2026-11-22）
+ */
 export const DONE_HOLD = 1500;
 /** 加载超过这么久在明细里写等了几秒（毫秒） */
 export const SLOW_AFTER = 5000;
 /**
  * 模型读完索引以后，渲染器在下一次选瓦片时才开始请求块或暂缓请求（ADR 0162）：两段相隔不到这么久算同一段，读完、还没有块时
- * 也等这么久再算结束，转圈和条目不闪（毫秒）。还没显示出来的读索引，等待不超过开始后 SHOW_DELAY，不会因为等这一下显示出来
+ * 也等这么久再算结束，转圈和条目不闪（毫秒）。等待不越过读索引还没到的下一道门槛（INLINE_DELAY、CHIP_DELAY），
+ * 不会因为等这一下显示出来
  */
 export const MODEL_SETTLE = 300;
 
@@ -52,6 +57,11 @@ export interface RequestItem {
   readonly requested: number;
   readonly loaded: number;
   readonly failed: number;
+  /**
+   * 上一轮结束时失败的张数、块数：这一轮还在加载时留着，其他时候为 0（失败留到下一轮结束才更新，用户 2026-11-22）；
+   * 只有二维瓦片和瓦片集的块有，由 withPreviousFailures 填上
+   */
+  readonly previousFailed: number;
   /** 高斯泼溅当前视角的细节到了多少（0～1）；其他为 null */
   readonly detail: number | null;
   readonly startedAt: number;
@@ -77,7 +87,7 @@ export function modelRequestItem(
   activity: SceneActivity | null,
   now: number
 ): RequestItem {
-  const common = { key, name, icon, detail: null };
+  const common = { key, name, icon, detail: null, previousFailed: 0 };
   const readAt = phase.finishedAt;
   if (phase.state !== 'ready' || readAt === null) {
     const failed = phase.state === 'failed' ? 1 : 0;
@@ -85,11 +95,10 @@ export function modelRequestItem(
   }
   const current = activity && (activity.finishedAt === null || activity.finishedAt >= phase.startedAt) ? activity : null;
   if (!current) {
-    // 读索引已经显示出来（超过 SHOW_DELAY）的等到读完后 MODEL_SETTLE；还没显示的最多等到开始后 SHOW_DELAY，不因为等这一下显示出来
+    // 等到读完后 MODEL_SETTLE，但不越过读索引还没到的下一道门槛（行内转圈、条目）：不因为等这一下显示出来
+    const threshold = [INLINE_DELAY, CHIP_DELAY].find(delay => readAt - phase.startedAt <= delay);
     const until =
-      readAt - phase.startedAt > SHOW_DELAY
-        ? readAt + MODEL_SETTLE
-        : Math.min(readAt + MODEL_SETTLE, phase.startedAt + SHOW_DELAY);
+      threshold === undefined ? readAt + MODEL_SETTLE : Math.min(readAt + MODEL_SETTLE, phase.startedAt + threshold);
     const finishedAt = now < until ? null : readAt;
     return { ...common, kind: 'model', requested: 0, loaded: 1, failed: 0, startedAt: phase.startedAt, finishedAt };
   }
@@ -135,24 +144,94 @@ export type RequestSummary =
 
 export const isPending = (item: RequestItem): boolean => item.finishedAt === null;
 
-// 显示过的：加载超过 SHOW_DELAY 的
-const wasShown = (item: RequestItem, now: number): boolean => (item.finishedAt ?? now) - item.startedAt > SHOW_DELAY;
+/**
+ * 有失败（用户 2026-11-22，失败留到下一轮结束才更新）：结束了的看这一轮；还在加载的看上一轮，这一轮的失败等它结束才算。
+ * 条目、明细的"有失败"一组和行内的"有瓦片加载失败"都按它
+ */
+export const hasFailure = (item: RequestItem): boolean => (isPending(item) ? item.previousFailed : item.failed) > 0;
+
+// 能留到下一轮结束的失败：二维瓦片和瓦片集的块；模型读索引失败后的重试是新的一次，不留
+const carriesFailure = (item: RequestItem): boolean => item.kind === 'tiles' || item.kind === 'blocks';
+
+/** 每项上一轮结束时失败的张数、块数，键是项的 key；没有失败的不记 */
+export type FailureMemory = ReadonlyMap<string, number>;
 
 /**
- * 状态栏的条目（原型 DESIGN.v1"请求状态"）：有加载超过 0.4 秒的时显示加载中、几项和完成的比例；没有在显示的加载、有失败时
- * 显示几项失败，直到下一轮请求把失败清掉；显示过的加载结束后 1.5 秒内显示"已加载完成"；明细开着时至少显示"已加载完成"。
- * 关掉的一类不算（ADR 0167）：都关掉时不显示
+ * 记下各项结束的一轮有没有失败：结束了的按这一轮记或清掉，还在加载的不变；不在了的项、模型重新读索引时忘掉。
+ * 内容没变时还是原来的对象
+ */
+export function nextFailureMemory(previous: FailureMemory, rounds: readonly RequestItem[]): FailureMemory {
+  const next = new Map<string, number>();
+  for (const item of rounds) {
+    if (!carriesFailure(item)) {
+      continue;
+    }
+    const failed = isPending(item) ? (previous.get(item.key) ?? 0) : item.failed;
+    if (failed > 0) {
+      next.set(item.key, failed);
+    }
+  }
+  const same = next.size === previous.size && [...next].every(([key, failed]) => previous.get(key) === failed);
+  return same ? previous : next;
+}
+
+/** 还在加载的项带上上一轮的失败（previousFailed）；其他项原样 */
+export function withPreviousFailures(rounds: readonly RequestItem[], memory: FailureMemory): readonly RequestItem[] {
+  return rounds.map(item => {
+    const previousFailed = isPending(item) && carriesFailure(item) ? (memory.get(item.key) ?? 0) : 0;
+    return previousFailed === item.previousFailed ? item : { ...item, previousFailed };
+  });
+}
+
+/**
+ * 状态栏的条目这一次显示（用户 2026-11-22，合并显示）：从出现到隐藏算一次。settledAt 是这一次里加载都结束的时候，
+ * 还有在加载的时为 null
+ */
+export interface RequestDisplay {
+  readonly settledAt: number | null;
+}
+
+// 这一次显示里还有在加载的
+const SHOWING: RequestDisplay = Object.freeze({ settledAt: null });
+
+/**
+ * 条目的显示往下走一步：没在显示时，有加载超过 CHIP_DELAY 的才开始；显示着、"已加载完成"留着的时候又开始的加载算同一次，
+ * 不先隐藏。加载都结束以后再留 DONE_HOLD 才结束，所以出现以后至少留 1.5 秒。按项算，不看显示哪几类；
+ * 没有变化时还是原来的对象
+ */
+export function nextRequestDisplay(
+  previous: RequestDisplay | null,
+  items: readonly RequestItem[],
+  now: number
+): RequestDisplay | null {
+  const pending = items.filter(isPending);
+  if (!previous) {
+    return pending.some(item => now - item.startedAt > CHIP_DELAY) ? SHOWING : null;
+  }
+  if (pending.length > 0) {
+    return SHOWING;
+  }
+  const settledAt = previous.settledAt ?? now;
+  if (now >= settledAt + DONE_HOLD) {
+    return null;
+  }
+  return previous.settledAt === settledAt ? previous : { settledAt };
+}
+
+/**
+ * 状态栏的条目（原型 DESIGN.v1"请求状态"）：这一次显示里（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、几项和完成的
+ * 比例；没有在显示的加载、有失败（hasFailure）时显示几项失败，留到下一轮结束；这一次显示里加载都结束了显示"已加载完成"，
+ * 明细开着时至少显示"已加载完成"。关掉的一类不算（ADR 0167）：都关掉时不显示
  */
 export function requestSummary(
   items: readonly RequestItem[],
-  now: number,
+  display: RequestDisplay | null,
   open = false,
   kinds: RequestKinds = ALL_REQUEST_KINDS
 ): RequestSummary {
   const pending = kinds.loading ? items.filter(isPending) : [];
-  // 关掉加载中时，还在加载、已有失败的项也不算：明细里它在加载中一组，不在有失败一组
-  const failed = kinds.failed ? items.filter(item => item.failed > 0 && (kinds.loading || !isPending(item))) : [];
-  if (pending.some(item => wasShown(item, now))) {
+  const failed = kinds.failed ? items.filter(hasFailure) : [];
+  if (pending.length > 0 && (display !== null || open)) {
     const counted = pending.filter(item => (item.kind === 'tiles' || item.kind === 'blocks') && item.requested > 0);
     const requested = counted.reduce((sum, item) => sum + item.requested, 0);
     const finished = counted.reduce((sum, item) => sum + item.loaded + item.failed, 0);
@@ -170,15 +249,17 @@ export function requestSummary(
   if (!kinds.done || (!kinds.loading && items.some(isPending))) {
     return { kind: 'hidden' };
   }
-  const recent = items.some(
-    item => item.finishedAt !== null && item.failed === 0 && wasShown(item, now) && now - item.finishedAt < DONE_HOLD
-  );
+  // 这一次显示里要有成功结束的项（关掉加载失败时，都失败了不说完成）；项都移走了的留到这一次结束
+  const settled = items.length === 0 || items.some(item => !isPending(item) && item.failed === 0);
   // 明细开着时留着条目；有项、但关掉的几类把它们都藏了时不留，免得明细是空的
   const shown = items.length === 0 || Object.values(requestGroups(items, kinds)).some(group => group.length > 0);
-  return recent || (open && shown) ? { kind: 'done' } : { kind: 'hidden' };
+  return (display !== null && settled) || (open && shown) ? { kind: 'done' } : { kind: 'hidden' };
 }
 
-/** 明细的三组：加载中、有失败（已经结束的）、已完成；组内按开始的先后。关掉的一类是空的（ADR 0167） */
+/**
+ * 明细的三组：加载中、有失败（hasFailure）、已完成；组内按开始的先后。还在加载、带着上一轮失败的项在加载中、有失败两组里都有，
+ * 有失败一组写上一轮的失败（failedRowText）。关掉的一类是空的（ADR 0167）
+ */
 export function requestGroups(
   items: readonly RequestItem[],
   kinds: RequestKinds = ALL_REQUEST_KINDS
@@ -190,14 +271,14 @@ export function requestGroups(
   const sorted = items.toSorted((a, b) => a.startedAt - b.startedAt);
   return {
     loading: kinds.loading ? sorted.filter(isPending) : [],
-    failed: kinds.failed ? sorted.filter(item => !isPending(item) && item.failed > 0) : [],
+    failed: kinds.failed ? sorted.filter(hasFailure) : [],
     done: kinds.done ? sorted.filter(item => !isPending(item) && item.failed === 0) : []
   };
 }
 
-/** 明细里有失败、已经结束的项（ADR 0167）：行内的"加载失败"用同一份，下一轮请求开始时清掉 */
+/** 明细里有失败的项（ADR 0167）：行内的"有瓦片加载失败"用同一份，留到下一轮结束（用户 2026-11-22） */
 export function failedRequestKeys(items: readonly RequestItem[]): ReadonlySet<string> {
-  return new Set(items.filter(item => !isPending(item) && item.failed > 0).map(item => item.key));
+  return new Set(items.filter(hasFailure).map(item => item.key));
 }
 
 /** 明细里一行的状态 */
@@ -246,10 +327,19 @@ export function requestRowText(item: RequestItem, now: number): RequestRowText {
   return { text: `${item.requested} ${unit}`, progress: null, tone: 'normal', waited: null };
 }
 
+/** 有失败一组里一行的状态：还在加载的写上一轮失败的张数、块数，留到这一轮结束（用户 2026-11-22）；结束了的同 requestRowText */
+export function failedRowText(item: RequestItem, now: number): RequestRowText {
+  if (!isPending(item)) {
+    return requestRowText(item, now);
+  }
+  const unit = item.kind === 'blocks' ? '块' : '张';
+  return { text: `${item.previousFailed} ${unit}失败`, progress: null, tone: 'error', waited: null };
+}
+
 /**
  * 几个数据源这一轮的请求合成一项：从最早开始，都结束时才结束。张数、开始和结束只算最近一段：按开始的先后连起时间上重叠的，
  * 和最后一段不重叠的（上一轮早已结束、结果还留着的数据源，如打开地名时的底图）不算，免得开始时间拉到几分钟前；
- * 失败的张数算全部数据源的，失败按数据源显示到它的下一次请求为止（ADR 0158）
+ * 失败的张数算全部数据源的，按数据源算到它的下一次请求为止（ADR 0158）；显示时再留到合起来的这一项下一轮结束（hasFailure）
  */
 export function mergedActivity(activities: readonly SourceActivity[]): SourceActivity | null {
   if (activities.length === 0) {

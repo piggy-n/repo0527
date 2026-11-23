@@ -7,8 +7,10 @@ import { SvgIcon } from '../../icons/SvgIcon';
 import { useLightDismiss } from '../popover/useLightDismiss';
 import { type RequestPopoverPlacement, requestPopoverPlacement } from './request-popover';
 import {
+  failedRowText,
   type RequestItem,
   requestGroups,
+  type RequestRowText,
   requestRowText,
   requestSummary
 } from './request-status';
@@ -22,7 +24,7 @@ const DETAIL_HINT = '高斯泼溅只能知道当前视角的细节加载了多�
  * 状态栏右边的请求状态（ADR 0158，原型 `/design.local/current-map-layers/`）：空闲时不显示；点开是"数据加载"的明细，
  * 分加载中、有失败、已完成三组。点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点条目关闭。
  * 明细贴着资源图层面板的右边、底边在状态栏上方（requestPopoverPlacement），不跟着条目左右移（用户 2026-11-16）。
- * 时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
+ * 条目有最小宽度，文字变了不跳（用户 2026-11-22）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
  */
 export const RequestStatusChip = defineComponent({
   name: 'RequestStatusChip',
@@ -44,7 +46,7 @@ export const RequestStatusChip = defineComponent({
     const open = ref(false);
     // 关掉的一类不在条目和明细里（ADR 0167）
     const summary = computed(() =>
-      requestSummary(props.status.items.value, props.status.now.value, open.value, props.status.kinds.value)
+      requestSummary(props.status.items.value, props.status.display.value, open.value, props.status.kinds.value)
     );
     const groups = computed(() => requestGroups(props.status.items.value, props.status.kinds.value));
     // 条目不显示了（没有在加载、没有失败）且明细关着：什么也不留
@@ -139,13 +141,13 @@ export const RequestStatusChip = defineComponent({
       );
     };
 
-    const renderRow = (item: RequestItem) => {
-      const { text, progress, tone, waited } = requestRowText(item, props.status.now.value);
+    // 带着上一轮失败、还在加载的项在加载中、有失败两组里都有：行的 key 带上组名
+    const renderRow = (group: string, item: RequestItem, { text, progress, tone, waited }: RequestRowText) => {
       const selectable = props.selectable(item.key);
       const failedModel = item.kind === 'model' && item.failed > 0;
       return (
         <li
-          key={item.key}
+          key={`${group}:${item.key}`}
           class={[styles.row, selectable && styles.selectable]}
           title={selectable ? '在图层列表中选中' : undefined}
           data-request-row={item.key}
@@ -198,14 +200,18 @@ export const RequestStatusChip = defineComponent({
       );
     };
 
-    const renderGroup = (title: string, items: readonly RequestItem[]) =>
+    const renderGroup = (
+      title: string,
+      items: readonly RequestItem[],
+      rowText: (item: RequestItem, now: number) => RequestRowText
+    ) =>
       items.length === 0
         ? []
         : [
             <li key={`group:${title}`} class={styles.group}>
               {title}
             </li>,
-            ...items.map(renderRow)
+            ...items.map(item => renderRow(title, item, rowText(item, props.status.now.value)))
           ];
 
     const renderPopover = () => {
@@ -224,9 +230,9 @@ export const RequestStatusChip = defineComponent({
             </button>
           </div>
           <ul class={styles.list}>
-            {renderGroup('加载中', loading)}
-            {renderGroup('有失败', failed)}
-            {renderGroup('已完成', done)}
+            {renderGroup('加载中', loading, requestRowText)}
+            {renderGroup('有失败', failed, failedRowText)}
+            {renderGroup('已完成', done, requestRowText)}
             {props.status.items.value.length === 0 && <li class={styles.empty}>当前视野没有要加载的数据</li>}
           </ul>
         </div>

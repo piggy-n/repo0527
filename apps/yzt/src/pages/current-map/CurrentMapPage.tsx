@@ -505,10 +505,10 @@ export const CurrentMapPage = defineComponent({
                 />
               </div>
             )}
-            {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
+            {/* 状态栏在左下角、左侧面板下面（ADR 0095）；按最宽的读数留位，后面的请求状态不跟着左右移（用户 2026-11-22） */}
             {!underground && (
               <div key="bottom" class={styles.bottom}>
-                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format}>
+                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} reserve>
                   {{
                     after: () => [
                       <RequestStatusChip

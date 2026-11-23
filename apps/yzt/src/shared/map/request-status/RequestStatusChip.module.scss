@@ -1,16 +1,21 @@
 // 状态栏右边的请求状态（ADR 0158）：和状态栏同高、同底色；明细浮层贴着资源图层面板
 
+// 弹性容器：块里放行内的按钮会形成行框，按页面的字号、行高撑到 25 像素，条目比状态栏高出 1 像素（用户 2026-11-22）
 .root {
   position: relative;
+  display: flex;
   flex: none;
   pointer-events: auto;
 }
 
+// 最小宽度放得下带红点的"正在加载 3 项 · 100%"，文字变了不跳（用户 2026-11-22）；行高、盒模型同状态栏
 .chip {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  box-sizing: border-box;
+  min-width: 160px;
   height: 24px;
   padding: 0 8px;
   overflow: hidden;
@@ -21,6 +26,7 @@
   color: var(--color-text-regular);
   font: inherit;
   font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;

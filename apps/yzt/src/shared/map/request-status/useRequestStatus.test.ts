@@ -146,7 +146,7 @@ describe('useRequestStatus', () => {
     await nextTick();
     const quiet = () =>
       ctx.status.loadingKeys.value.size === 0 &&
-      requestSummary(ctx.status.items.value, ctx.status.now.value).kind === 'hidden';
+      requestSummary(ctx.status.items.value, ctx.status.display.value).kind === 'hidden';
     // 时钟每 250 毫秒走一格：走到 500、750 都不出现
     await ctx.advance(200);
     expect(quiet()).toBe(true);
@@ -161,5 +161,67 @@ describe('useRequestStatus', () => {
     await ctx.advance(500);
     expect(ctx.status.items.value[0]).toMatchObject({ kind: 'model', startedAt: 0, finishedAt: 0 });
     expect(ctx.status.loadingKeys.value.size).toBe(0);
+  });
+});
+
+// 条目现在显示什么
+const summary = ({ status }: ReturnType<typeof setup>) => requestSummary(status.items.value, status.display.value).kind;
+
+describe('useRequestStatus 的条目（用户 2026-11-22）', () => {
+  it('行内转圈 0.4 秒、条目 0.8 秒才出现；出现以后又开始的加载直接是加载中，不先隐藏；都结束后留 1.5 秒，时钟停下', async () => {
+    using ctx = setup([tiles('a', 0)]);
+    await ctx.advance(500);
+    expect([...ctx.status.loadingKeys.value]).toStrictEqual(['a']);
+    expect(summary(ctx)).toBe('hidden');
+    await ctx.advance(250);
+    expect(summary(ctx)).toBe('hidden');
+    await ctx.advance(250);
+    expect(summary(ctx)).toBe('loading');
+
+    // 1000 结束：已加载完成
+    ctx.sources.value = [tiles('a', 0, 1000)];
+    await nextTick();
+    expect(summary(ctx)).toBe('done');
+    // 1500 平移，新的一轮刚开始：还是同一次显示，直接回到加载中
+    await ctx.advance(500);
+    ctx.sources.value = [tiles('a', 1500)];
+    await nextTick();
+    expect(summary(ctx)).toBe('loading');
+    expect(ctx.status.loadingKeys.value.size).toBe(0);
+    ctx.sources.value = [tiles('a', 1500, 1600)];
+    await nextTick();
+    expect(summary(ctx)).toBe('done');
+
+    // 结束后 1.5 秒内都是已加载完成，之后隐藏、时钟停下
+    await ctx.advance(1250);
+    expect(summary(ctx)).toBe('done');
+    await ctx.advance(500);
+    expect(summary(ctx)).toBe('hidden');
+    const stopped = ctx.status.now.value;
+    await ctx.advance(1000);
+    expect(ctx.status.now.value).toBe(stopped);
+  });
+
+  it('失败留到下一轮结束：下一轮开始时条目、行内都不变，结束后按这一轮更新；集合内容不变时是同一个对象', async () => {
+    using ctx = setup([tiles('a', 0)]);
+    ctx.sources.value = [tiles('a', 0, 100, 2)];
+    await nextTick();
+    const failed = ctx.status.failedKeys.value;
+    expect([...failed]).toStrictEqual(['a']);
+    expect(summary(ctx)).toBe('failed');
+
+    // 下一轮开始，这一轮还没有结果
+    await ctx.advance(250);
+    ctx.sources.value = [tiles('a', 250)];
+    await nextTick();
+    expect(ctx.status.failedKeys.value).toBe(failed);
+    expect(summary(ctx)).toBe('failed');
+    expect(ctx.status.items.value[0]).toMatchObject({ previousFailed: 2, finishedAt: null });
+
+    // 这一轮没有失败地结束：一起清掉
+    ctx.sources.value = [tiles('a', 250, 400)];
+    await nextTick();
+    expect(ctx.status.failedKeys.value.size).toBe(0);
+    expect(summary(ctx)).toBe('hidden');
   });
 });
