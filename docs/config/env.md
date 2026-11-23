@@ -56,6 +56,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_LAYER_HINT_COVERING` | `true` | 同上 | 盖住模型：三维里排在模型上面、接近不透明的面（ADR 0161） |
 | `VITE_MAP_MOUSE_2D` | `maplibre` | `appConfig.mapMouse`、`MAP_MOUSE_SCHEMES` | 二维的鼠标操作方式（ADR 0168）：`maplibre` 是 MapLibre 自带的（左键拖平移，右键拖、Ctrl + 左键拖旋转和倾斜）；`cesium` 是 Cesium 式（左键拖平移，右键拖缩放，中键拖、Ctrl + 左键拖旋转和倾斜）。两种都是滚轮朝鼠标缩放。只管经 `withMapRuntime` 的地图页，写错时启动就报错 |
 | `VITE_MAP_MOUSE_3D` | `cesium` | 同上 | 三维的鼠标操作方式，取值同上；`cesium` 是旧系统三维的手感（用户 2026-11-17） |
+| `VITE_LAYERS_PER_DIMENSION` | `true` | `appConfig.layersPerDimension`，现状底图交给 `useResourceLayers` 的 `perDimension` | 现状底图的二维、三维各自维护已添加的资源（ADR 0169，用户 2026-11-22）。`true` 时互相隔离：各有自己的加入、顺序、显隐、透明度、年份、标注开关和批量年份，二维的资源目录不列出三维模型、没有"全部、二维资源、三维模型"的标签；`false` 时二三维共用一套（ADR 0157、0161），二维里模型行变淡。符号和标注的样式两种都共用。从 `true` 改回 `false` 时共用的是二维那一套加上三维模型，三维那一套留在偏好里，再打开时还在。只由部署方配置，内网继承，写错时启动就报错 |
 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `false` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，各级都请求瓦片，低级别的瓦片可能有十几 MB。**现在暂时关着：** 用户 2026-11-04 确定先不打开（`88c4a99` 改成 `false`），层级表和部署的文件都不生效；层级表和实测的瓦片大小也还对不上（水域面层不在表里，永久基本农田图斑的 8 级偏低）。打开前按 [backlog](../backlog.md)"最小显示级别"两条重测层级，再在真实后端上换一次文件确认 |
 
 三维引擎不再用变量选择：Cesium 引擎已移除，`VITE_MAP_3D_ENGINE` 跟着删掉，三维只有 MapLibre + Three.js（ADR 0153）。三维里显示资源图层、点/框选识别，由 app 注入的能力决定，没有开关（ADR 0157）。

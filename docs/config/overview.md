@@ -28,6 +28,7 @@
 | 图层的行内提示显示哪几类 | `VITE_LAYER_HINTS_ENABLED`（总开关）和 6 个 `VITE_LAYER_HINT_*`（每类） | 0167 |
 | 资源的最小显示级别 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | 0132、0137 |
 | 二维、三维的鼠标操作方式 | `VITE_MAP_MOUSE_2D`、`VITE_MAP_MOUSE_3D` | 0168 |
+| 现状底图的二维、三维各自维护已添加的资源 | `VITE_LAYERS_PER_DIMENSION` | 0169 |
 
 三维引擎不再用变量选择，只有 MapLibre + Three.js（ADR 0153）。
 
