@@ -94,6 +94,39 @@ describe('MapStatusBar', () => {
   });
 });
 
+// 看得见的那一条里看不见的部分：最宽的样子、鼠标在画布上时的"中心"
+const hiddenParts = (wrapper: Wrapper) =>
+  [...(rootOf(wrapper).firstElementChild?.querySelectorAll('[aria-hidden="true"]') ?? [])].map(
+    element => element.textContent
+  );
+
+describe('MapStatusBar 的留位（reserve，用户 2026-11-22）', () => {
+  it('第一段叠上二三维最宽的样子（80 像素的线段和最宽的长度、最宽的视点高度），"中心"不显示时也占位；看得见的读数不变', async () => {
+    const fake = fakeReadout();
+    const wrapper = mount(MapStatusBar, { props: { readout: fake.readout, format: 'decimal', reserve: true } });
+    expect(hiddenParts(wrapper)).toStrictEqual(['200 km', '视点高度 8888 km', '中心']);
+    const sample = required(rootOf(wrapper).firstElementChild?.querySelector('[aria-hidden="true"]'), '最宽的样子');
+    expect(sample.querySelector('[style*="width: 80px"]')).not.toBeNull();
+    expect(shown(wrapper)).toContain('10 km');
+
+    fake.position.value = { lngLat: POINT, center: true };
+    await nextTick();
+    expect(hiddenParts(wrapper)).toStrictEqual(['200 km', '视点高度 8888 km']);
+
+    // 三维：同样的两个样子，切换维度时宽度不变
+    fake.scale.value = null;
+    fake.eye.value = 420_300;
+    await nextTick();
+    expect(hiddenParts(wrapper)).toStrictEqual(['200 km', '视点高度 8888 km']);
+    expect(shown(wrapper)).toContain('视点高度 420 km');
+  });
+
+  it('不开时没有看不见的部分（其他地图页不变）', () => {
+    const { wrapper } = mountBar('decimal');
+    expect(hiddenParts(wrapper)).toStrictEqual([]);
+  });
+});
+
 // jsdom 没有布局，也没有 ResizeObserver：替身按被观察的元素记下回调，用例设定宽度后手动触发
 const observed = new Map<Element, (width: number) => void>();
 

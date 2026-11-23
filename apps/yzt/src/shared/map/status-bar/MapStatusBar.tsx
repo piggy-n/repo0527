@@ -2,7 +2,14 @@ import { EYE_HEIGHT, type WalkView } from '@mx/map-core';
 import { useShownElementSize } from '@mx/map-vue';
 import { computed, defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
-import { eyeText, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
+import {
+  eyeText,
+  fitStatusLayout,
+  SCALE_MAX_WIDTH,
+  type ScaleBar,
+  type StatusLayout,
+  type ViewAngles
+} from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
 import styles from './MapStatusBar.module.scss';
 
@@ -12,6 +19,10 @@ const AFTER_GAP = 8;
 // 每种排法最多显示几段
 const LAYOUT_SEGMENTS: Readonly<Record<StatusLayout, number>> = { full: 3, 'no-angles': 2, 'scale-only': 1 };
 
+// 留位时按最宽的读数：比例尺在最小级别 5 级是"200 km"，三维的视点高度在 5～8 级是四位数的千米
+const SCALE_LABEL_SAMPLE = '200 km';
+const EYE_SAMPLE = eyeText(8_888_000);
+
 // 段之间加分隔线；一段都没有时不显示
 const joined = (segments: readonly VNode[]) =>
   segments.length === 0 ? null : (
@@ -20,7 +31,7 @@ const joined = (segments: readonly VNode[]) =>
     </div>
   );
 
-const scaleSegment = ({ width, label }: ScaleBar) => (
+const scaleSegment = ({ width, label }: Pick<ScaleBar, 'width' | 'label'>) => (
   <span class={styles.segment}>
     <span class={styles.scaleBar} style={{ width: `${width}px` }} />
     {label}
@@ -29,6 +40,20 @@ const scaleSegment = ({ width, label }: ScaleBar) => (
 
 // 三维代替比例尺的一段（ADR 0080 第 6 节）
 const eyeSegment = (meters: number) => <span class={styles.segment}>{eyeText(meters)}</span>;
+
+// 第一段留位：读数和二三维最宽的样子（80 像素的线段加最宽的长度、最宽的视点高度）叠在同一格里，格子按最宽的那个，
+// 读数贴左边；切换维度时宽度也不变
+const reserved = (content: VNode) => (
+  <span class={styles.reserved}>
+    {content}
+    <span class={styles.sample} aria-hidden="true">
+      {scaleSegment({ width: SCALE_MAX_WIDTH, label: SCALE_LABEL_SAMPLE })}
+    </span>
+    <span class={styles.sample} aria-hidden="true">
+      <span class={styles.segment}>{EYE_SAMPLE}</span>
+    </span>
+  </span>
+);
 
 // 旋转、俯仰都为 0 时没有这一段
 const anglesSegment = ({ bearing, pitch }: ViewAngles) =>
@@ -57,7 +82,12 @@ export const MapStatusBar = defineComponent({
   props: {
     readout: { type: Object as PropType<MapReadout>, required: true },
     /** 经纬度的写法，跟着坐标定位面板 */
-    format: { type: String as PropType<CoordinateFormat>, required: true }
+    format: { type: String as PropType<CoordinateFormat>, required: true },
+    /**
+     * 第一段按二三维最宽的读数留位（比例尺的线段按 80 像素），"中心"不显示时也占着位置，不做字距调整（经纬度定宽）：缩放、
+     * 鼠标移动和进出画布、切换维度时宽度不变，插槽 after 里的内容不跟着左右移（现状底图的请求状态，用户 2026-11-22）
+     */
+    reserve: { type: Boolean, default: false }
   },
   slots: Object as SlotsType<{ after?: () => VNode[] }>,
   setup(props, { slots }) {
@@ -81,12 +111,28 @@ export const MapStatusBar = defineComponent({
       )
     );
 
+    // 留位时"中心"一直在，鼠标在画布上时看不见
     const positionSegment = ({ lngLat, center }: ReadoutPosition) => (
       <span class={styles.segment}>
-        {center && <span class={styles.muted}>中心</span>}
+        {(center || props.reserve) && (
+          <span class={[styles.muted, !center && styles.sample]} aria-hidden={center ? undefined : 'true'}>
+            中心
+          </span>
+        )}
         {formatLngLat(lngLat, props.format)}
       </span>
     );
+
+    // 第一段：二维是比例尺，三维是视点高度；留位时叠上最宽的样子
+    const firstSegment = (scale: ScaleBar | null, eye: number | null): VNode | null => {
+      let segment: VNode | null = null;
+      if (scale) {
+        segment = scaleSegment(scale);
+      } else if (eye !== null) {
+        segment = eyeSegment(eye);
+      }
+      return segment && props.reserve ? reserved(segment) : segment;
+    };
 
     // 按排法取出要显示的几段
     const bar = (shown: StatusLayout) => {
@@ -97,10 +143,9 @@ export const MapStatusBar = defineComponent({
       }
       const segments: VNode[] = [];
       // 排法里的 scale-only 指只留第一段：二维是比例尺，三维是视点高度
-      if (scale.value) {
-        segments.push(scaleSegment(scale.value));
-      } else if (eye.value !== null) {
-        segments.push(eyeSegment(eye.value));
+      const first = firstSegment(scale.value, eye.value);
+      if (first) {
+        segments.push(first);
       }
       if (shown !== 'scale-only' && position.value) {
         segments.push(positionSegment(position.value));
@@ -113,7 +158,7 @@ export const MapStatusBar = defineComponent({
     };
 
     return () => (
-      <div ref={root} class={styles.root} data-map-status-bar>
+      <div ref={root} class={[styles.root, props.reserve && styles.reserving]} data-map-status-bar>
         {bar(layout.value)}
         {slots.after && (
           <div ref={after} class={styles.after}>

@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, shallowRef } from 'vue';
-import { ALL_REQUEST_KINDS, type RequestItem, type RequestKinds } from './request-status';
+import { ALL_REQUEST_KINDS, type RequestDisplay, type RequestItem, type RequestKinds } from './request-status';
 import { RequestStatusChip } from './RequestStatusChip';
 import type { RequestStatus } from './useRequestStatus';
 
@@ -13,20 +13,31 @@ const item = (key: string, extra: Partial<RequestItem> = {}): RequestItem => ({
   requested: 10,
   loaded: 4,
   failed: 0,
+  previousFailed: 0,
   detail: null,
   startedAt: 0,
   finishedAt: null,
   ...extra
 });
 
-// 状态由用例直接改
-function mountChip(initial: readonly RequestItem[], now = 1000, shown: RequestKinds = ALL_REQUEST_KINDS) {
+// 条目这一次显示着、还有在加载的
+const SHOWING: RequestDisplay = { settledAt: null };
+
+// 状态由用例直接改；默认条目显示着
+function mountChip(
+  initial: readonly RequestItem[],
+  now = 1000,
+  shown: RequestKinds = ALL_REQUEST_KINDS,
+  shownDisplay: RequestDisplay | null = SHOWING
+) {
   const items = shallowRef(initial);
   const clock = shallowRef(now);
   const kinds = shallowRef(shown);
+  const display = shallowRef(shownDisplay);
   const status: RequestStatus = {
     items: computed(() => items.value),
     now: clock,
+    display,
     loadingKeys: computed(() => new Set<string>()),
     failedKeys: computed(() => new Set<string>()),
     kinds: computed(() => kinds.value)
@@ -35,7 +46,7 @@ function mountChip(initial: readonly RequestItem[], now = 1000, shown: RequestKi
     props: { status, selectable: (key: string) => key !== 'basemap' },
     attachTo: document.body
   });
-  return { wrapper, items, clock };
+  return { wrapper, items, clock, display };
 }
 
 // 量到的位置由用例给出：jsdom 没有布局
@@ -87,11 +98,13 @@ afterEach(() => {
 });
 
 describe('RequestStatusChip', () => {
-  it('空闲时什么也不显示；加载超过 0.4 秒显示项数和比例，有失败时带红点；结束后显示失败的项数', async () => {
-    const { wrapper, items, clock } = mountChip([]);
+  it('空闲时什么也不显示；显示着时是加载中的项数和比例，有失败时带红点；结束后显示失败的项数', async () => {
+    const { wrapper, items, clock, display } = mountChip([], 1000, ALL_REQUEST_KINDS, null);
     expect(wrapper.find('[data-request-status]').exists()).toBe(false);
 
-    items.value = [item('a'), item('b', { failed: 1, loaded: 5 })];
+    // b 上一轮有失败，这一轮还在加载
+    items.value = [item('a'), item('b', { previousFailed: 1, loaded: 6 })];
+    display.value = SHOWING;
     await nextTick();
     const chip = wrapper.get('[data-request-chip]');
     expect(chip.attributes('data-request-chip')).toBe('loading');
@@ -247,10 +260,23 @@ describe('RequestStatusChip', () => {
     expect(wrapper.find('[data-request-status]').exists()).toBe(false);
   });
 
-  it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {
-    const { wrapper, items, clock } = mountChip([item('a')]);
+  it('上一轮有失败、这一轮还在加载的项在加载中、有失败两组里都有：加载中写这一轮的进度，有失败写上一轮的张数（用户 2026-11-22）', async () => {
+    const { wrapper } = mountChip([item('resource:a', { previousFailed: 2 })]);
     await wrapper.get('[data-request-chip]').trigger('click');
+    expect(wrapper.get('[data-request-popover]').findAll('li').map(row => row.text())).toStrictEqual([
+      '加载中',
+      'resource:a 的名称4/10 张',
+      '有失败',
+      'resource:a 的名称2 张失败'
+    ]);
+  });
+
+  it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {
+    const { wrapper, items, clock, display } = mountChip([item('a')]);
+    await wrapper.get('[data-request-chip]').trigger('click');
+    // 这一次显示已经过去
     items.value = [item('a', { loaded: 10, finishedAt: 300 })];
+    display.value = null;
     clock.value = 9000;
     await nextTick();
     expect(wrapper.get('[data-request-chip]').text()).toBe('已加载完成');
