@@ -1,11 +1,13 @@
-// 资源目录的树（ADR 0157）：行高 32，每层缩进 18，下一层左边有引导线
+// 资源目录的树（ADR 0157）：行高 32，每层缩进 18，下一层左边有引导线。单击项是添加或移除（用户 2026-11-22），
+// 悬停时底色、行尾、光标一起预告这一下会做什么；颜色只是加强，状态看勾、动作看加号和叉
 
-// 读屏播报放在树的外面：看不见、不占位置
 .root {
   position: relative;
 }
 
-.live {
+// 读屏播报（放在树的外面）和行里"已添加"的文字：看不见、不占位置
+.live,
+.hiddenText {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -55,13 +57,69 @@
     background-color: var(--color-primary-bg-light);
   }
 
+  // 对比度主题下阴影被去掉、透明的轮廓线会画出来
   &:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: -2px;
     box-shadow: inset 0 0 0 2px var(--color-primary-border-hover);
   }
+}
 
-  // 悬停、键盘焦点时行尾换成操作；点完停留的行（held，用户 2026-11-22）显示结果，离开以后才换
-  &:hover:not(.held),
-  &:focus-visible:not(.held) {
+// 光标：没添加的是带加号的箭头，已添加的是手形（没有表示"移除"的系统光标，由淡红底和叉说明）；分类单击是展开、收起。
+// 点完停留时、按住 Ctrl、⌘、Shift 准备多选时、搜索时不能收起的分类是普通箭头
+.leaf {
+  cursor: copy;
+}
+
+.added {
+  cursor: pointer;
+}
+
+.branch {
+  cursor: pointer;
+}
+
+.held,
+.modifying .row,
+.searching .branch {
+  cursor: default;
+}
+
+// 状态色：没添加的淡蓝，已添加的淡红。键盘焦点也显示；悬停的只给鼠标（触屏点过的行不留着颜色）。
+// 点完停留、准备多选时不预告，选中的行保持选中的底色
+.root:not(.modifying) .leaf:not(.held, .selected):focus-visible {
+  background-color: var(--color-primary-bg);
+
+  &.added {
+    background-color: var(--color-danger-bg-solid);
+  }
+}
+
+@media (hover: hover) {
+  .root:not(.modifying, .touch) .leaf:not(.held, .selected):hover {
+    background-color: var(--color-primary-bg);
+
+    &.added {
+      background-color: var(--color-danger-bg-solid);
+    }
+  }
+}
+
+.held:hover,
+.held:focus-visible {
+  background-color: var(--color-neutral-bg-light);
+}
+
+.touch .row:not(.selected):hover {
+  background-color: transparent;
+}
+
+// 行尾一列：悬停、键盘焦点时项的勾换成加号或叉，分类的项数换成整类按钮；点完停留的行（held）显示结果，
+// 离开以后才换；准备多选时不换
+.root:not(.modifying) .row:not(.held) {
+  &:hover,
+  &:focus-visible {
+    .hint,
     .action {
       display: inline-flex;
     }
@@ -73,9 +131,10 @@
   }
 }
 
-// 触屏没有悬停（用户 2026-11-22）：行尾常显操作，加号是还没添加、叉是已添加
+// 触屏没有悬停（用户 2026-11-22）：行尾常显操作，加号是还没添加、叉是已添加；分类显示整类按钮、不显示项数
 @media (hover: none) {
   .row:not(.held) {
+    .hint,
     .action {
       display: inline-flex;
     }
@@ -87,7 +146,7 @@
   }
 }
 
-// 用行尾、Insert、Delete 添加或移除过的行闪一下（用户 2026-11-22）：浅蓝底淡出，和图层里新加入的行一样
+// 添加或移除过的行闪一下（用户 2026-11-22）：浅蓝底淡出，和图层里新加入的行一样
 .acted {
   animation: catalog-acted 0.9s ease-out;
 }
@@ -110,7 +169,7 @@
   font-weight: var(--font-weight-semibold);
 }
 
-// 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；多选时每一行都这样
+// 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；2026-11-22 起只有多选（批量）才有
 .selected {
   background-color: var(--color-primary-bg);
 
@@ -203,14 +262,14 @@
   text-align: center;
 }
 
-// 行尾一列，固定 30 宽、内容居中：分类的项数、项的勾、悬停时的添加、移除在同一条竖线上，悬停时替换，名称不跳动
+// 行尾一列，固定 30 宽、内容居中：分类的项数、项的勾、悬停时的加号和叉在同一条竖线上，悬停时替换，名称不跳动
 .end {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
   width: 30px;
-  height: 22px;
+  height: 24px;
 }
 
 .mark {
@@ -218,29 +277,45 @@
   color: var(--color-success);
 }
 
-.action {
+// 项的预告：只是图形，单击的是整行
+.hint {
   display: none;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
+  color: var(--color-primary);
+
+  &.remove {
+    color: var(--color-danger);
+  }
+}
+
+// 分类的整类按钮：24 × 24，不小于最小的点击目标
+.action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-primary);
-  cursor: pointer;
+  cursor: copy;
 
   &:hover {
     background-color: var(--color-primary-alpha-12);
   }
-}
 
-.remove {
-  color: var(--color-text-secondary);
+  &.remove {
+    color: var(--color-text-secondary);
+    cursor: pointer;
 
-  &:hover {
-    background-color: var(--color-danger-bg-solid);
-    color: var(--color-danger);
+    &:hover {
+      background-color: var(--color-danger-bg-solid);
+      color: var(--color-danger);
+    }
   }
 }

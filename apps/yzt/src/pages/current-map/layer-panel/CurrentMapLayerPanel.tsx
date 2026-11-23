@@ -31,8 +31,10 @@ import {
 } from '@/features/scene-models/layer-panel';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import {
+  actionTargets,
   type CatalogSelection,
   EMPTY_CATALOG_SELECTION,
+  isBatch,
   prunedSelection
 } from '@/shared/map/layer-panel/catalog-selection';
 import {
@@ -365,7 +367,8 @@ export const CurrentMapLayerPanel = defineComponent({
       props.current.remove([...removed]);
     };
 
-    // 目录里的定位：在图层里选中、滚到中间、闪两下（用户 2026-11-14：双击改为定位）；被筛掉时回到"全部"
+    // 目录里的定位（回车、右键菜单；2026-11-22 起单击是添加、移除，不再双击定位）：在图层里选中、滚到中间、闪两下；
+    // 被筛掉时回到"全部"
     const locateInList = (key: string) => {
       if (!currentKeys.value.includes(key)) {
         return;
@@ -506,7 +509,16 @@ export const CurrentMapLayerPanel = defineComponent({
     const retryShown = (id: string) => props.hints.has('failed') && modelFailed(id);
 
     // ---------- 工具栏
+    // 资源的批量添加、移除只在多选（两项以上）时出现（用户 2026-11-22），在展开、收起的左边，那两个按钮不动；
+    // 添加、移除一起出现，做不了的灰着、写原因
     const catalogTools = computed((): PanelToolItem[] => {
+      const treeTools: PanelToolItem[] = [
+        { key: 'expand-all', icon: 'tree-expand-all', label: '展开全部分类', tip: '全部展开', disabled: searching.value },
+        { key: 'collapse-all', icon: 'tree-collapse-all', label: '收起全部分类', tip: '全部收起', disabled: searching.value }
+      ];
+      if (!isBatch(selection.value)) {
+        return treeTools;
+      }
       const adds = cover.value.add.length;
       const removes = cover.value.remove.length;
       return [
@@ -514,19 +526,18 @@ export const CurrentMapLayerPanel = defineComponent({
           key: 'add',
           icon: 'layer-add',
           label: '添加到当前地图',
-          tip: adds > 1 ? `添加 ${adds} 项` : '添加',
+          tip: adds > 0 ? `添加 ${adds} 项` : '选中的都已添加',
           disabled: adds === 0
         },
         {
           key: 'remove',
           icon: 'layer-remove',
           label: '从当前地图移除',
-          tip: removes > 1 ? `移除 ${removes} 项` : '移除',
+          tip: removes > 0 ? `移除 ${removes} 项` : '选中的都还没有添加',
           disabled: removes === 0
         },
         'divider',
-        { key: 'expand-all', icon: 'tree-expand-all', label: '展开全部分类', tip: '全部展开', disabled: searching.value },
-        { key: 'collapse-all', icon: 'tree-collapse-all', label: '收起全部分类', tip: '全部收起', disabled: searching.value }
+        ...treeTools
       ];
     });
 
@@ -594,9 +605,12 @@ export const CurrentMapLayerPanel = defineComponent({
     };
 
     // ---------- 右键菜单
-    // 目录的菜单作用的项：右键分类时是它下面的，右键项时是选中的
+    // 目录的菜单作用的项：右键分类时是它下面的，右键多选里的项时是整个选中，否则只是这一项
     const catalogMenuCover = (key: string) =>
-      findCatalogNode(nodes.value, key)?.kind === 'branch' ? catalogCover(nodes.value, new Set([key])) : cover.value;
+      catalogCover(
+        nodes.value,
+        findCatalogNode(nodes.value, key)?.kind === 'branch' ? [key] : actionTargets(selection.value, key)
+      );
 
     const menuItems = computed((): PanelMenuEntry[] => {
       const current = menu.value;
@@ -625,7 +639,7 @@ export const CurrentMapLayerPanel = defineComponent({
             shortcut: 'Delete'
           },
           ...(node?.kind === 'leaf'
-            ? (['divider', { key: 'locate', label: '定位', icon: 'focus', disabled: !added, shortcut: '双击' }] satisfies PanelMenuEntry[])
+            ? (['divider', { key: 'locate', label: '定位', icon: 'focus', disabled: !added, shortcut: '回车' }] satisfies PanelMenuEntry[])
             : [])
         ];
       }

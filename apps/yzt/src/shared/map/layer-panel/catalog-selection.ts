@@ -1,4 +1,5 @@
-// 资源目录的多选（ADR 0157）：选中哪些节点、连选的起点、键盘焦点，都是纯函数；节点用字符串键，和业务无关
+// 资源目录的多选（ADR 0157；2026-11-22 起只用于批量，单击是添加、移除）：选中哪些节点、连选的起点、键盘焦点，
+// 都是纯函数；节点用字符串键，和业务无关
 
 /** 目录的选中状态 */
 export interface CatalogSelection {
@@ -58,6 +59,37 @@ export function selectKey(
 /** 只移动键盘焦点，选中不变 */
 export function focusKey(selection: CatalogSelection, key: string): CatalogSelection {
   return selection.focus === key ? selection : { ...selection, focus: key };
+}
+
+/** 方向键移到项上：焦点和连选的起点都移过来，选中不变（之后的 Shift 加方向键从这一项连选）；已经是这样时返回原来的对象 */
+export function movedTo(selection: CatalogSelection, key: string): CatalogSelection {
+  return selection.focus === key && selection.anchor === key ? selection : { ...selection, anchor: key, focus: key };
+}
+
+/** 单击切换了 key 以后：不再有选中，起点和焦点移到 key（之后的 Shift 连选从它开始）；已经是这样时返回原来的对象 */
+export function clearedAt(selection: CatalogSelection, key: string): CatalogSelection {
+  if (selection.keys.size === 0 && selection.anchor === key && selection.focus === key) {
+    return selection;
+  }
+  return { keys: new Set(), anchor: key, focus: key };
+}
+
+/** 清空选中（Esc），起点和焦点不变；本来就没有选中时返回原来的对象 */
+export function clearedSelection(selection: CatalogSelection): CatalogSelection {
+  return selection.keys.size === 0 ? selection : { ...selection, keys: new Set() };
+}
+
+/** 选中这么多项才算多选：标题的批量添加、移除只在多选时出现（用户 2026-11-22） */
+export const BATCH_MIN = 2;
+
+/** 是不是多选 */
+export function isBatch(selection: CatalogSelection): boolean {
+  return selection.keys.size >= BATCH_MIN;
+}
+
+/** 右键菜单、Insert、Delete 作用的节点：key 在多选里时是整个选中，否则只是它 */
+export function actionTargets(selection: CatalogSelection, key: string): ReadonlySet<string> {
+  return isBatch(selection) && selection.keys.has(key) ? selection.keys : new Set([key]);
 }
 
 /**

@@ -197,11 +197,10 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await pin.locator('svg').last().click();
     await expect(page.locator('[data-location-info]')).toBeVisible();
 
-    // 在资源目录里加入生成的屋子（ADR 0157）：展开全部、选中、点"添加"；新加的一行被选中，加载好以后双击这一行定位
+    // 在资源目录里加入生成的屋子（ADR 0157）：展开全部、单击这一项（用户 2026-11-22）；新加的一行被选中，加载好以后双击这一行定位
     const addModel = async (id: string) => {
       await page.locator('[data-tool="expand-all"]').click();
       await page.locator(`[data-catalog-node="model:${id}"]`).click();
-      await page.locator('[data-tool="add"]').click();
     };
     // 定位：双击当前图层里的这一行（工具栏换成了移除，用户 2026-11-15）
     const locate = (id: string) => page.locator(`[data-current-row="model:${id}"] [data-row-text]`).dblclick();

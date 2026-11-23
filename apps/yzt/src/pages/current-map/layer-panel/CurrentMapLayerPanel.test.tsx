@@ -262,22 +262,35 @@ afterEach(() => {
 });
 
 describe('CurrentMapLayerPanel', () => {
-  it('目录多选后添加：只加还没加的，整批放在最上面、保持目录的先后，选中第一个（ADR 0157）', async () => {
+  it('目录多选后批量添加（用户 2026-11-22：标题的添加、移除只在多选时出现）：只加还没加的，整批放在最上面、保持目录的先后，选中第一个（ADR 0157）', async () => {
     const { wrapper, owner } = await mountPanel();
     await tool(wrapper, 'expand-all').trigger('click');
-    expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('true');
+    expect(wrapper.find('[data-tool="add"]').exists()).toBe(false);
 
-    await node(wrapper, 'csxhjctb_hydl').trigger('click');
+    await node(wrapper, 'csxhjctb_hydl').trigger('click', { ctrlKey: true });
+    expect(wrapper.find('[data-tool="add"]').exists()).toBe(false);
     await node(wrapper, 'bgdc_dltb').trigger('click', { ctrlKey: true });
     await node(wrapper, 'bgdc_cjdcq').trigger('click', { ctrlKey: true });
+    // 批量按钮在展开、收起的左边
+    const tools = wrapper.findAll('[data-tool]').map(item => item.attributes('data-tool'));
+    expect(tools.slice(0, 4)).toStrictEqual(['add', 'remove', 'expand-all', 'collapse-all']);
     await tool(wrapper, 'add').trigger('click');
 
     expect(currentOrder(wrapper)).toStrictEqual(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
     expect(selectedRow(wrapper)).toBe('bgdc_cjdcq');
     expect(owner.state.value.displays.get('csxhjctb_hydl')).toMatchObject({ added: true, checked: true });
-    // 都加过了：添加不可用，移除可用
+    // 都加过了：添加不可用、写原因，移除可用
     expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('true');
     expect(tool(wrapper, 'remove').attributes('aria-disabled')).toBe('false');
+
+    // 单击一项是添加或移除，多选随之清空，批量按钮收起
+    await node(wrapper, 'csxhjctb_hydl').trigger('click');
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.added).toBe(false);
+    expect(wrapper.find('[data-tool="add"]').exists()).toBe(false);
+    await node(wrapper, 'csxhjctb_hydl').trigger('pointerleave', { pointerType: 'mouse' });
+    await node(wrapper, 'csxhjctb_hydl').trigger('click');
+    await nextTick();
+    expect(currentOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_cjdcq', 'bgdc_dltb']);
   });
 
   it('移除选中的行：选中相邻的，目录里的资源仍在；全部移除后是空状态，工具栏不可用', async () => {
@@ -301,7 +314,7 @@ describe('CurrentMapLayerPanel', () => {
   it('工具栏移动选中的一行：上移、置顶、置底，到头时不可用', async () => {
     const { wrapper } = await mountPanel();
     await tool(wrapper, 'expand-all').trigger('click');
-    await node(wrapper, 'bgdc_cjdcq').trigger('click');
+    await node(wrapper, 'bgdc_cjdcq').trigger('click', { ctrlKey: true });
     await node(wrapper, 'csxhjctb_hydl').trigger('click', { ctrlKey: true });
     await tool(wrapper, 'add').trigger('click');
     await row(wrapper, 'bgdc_dltb').trigger('click');
@@ -385,13 +398,14 @@ describe('CurrentMapLayerPanel', () => {
     expect(selectedRow(wrapper)).toBe('csxhjctb_hydl');
   });
 
-  it('双击目录里已添加的资源：在图层里选中并闪一下；没添加的不动', async () => {
+  it('在目录里按回车定位已添加的资源：在图层里选中并闪一下；没添加的不动；双击不再定位（用户 2026-11-22）', async () => {
     const { wrapper } = await mountPanel();
     await tool(wrapper, 'expand-all').trigger('click');
 
-    await node(wrapper, 'bgdc_cjdcq').trigger('dblclick');
-    expect(selectedRow(wrapper)).toBeNull();
     await node(wrapper, 'bgdc_dltb').trigger('dblclick');
+    await node(wrapper, 'bgdc_cjdcq').trigger('keydown', { key: 'Enter' });
+    expect(selectedRow(wrapper)).toBeNull();
+    await node(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'Enter' });
     await nextTick();
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
     expect(row(wrapper, 'bgdc_dltb').classes().some(name => name.includes('flash'))).toBe(true);
@@ -486,7 +500,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(keys.slice(-4)).toStrictEqual(['model-root', 'model-city:320500', 'model:station', 'model:white']);
     expect(wrapper.get('[data-catalog-node="model:white"]').text()).toContain('白膜');
 
-    await node(wrapper, 'csxhjctb_lrdl').trigger('click');
+    await node(wrapper, 'csxhjctb_lrdl').trigger('click', { ctrlKey: true });
     await wrapper.get('[data-catalog-node="model:white"]').trigger('click', { ctrlKey: true });
     await tool(wrapper, 'add').trigger('click');
     expect(models.added.value).toStrictEqual(['white']);
@@ -499,7 +513,6 @@ describe('CurrentMapLayerPanel', () => {
     await row(wrapper, 'bgdc_dltb').trigger('click');
     await tool(wrapper, 'move-top').trigger('click');
     await node(wrapper, 'bgdc_cjdcq').trigger('click');
-    await tool(wrapper, 'add').trigger('click');
     expect(rowKeys(wrapper)).toStrictEqual([
       'resource:bgdc_cjdcq',
       'resource:bgdc_dltb',
@@ -553,7 +566,6 @@ describe('CurrentMapLayerPanel', () => {
     expect(wrapper.find('input[placeholder="搜索模型或城市"]').exists()).toBe(true);
     expect(wrapper.findComponent(ModelKindSelect).exists()).toBe(true);
     await wrapper.get('[data-catalog-node="model:white"]').trigger('click');
-    await tool(wrapper, 'add').trigger('click');
     expect(models.added.value).toStrictEqual(['white']);
     expect(wrapper.find('[data-current-row="model:white"]').exists()).toBe(true);
 
@@ -836,13 +848,12 @@ describe('CurrentMapLayerPanel', () => {
     await showView(wrapper, 'resources');
     await tool(wrapper, 'expand-all').trigger('click');
     await node(wrapper, 'bgdc_cjdcq').trigger('click');
-    await tool(wrapper, 'add').trigger('click');
     expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
     expect(selectedRow(wrapper)).toBe('bgdc_cjdcq');
 
     models.add(['white']);
     await showLayers(wrapper, 'models');
-    await node(wrapper, 'bgdc_dltb').trigger('dblclick');
+    await node(wrapper, 'bgdc_dltb').trigger('keydown', { key: 'Enter' });
     expect(wrapper.get('[data-current-view][aria-selected="true"]').attributes('data-current-view')).toBe('all');
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
   });
@@ -1233,10 +1244,11 @@ describe('CurrentMapLayerPanel', () => {
       const { wrapper, map } = await mountPanel();
       map.setDimension('3d');
       await nextTick();
-      await wrapper.get('[data-catalog-node="model:white"]').trigger('click');
+      await wrapper.get('[data-catalog-node="model:white"]').trigger('click', { ctrlKey: true });
+      await wrapper.get('[data-catalog-node="model:station"]').trigger('click', { ctrlKey: true });
       expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('false');
       await showView(wrapper, 'resources');
-      expect(tool(wrapper, 'add').attributes('aria-disabled')).toBe('true');
+      expect(wrapper.find('[data-tool="add"]').exists()).toBe(false);
 
       // 二维资源里没有"苏州"：标签上看得到三维模型里有 2 项
       await wrapper.get('input[placeholder="搜索资源"]').setValue('苏州');

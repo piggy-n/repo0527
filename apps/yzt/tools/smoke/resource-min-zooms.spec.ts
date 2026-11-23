@@ -40,8 +40,8 @@ async function openResources(context: BrowserContext, page: Page): Promise<reado
   await expect(page).toHaveURL(CURRENT_MAP_URL);
   await expect(page.locator('[data-map-view-state]')).toHaveAttribute('data-map-view-state', 'ready');
 
-  // 资源目录里选中两个资源，用标题上的"添加"加入当前地图（ADR 0157）
-  await page.locator(`[data-catalog-node="resource:${LIMITED}"]`).click();
+  // 资源目录里 Ctrl 多选两个资源，用标题上的批量"添加"加入当前地图（ADR 0157；批量按钮只在多选时出现，用户 2026-11-22）
+  await page.locator(`[data-catalog-node="resource:${LIMITED}"]`).click({ modifiers: ['Control'] });
   await page.locator(`[data-catalog-node="resource:${FREE}"]`).click({ modifiers: ['Control'] });
   await page.locator('[data-tool="add"]').click();
   await expect(page.locator(`[data-current-row="resource:${LIMITED}"]`)).toBeVisible();

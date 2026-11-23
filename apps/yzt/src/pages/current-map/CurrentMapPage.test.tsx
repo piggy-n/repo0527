@@ -752,12 +752,11 @@ function failNavigation() {
   return () => requests;
 }
 
-// 在资源目录里展开全部、选中模型，用工具栏加入当前地图（ADR 0157）：二维里在"三维模型"分类下面，三维里在"三维模型"页
+// 在资源目录里展开全部、单击模型加入当前地图（用户 2026-11-22）：二维里在"三维模型"分类下面，三维里在"三维模型"页
 async function addModel(wrapper: ReturnType<typeof mountPage>['wrapper'], id: string) {
   await vi.waitFor(() => expect(wrapper.find('[data-catalog-node^="model-"]').exists()).toBe(true));
   await wrapper.get('[data-tool="expand-all"]').trigger('click');
   await wrapper.get(`[data-catalog-node="model:${id}"]`).trigger('click');
-  await wrapper.get('[data-tool="add"]').trigger('click');
   await settle();
 }
 
@@ -792,11 +791,10 @@ function drawnResources(page: ReturnType<typeof mountPage>): string[] {
     .filter(id => groupOf(id) === 'resources');
 }
 
-// 在资源目录里选中这个资源，用工具栏加入
+// 在资源目录里单击这个资源加入（用户 2026-11-22）
 async function addResource(wrapper: PageWrapper, code: string) {
   await vi.waitFor(() => resourceRow(wrapper, code));
   await resourceRow(wrapper, code).trigger('click');
-  await wrapper.get('[data-tool="add"]').trigger('click');
   await settle();
 }
 
@@ -1584,7 +1582,7 @@ describe('CurrentMapPage', () => {
     expect(wrapper.text()).toContain('土地资源');
     expect(wrapper.text()).not.toContain('海洋资源');
     expect(wrapper.text()).not.toContain('公共库');
-    await resourceRow(wrapper, 'csxhjctb_hydl').get('[data-node-action="add"]').trigger('click');
+    await resourceRow(wrapper, 'csxhjctb_hydl').trigger('click');
     await settle();
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
   });
@@ -1631,7 +1629,7 @@ describe('CurrentMapPage', () => {
   it('平移和同一级内缩放不更新当前图层的列表，跨过最小级别才更新提示', async () => {
     const { wrapper, map, updates } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
-    await resourceRow(wrapper, 'csxhjctb_lrdl').get('[data-node-action="add"]').trigger('click');
+    await resourceRow(wrapper, 'csxhjctb_lrdl').trigger('click');
     map.moveTo([119, 32], 8, {});
     await settle();
     updates.clear();
@@ -1658,7 +1656,7 @@ describe('CurrentMapPage', () => {
     await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
     expect(wrapper.find('[data-current-row="resource:csxhjctb_lrdl"]').exists()).toBe(false);
 
-    await resourceRow(wrapper, 'csxhjctb_lrdl').get('[data-node-action="add"]').trigger('click');
+    await resourceRow(wrapper, 'csxhjctb_lrdl').trigger('click');
     expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('放大至第 9 级显示');
     // 数据源的错误照样上报（默认打印到控制台）
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -2331,7 +2329,6 @@ describe('CurrentMapPage', () => {
       // 搜索时目录全部展开
       await search().setValue('广');
       await wrapper.get('[data-catalog-node="model:square"]').trigger('click');
-      await wrapper.get('[data-tool="add"]').trigger('click');
       await settle();
       const scene = sceneOf(page);
       await scene.ready('square');
