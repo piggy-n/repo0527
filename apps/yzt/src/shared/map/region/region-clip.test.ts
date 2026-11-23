@@ -37,7 +37,7 @@ function masked(geometry: Polygon | MultiPolygon, point: Position): boolean {
 }
 
 function compose(group: StyleGroup) {
-  const model = new StyleModel({ groups: ['selection', 'region-clip', 'basemap-labels'] });
+  const model = new StyleModel({ groups: ['selection', 'basemap-labels', 'region-clip'] });
   model.setGroups({ 'region-clip': group });
   return model.current;
 }
