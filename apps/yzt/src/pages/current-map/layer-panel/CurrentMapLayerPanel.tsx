@@ -102,7 +102,8 @@ type LoadStatus = 'ready' | 'loading' | 'failed';
  * 成一个列表、顺序就是叠放（ADR 0161），工具栏操作选中的一行（两段的叫法用户 2026-11-16 定）。把 resource-map、scene-models 的
  * 目录、行、图例和 shared 的面板部件拼在一起；选中、浮层、菜单、筛选这些界面状态在这里，平铺的顺序在页面的 CurrentLayers，
  * 图层和模型的状态在各自的拥有者里。二维里模型行留在原位、变淡，不能定位、不能漫游，其余操作照常（用户 2026-11-14、11-16）。
- * 三维里上段先体现模型（用户 2026-11-15 选的方案乙），下段标题下面有和上段一样的"全部、二维资源、三维模型"，筛选时也能排序
+ * 三维里上段先体现模型（用户 2026-11-15 选的方案乙），下段标题下面有和上段一样的"全部、二维资源、三维模型"，筛选时也能排序。
+ * 二维、三维各一套时（ADR 0169）二维的图层里没有模型：上段只列资源、没有标签，三维照旧
  */
 export const CurrentMapLayerPanel = defineComponent({
   name: 'CurrentMapLayerPanel',
@@ -151,10 +152,19 @@ export const CurrentMapLayerPanel = defineComponent({
     // ---------- 资源（上段）
     const keyword = ref('');
     const searching = computed(() => keyword.value.trim() !== '');
-    // 显示的内容、"三维模型"时的类型筛选：界面状态，不持久化；进入三维是"三维模型"，进入二维是"全部"（同以前的二维目录）
-    const view = ref<CatalogView>(scene.value ? 'models' : 'all');
+    // 图层里不能有模型（二维、三维各一套时的二维，ADR 0169）：目录只有资源、没有标签
+    const resourcesOnly = computed(() => !props.current.holdsModels.value);
+    // 显示的内容、"三维模型"时的类型筛选：界面状态，不持久化；进入三维是"三维模型"，进入二维是"全部"（同以前的二维目录），
+    // 二维里只有资源时固定是"二维资源"
+    const defaultView = (): CatalogView => {
+      if (resourcesOnly.value) {
+        return 'resources';
+      }
+      return scene.value ? 'models' : 'all';
+    };
+    const view = ref<CatalogView>(defaultView());
     const modelKind = ref<string | null>(null);
-    watch(scene, value => (view.value = value ? 'models' : 'all'));
+    watch([scene, resourcesOnly], () => (view.value = defaultView()));
     const modelsView = computed(() => view.value === 'models');
     const resourceNodes = computed(() => resourceCatalogNodes(state.value, keyword.value));
     const cityNodes = computed(() =>
@@ -177,8 +187,12 @@ export const CurrentMapLayerPanel = defineComponent({
     };
     const nodes = computed(() => viewNodes(view.value));
     // 标签上的数量：这一项显示的资源和模型（不算分类），搜索时是匹配的项数，"三维模型"里也按类型筛选；代替以前列表下面
-    // "还有 N 项匹配"的提示（用户 2026-11-16）。资源目录、模型清单还没到或读不到时，用到它的项不写数量
+    // "还有 N 项匹配"的提示（用户 2026-11-16）。资源目录、模型清单还没到或读不到时，用到它的项不写数量。
+    // 只有资源时没有标签，外壳不显示标签行（用户 2026-11-22，ADR 0169）
     const views = computed((): PanelTab[] => {
+      if (resourcesOnly.value) {
+        return [];
+      }
       const resourcesReady = props.status === 'ready';
       const modelsReady = props.modelsStatus === 'ready';
       const readyOf = { all: resourcesReady && modelsReady, resources: resourcesReady, models: modelsReady };

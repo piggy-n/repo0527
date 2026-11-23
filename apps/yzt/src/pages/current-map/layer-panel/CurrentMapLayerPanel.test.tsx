@@ -70,17 +70,19 @@ const MODELS = buildModelCatalog(
 );
 
 // 页面创建地图和拥有者，渲染面板；没有画布，只看面板和拥有者的状态。模型的状态报告由用例给；
-// 资源目录可以先不到（status 是页面给的查询状态，catalog 由用例在之后给）
+// 资源目录可以先不到（status 是页面给的查询状态，catalog 由用例在之后给）；perDimension 同页面的开关（ADR 0169）
 async function mountPanel({
   modelsStatus = 'ready',
   status = 'ready',
   catalogReady = true,
-  hints = new Set(LAYER_HINTS)
+  hints = new Set(LAYER_HINTS),
+  perDimension = false
 }: {
   modelsStatus?: 'ready' | 'failed';
   status?: 'ready' | 'loading' | 'failed';
   catalogReady?: boolean;
   hints?: ReadonlySet<LayerHint>;
+  perDimension?: boolean;
 } = {}) {
   let owner: ResourceLayers | undefined;
   let models: SceneModels | undefined;
@@ -107,7 +109,7 @@ async function mountPanel({
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const symbols = useResourceSymbols({ catalog });
-    const layers = useResourceLayers(map, { catalog, symbols, tileBase: 'http://localhost/tiles/' });
+    const layers = useResourceLayers(map, { catalog, symbols, tileBase: 'http://localhost/tiles/', perDimension });
     const layout = useResourcePanelLayout();
     const sceneModels = useSceneModels({ ...map, sceneStatus }, MODELS);
     const list = useCurrentLayers(layers, sceneModels);
@@ -446,6 +448,34 @@ describe('CurrentMapLayerPanel', () => {
     await nextTick();
     expect(owner.state.value.displays.get('bgdc_dltb')?.checked).toBe(false);
     expect(document.querySelector('[data-panel-menu]')).toBeNull();
+  });
+
+  it('二维、三维各一套时（ADR 0169）：二维的资源只列资源、没有标签，清单读不到也不提示；三维照旧有标签、默认"三维模型"', async () => {
+    const { wrapper, map } = await mountPanel({ perDimension: true, modelsStatus: 'failed' });
+    await tool(wrapper, 'expand-all').trigger('click');
+    expect(viewTabs(wrapper)).toStrictEqual([]);
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
+    expect(catalogKeys(wrapper).some(key => key?.startsWith('model'))).toBe(false);
+    expect(catalogKeys(wrapper)).toContain('resource:bgdc_dltb');
+    expect(wrapper.find('input[placeholder="搜索资源"]').exists()).toBe(true);
+    expect(wrapper.find('[data-models-failed]').exists()).toBe(false);
+
+    map.setDimension('3d');
+    await nextTick();
+    expect(viewTabs(wrapper)).toStrictEqual(['全部', '二维资源 4 项', '三维模型']);
+    expect(shownView(wrapper)).toBe('models');
+    expect(wrapper.find('[data-models-failed]').exists()).toBe(true);
+
+    map.setDimension('2d');
+    await nextTick();
+    expect(viewTabs(wrapper)).toStrictEqual([]);
+    expect(catalogKeys(wrapper).some(key => key?.startsWith('model'))).toBe(false);
+  });
+
+  it('二维、三维各一套时二维里资源目录还没到：资源段整段说明（同"二维资源"）', async () => {
+    const { wrapper } = await mountPanel({ perDimension: true, status: 'loading', catalogReady: false });
+    expect(wrapper.text()).toContain('正在加载资源…');
+    expect(wrapper.find('[data-resources-status]').exists()).toBe(false);
   });
 
   it('三维模型在目录最后、按市分组；加入后和资源平铺：后加入的整批在最上面、批内按目录的先后，选中最上面的新行（ADR 0167）', async () => {
