@@ -32,7 +32,9 @@ const MapUiSamples = defineComponent({
   name: 'MapUiSamples',
   props: {
     width: { type: Number, required: true },
-    height: { type: Number, required: true }
+    height: { type: Number, required: true },
+    /** 二维、三维各一套已添加的资源（ADR 0169，现状底图按 .env 的开关）；换了要重建样例 */
+    perDimension: { type: Boolean, default: false }
   },
   setup(props) {
     const map = provideMap({
@@ -41,7 +43,7 @@ const MapUiSamples = defineComponent({
     });
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
-    const layers = useResourceLayers(map, { catalog, symbols });
+    const layers = useResourceLayers(map, { catalog, symbols, perDimension: props.perDimension });
     // 模型只进面板：没有画布，三维里也不加载；没有请求状态，行上不转圈
     const models = useSceneModels(map, SAMPLE_MODELS);
     const layerList = useCurrentLayers(layers, models);
@@ -238,6 +240,7 @@ export const DevMapUiPage = defineComponent({
   setup() {
     const width = ref(320);
     const height = ref(520);
+    const perDimension = ref(false);
     // 重建样例清空临时状态，避免复制各拥有者的重置规则
     const revision = ref(0);
     return () => (
@@ -277,11 +280,25 @@ export const DevMapUiPage = defineComponent({
               </ElRadioButton>
             ))}
           </ElRadioGroup>
+          <span>已添加的资源</span>
+          <ElRadioGroup
+            modelValue={perDimension.value}
+            onUpdate:modelValue={value => (perDimension.value = value === true)}
+            size="small"
+          >
+            <ElRadioButton value={false}>二三维共用</ElRadioButton>
+            <ElRadioButton value={true}>二三维各一套</ElRadioButton>
+          </ElRadioGroup>
           <ElButton size="small" onClick={() => revision.value++}>
             还原样例
           </ElButton>
         </div>
-        <MapUiSamples key={revision.value} width={width.value} height={height.value} />
+        <MapUiSamples
+          key={`${revision.value}-${perDimension.value}`}
+          width={width.value}
+          height={height.value}
+          perDimension={perDimension.value}
+        />
       </main>
     );
   }
