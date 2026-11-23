@@ -126,7 +126,13 @@ export const CurrentMapPage = defineComponent({
     const legendCode = ref<string | null>(null);
     // 右侧图例正在编辑的资源：图例浮层开着同一个资源时关掉（ADR 0157）
     const legendEditingCode = ref<string | null>(null);
-    const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences, symbols });
+    // 二维、三维各自一套已添加的资源（ADR 0169），部署时在 .env 里配
+    const resources = useResourceLayers(map, {
+      catalog: catalogQuery.data,
+      preferences,
+      symbols,
+      perDimension: appConfig.layersPerDimension
+    });
     const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();

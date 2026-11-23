@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, shallowRef } from 'vue';
+import type { ViewKind } from '@mx/map-core';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
 import { buildCatalog } from '@/features/resource-map/catalog';
+import type { ResourceLayerSetId } from '@/features/resource-map/composables/useResourceLayers';
 import {
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
@@ -34,19 +36,39 @@ const m = (id: string) => `model:${id}`;
 // 资源目录到了：地类图斑默认加入，再加入村级调查区放在最上面
 const ARRIVED = withAdded(mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG), ['bgdc_cjdcq'], 0);
 
-// 两个拥有者只保留用到的部分；arrived 为 false 时资源目录还没到、记下的模型还没恢复
-function setup({ order, arrived = true, models: initial = [] as readonly string[] } = {} as {
-  readonly order?: readonly string[];
-  readonly arrived?: boolean;
-  readonly models?: readonly string[];
-}) {
-  const store = createMemoryStore(order ? { [KEY]: { version: 1, value: { order } } } : {});
-  const state = shallowRef<ResourceLayersState>(arrived ? ARRIVED : EMPTY_RESOURCE_LAYERS);
-  const resources = {
+// 资源的一套已添加，状态按真实的纯函数变化
+function fakeSet(initial: ResourceLayersState) {
+  const state = shallowRef(initial);
+  return {
     state,
     add: (codes: readonly string[], at?: number) => (state.value = withAdded(state.value, codes, at)),
     remove: (codes: readonly string[]) => (state.value = withRemoved(state.value, codes)),
     moveLayer: (code: string, to: number) => (state.value = withMoved(state.value, code, to))
+  };
+}
+
+// 两个拥有者只保留用到的部分；arrived 为 false 时资源目录还没到、记下的模型还没恢复。perDimension 时二维另有一套
+// （只有地类图斑），从二维开始（ADR 0169）
+function setup({ order, arrived = true, models: initial = [] as readonly string[], perDimension = false } = {} as {
+  readonly order?: readonly string[];
+  readonly arrived?: boolean;
+  readonly models?: readonly string[];
+  readonly perDimension?: boolean;
+}) {
+  const store = createMemoryStore(order ? { [KEY]: { version: 1, value: { order } } } : {});
+  const shared = fakeSet(arrived ? ARRIVED : EMPTY_RESOURCE_LAYERS);
+  const flat = fakeSet(arrived ? mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG) : EMPTY_RESOURCE_LAYERS);
+  const { state } = shared;
+  const dimension = shallowRef<ViewKind>('2d');
+  const resources = {
+    perDimension,
+    currentSet: computed((): ResourceLayerSetId => {
+      if (!perDimension) {
+        return 'shared';
+      }
+      return dimension.value;
+    }),
+    forSet: (set: ResourceLayerSetId) => (set === '2d' ? flat : shared)
   };
   const added = shallowRef<readonly string[]>(initial);
   const restored = shallowRef(arrived);
@@ -65,7 +87,7 @@ function setup({ order, arrived = true, models: initial = [] as readonly string[
   if (!current) {
     throw new Error('图层列表没有创建');
   }
-  return { current, state, added, restored, store, [Symbol.dispose]: () => effect.stop() };
+  return { current, state, dimension, added, restored, store, [Symbol.dispose]: () => effect.stop() };
 }
 
 const written = (store: ReturnType<typeof createMemoryStore>) => store.entries.get(KEY);
@@ -196,5 +218,27 @@ describe('图层的顺序：按账号记住（ADR 0167）', () => {
     // 没有记下的顺序：自己出现的接在最后，先模型后资源
     expect(duplicated.current.keys.value).toStrictEqual([m('x'), r('bgdc_cjdcq'), r('bgdc_dltb')]);
     expect(unknown.current.keys.value).toStrictEqual([m('x'), r('bgdc_cjdcq'), r('bgdc_dltb')]);
+  });
+});
+
+describe('图层的顺序：二维、三维各一套（ADR 0169）', () => {
+  it('二维里不丢三维的穿插：二维那一套没有的资源不算没有了，不清理、不写回；二维里的操作不改记下的穿插', async () => {
+    // 三维那一套：村级调查区盖住模型 x；二维那一套只有地类图斑
+    const order = [r('bgdc_cjdcq'), m('x'), r('bgdc_dltb')];
+    using ctx = setup({ order, models: ['x'], perDimension: true });
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(ctx.current.keys.value).toStrictEqual([r('bgdc_dltb')]);
+    expect(written(ctx.store)).toStrictEqual({ version: 1, value: { order } });
+
+    ctx.current.add([r('csxhjctb_hydl')]);
+    ctx.current.remove([r('bgdc_dltb')]);
+    ctx.current.move(r('csxhjctb_hydl'), 0);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(ctx.current.keys.value).toStrictEqual([r('csxhjctb_hydl')]);
+    expect(written(ctx.store)).toStrictEqual({ version: 1, value: { order } });
+
+    ctx.dimension.value = '3d';
+    expect(ctx.current.keys.value).toStrictEqual(order);
+    expect(ctx.current.overModels.value).toStrictEqual(['bgdc_cjdcq']);
   });
 });
