@@ -348,7 +348,7 @@
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     },
-    "body": "<path d=\"m5 12 5 5L20 7\"/>"
+    "body": "<path d=\"M12 5v14m-7-7h14\"/>"
   },
   "layer-added": {
     "viewBox": "0 0 24 24",

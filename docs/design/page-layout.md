@@ -284,7 +284,7 @@ Popover 的关闭规则、无滚动条布局及缩略图标签见 [ADR 0069](../
 | 已打开但未显示的标签 | 主色图标、无底色 |
 | 不可用 | `--color-text-disabled` |
 
-- 图标用 Tabler Icons 的线性图标（MIT），工具栏 20、面板里 16，描边 1.5，按用途命名；Element 组件的图标属性仍用 Element 的图标。例外：资源图层面板的添加、移除（勾、叉）描边 2（用户 2026-11-16，见 [current-map-reference.md](current-map-reference.md)）
+- 图标用 Tabler Icons 的线性图标（MIT），工具栏 20、面板里 16，描边 1.5，按用途命名；Element 组件的图标属性仍用 Element 的图标。例外：资源图层面板的添加、移除（加号、叉，2026-11-22 前添加是勾）描边 2（用户 2026-11-16，见 [current-map-reference.md](current-map-reference.md)）
 - 面板里的正文 14，次要信息（年份、透明度、数量、提示、状态栏、工具栏的文字）12
 
 ## 设计稿确认的取舍
