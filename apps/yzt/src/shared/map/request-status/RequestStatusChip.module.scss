@@ -41,6 +41,13 @@
   }
 }
 
+// 手机宽度：状态栏（容器 map-status-bar，开了留位时才有）窄到放不下时不撑最小宽度，免得把比例尺挤掉，宽度同 MapStatusBar.module.scss
+@container map-status-bar (width < 320px) {
+  .chip {
+    min-width: 0;
+  }
+}
+
 .spinner {
   color: var(--color-primary);
 }

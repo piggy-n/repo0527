@@ -84,8 +84,8 @@ export const MapStatusBar = defineComponent({
     /** 经纬度的写法，跟着坐标定位面板 */
     format: { type: String as PropType<CoordinateFormat>, required: true },
     /**
-     * 第一段按二三维最宽的读数留位（比例尺的线段按 80 像素），"中心"不显示时也占着位置：缩放、鼠标进出画布、切换维度时
-     * 宽度不变，插槽 after 里的内容不跟着左右移（现状底图的请求状态，用户 2026-11-22）
+     * 第一段按二三维最宽的读数留位（比例尺的线段按 80 像素），"中心"不显示时也占着位置，不做字距调整（经纬度定宽）：缩放、
+     * 鼠标移动和进出画布、切换维度时宽度不变，插槽 after 里的内容不跟着左右移（现状底图的请求状态，用户 2026-11-22）
      */
     reserve: { type: Boolean, default: false }
   },
@@ -158,7 +158,7 @@ export const MapStatusBar = defineComponent({
     };
 
     return () => (
-      <div ref={root} class={styles.root} data-map-status-bar>
+      <div ref={root} class={[styles.root, props.reserve && styles.reserving]} data-map-status-bar>
         {bar(layout.value)}
         {slots.after && (
           <div ref={after} class={styles.after}>

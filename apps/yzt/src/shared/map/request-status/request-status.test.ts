@@ -141,6 +141,22 @@ describe('nextRequestDisplay', () => {
     expect(again).toStrictEqual({ settledAt: 1750 });
     expect(nextRequestDisplay(again, [at(1500, 1700)], 1750 + DONE_HOLD - 1)).toBe(again);
   });
+
+  it('结束后留着的是失败：又开始的加载不算同一次，照样等 0.8 秒，失败不跟着每一轮闪（2026-11-22 在产物上发现）', () => {
+    const settled = { settledAt: 1100 };
+    // 上一轮失败、这一轮刚开始：带着上一轮的失败
+    const retry = tiles('a', { startedAt: 1500, previousFailed: 2 });
+    expect(nextRequestDisplay(settled, [retry], 1600)).toBe(settled);
+    expect(requestSummary([retry], settled)).toStrictEqual({ kind: 'failed', count: 1 });
+    // 别的项结束了、有失败的也一样
+    const broken = tiles('b', { failed: 1, finishedAt: 1100 });
+    expect(nextRequestDisplay(settled, [broken, at(1500)], 1600)).toBe(settled);
+    // 超过 0.8 秒的照样显示加载中
+    expect(nextRequestDisplay(settled, [retry], 1500 + CHIP_DELAY + 1)).toStrictEqual({ settledAt: null });
+    // 留够了就结束
+    const late = tiles('a', { startedAt: 2000, previousFailed: 2 });
+    expect(nextRequestDisplay(settled, [late], 1100 + DONE_HOLD)).toBeNull();
+  });
 });
 
 describe('失败留到下一轮结束（nextFailureMemory、withPreviousFailures）', () => {

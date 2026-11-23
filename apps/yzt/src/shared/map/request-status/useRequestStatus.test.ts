@@ -224,4 +224,24 @@ describe('useRequestStatus 的条目（用户 2026-11-22）', () => {
     expect(ctx.status.failedKeys.value.size).toBe(0);
     expect(summary(ctx)).toBe('hidden');
   });
+
+  it('显示过的加载以失败结束后马上又开始一轮：仍是几项失败，不切成加载中；这一轮没有失败地结束后是已加载完成', async () => {
+    using ctx = setup([tiles('a', 0)]);
+    await ctx.advance(1000);
+    expect(summary(ctx)).toBe('loading');
+    ctx.sources.value = [tiles('a', 0, 1000, 2)];
+    await nextTick();
+    expect(summary(ctx)).toBe('failed');
+
+    // 1250 平移，新的一轮 0.3 秒就结束
+    await ctx.advance(250);
+    ctx.sources.value = [tiles('a', 1250)];
+    await nextTick();
+    await ctx.advance(250);
+    expect(summary(ctx)).toBe('failed');
+    ctx.sources.value = [tiles('a', 1250, 1550)];
+    await nextTick();
+    // 这一次显示还没过去：失败清掉以后是已加载完成，不直接消失
+    expect(summary(ctx)).toBe('done');
+  });
 });

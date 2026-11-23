@@ -195,9 +195,9 @@ export interface RequestDisplay {
 const SHOWING: RequestDisplay = Object.freeze({ settledAt: null });
 
 /**
- * 条目的显示往下走一步：没在显示时，有加载超过 CHIP_DELAY 的才开始；显示着、"已加载完成"留着的时候又开始的加载算同一次，
- * 不先隐藏。加载都结束以后再留 DONE_HOLD 才结束，所以出现以后至少留 1.5 秒。按项算，不看显示哪几类；
- * 没有变化时还是原来的对象
+ * 条目的显示往下走一步：没在显示时，有加载超过 CHIP_DELAY 的才开始。显示着加载中、"已加载完成"留着的时候又开始的加载算同一次，
+ * 直接回到加载中，不先隐藏；留着的是失败时不算（失败不跟着每一轮闪），新的加载照样要超过 CHIP_DELAY。加载都结束以后再留
+ * DONE_HOLD 才结束，所以出现以后至少留 1.5 秒。按项算，不看显示哪几类；没有变化时还是原来的对象
  */
 export function nextRequestDisplay(
   previous: RequestDisplay | null,
@@ -205,23 +205,21 @@ export function nextRequestDisplay(
   now: number
 ): RequestDisplay | null {
   const pending = items.filter(isPending);
-  if (!previous) {
-    return pending.some(item => now - item.startedAt > CHIP_DELAY) ? SHOWING : null;
+  if (previous && previous.settledAt === null) {
+    return pending.length > 0 ? previous : { settledAt: now };
   }
-  if (pending.length > 0) {
+  const due = pending.some(item => now - item.startedAt > CHIP_DELAY);
+  if (pending.length > 0 && (due || (previous !== null && !items.some(hasFailure)))) {
     return SHOWING;
   }
-  const settledAt = previous.settledAt ?? now;
-  if (now >= settledAt + DONE_HOLD) {
-    return null;
-  }
-  return previous.settledAt === settledAt ? previous : { settledAt };
+  const settledAt = previous?.settledAt ?? null;
+  return settledAt === null || now >= settledAt + DONE_HOLD ? null : previous;
 }
 
 /**
- * 状态栏的条目（原型 DESIGN.v1"请求状态"）：这一次显示里（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、几项和完成的
- * 比例；没有在显示的加载、有失败（hasFailure）时显示几项失败，留到下一轮结束；这一次显示里加载都结束了显示"已加载完成"，
- * 明细开着时至少显示"已加载完成"。关掉的一类不算（ADR 0167）：都关掉时不显示
+ * 状态栏的条目（原型 DESIGN.v1"请求状态"）：这一次显示着加载中（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、
+ * 几项和完成的比例；没有在显示的加载、有失败（hasFailure）时显示几项失败，留到下一轮结束；这一次显示里加载都结束了显示
+ * "已加载完成"，明细开着时至少显示"已加载完成"。关掉的一类不算（ADR 0167）：都关掉时不显示
  */
 export function requestSummary(
   items: readonly RequestItem[],
@@ -231,7 +229,7 @@ export function requestSummary(
 ): RequestSummary {
   const pending = kinds.loading ? items.filter(isPending) : [];
   const failed = kinds.failed ? items.filter(hasFailure) : [];
-  if (pending.length > 0 && (display !== null || open)) {
+  if (pending.length > 0 && (display?.settledAt === null || open)) {
     const counted = pending.filter(item => (item.kind === 'tiles' || item.kind === 'blocks') && item.requested > 0);
     const requested = counted.reduce((sum, item) => sum + item.requested, 0);
     const finished = counted.reduce((sum, item) => sum + item.loaded + item.failed, 0);

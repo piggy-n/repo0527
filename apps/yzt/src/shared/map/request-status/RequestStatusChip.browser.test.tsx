@@ -147,34 +147,41 @@ afterEach(async () => {
   await page.viewport(1440, 900);
 });
 
+// 依次显示加载中、失败、已完成，量条目的上下边和宽度
+async function chipStates(ctx: ReturnType<typeof setup>): Promise<{ top: number; bottom: number; width: number }[]> {
+  const measured: { top: number; bottom: number; width: number }[] = [];
+  for (const items of [[LOADING], [FAILED], [DONE]]) {
+    ctx.items.value = items;
+    ctx.display.value = items[0] === LOADING ? { settledAt: null } : { settledAt: 500 };
+    // oxlint-disable-next-line no-await-in-loop -- 每种状态排好以后再量
+    await settle();
+    const { top, bottom, width } = chip();
+    measured.push({ top, bottom, width });
+  }
+  return measured;
+}
+
+// 现状底图这一行（状态栏加条目）的宽度：1440 宽时很宽，768 宽时约 520
 describe.each([
   [1440, 1408],
-  [375, 343]
+  [768, 520]
 ])('请求状态的条目和状态栏（视口 %i）', (viewport, width) => {
   it('三种状态都和状态栏一样高、上下对齐；有最小宽度，短的文字等宽', async () => {
     await page.viewport(viewport, 800);
     using ctx = setup(width);
-    const measured: { top: number; bottom: number; width: number }[] = [];
-    for (const items of [[LOADING], [FAILED], [DONE]]) {
-      ctx.items.value = items;
-      ctx.display.value = items[0] === LOADING ? { settledAt: null } : { settledAt: 500 };
-      // oxlint-disable-next-line no-await-in-loop -- 每种状态排好以后再量
-      await settle();
-      const { top, bottom, width: chipWidth } = chip();
-      measured.push({ top, bottom, width: chipWidth });
-    }
+    const measured = await chipStates(ctx);
     const { top, bottom } = bar();
     expect(bottom - top).toBe(24);
     expect(measured).toStrictEqual(measured.map(() => ({ top, bottom, width: 160 })));
-    // 窄屏时状态栏放不下就去掉后面几段，条目不出这一行
-    expect(chip().right).toBeLessThanOrEqual(16 + width);
   });
 
-  it('缩放、鼠标进出画布、三维视点高度变了、切换维度，条目都不左右移（状态栏留位）', async () => {
+  it('缩放、鼠标移动和进出画布、三维视点高度变了、切换维度，条目都不左右移（状态栏留位）', async () => {
     await page.viewport(viewport, 800);
     using ctx = setup(width);
     const scaleTo = (line: number, label: string) => () => (ctx.scale.value = { meters: 1, width: line, label });
     const center = (value: boolean) => () => (ctx.position.value = { lngLat: POINT, center: value });
+    // 经纬度的数字和"°′″."之间有字距调整时，宽度随数字变（2026-11-22 在产物上发现）
+    const pointAt = (lngLat: LngLat) => () => (ctx.position.value = { lngLat, center: false });
     const twoD = await leftsAfter([
       scaleTo(32, '5 m'),
       scaleTo(80, '10 m'),
@@ -182,7 +189,10 @@ describe.each([
       center(true),
       scaleTo(64, '1 km'),
       center(false),
-      scaleTo(50, '200 km')
+      scaleTo(50, '200 km'),
+      pointAt([111.1111, 31.1111]),
+      pointAt([118.0001, 30.0001]),
+      pointAt([121.9876, 34.5432])
     ]);
     expect(new Set(twoD).size).toBe(1);
 
@@ -201,5 +211,21 @@ describe.each([
       eyeAt(4_977_000)
     ]);
     expect(new Set([...twoD, ...threeD]).size).toBe(1);
+  });
+});
+
+// 375 宽时这一行约 250（右边是底图卡片）：留位的比例尺加上 160 的条目放不下（2026-11-22 在产物上发现比例尺被截掉）
+describe('请求状态的条目和状态栏（手机宽度）', () => {
+  it('三种状态照样对齐；不留位、条目不撑最小宽度，比例尺不被截掉', async () => {
+    await page.viewport(375, 812);
+    using ctx = setup(250);
+    const measured = await chipStates(ctx);
+    const { top, bottom } = bar();
+    expect(measured.map(state => [state.top, state.bottom])).toStrictEqual(measured.map(() => [top, bottom]));
+    expect(measured.every(state => state.width < 160)).toBe(true);
+    const shown = required(document.querySelector('[data-map-status-bar]')?.firstElementChild, '状态栏');
+    expect(shown.scrollWidth).toBeLessThanOrEqual(shown.clientWidth);
+    const samples = [...shown.querySelectorAll('[aria-hidden="true"]')].filter(element => element.textContent !== '中心');
+    expect(samples.map(element => getComputedStyle(element).display)).toStrictEqual(['none', 'none']);
   });
 });
