@@ -84,8 +84,8 @@ export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
-    // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源和高亮，注记、边界在它上面
-    // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面。
+    // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源、高亮和底图的注记，边界在它上面
+    // （ADR 0051，注记移到遮罩下面见 docs/design/current-map-reference.md）；区划高亮在边界之上，测量在最上面。
     // MapLibre 引擎的三维模型层在资源里：图层列表里排在最上面那个模型上面的资源画在模型上面，其余被模型挡住；高亮、资源的标注、
     // 区划遮罩及以上永远画在模型上面（ADR 0161，取代 ADR 0147 第 2 节的静态位置）。资源的标注在选中高亮之上、区划遮罩之下
     // （区划外的标注被盖住），查询详情里那个要素的加强标注紧挨着压在上面（ADR 0160）
@@ -96,8 +96,8 @@ export const CurrentMapPage = defineComponent({
         'selection',
         'resource-labels',
         'selection-labels',
-        'region-clip',
         'basemap-labels',
+        'region-clip',
         'boundaries',
         'region',
         'measure'

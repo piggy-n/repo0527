@@ -673,8 +673,8 @@ const GROUPS = [
   'selection',
   'resource-labels',
   'selection-labels',
-  'region-clip',
   'basemap-labels',
+  'region-clip',
   'boundaries',
   'region',
   'measure'
@@ -2131,10 +2131,12 @@ describe('CurrentMapPage', () => {
       await addModel(wrapper, 'sz-station');
       const scene = sceneOf(page);
       await scene.ready('sz-station');
-      // 区划遮罩一直画在模型上面（ADR 0161）：没有资源画在模型上面、没有选中时，模型层就在遮罩下面
-      const masked = () => scene.session.style.current.layers.some(({ id }) => id === 'region-clip-mask');
+      // 区划遮罩一直画在模型上面（ADR 0161）：没有资源画在模型上面、没有选中时，模型层就在底图的注记下面，遮罩在注记上面
+      const layerIds = () => scene.session.style.current.layers.map(({ id }) => id);
+      const masked = () => layerIds().includes('region-clip-mask');
       await vi.waitFor(() => expect(masked()).toBe(true));
-      expect(scene.session.style.sceneBefore).toBe('region-clip-mask');
+      expect(scene.session.style.sceneBefore).toBe('basemap-labels-imagery');
+      expect(layerIds().indexOf('region-clip-mask')).toBeGreaterThan(layerIds().indexOf('basemap-labels-imagery'));
       await button(wrapper, '测距').trigger('click');
       expect(scene.session.tool.active).toBe('measure-distance');
       expect(shownPanels(wrapper)).toStrictEqual(['legend']);
@@ -2490,7 +2492,7 @@ describe('CurrentMapPage', () => {
   });
 
   describe('区划定位与其他相机操作的先后（每个用例重新导入页面，边界没有缓存）', () => {
-    it('区划裁剪：边界到位后才盖上遮罩，插在注记下面、盖住资源和高亮；回到全省后去掉（ADR 0051）', async () => {
+    it('区划裁剪：边界到位后才盖上遮罩，盖住资源、高亮和底图的注记，边界和区划轮廓在它上面；回到全省后去掉（ADR 0051）', async () => {
       const boundaries = deferBoundaryFetch();
       const { wrapper, map } = await readyPage(await freshModules());
       await button(wrapper, '区划定位').trigger('click');
@@ -2500,10 +2502,13 @@ describe('CurrentMapPage', () => {
 
       boundaries.release('city');
       await settle();
-      const [[id, beforeId] = []] = addedLayersOf(map, 'region-clip');
+      const [[id] = []] = addedLayersOf(map, 'region-clip');
       expect(id).toBe('region-clip-mask');
-      expect(beforeId?.startsWith('basemap-labels')).toBe(true);
       expect(map.geojson.get('region-clip')).toMatchObject({ geometry: { type: 'MultiPolygon' } });
+      // 开着注记：天地图的注记在遮罩下面，区划外的地名被盖住（用户 2026-11-22）
+      const mask = map.layerOrder.indexOf('region-clip-mask');
+      expect(map.layerOrder.slice(0, mask)).toContain('basemap-labels-vector');
+      expect([...new Set(map.layerOrder.slice(mask + 1).map(groupOf))]).toStrictEqual(['boundaries', 'region']);
 
       await button(wrapper, '南京').trigger('click');
       await settle();
