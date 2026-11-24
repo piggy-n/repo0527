@@ -33,6 +33,7 @@ import { useLocationPoint } from '@/shared/map/location/useLocationPoint';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
+import type { ListSplit } from '@/shared/map/layer-panel/panel-split';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
@@ -172,13 +173,16 @@ export const CurrentMapPage = defineComponent({
     // 请求状态的明细里点了一行：在当前图层里选中它
     const revealed = shallowRef<{ readonly key: string } | null>(null);
     // 明细放在资源图层面板下方或右边、四周留白以内（用户 2026-11-16、2026-11-23）：量的是左列里的面板本身（按内容定高，
-    // 收起后是竖条），不是撑满高度的一列；交给条目的是同一对函数，重渲染时不换
+    // 收起后是竖条），不是撑满高度的一列；面板变高变矮按面板发出的两段高度重新放，不监听面板的尺寸（会报 ResizeObserver
+    // loop）。交给条目的是同一组函数，重渲染时不换
     const overlay = ref<HTMLElement>();
     const left = ref<HTMLElement>();
     const leftPanel = () => {
       const panel = left.value?.firstElementChild;
       return panel instanceof HTMLElement ? panel : null;
     };
+    const leftSplit = shallowRef<ListSplit | null>(null);
+    const leftLayout = () => leftSplit.value;
     const mapArea = () => overlay.value ?? null;
     // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
     // 视图控件和状态栏都隐藏，不能加入模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
@@ -402,6 +406,7 @@ export const CurrentMapPage = defineComponent({
           onRetryModels={() => void sceneModelsQuery.refetch()}
           onUpdate:collapsed={changeLeftCollapsed}
           onLegendCode={(code: string | null) => (legendCode.value = code)}
+          onLayout={(split: ListSplit | null) => (leftSplit.value = split)}
         />
       );
     };
@@ -527,6 +532,7 @@ export const CurrentMapPage = defineComponent({
                         selectable={key => key !== 'basemap'}
                         panel={leftPanel}
                         panelCollapsed={!sides.left.value}
+                        panelLayout={leftLayout}
                         area={mapArea}
                         onSelect={(key: string) => {
                           // 面板收起、窄屏时被右侧挤掉都看不到反应：先展开左侧，面板在下一轮渲染后滚到这一行、闪两下

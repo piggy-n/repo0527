@@ -45,6 +45,14 @@ function statusContent(summary: RequestSummary): VNode[] {
   return [<SvgIcon name="check" size={14} />];
 }
 
+const samePlacement = (next: RequestPopoverPlacement, current: RequestPopoverPlacement | null) =>
+  current !== null &&
+  next.side === current.side &&
+  next.left === current.left &&
+  next.bottom === current.bottom &&
+  next.width === current.width &&
+  next.maxHeight === current.maxHeight;
+
 /**
  * 状态栏前面的请求状态（ADR 0158、0171，原型 `/design.local/status-bar/`）：一直在的按钮，宽度按"转圈 99%"固定、内容居中，
  * 状态变了读数不动；只有图标和数字，全称在 Tooltip 和读屏名称里。点开是"数据加载"的明细，分加载中、有失败、已完成三组。
@@ -62,6 +70,11 @@ export const RequestStatusChip = defineComponent({
     panel: { type: Function as PropType<() => HTMLElement | null>, default: () => null },
     /** 面板收起成了竖条：明细用面板展开时的宽度 */
     panelCollapsed: Boolean,
+    /**
+     * 面板的布局（外壳发出的两段高度，LayerPanelShell 的 layout）：面板变高变矮时变，读到的值变了就重新放。不监听面板的尺寸：
+     * 它跟着内容变，又比外壳量的内容浅，会报 ResizeObserver loop（同 LayerPopover，2026-11-23 审查发现）
+     */
+    panelLayout: { type: Function as PropType<() => unknown>, default: () => null },
     /** 明细能放的区域（地图上四周留白以内）；没有时用整个视口 */
     area: { type: Function as PropType<() => HTMLElement | null>, default: () => null }
   },
@@ -93,8 +106,8 @@ export const RequestStatusChip = defineComponent({
       onEscape: () => (open.value = false)
     });
 
-    // 明细的位置：开着时量面板、区域和状态栏（条目的上边），面板的尺寸、收起和窗口变了重新放；页面停用时量不到，激活后再放。
-    // 页面给的面板一直是同一个元素，展开、收起、内容变了只改它的尺寸，靠尺寸监听；只在开着时监听，元素没换时不重建监听
+    // 明细的位置：开着时量面板、区域和状态栏（条目的上边）。面板的布局、收起，区域的尺寸，窗口的尺寸和滚动变了重新放；
+    // 页面停用时量不到，激活后再放。区域的尺寸和内容无关，可以监听；只在开着时监听
     const placement = shallowRef<RequestPopoverPlacement | null>(null);
     const pageActive = usePageActive();
     const panel = computed(() => (open.value ? props.panel() : null));
@@ -104,7 +117,7 @@ export const RequestStatusChip = defineComponent({
       if (!open.value || !chip?.isConnected) {
         return;
       }
-      placement.value = requestPopoverPlacement({
+      const next = requestPopoverPlacement({
         panel: panel.value?.getBoundingClientRect() ?? null,
         collapsed: props.panelCollapsed,
         area: area.value?.getBoundingClientRect() ?? {
@@ -116,11 +129,19 @@ export const RequestStatusChip = defineComponent({
         barTop: chip.getBoundingClientRect().top,
         viewport: { height: window.innerHeight }
       });
+      // 位置没变时不换：滚动、布局的通知很多，明细不跟着重渲染
+      if (!samePlacement(next, placement.value)) {
+        placement.value = next;
+      }
     };
-    watch([open, pageActive, panel, area, () => props.panelCollapsed], place, { immediate: true, flush: 'post' });
-    useResizeObserver(panel, place);
+    watch([open, pageActive, panel, area, () => props.panelCollapsed, () => props.panelLayout()], place, {
+      immediate: true,
+      flush: 'post'
+    });
     useResizeObserver(area, place);
     useEventListener(window, 'resize', place);
+    // 页面滚动时（开发页的样例）跟着走：明细是 fixed 的视口坐标
+    useEventListener(document, 'scroll', place, { capture: true, passive: true });
 
     // 按钮的宽度由叠在同一格里、看不见的"转圈 99%"撑出，内容居中；明细开着时不提示
     const renderChip = (): VNode | null => {

@@ -57,7 +57,9 @@ export const LayerPanelShell = defineComponent({
     'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean',
     'update:ratio': (ratio: number) => ratio >= 0 && ratio <= 1,
     'update:view': (view: string) => typeof view === 'string',
-    'update:currentView': (view: string) => typeof view === 'string'
+    'update:currentView': (view: string) => typeof view === 'string',
+    /** 两段分到的高度变了（同浮层插槽的 layout）：面板外面贴着面板放的浮层读它重新放，不监听面板的尺寸 */
+    layout: (split: ListSplit | null) => split === null || typeof split === 'object'
   },
   slots: Object as SlotsType<{
     catalogTools: () => VNode[];
@@ -123,6 +125,7 @@ export const LayerPanelShell = defineComponent({
           })
         : null
     );
+    watch(split, value => emit('layout', value));
     const currentSectionHeight = computed(() => split.value?.checked ?? 0);
     // 拖动改变不了两段时分割线不响应，也不显示成能拖的样子
     const adjustable = computed(() => split.value?.adjustable ?? false);

@@ -18,10 +18,12 @@ async function box(locator: Locator, name: string): Promise<{ x: number; y: numb
 
 // 数据加载的明细（ADR 0158，用户 2026-11-23）：量的是左列里的面板本身（按内容定高，收起后是竖条），不是撑满高度的一列；
 // 底边都在状态栏上方 8；面板下面放得下最高的明细（420）时平移到面板下方、和面板左对齐，放不下时在它右边，宽度同面板展开时。
-// 样例目录只有几项，展开的面板矮：窗口高时在下方，压矮窗口后放不下、回到右边
+// fixtures 的资源目录是空的，展开的面板只有空状态，约 316 高：窗口 1000 高时下面约有 530，在下方；压到 640 高放不下，回到右边
+// （900 高时余量只有十几像素，面板多一行就换边，所以先把窗口调高）
 test('数据加载的明细：面板下面放得下时平移到面板下方、放不下时在右边，底边在状态栏上方，和面板同宽；收起成竖条后在竖条下方', async ({
   page
 }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto('/login');
   await login(page);
   await expect(page).toHaveURL(CURRENT_MAP_URL);
@@ -53,7 +55,7 @@ test('数据加载的明细：面板下面放得下时平移到面板下方、�
   expect(beside.width, '和面板同宽').toBeCloseTo(short.width, 0);
   expect(beside.y + beside.height, '底边在状态栏上方 8').toBeCloseTo((await box(chip, '状态按钮')).y - 8, 0);
 
-  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await chip.click();
   await expect(popover).toHaveCount(0);
   await page.getByRole('button', { name: '收起资源图层' }).click();

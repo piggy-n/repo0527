@@ -233,18 +233,21 @@ describe('RequestStatusChip', () => {
     expect(style().left).toBe('344px');
   });
 
-  it('面板收起成竖条时明细在它下方（底边在状态栏上方）、用面板展开时的宽度，展开后到右边：页面给的一直是同一个元素，靠尺寸监听；明细关着时不监听（用户 2026-11-23）', async () => {
+  it('面板收起成竖条时明细在它下方（底边在状态栏上方）、用面板展开时的宽度，展开后到右边：面板变高按面板的布局重新放，不监听面板的尺寸（用户 2026-11-23，2026-11-23 审查发现）', async () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const area = placed(16, 72, 1264, 760);
     let rect = new DOMRect(16, 72, 40, 140);
     const panel = document.body.appendChild(document.createElement('div'));
     panel.getBoundingClientRect = () => rect;
+    const layout = shallowRef<unknown>(null);
     const { wrapper } = mountChip([item('a')]);
-    await wrapper.setProps({ panel: () => panel, panelCollapsed: true, area: () => area });
+    await wrapper.setProps({ panel: () => panel, panelCollapsed: true, panelLayout: () => layout.value, area: () => area });
     wrapper.get('[data-request-status]').element.getBoundingClientRect = () => new DOMRect(400, 736, 120, 24);
-    expect(FakeResizeObserver.watching(panel)).toBe(false);
+    expect(FakeResizeObserver.watching(area)).toBe(false);
 
     await wrapper.get('[data-request-chip]').trigger('click');
+    // 区域的尺寸和内容无关，开着时监听；面板一直不监听（它比外壳量的内容浅，会报 ResizeObserver loop）
+    expect([FakeResizeObserver.watching(area), FakeResizeObserver.watching(panel)]).toStrictEqual([true, false]);
     const popover = () => wrapper.get<HTMLElement>('[data-request-popover]').element;
     const box = () => {
       const { left, top, bottom, width } = popover().style;
@@ -258,14 +261,35 @@ describe('RequestStatusChip', () => {
     await wrapper.setProps({ panelCollapsed: false });
     expect(box()).toStrictEqual(['below', '16px', '', '40px', '300px']);
 
-    // 面板的内容多了、变高，下面放不下：只有尺寸监听知道
+    // 面板的内容多了、变高，下面放不下：外壳发出新的两段高度
     rect = new DOMRect(16, 72, 300, 652);
-    FakeResizeObserver.resized(panel);
+    layout.value = { tree: 400, checked: 160, adjustable: true };
     await nextTick();
     expect(box()).toStrictEqual(['beside', '324px', '', '40px', '300px']);
 
     await wrapper.get('[data-request-chip]').trigger('click');
-    expect(FakeResizeObserver.watching(panel)).toBe(false);
+    expect(FakeResizeObserver.watching(area)).toBe(false);
+  });
+
+  it('页面滚动时明细跟着重新放（开发页的样例会滚动，2026-11-23 审查发现）', async () => {
+    const area = placed(16, 72, 1264, 760);
+    let top = 72;
+    const panel = document.body.appendChild(document.createElement('div'));
+    panel.getBoundingClientRect = () => new DOMRect(16, top, 320, 600);
+    const { wrapper } = mountChip([item('a')]);
+    await wrapper.setProps({ panel: () => panel, area: () => area });
+    let chipTop = 736;
+    wrapper.get('[data-request-status]').element.getBoundingClientRect = () => new DOMRect(400, chipTop, 120, 24);
+    await wrapper.get('[data-request-chip]').trigger('click');
+    const popover = wrapper.get<HTMLElement>('[data-request-popover]').element;
+    expect(popover.style.bottom).toBe('40px');
+
+    // 整页往上滚了 100：面板和条目一起上移
+    top = -28;
+    chipTop = 636;
+    document.dispatchEvent(new Event('scroll'));
+    await nextTick();
+    expect(popover.style.bottom).toBe('140px');
   });
 
   it('关掉加载失败（ADR 0167）：按钮不说失败，明细没有有失败一组；都以失败结束时按钮回到空闲，明细里一组也没有', async () => {

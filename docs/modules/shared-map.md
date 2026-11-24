@@ -363,7 +363,7 @@ const readout = useMapReadout(map);
 
 | 文件 | 内容 |
 |---|---|
-| `LayerPanelShell.tsx` | 外壳：头部只有标题和收起（2026-11-15 删掉了主节点、统计报表、分节点资源三个页签）、收起后的竖条、上下两段"资源""图层"（2026-11-16 用户定的叫法）和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`，`floating` 收到面板、图层滚动区和两段分到的高度（`layout`）；`views`、`view` 是搜索行下面一行带数量的标签（`PanelTab` 的 `count` 为 null 时只写名称，为 0 时变灰；现状底图用来切换显示全部、二维资源或三维模型，2026-11-16 用户选的丁），这一行算进上段本来的高度；`currentViews`、`currentView` 是"图层"标题下面同样的一行（现状底图三维里的筛选，ADR 0161），算进下段本来的高度；登记为贴左边的悬浮元素 |
+| `LayerPanelShell.tsx` | 外壳：头部只有标题和收起（2026-11-15 删掉了主节点、统计报表、分节点资源三个页签）、收起后的竖条、上下两段"资源""图层"（2026-11-16 用户定的叫法）和分隔条（比例由页面持有），插槽 `catalogTools`、`catalogFilter`、`catalog`、`currentTools`、`current`、`floating`，`floating` 收到面板、图层滚动区和两段分到的高度（`layout`），两段的高度变了同时发出 `layout` 事件（面板外面贴着面板放的浮层用，如数据加载的明细；不监听面板的尺寸，会报 ResizeObserver loop）；`views`、`view` 是搜索行下面一行带数量的标签（`PanelTab` 的 `count` 为 null 时只写名称，为 0 时变灰；现状底图用来切换显示全部、二维资源或三维模型，2026-11-16 用户选的丁），这一行算进上段本来的高度；`currentViews`、`currentView` 是"图层"标题下面同样的一行（现状底图三维里的筛选，ADR 0161），算进下段本来的高度；登记为贴左边的悬浮元素 |
 | `PanelTabs.tsx` | 一行带数量的标签：两段共用，读屏名称带数量，为 0 的变灰、仍可以点；每个标签带 `data-<kind>-view`（`kind` 是 `catalog` 或 `current`） |
 | `catalog-tree.ts`、`CatalogTree.tsx` | 目录的节点（`CatalogLeaf`、`CatalogBranch`，键带种类前缀）和树：单击项是添加或移除（2026-11-22），悬停时底色、行尾、光标预告这一下会做什么，按住 Ctrl、⌘、Shift 时不预告；Ctrl、Shift 多选只用于批量（右键菜单、Insert、Delete；页面在多选时显示标题的批量按钮）；分类单击展开、收起；键盘；行尾一列是项数或勾，悬停时项换成加号或叉（只是图形）、分类换成整类按钮，触屏上常显；操作过的行停在结果上（鼠标、焦点离开这一行才再预告、单击才再生效，触屏 0.9 秒），双击只切换一次、不定位，变了的行闪一下，树外面一个看不见的 `aria-live` 播报"已添加 …"，都只在页面真的改了时出现；`catalogCover` 算出一组节点下能添加、能移除的项 |
 | `catalog-selection.ts` | 目录的多选：选中、锚点、焦点，搜索掉的节点不再算选中；单击切换以后清空（`clearedAt`），方向键移动焦点和锚点（`movedTo`），两项以上才算多选（`isBatch`），右键菜单和 Insert、Delete 作用的节点（`actionTargets`） |
@@ -392,12 +392,16 @@ const requests = useRequestStatus(
 <MapStatusBar readout={readout} format={format}>
   {{
     // onSelect：先展开左侧面板（changeLeftCollapsed(false)），再给资源图层面板一个新的 reveal
-    // panel、area：明细贴着左侧面板所在的一列、放在地图四周留白以内；在 setup 里定义好的函数，重渲染时不换
+    // panel：左列里的资源图层面板本身（按内容定高，收起后是竖条），不是撑满高度的一列；panelCollapsed：收起时明细用展开时的 320 宽
+    // panelLayout：面板发出的两段高度（CurrentMapLayerPanel 的 onLayout 记下），面板变高变矮时重新放，不监听面板的尺寸
+    // area：地图四周留白以内；这几个函数在 setup 里定义好，重渲染时不换
     before: () => [
       <RequestStatusChip
         status={requests}
         selectable={key => key !== 'basemap'}
-        panel={leftColumn}
+        panel={leftPanel}
+        panelCollapsed={!sides.left.value}
+        panelLayout={leftLayout}
         area={mapArea}
         onSelect={reveal}
         onRetry={retry}
@@ -415,7 +419,7 @@ const requests = useRequestStatus(
 - 按钮和明细的规则是纯函数：`requestSummary`（这一次显示里、明细开着时是加载中，没有在显示的加载时看失败，这一次显示里都结束了是已加载完成，其余是空闲 `idle`；三类都关掉时是 `hidden`、没有按钮；百分比按二维瓦片的张数和瓦片集的块数合起来算，泼溅的比例不算进去）、`requestPercent`（向下取整、最多 99）、`requestStatusText`（读屏名称）、`requestStatusTip`（悬停提示）、`requestGroups`、`requestRowText`、`failedRowText`；关掉的一类（`RequestKinds`，ADR 0167）在按钮和明细里都不算；常量 `INLINE_DELAY`（行内转圈 0.4 秒）、`CHIP_DELAY`（按钮显示加载 0.8 秒）、`DONE_HOLD`（1.5 秒）、`SLOW_AFTER`（5 秒）
 - 按钮（ADR 0171）：一直在，内容和看不见的"转圈 99%"叠在同一个 grid 格子里，宽度按后者固定、内容居中，状态变了宽度不变，后面的读数不动。加载中是主色的转圈加百分比（只有读模型索引、高斯泼溅时只有转圈），上一轮有失败时转圈右上角一个红点；有失败是橙色警告加项数；完成是绿色的勾，空闲是灰色的勾。全称在读屏名称和 `ElTooltip`（明细开着时不提示）里。外层是弹性容器，按钮的行高、盒模型和状态栏一样，和状态栏同高、上下对齐（2026-11-22 前外层是块元素，按页面 14 像素、1.5 倍行高形成的行框把按钮撑高 1 像素）
 - 按钮自己拦截鼠标（状态栏不拦截）；空闲时也能点开明细，看已完成的项；明细用 `useLightDismiss`，点外面、Esc 关闭
-- 明细的位置是纯函数 `requestPopoverPlacement`（视口坐标，用户 2026-11-23）：宽度同资源图层面板（收起成竖条时用展开时的 320），区域更窄时同区域。面板下面到状态栏上方放得下最高的明细（420）时平移到面板下方（`below`，和面板左对齐）；否则在右边（`beside`，左边离面板右边 8，右边放不下时向左移、盖住面板）；底边都离状态栏 8，上边放不下时变矮。按最高的明细判断，内容多少不换位置。页面给的 `panel` 是左列里的面板本身（按内容定高，不是撑满高度的一列），另给 `panelCollapsed`；组件只在明细开着时量面板、区域和按钮的上边，面板、区域的尺寸和窗口变了、收起展开、页面激活时重新放；不跟着按钮走（用户 2026-11-16，那时条目会随经纬度左右移）。外壳是浮在地图上的 `MxPanel`（浅灰标题栏），三组的标题是 `MxTitle`
+- 明细的位置是纯函数 `requestPopoverPlacement`（视口坐标，用户 2026-11-23）：宽度同资源图层面板（收起成竖条时用展开时的 320），区域更窄时同区域。面板下面到状态栏上方放得下最高的明细（420）时平移到面板下方（`below`，和面板左对齐）；否则在右边（`beside`，左边离面板右边 8，右边放不下时向左移、盖住面板）；底边都离状态栏 8，上边放不下时变矮。按最高的明细判断，内容多少不换位置。页面给的 `panel` 是左列里的面板本身（按内容定高，不是撑满高度的一列），另给 `panelCollapsed`；组件只在明细开着时量面板、区域和按钮的上边，面板的布局（`panelLayout`）、收起展开，区域的尺寸，窗口的尺寸和滚动变了，页面激活时重新放，位置没变时不重渲染；不监听面板的尺寸（2026-11-23 审查发现：会报 ResizeObserver loop）；不跟着按钮走（用户 2026-11-16，那时条目会随经纬度左右移）。外壳是浮在地图上的 `MxPanel`（浅灰标题栏），三组的标题是 `MxTitle`
 
 ## 自定义范围（ADR 0121）
 

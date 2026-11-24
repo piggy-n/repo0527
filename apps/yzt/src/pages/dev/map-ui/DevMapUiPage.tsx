@@ -16,6 +16,7 @@ import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { MapCard } from '@/shared/map/card/MapCard';
+import type { ListSplit } from '@/shared/map/layer-panel/panel-split';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
@@ -70,13 +71,14 @@ const MapUiSamples = defineComponent({
     const legendCode = ref<string | null>(null);
     const legendEditingCode = ref<string | null>(null);
     const basemapOpen = ref(false);
-    // 数据加载的明细量这里的面板（列里的第一个元素）和区域，同现状底图页
+    // 数据加载的明细量这里的面板（列里的第一个元素）和区域，按面板发出的两段高度重新放，同现状底图页
     const requestArea = ref<HTMLElement>();
     const requestColumn = ref<HTMLElement>();
     const requestPanel = () => {
       const panel = requestColumn.value?.firstElementChild;
       return panel instanceof HTMLElement ? panel : null;
     };
+    const requestSplit = shallowRef<ListSplit | null>(null);
     // 切换样例只改加入当前地图的资源，年份与样式继续由真实拥有者维护
     const codes = [...SAMPLE_CATALOG.resources.keys()];
     const modelKeys = SAMPLE_MODELS.map(model => modelKey(model.id));
@@ -246,6 +248,7 @@ const MapUiSamples = defineComponent({
                   legendYield={legendEditingCode.value}
                   onUpdate:collapsed={layout.setCollapsed}
                   onLegendCode={(code: string | null) => (legendCode.value = code)}
+                  onLayout={(split: ListSplit | null) => (requestSplit.value = split)}
                 />
               </div>
               <div class={styles.requestBar}>
@@ -253,6 +256,7 @@ const MapUiSamples = defineComponent({
                   status={SAMPLE_REQUEST_STATUS}
                   panel={requestPanel}
                   panelCollapsed={layout.collapsed.value}
+                  panelLayout={() => requestSplit.value}
                   area={() => requestArea.value ?? null}
                 />
               </div>

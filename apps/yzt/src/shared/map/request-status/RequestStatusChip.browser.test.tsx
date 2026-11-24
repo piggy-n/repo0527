@@ -1,10 +1,13 @@
 import 'element-plus/dist/index.css';
 import type { LngLat } from '@mx/map-core';
+import { provideMap } from '@mx/map-vue';
 import { mount } from '@vue/test-utils';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
-import { computed, defineComponent, nextTick, shallowRef } from 'vue';
+import { computed, defineComponent, h, nextTick, ref, shallowRef } from 'vue';
 import { required } from '../../testing/required';
+import { LayerPanelShell } from '../layer-panel/LayerPanelShell';
+import type { ListSplit } from '../layer-panel/panel-split';
 import { MapStatusBar } from '../status-bar/MapStatusBar';
 import type { ScaleBar, ViewAngles } from '../status-bar/status-bar';
 import type { MapReadout, ReadoutPosition } from '../status-bar/useMapReadout';
@@ -280,5 +283,98 @@ describe('状态按钮和状态栏（手机宽度）', () => {
     const shown = readoutBar();
     expect(shown.textContent).toBe('10 km');
     expect(shown.scrollWidth).toBeLessThanOrEqual(shown.clientWidth);
+  });
+});
+
+// n 行、每行 32 高的内容
+const rows = (n: number) => Array.from({ length: n }, (_, index) => h('div', { key: index, style: { height: '32px' } }));
+
+// 明细和真实的资源图层面板（2026-11-23 审查发现）：面板按内容定高，外壳在自己的尺寸监听里改两段的高度；明细监听面板的尺寸时
+// 浏览器同一帧里不再通知比内容浅的面板，报 ResizeObserver loop。用面板发出的两段高度重新放
+function setupWithPanel() {
+  const host = document.body.appendChild(document.createElement('div'));
+  const loopErrors: string[] = [];
+  const onError = (event: ErrorEvent) => {
+    if (event.message.includes('ResizeObserver')) {
+      loopErrors.push(event.message);
+    }
+  };
+  window.addEventListener('error', onError);
+  const catalogRows = ref(2);
+  const split = shallowRef<ListSplit | null>(null);
+  const column = ref<HTMLElement>();
+  const status: RequestStatus = {
+    items: computed(() => [LOADING]),
+    now: shallowRef(1000),
+    display: shallowRef({ settledAt: null }),
+    loadingKeys: computed(() => new Set<string>()),
+    failedKeys: computed(() => new Set<string>()),
+    kinds: computed(() => ALL_REQUEST_KINDS)
+  };
+  const panel = () => {
+    const element = column.value?.firstElementChild;
+    return element instanceof HTMLElement ? element : null;
+  };
+  // 同现状底图的左下角：面板一列、下面一行是状态按钮；2 行目录时面板约 344 高，下面放得下明细
+  const Page = defineComponent({
+    name: 'PanelPage',
+    setup() {
+      provideMap({ groups: [], camera: { center: POINT, zoom: 7, bearing: 0, pitch: 0 } });
+      return () => (
+        <div style={{ ...SPACES, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) 24px', gap: '12px', height: '880px' }}>
+          <div ref={column} style={{ display: 'flex', flexDirection: 'column', minHeight: '0', width: '320px' }}>
+            <LayerPanelShell title="资源图层" ratio={0.4} onLayout={(value: ListSplit | null) => (split.value = value)}>
+              {{
+                catalogTools: () => [],
+                catalogFilter: () => [h('div', { style: { height: '32px' } })],
+                catalog: () => rows(catalogRows.value),
+                currentTools: () => [],
+                current: () => rows(2),
+                floating: () => []
+              }}
+            </LayerPanelShell>
+          </div>
+          <div style={{ display: 'flex' }}>
+            <RequestStatusChip status={status} panel={panel} panelLayout={() => split.value} />
+          </div>
+        </div>
+      );
+    }
+  });
+  const wrapper = mount(Page, { attachTo: host });
+  return {
+    catalogRows,
+    loopErrors,
+    panel: () => required(panel(), '面板').getBoundingClientRect(),
+    [Symbol.dispose]() {
+      window.removeEventListener('error', onError);
+      wrapper.unmount();
+      host.remove();
+    }
+  };
+}
+
+// 外壳用到的间距令牌
+const SPACES = { '--space-xs': '4px', '--space-sm': '8px', '--space-md': '12px', '--space-lg': '16px' };
+
+const popover = () => required(document.querySelector<HTMLElement>('[data-request-popover]'), '明细');
+
+describe('明细和真实的资源图层面板', () => {
+  it('明细开着时面板变高：按面板发出的两段高度从下方换到右边，不报 ResizeObserver loop（2026-11-23 审查发现）', async () => {
+    await page.viewport(1440, 900);
+    using ctx = setupWithPanel();
+    await settle();
+    required(document.querySelector<HTMLElement>('[data-request-chip]'), '状态按钮').click();
+    await settle();
+    expect(popover().dataset.requestSide).toBe('below');
+    expect(popover().getBoundingClientRect().left).toBeCloseTo(ctx.panel().left, 0);
+
+    // 目录到了：面板撑到列的底部，下面放不下
+    ctx.catalogRows.value = 40;
+    await settle();
+    await settle();
+    expect(popover().dataset.requestSide).toBe('beside');
+    expect(popover().getBoundingClientRect().left).toBeCloseTo(ctx.panel().right + 8, 0);
+    expect(ctx.loopErrors).toStrictEqual([]);
   });
 });

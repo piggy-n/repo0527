@@ -50,6 +50,7 @@ import { CurrentLayerList, type RowAnimation } from '@/shared/map/layer-panel/Cu
 import { LayerPanelShell, type PanelFloatingContext, type PanelTab } from '@/shared/map/layer-panel/LayerPanelShell';
 import { LayerPopover } from '@/shared/map/layer-panel/LayerPopover';
 import { type PanelMenuEntry, PanelMenu } from '@/shared/map/layer-panel/PanelMenu';
+import type { ListSplit } from '@/shared/map/layer-panel/panel-split';
 import { type PanelToolItem, PanelToolbar } from '@/shared/map/layer-panel/PanelToolbar';
 import { revealInScroll } from '@/shared/map/layer-panel/scroll';
 import { OpacitySlider } from '@/shared/map/OpacitySlider';
@@ -140,7 +141,9 @@ export const CurrentMapLayerPanel = defineComponent({
     retryModels: () => true,
     'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean',
     /** 图例浮层正在显示的资源，右侧图例在编辑同一个资源时回到浏览；关闭时为 null */
-    legendCode: (code: string | null) => code === null || typeof code === 'string'
+    legendCode: (code: string | null) => code === null || typeof code === 'string',
+    /** 两段分到的高度变了（外壳的 layout）：页面上贴着面板放的浮层（数据加载的明细）读它重新放 */
+    layout: (split: ListSplit | null) => split === null || typeof split === 'object'
   },
   setup(props, { emit }) {
     const map = useMap();
@@ -1010,6 +1013,7 @@ export const CurrentMapLayerPanel = defineComponent({
         onRetry={() => emit('retry')}
         onUpdate:collapsed={(collapsed: boolean) => emit('update:collapsed', collapsed)}
         onUpdate:ratio={(ratio: number) => props.layout.setCheckedRatio(ratio)}
+        onLayout={(split: ListSplit | null) => emit('layout', split)}
         views={views.value}
         view={view.value}
         onUpdate:view={(id: string) => (view.value = catalogViewOf(id) ?? view.value)}
