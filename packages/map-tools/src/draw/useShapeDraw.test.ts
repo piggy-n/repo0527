@@ -22,9 +22,19 @@ function pointer(type: MapPointerEvent['type'], x: number, y: number, clickCount
   return { type, point: { x, y }, button: 0, clickCount, modifiers: MODIFIERS };
 }
 
+// 绘制不截图
+function noSnapshot(): never {
+  throw new Error('绘制不截图');
+}
+
 function setup() {
   const camera = shallowRef<CameraState>({ center: [119, 33], zoom: 10, bearing: 0, pitch: 0 });
-  const view = shallowRef<MapViewport | null>({ ...toolView(), eyeHeight: () => null, heading: () => null });
+  const view = shallowRef<MapViewport | null>({
+    ...toolView(),
+    eyeHeight: () => null,
+    heading: () => null,
+    snapshot: noSnapshot
+  });
   const mapPointer = shallowRef<ScreenPoint | null>(null);
   const activeTool = ref('browse');
   const map = {

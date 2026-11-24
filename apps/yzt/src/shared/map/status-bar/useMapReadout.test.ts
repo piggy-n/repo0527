@@ -29,7 +29,10 @@ function fakeViewport(camera: { readonly value: CameraState }) {
     project: () => ({ x: 500, y: 300 }),
     queryRendered: () => [],
     eyeHeight: () => null,
-    heading: () => null
+    heading: () => null,
+    snapshot: () => {
+      throw new Error('读数不截图');
+    }
   };
   // 三维视图：同样的拾取，另外有视点高度（ADR 0080 第 6 节）和朝向
   const eye = { height: 420_000, heading: 359.6 };

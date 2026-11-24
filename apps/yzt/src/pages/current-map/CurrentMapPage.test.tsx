@@ -272,6 +272,11 @@ class FakeMap implements MapLike {
     return [];
   }
   triggerRepaint(): void {}
+  redraw(): void {}
+  getPixelRatio(): number {
+    return 1;
+  }
+  setPixelRatio(): void {}
   remove(): void {}
   // 投影、俯角上限和相机的变换只在三维引擎是 maplibre 时用到
   getProjection(): ProjectionSpecification | undefined {
@@ -885,7 +890,7 @@ describe('CurrentMapPage', () => {
     // 地图的工具栏是竖排的；资源图层面板里的两个工具栏是横排的
     const toolbar = wrapper.get('[role="toolbar"][aria-orientation="vertical"]');
     const labels = toolbar.findAll('button').map(item => item.attributes('aria-label'));
-    expect(labels.slice(-3)).toStrictEqual(['行政区边界', '图例', '清除测量与定位标记']);
+    expect(labels.slice(-4)).toStrictEqual(['行政区边界', '图例', '地图打印', '清除测量与定位标记']);
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
@@ -977,6 +982,30 @@ describe('CurrentMapPage', () => {
     await reopen();
     await optionsPopover(name).trigger('keydown', { key: 'Escape', code: 'Escape' });
     await expectClosed();
+  });
+
+  it('地图打印（ADR 0174）：业务组里单独一组、在清除前面；点开是打印的浮层，入口按下；再点入口关闭', async () => {
+    // jsdom 没有 Canvas 2D：预览截不了图，只说明原因
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const name = 'print';
+    const { wrapper } = await readyPage();
+    const toolbar = wrapper.get('[role="toolbar"][aria-orientation="vertical"]');
+    expect(toolbar.findAll('button').map(item => item.attributes('aria-label')).slice(-2)).toStrictEqual([
+      '地图打印',
+      '清除测量与定位标记'
+    ]);
+    expect(toolbar.findAll('[role="separator"]')).toHaveLength(5);
+    const trigger = button(wrapper, '地图打印');
+
+    await trigger.trigger('click');
+    await vi.waitFor(() => expect(optionsPopoverVisible(name)).toBe(true));
+    expect(trigger.attributes('aria-pressed')).toBe('true');
+    expect(optionsPopover(name).text()).toContain('导出图片');
+    expect(optionsPopover(name).text()).toContain('无法创建截图的画布');
+
+    await trigger.trigger('click');
+    expect(trigger.attributes('aria-pressed')).toBe('false');
+    await vi.waitFor(() => expect(optionsPopoverVisible(name)).toBe(false));
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {

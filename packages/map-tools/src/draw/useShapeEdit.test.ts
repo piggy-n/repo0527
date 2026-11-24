@@ -42,9 +42,19 @@ const SQUARE: MultiPolygon = {
   ]
 };
 
+// 编辑不截图
+function noSnapshot(): never {
+  throw new Error('编辑不截图');
+}
+
 function setup(initial: MultiPolygon | null = SQUARE) {
   const geometry = shallowRef<MultiPolygon | null>(initial);
-  const view = shallowRef<MapViewport | null>({ ...toolView(), eyeHeight: () => null, heading: () => null });
+  const view = shallowRef<MapViewport | null>({
+    ...toolView(),
+    eyeHeight: () => null,
+    heading: () => null,
+    snapshot: noSnapshot
+  });
   const mapPointer = shallowRef<ScreenPoint | null>(null);
   const activeTool = ref('browse');
   const map = {

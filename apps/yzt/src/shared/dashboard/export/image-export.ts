@@ -104,19 +104,6 @@ export function safeImageName(name: string): string {
   return `${name.replace(/[\p{Cc}<>:"/\\|?*]/gu, '-').slice(0, 150)}.png`;
 }
 
-export function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const encoded = (blob: Blob | null) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error('图片编码失败'));
-      }
-    };
-    canvas.toBlob(encoded, 'image/png');
-  });
-}
-
 export function saveImage(blob: Blob, name: string): void {
   saveFile({ blob, fileName: safeImageName(name) });
 }

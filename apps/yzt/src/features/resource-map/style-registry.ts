@@ -404,14 +404,34 @@ export function pointMarkOf(
   }
   const items = classItems(rule);
   const marks = new Map(items.map(item => [item.key, markOf(classSymbol(resource, item, override, style))]));
+  const fallback = marks.get(OTHER_ITEM) ?? markOf(uniformSymbol(resource, override, style));
+  const keyOf = classKeyEvaluator(rule, zoom);
+  return properties => marks.get(keyOf(properties)) ?? fallback;
+}
+
+/** 按要素的属性给出它属于哪个取值（分类样式里取值的键） */
+export type ClassKeyOf = (properties: Readonly<Record<string, unknown>>) => string;
+
+// 取值的键：和图层的 match 是同一个表达式，按 MapLibre 的语义求值
+function classKeyEvaluator(rule: ColorRule, zoom: number): ClassKeyOf {
   const parsed = createExpression(classExpression(rule, item => item.key), 'class-key', CLASS_KEY_SPEC);
   if (parsed.result !== 'success') {
     throw new Error(parsed.value.map(({ message }) => message).join('；'));
   }
-  const fallback = marks.get(OTHER_ITEM) ?? markOf(uniformSymbol(resource, override, style));
   const expression = parsed.value;
-  return properties => {
-    const key: unknown = expression.evaluate({ zoom }, { type: 'Point', properties: { ...properties } });
-    return marks.get(String(key)) ?? fallback;
-  };
+  return properties => String(expression.evaluate({ zoom }, { type: 'Point', properties: { ...properties } }));
+}
+
+/**
+ * 要素在地图上按哪个取值画（ADR 0174，打印的图例只列画面里出现的取值）：资源没有分类、或者用统一样式时为 null。
+ * 没对上任何取值的要素是兜底的键（OTHER_ITEM），同图层
+ */
+export function classKeyOf(
+  resource: Resource,
+  zoom: number,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ClassKeyOf | null {
+  const rule = style.color;
+  return rule && symbolModeOf(style, override) !== 'uniform' ? classKeyEvaluator(rule, zoom) : null;
 }

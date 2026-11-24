@@ -293,7 +293,7 @@ boundaries.setOpacity(0.6);
 ```
 
 - 业务组（ADR 0053 第 2 节，设计稿 5D.1）：竖排、宽 56，组之间画分隔线；按钮 48 × 46，图标 20 在上，文字 12 在下、每行两个字（`labelLines`），"区划定位""坐标定位"分两行、高 62；整组约 380 高
-- `compact`：只显示图标，整组宽 40、按钮高 32，名称放进左边的 `ElTooltip`，`aria-label` 始终是完整名称。现状底图按地图操作、测量、定位、显示辅助、清理五组排列；`mapPageLayout` 在地图高度低于 692 时启用双列，宽 72、按钮高 28，清理独占末行。`pressed` 表示当前显示、浅主色底，`opened` 表示已打开标签、仅主色图标；当前工具仍用实心主色（ADR 0070）
+- `compact`：只显示图标，整组宽 40、按钮高 32，名称放进左边的 `ElTooltip`，`aria-label` 始终是完整名称。现状底图按地图操作、测量、定位、显示辅助、打印、清理六组排列（打印见下面"地图打印"）；`mapPageLayout` 在地图高度低于 733 时启用双列，宽 72、按钮高 28，打印、清理各独占一行。`pressed` 表示当前显示、浅主色底，`opened` 表示已打开标签、仅主色图标；当前工具仍用实心主色（ADR 0070）
 - 地图工具栏、右下控制栏、透明度入口和资源状态提示共用 `MAP_TOOLTIP_PROPS`：悬停 200 毫秒后显示、移出立即关闭、不可进入提示内容、关闭后不常驻；`transition="none"` 使用没有 CSS 过渡的名称，避开 Element 默认淡出动画（空字符串会回退到默认动画）。资源透明度滑块已有百分比输出，和公共透明度滑块一样禁用重复的数值 Tooltip
 - 状态：当前工具主色实心（`aria-pressed`），打开着面板的动作浅主色底（也是 `aria-pressed`），悬停浅底主色，不可用灰色，键盘焦点 `:focus-visible` 时 2 像素的浅主色描边
 - 业务组贴在右边、会挡住定位，组件自己登记为贴右边的悬浮元素（ADR 0053 第 9 节）
@@ -303,6 +303,24 @@ boundaries.setOpacity(0.6);
 - 工具按钮读 `useMap().activeTool`，激活的按钮高亮；点击没激活的工具时 `activateTool`，点击激活的工具时 `releaseTool`（临时任务退回上一个常驻模式）。"移动"是常驻模式，再点一次什么也不做
 - 动作按钮调用页面通过 `actions` 传入的回调，没有回调时不可用。开关面板的动作（区划定位，以后的坐标定位）也是动作：面板开关是页面的界面状态，页面通过 `pressed` 告诉工具栏哪些显示为按下（高亮、`aria-pressed`），工具栏自己不保存；它和当前工具互不影响（ADR 0036）
 - 现状底图页把它放在最右列上方，基础组与底图卡在同列下方，右边缘对齐（ADR 0066）
+
+- 给动作按钮挂浮层用插槽：插槽名是动作的 ID，拿到工具栏做好的按钮（带提示）放进 `MapOptionsPopover` 的 `reference`；动作的回调照样要给（没有回调时按钮不可用），开关由浮层自己的入口点击负责，回调只做别的事（现状底图的打印只让右边显示出来）
+
+## 地图打印（ADR 0174）
+
+`shared/map/print/`：把当前视角原样截图，加上图例合成一张 PNG。现状底图用，入口在业务组。
+
+| 文件 | 内容 |
+|---|---|
+| `print-legend.ts` | 图例的类型（`PrintLegendBlock`：一组的标题、跨列时续的标题、各行的文字和画符号的函数）和排版 `layoutPrintLegend`（纯函数）：一列宽 232，按最高的高度分列，组的标题不和第一行分开，跨列时新的一列开头写"（续）"，文字按字形宽度分行 |
+| `print-image.ts` | `arrangePrint`（纯函数）定图例放哪、整张图多大：右侧一栏（和地图一样高）、右下角（最高占地图 60%、最宽 45%，放不下改右侧）、不带；`composePrintImage` 在 canvas 上画，像素比同截图（图片 ÷ 地图的 CSS 尺寸）。图片里的颜色、字体是固定的数据（普惠体，取值同设计令牌） |
+| `print-file-name.ts` | 文件名"名称-年月日-时分秒.png"，按本地时间 |
+| `useMapPrint.ts` | 打印的拥有者：`run` 等画面完整（上下文的 `whenComplete`，`skipWait` 不等了）、截图（`omitGroups` 的分组这一帧不画，二维可 2 倍）、在截图之后同步推导图例、合成、编码（`shared/file-transfer` 的 `canvasBlob`），交出 Blob 和文件名；`preview` 按当前画面合成，不等。同一时间只有一次，作用域销毁、`cancel` 时作废；失败时 `error` 记下原因。不保存、不提示 |
+| `MapPrintPanel.tsx` | 浮层的内容：预览、导出的像素、图例的位置、清晰度、导出；等待时"等待地图加载完成"和"不等了"。预览在打开、改设置、相机变了以后画面稳定时重画（预览自己会请求重画，每次只等一次）；导出完交给浏览器保存（`saveFile`）、提示文件名，通知页面关掉浮层；卸载时放弃没完成的导出 |
+
+- 图例的来源由页面拼起来（现状底图页的 `printLegend`）：资源是 `features/resource-map/print-legend.ts`（画面里画出来的资源，整屏查一次渲染要素，有区划范围时只算范围里的；按属性配色的只列出现的取值，`style-registry` 的 `classKeyOf` 和图层同一个 `match`；符号在 canvas 上画，`legend-canvas.ts`，几何和页面的 `LegendSwatchIcon` 共用 `legend-swatch-geometry.ts`），三维里显示着的模型是 `features/scene-models/print-legend.ts`，打开着的行政区边界是 `boundary/boundary-print.ts`
+- 现状底图截图时不画 `measure`、`selection`、`selection-labels`（用户 2026-11-24）；漫游时工具栏隐藏，不提供打印
+- 测试：排版、排法、文件名、各来源的推导是普通测试；`useMapPrint`、`MapPrintPanel` 在 jsdom 里换掉 Canvas 2D；`app/map-print.browser.test.ts` 在真实 MapLibre 上截图、推导、合成，看图例里的颜色
 
 ## 基础组（ADR 0053 第 3 节）
 

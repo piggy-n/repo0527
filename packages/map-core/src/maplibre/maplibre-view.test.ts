@@ -6,7 +6,7 @@ import type {
 import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { createNanoEvents } from 'nanoevents';
-import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import { NO_SCENE_STATUS, type SceneStatus } from '../scene/scene-content-model';
@@ -371,7 +371,27 @@ class FakeMap implements MapLike {
   getLayersOrder(): string[] {
     return [];
   }
-  triggerRepaint(): void {}
+  // 请求重画的次数：模型层也会请求，不记进 calls
+  repaints = 0;
+  triggerRepaint(): void {
+    this.repaints += 1;
+  }
+
+  // 截图（ADR 0174）：redraw 时画布上的内容由用例设置（onRedraw），记下调用；像素比改了以后像 MapLibre 一样调整画布、同步发出 resize
+  pixelRatio = 1;
+  onRedraw: (() => void) | undefined;
+  redraw(): void {
+    this.calls.push(['redraw']);
+    this.onRedraw?.();
+  }
+  getPixelRatio(): number {
+    return this.pixelRatio;
+  }
+  setPixelRatio(pixelRatio: number | null): void {
+    this.calls.push(['setPixelRatio', pixelRatio]);
+    this.pixelRatio = pixelRatio ?? 1;
+    this.resize();
+  }
 
   getProjection(): ProjectionSpecification | undefined {
     return this.projection;
@@ -3627,5 +3647,294 @@ describe('MapLibreView 的地形（ADR 0170）', () => {
     await nextTask();
 
     expect(offsets).toStrictEqual([-2]);
+  });
+});
+
+// 截图的二维画布：jsdom 没有 Canvas 2D，换成只有 drawImage 的假上下文，拷贝时由 onDraw 记下先后；用例结束时还原
+function stubCanvas2d(onDraw: () => void): void {
+  const context = { drawImage: () => onDraw() };
+  const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext');
+  spy.mockReturnValue(context as unknown as RenderingContext);
+  onTestFinished(() => spy.mockRestore());
+}
+
+// business 分组一个显示着的线图层、一个本来就隐藏的线图层，basemap 一个线图层
+const BUSINESS: StyleGroup = {
+  sources: { dltb: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+  layers: [
+    { id: 'dltb-line', type: 'line', source: 'dltb' },
+    { id: 'dltb-off', type: 'line', source: 'dltb', layout: { visibility: 'none' } }
+  ]
+};
+
+// 就绪、样式已应用的视图；之后的调用从空记录开始
+async function readySetup(options: Parameters<typeof setup>[0] = {}) {
+  const ctx = setup(options);
+  ctx.map.fire('style.load');
+  ctx.session.style.setGroups({ basemap: lineGroup('tdt'), business: BUSINESS });
+  await nextMicrotask();
+  ctx.map.canvas.width = 640;
+  ctx.map.canvas.height = 480;
+  ctx.map.calls.length = 0;
+  return ctx;
+}
+
+// 站点瓦片集，以及它这一轮按块数的加载
+const STATION_LAYER = {
+  id: 'station',
+  url: 'https://models.test/station/tileset.json',
+  show: true,
+  lighting: 'sun',
+  attempt: 0
+} as const;
+
+function stationBlocks(requested: number, loaded: number, startedAt: number, finishedAt: number | null) {
+  return new Map([['station', { kind: 'blocks' as const, requested, loaded, failed: 0, startedAt, finishedAt }]]);
+}
+
+describe('MapLibreView 的截图（ADR 0174）', () => {
+  it('同步画一帧并拷贝画布：省略的分组这一帧不透明度为 0、不过渡，本来隐藏的不动；之后还原、再画一帧，最后还原过渡', async () => {
+    using ctx = await readySetup();
+    stubCanvas2d(() => ctx.map.calls.push(['drawImage']));
+    const repaints = ctx.map.repaints;
+
+    const { image } = ctx.view.snapshot({ omitGroups: ['business'] });
+
+    expect(ctx.map.calls).toStrictEqual([
+      ['setPaintProperty', 'dltb-line', 'line-opacity-transition', { duration: 0, delay: 0 }],
+      ['setPaintProperty', 'dltb-line', 'line-opacity', 0],
+      ['redraw'],
+      ['drawImage'],
+      ['setPaintProperty', 'dltb-line', 'line-opacity', undefined],
+      ['redraw'],
+      ['setPaintProperty', 'dltb-line', 'line-opacity-transition', undefined]
+    ]);
+    expect([image.width, image.height]).toStrictEqual([640, 480]);
+    expect(ctx.map.repaints).toBe(repaints + 1);
+  });
+
+  it('省略的图层还原成样式里原来的不透明度和过渡', async () => {
+    using ctx = await readySetup();
+    ctx.session.style.setGroups({
+      business: {
+        sources: BUSINESS.sources,
+        layers: [
+          {
+            id: 'dltb-point',
+            type: 'circle',
+            source: 'dltb',
+            paint: { 'circle-opacity': 0.5, 'circle-opacity-transition': { duration: 100 } }
+          }
+        ]
+      }
+    });
+    await nextMicrotask();
+    ctx.map.calls.length = 0;
+    stubCanvas2d(() => undefined);
+
+    ctx.view.snapshot({ omitGroups: ['business'] });
+
+    const restored = ctx.map.calls.slice(ctx.map.calls.findLastIndex(([name]) => name === 'redraw') - 2);
+    expect(restored).toStrictEqual([
+      ['setPaintProperty', 'dltb-point', 'circle-opacity', 0.5],
+      ['setPaintProperty', 'dltb-point', 'circle-stroke-opacity', undefined],
+      ['redraw'],
+      ['setPaintProperty', 'dltb-point', 'circle-opacity-transition', { duration: 100 }],
+      ['setPaintProperty', 'dltb-point', 'circle-stroke-opacity-transition', undefined]
+    ]);
+  });
+
+  it('不给选项时只画一帧、拷贝，不改图层和像素比', async () => {
+    using ctx = await readySetup();
+    stubCanvas2d(() => ctx.map.calls.push(['drawImage']));
+
+    ctx.view.snapshot();
+
+    expect(ctx.map.calls).toStrictEqual([['redraw'], ['drawImage']]);
+  });
+
+  it('二维按给的像素比画这一帧，之后还原成页面指定的值；没指定时还原成跟随设备', async () => {
+    using plain = await readySetup();
+    stubCanvas2d(() => plain.map.calls.push(['drawImage', plain.map.pixelRatio]));
+    plain.view.snapshot({ pixelRatio: 2 });
+    expect(plain.map.calls).toStrictEqual([
+      ['setPixelRatio', 2],
+      ['redraw'],
+      ['drawImage', 2],
+      ['setPixelRatio', null]
+    ]);
+
+    using fixed = await readySetup({ mapOptions: { pixelRatio: 1.5 } });
+    fixed.map.pixelRatio = 1.5;
+    fixed.view.snapshot({ pixelRatio: 2 });
+    expect(fixed.map.calls.filter(([name]) => name === 'setPixelRatio')).toStrictEqual([
+      ['setPixelRatio', 2],
+      ['setPixelRatio', 1.5]
+    ]);
+
+    // 和现在的一样时不调整画布
+    fixed.map.calls.length = 0;
+    fixed.view.snapshot({ pixelRatio: 1.5 });
+    expect(names(fixed.map.calls)).toStrictEqual(['redraw']);
+  });
+
+  it('三维照屏幕的像素比：模型按屏幕误差选精度', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    expect(ctx.view.state).toBe('ready');
+    stubCanvas2d(() => ctx.map.calls.push(['drawImage']));
+    ctx.map.calls.length = 0;
+
+    ctx.view.snapshot({ pixelRatio: 2 });
+
+    expect(names(ctx.map.calls)).toStrictEqual(['redraw', 'drawImage']);
+  });
+
+  it('画的时候出错也还原不透明度、像素比和过渡，还原时的错误只报告', async () => {
+    using ctx = await readySetup();
+    stubCanvas2d(() => undefined);
+    ctx.map.onRedraw = () => {
+      throw new Error('画不出来');
+    };
+
+    expect(() => ctx.view.snapshot({ omitGroups: ['business'], pixelRatio: 2 })).toThrow('画不出来');
+    expect(ctx.map.calls.slice(-5)).toStrictEqual([
+      ['redraw'],
+      ['setPaintProperty', 'dltb-line', 'line-opacity', undefined],
+      ['setPixelRatio', null],
+      ['redraw'],
+      ['setPaintProperty', 'dltb-line', 'line-opacity-transition', undefined]
+    ]);
+    expect(ctx.errors).toStrictEqual([new Error('画不出来')]);
+  });
+
+  it('不认识的分组、不合法的像素比、没有就绪时抛错，不动地图', async () => {
+    using ctx = await readySetup();
+    expect(() => ctx.view.snapshot({ omitGroups: ['measure'] })).toThrow('没有分组 measure');
+    expect(() => ctx.view.snapshot({ pixelRatio: 0 })).toThrow('截图的像素比不是正数：0');
+    expect(ctx.map.calls).toStrictEqual([]);
+
+    ctx.view.pause();
+    expect(() => ctx.view.snapshot()).toThrow('MapLibreView 当前状态为 paused');
+  });
+
+  it('二维等到请求重画之后的下一次空闲；之前的空闲不算', async () => {
+    using ctx = await readySetup();
+    ctx.map.fire('idle');
+    const repaints = ctx.map.repaints;
+
+    const complete = ctx.view.whenComplete();
+    expect(await settled(complete)).toBe('pending');
+    expect(ctx.map.repaints).toBe(repaints + 1);
+
+    ctx.map.fire('idle');
+    expect(await settled(complete)).toBeUndefined();
+  });
+
+  it('等待时 signal 中止、视图暂停、释放都结束等待，结束后不留监听', async () => {
+    using ctx = await readySetup();
+    const listeners = ctx.map.listenerCount();
+
+    const controller = new AbortController();
+    const aborted = ctx.view.whenComplete(controller.signal);
+    await nextMicrotask();
+    controller.abort(new Error('不等了'));
+    await expect(aborted).rejects.toThrow('不等了');
+    expect(ctx.map.listenerCount()).toBe(listeners);
+
+    const paused = ctx.view.whenComplete();
+    await nextMicrotask();
+    ctx.view.pause();
+    await expect(paused).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(ctx.view.whenComplete()).rejects.toThrow('MapLibreView 当前状态为 paused');
+
+    ctx.view.resume();
+    const disposed = ctx.view.whenComplete();
+    await nextMicrotask();
+    ctx.view[Symbol.dispose]();
+    await expect(disposed).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('三维先等模型读完索引、这一轮加载完再等空闲；空闲时又开始了新的一轮就再等一遍', async () => {
+    const emitter = createNanoEvents<SceneRendererEvents>();
+    let activity: SceneActivities = NO_SCENE_ACTIVITY;
+    const renderer: SceneRenderer = {
+      ...fakeRenderer(),
+      get activity() {
+        return activity;
+      },
+      on: (event, callback) => emitter.on(event, callback)
+    };
+    let loadIndex: ((json: unknown) => void) | undefined;
+    using ctx = setup({
+      loadSceneRenderer: async () => () => renderer,
+      loadJson: () => new Promise(resolve => (loadIndex = resolve))
+    });
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    ctx.session.scene.set({
+      tilesets: [STATION_LAYER],
+      underground: null
+    });
+    await nextTask();
+    expect(ctx.view.sceneStatus.get('station')?.state).toBe('loading');
+    const repaints = ctx.map.repaints;
+
+    const complete = ctx.view.whenComplete();
+    ctx.map.fire('idle');
+    expect(await settled(complete)).toBe('pending');
+    expect(ctx.map.repaints).toBe(repaints);
+
+    // 读完索引，瓦片还在加载：空闲照样不算
+    activity = stationBlocks(4, 1, 1, null);
+    loadIndex?.(STATION_JSON);
+    await nextTask();
+    expect(ctx.view.sceneStatus.get('station')?.state).toBe('ready');
+    ctx.map.fire('idle');
+    expect(await settled(complete)).toBe('pending');
+
+    // 这一轮完了：请求重画、等空闲；空闲时又开始了新的一轮
+    activity = stationBlocks(4, 4, 1, 9);
+    emitter.emit('activitychange');
+    await nextTask();
+    expect(ctx.map.repaints).toBeGreaterThan(repaints);
+    activity = stationBlocks(2, 0, 10, null);
+    ctx.map.fire('idle');
+    expect(await settled(complete)).toBe('pending');
+
+    // 又完了：空闲以后再确认一帧，这一帧里没有开始新的一轮才算完
+    activity = stationBlocks(2, 2, 10, 12);
+    emitter.emit('activitychange');
+    await nextTask();
+    ctx.map.fire('idle');
+    expect(await settled(complete)).toBe('pending');
+    ctx.map.fire('idle');
+    expect(await settled(complete)).toBeUndefined();
+  });
+
+  it('三维内容刚交给会话、视图还没登记这些模型时不算加载完，不请求重画', async () => {
+    using ctx = setup({ loadSceneRenderer: async () => fakeRenderer, loadJson: () => new Promise(() => undefined) });
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    const repaints = ctx.map.repaints;
+
+    ctx.session.scene.set({
+      tilesets: [STATION_LAYER],
+      underground: null
+    });
+    const complete = ctx.view.whenComplete();
+    await nextTask();
+    ctx.map.fire('idle');
+
+    expect(await settled(complete)).toBe('pending');
+    expect(ctx.map.repaints).toBe(repaints);
+    expect(ctx.view.sceneStatus.get('station')?.state).toBe('loading');
   });
 });

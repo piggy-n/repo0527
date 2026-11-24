@@ -42,6 +42,25 @@ export interface FlyToOptions {
   readonly padding?: ViewPadding;
 }
 
+/** 截下的一帧（ADR 0174）：图片的像素 ÷ CSS 尺寸是这一帧实际的像素比 */
+export interface MapSnapshot {
+  readonly image: HTMLCanvasElement;
+  /** 地图画布的 CSS 尺寸 */
+  readonly width: number;
+  readonly height: number;
+}
+
+/** 截图的选项（ADR 0174） */
+export interface SnapshotOptions {
+  /** 这一帧不画的分组（如测量、选中高亮）：只在截图的这一帧隐藏，不改会话；不认识的分组抛错 */
+  readonly omitGroups?: readonly string[];
+  /**
+   * 这一帧画布的像素比（画布的像素 ÷ CSS 像素），截完还原；不给时同屏幕。只在二维生效，三维照屏幕：模型按屏幕误差选精度，
+   * 像素翻倍会去加载更细的一级。实际的像素比还受 MapLibre 的画布上限约束，以返回的画布尺寸为准
+   */
+  readonly pixelRatio?: number;
+}
+
 export interface FitBoundsOptions {
   readonly padding?: ViewPadding;
   readonly maxZoom?: number;
@@ -107,6 +126,17 @@ export interface MapView extends Disposable {
   readonly sceneActivity?: SceneActivities;
   /** 这一轮的加载有变化：每块瓦片都可能通知一次，使用方自己决定多久读一次 sceneActivity */
   onSceneActivityChange?(callback: () => void): Unsubscribe;
+  /**
+   * 等到画面完整（ADR 0174）：视野里请求的瓦片都已加载并画出，三维还要模型读完索引、这一轮加载完，之后再画出一帧；
+   * 已经稳定时也重画一帧再确认。不在 ready 时、等待中离开 ready 时以错误结束，释放时以 AbortError 结束，signal 中止时以它的原因结束。
+   * 一直有东西在加载时一直等，由调用方决定什么时候不等了；只有截图的视图有这项能力
+   */
+  whenComplete?(signal?: AbortSignal): Promise<void>;
+  /**
+   * 只在 ready 时可用：同步画一帧，立刻拷进一张新的二维画布（ADR 0174），不需要 preserveDrawingBuffer。
+   * 截的是整块画布，页面上盖在地图上的面板、控件不在里面；只有截图的视图有这项能力
+   */
+  snapshot?(options?: SnapshotOptions): MapSnapshot;
   /** 漫游的进度（ADR 0083 第 2 节），没有在漫游时为 null；只有三维视图有这项能力 */
   readonly roamStatus?: RoamStatus | null;
   /** 漫游的进度变化，最多 10 次每秒；只有三维视图有这项能力 */

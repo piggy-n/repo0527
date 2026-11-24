@@ -194,6 +194,7 @@ packages/icons/
 | `status-zoom` | `zoom-in` | 图层列表里的说明状态（当前级别不显示） |
 | `status-info` | 自制（2026-11-23，照 `status-error` 上下翻过来） | 资源详情里不能查详情的资源，说明行后面的提示图标：实心圆，i 镂空，颜色跟随文字 |
 | `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
+| `map-print` | `printer` | 业务组的地图打印入口（ADR 0174） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 | `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |
 | `focus` | `focus-2` | 定位到要素 |

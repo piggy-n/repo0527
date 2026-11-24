@@ -46,7 +46,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具、选择状态（只存要素身份）、三维内容（瓦片集、钻地，页面用 `bindScene` 绑定）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047、0081 | [map-core.md](map-core.md) |
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |
-| map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
+| map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取、投影、渲染要素查询和截图（`snapshot`，ADR 0174）；截图前用 `whenComplete` 等画面完整 | 0028（第 5 条由 0039 修正）、0174 | [map-vue.md](map-vue.md) |
 | 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影、渲染要素查询（三维时同样查二维样式的图层，用不用看能力 `identify`）；相机事件带 `view` 和 `cause`；一个视图可以随维度换种类（ADR 0147） | 0024、0047 | [map-core.md](map-core.md) |
 | 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
 | 资源释放与运行时 | `Disposable`、nanoevents；maplibre-gl 的全局设置在登录页空闲时预加载或首次进入地图时懒加载，同时预热 Worker 池 | 0023、0061 | [map-core.md](map-core.md) |
@@ -68,6 +68,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 点/框选的交互 | 十字光标、跟随提示；关掉拖动平移的工具声明 `panModifier`，按住 Ctrl / ⌘ 临时拖动地图；工具要接管按在手柄上的拖动时声明 `capturesPress` | 0056、0122 | [shared-map.md](shared-map.md)、[map-core.md](map-core.md) |
 | 鼠标的操作方式 | 二维、三维按部署各选一种（`.env` 的 `VITE_MAP_MOUSE_2D`、`VITE_MAP_MOUSE_3D`）：`maplibre` 是右键拖旋转和倾斜；`cesium` 是右键拖缩放、中键或 Ctrl + 左键拖旋转和倾斜，关掉 MapLibre 的 `dragRotate`、由 map-core 的 `CesiumDrag` 处理；现在二维 MapLibre、三维 Cesium 式 | 0168 | [map-core.md](map-core.md)、[map-vue.md](map-vue.md) |
 | 现状底图的界面 | 功能标签与独立详情同列排布、底图 Popover、紧凑图例与编辑视图、面板标题、指北针、状态栏在左下角、请求状态是前面定宽的按钮、资源图层面板（上段"资源"、下段"图层"，图层平铺成一个列表、三维里有筛选标签、"盖住模型"、按部署开关的行内提示、按部署开关二维三维各一套）、标注浮层；以设计文档"已确认的界面细节"为准 | 0057～0060、0066～0074、0094～0096、0102、0116、0157、0158、0159、0160、0161、0162、0165、0167、0169、0171 | [current-map-reference.md](../design/current-map-reference.md) |
+| 地图打印 | 现状底图业务组单独一组"地图打印"，入口上是底图同款的浮层：预览、图例位置（右侧一栏、右下角、不带）、清晰度（二维可 2 倍）、导出 PNG；当前视角原样截图（视图的 `whenComplete` 等画面完整，三维还等模型这一轮加载完，`snapshot` 同步画一帧拷出，不保留绘图缓冲；测量、选中高亮这一帧不透明度为 0），图例只列画面里画出来的资源和取值、三维里显示着的模型、打开着的行政区边界；漫游时不提供 | 0174 | [shared-map.md](shared-map.md)"地图打印"、[map-core.md](map-core.md)、[current-map-reference.md](../design/current-map-reference.md) |
 | 控制栏与边界入口 | 不支持三维的地图不显示 2D/3D；底图入口是 `BasemapCard`；除现状底图外的地图页在控制栏放行政区边界入口 | 0111、0128 | [shared-map.md](shared-map.md) |
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
 | 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），默认关；陆地全省一种颜色；地名和资源标注一样不写 glyphs、用普惠体在本地画 | 0133、0134、0146、0160 | [shared-map.md](shared-map.md) |

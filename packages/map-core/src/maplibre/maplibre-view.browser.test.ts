@@ -758,3 +758,94 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     expect(causes.every(cause => cause === 'sync')).toBe(true);
   });
 });
+
+// 截图（ADR 0174）：data 分组是盖满中心的红色面，marks 分组是中心的蓝色小方块
+function snapshotSetup() {
+  const container = document.body.appendChild(document.createElement('div'));
+  container.style.width = '800px';
+  container.style.height = '600px';
+  const session = new MapSession({ groups: ['data', 'marks'], camera: CAMERA });
+  session.style.setGroups({
+    data: areaGroup(),
+    marks: {
+      sources: { marks: { type: 'geojson', data: collection(square('m', 118.78, 118.82)) } },
+      layers: [{ id: 'marks-fill', type: 'fill', source: 'marks', paint: { 'fill-color': '#0000ff' } }]
+    }
+  });
+  let created: MapLibreMap | undefined;
+  // 不保留绘图缓冲（同页面）：截图不依赖它
+  const view = new MapLibreView({
+    session,
+    container,
+    createMap: mapOptions => (created = new MapLibreMap(mapOptions))
+  });
+  return {
+    view,
+    get map(): MapLibreMap {
+      if (!created) {
+        throw new Error('地图没有创建');
+      }
+      return created;
+    },
+    [Symbol.dispose]() {
+      view[Symbol.dispose]();
+      session[Symbol.dispose]();
+      container.remove();
+    }
+  };
+}
+
+// 截图中心的颜色
+function centerColor(image: HTMLCanvasElement): [number, number, number] {
+  const context = image.getContext('2d');
+  if (!context) {
+    throw new Error('截图没有二维上下文');
+  }
+  const center = context.getImageData(Math.floor(image.width / 2), Math.floor(image.height / 2), 1, 1);
+  const [r = 0, g = 0, b = 0] = center.data;
+  return [r, g, b];
+}
+
+describe('MapLibreView 的截图（真实的 MapLibre，ADR 0174）', () => {
+  it('等到画面完整后截图：不保留绘图缓冲也截得到；省略的分组只在这一帧不画，之后照常画', async () => {
+    using ctx = snapshotSetup();
+    await withTimeout(ctx.view.whenReady(), '视图就绪');
+    await withTimeout(ctx.view.whenComplete(), '画面完整');
+
+    const { image: full, width, height } = ctx.view.snapshot();
+    expect([width, height]).toStrictEqual([800, 600]);
+    expect([full.width, full.height]).toStrictEqual([800 * devicePixelRatio, 600 * devicePixelRatio]);
+    expect(centerColor(full)).toStrictEqual([0, 0, 255]);
+
+    expect(centerColor(ctx.view.snapshot({ omitGroups: ['marks'] }).image)).toStrictEqual([255, 0, 0]);
+    expect(ctx.map.getPaintProperty('marks-fill', 'fill-opacity')).toBeUndefined();
+    // 下一帧（不再截图）屏幕上照常画出，不淡入：读这一帧要在它的 render 事件里
+    const drawn = new Promise<[number, number, number]>(resolve =>
+      ctx.map.once('render', () => {
+        const canvas = ctx.map.getCanvas();
+        const gl = canvas.getContext('webgl2');
+        const pixel = new Uint8Array(4);
+        gl?.readPixels(canvas.width / 2, canvas.height / 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        resolve([pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]);
+      })
+    );
+    expect(await withTimeout(drawn, '下一帧')).toStrictEqual([0, 0, 255]);
+  });
+
+  it('二维按给的像素比截这一帧，范围不变；之后画布回到原来的尺寸、跟随设备像素比', async () => {
+    using ctx = snapshotSetup();
+    await withTimeout(ctx.view.whenReady(), '视图就绪');
+    await withTimeout(ctx.view.whenComplete(), '画面完整');
+    const before = ctx.map.getCanvas().width;
+    const center = ctx.map.getCenter();
+
+    const { image: sharp, width, height } = ctx.view.snapshot({ pixelRatio: 2 });
+
+    expect([width, height]).toStrictEqual([800, 600]);
+    expect([sharp.width, sharp.height]).toStrictEqual([1600, 1200]);
+    expect(centerColor(sharp)).toStrictEqual([0, 0, 255]);
+    expect(ctx.map.getCanvas().width).toBe(before);
+    expect(ctx.map.getPixelRatio()).toBe(devicePixelRatio);
+    expect(ctx.map.getCenter()).toStrictEqual(center);
+  });
+});

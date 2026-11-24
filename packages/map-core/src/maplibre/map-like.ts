@@ -206,6 +206,12 @@ export interface MapLike extends StyleTarget {
   getLayersOrder(): string[];
   /** 请求重画下一帧：三维内容自己变了（瓦片到了）时用 */
   triggerRepaint(): void;
+  /** 同步画一帧（取消已经排着的那一帧）：截图时画完立刻拷贝画布（ADR 0174） */
+  redraw(): void;
+  /** 画布的像素比：页面没指定时是设备像素比（不含画布上限的收缩） */
+  getPixelRatio(): number;
+  /** 改像素比并按它调整画布，同 resize 一样同步发出移动和 resize 事件；null 是不指定、跟随设备像素比 */
+  setPixelRatio(pixelRatio: number | null): void;
   /** 投影；同时担任二三维的视图切换种类时设置（ADR 0147 第 2 节）。样式加载完成之前调用会抛错 */
   getProjection(): ProjectionSpecification | undefined;
   setProjection(projection: ProjectionSpecification): void;

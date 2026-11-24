@@ -220,6 +220,11 @@ class FakeMap implements MapLike {
     return [];
   }
   triggerRepaint(): void {}
+  redraw(): void {}
+  getPixelRatio(): number {
+    return 1;
+  }
+  setPixelRatio(): void {}
   projection: Projection | undefined;
   getProjection(): Projection | undefined {
     return this.projection;
@@ -431,7 +436,7 @@ describe('MapCanvas', () => {
     expect(maps[0]?.removed).toBe(true);
   });
 
-  it('视图的受限入口：冻结，只有 kind、pick、project、queryRendered 和三维的读数，转发给视图；移动相机通过相机操作', () => {
+  it('视图的受限入口：冻结，只有 kind、pick、project、queryRendered、三维的读数和截图，转发给视图；移动相机通过相机操作', () => {
     const { context, maps, session } = setup();
     maps[0]?.fire('style.load');
     const viewport = context.view.value;
@@ -440,7 +445,7 @@ describe('MapCanvas', () => {
     }
 
     expect(Object.isFrozen(viewport)).toBe(true);
-    const keys = ['eyeHeight', 'heading', 'kind', 'pick', 'project', 'queryRendered'];
+    const keys = ['eyeHeight', 'heading', 'kind', 'pick', 'project', 'queryRendered', 'snapshot'];
     expect(Object.keys(viewport).toSorted()).toEqual(keys);
     expect(Symbol.dispose in viewport).toBe(false);
 

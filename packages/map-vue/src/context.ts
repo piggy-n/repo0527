@@ -5,6 +5,7 @@ import {
   type LngLat,
   type MapInputEvent,
   type MapSession,
+  type MapSnapshot,
   type MapView,
   type MapViewFailure,
   NO_SCENE_ACTIVITY,
@@ -20,6 +21,7 @@ import {
   type SceneStatus,
   type ScreenPoint,
   type SelectedFeature,
+  type SnapshotOptions,
   NO_SOURCE_ACTIVITY,
   type SourceActivities,
   type SourceErrors,
@@ -62,6 +64,11 @@ export interface MapViewport {
   eyeHeight(): number | null;
   /** 视点的朝向（度，正北为 0、顺时针）；视图没有这项能力（二维）时为 null（ADR 0086 第 5 节） */
   heading(): number | null;
+  /**
+   * 同步截下整块画布（ADR 0174）：盖在地图上的面板、控件不在里面；omitGroups 的分组只在这一帧不画。
+   * 要完整的画面先等上下文的 whenComplete；视图没有这项能力时抛错
+   */
+  snapshot(options?: SnapshotOptions): MapSnapshot;
 }
 
 /** 移动相机的能力，只在 run 的回调期间有效，之后调用抛错（ADR 0039 第 3 条） */
@@ -140,6 +147,12 @@ export interface MapContext {
    * 等待绑定具体的视图实例：它被卸下或替换、上下文释放时以 AbortError 结束，signal 中止时以它的原因结束
    */
   whenSettled(signal?: AbortSignal): Promise<void>;
+  /**
+   * 等到当前视图就绪、画面完整（ADR 0174）：视野里的瓦片都画出，三维还要模型这一轮加载完；截图前用。和 whenSettled 不同，
+   * 已经稳定时也会重画一帧确认，一直有东西在加载时一直等。等待绑定具体的视图：它被卸下或替换、切换二三维、上下文释放时以
+   * AbortError 结束，signal 中止时以它的原因结束，视图自己的等待也一起结束。视图没有这项能力时等到就绪为止
+   */
+  whenComplete(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 屏幕投影的修订号：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
@@ -200,7 +213,13 @@ function createViewport(view: MapView): MapViewport {
     project: (lngLat: LngLat, height?: number) => view.project(lngLat, height),
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options),
     eyeHeight: () => view.eyeHeight?.() ?? null,
-    heading: () => view.heading?.() ?? null
+    heading: () => view.heading?.() ?? null,
+    snapshot: (options?: SnapshotOptions) => {
+      if (!view.snapshot) {
+        throw new Error('当前视图不能截图');
+      }
+      return view.snapshot(options);
+    }
   });
 }
 
@@ -307,6 +326,7 @@ export class MapContextState implements Disposable {
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       whenSettled: (signal?: AbortSignal) => this.#whenSettled(signal),
+      whenComplete: (signal?: AbortSignal) => this.#whenComplete(signal),
       useCamera: () => this.#useCamera(),
       projectionRevision: shallowReadonly(this.#projectionRevision),
       pointer: shallowReadonly(this.#pointer),
@@ -704,6 +724,26 @@ export class MapContextState implements Disposable {
       this.#confirmBound(attached, bound);
     } finally {
       unsubscribe();
+    }
+  }
+
+  async #whenComplete(signal?: AbortSignal): Promise<void> {
+    const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
+    const attached = this.#current ?? (await this.#nextView(signals));
+    const bound = [...signals, attached.detached.signal, this.#lease.signal];
+    const { view } = attached;
+    await abortable(view.whenReady(), bound);
+    this.#confirmBound(attached, bound);
+    if (!view.whenComplete) {
+      return;
+    }
+    // 这边结束等待时视图那边也停下，不留着它的监听
+    const stop = new AbortController();
+    try {
+      await abortable(view.whenComplete(stop.signal), bound);
+      this.#confirmBound(attached, bound);
+    } finally {
+      stop.abort();
     }
   }
 

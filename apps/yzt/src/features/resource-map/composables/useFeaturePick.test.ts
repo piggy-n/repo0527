@@ -103,9 +103,14 @@ function rendered(sourceId: string, id: number): RenderedFeature {
   return { sourceId, layerId: sourceId, properties: { guid: guid(id), name: `要素 ${id}` } };
 }
 
-// 上下文里的就绪视图：工具视图加上视点高度，点选用不到
+// 点选不截图
+function noSnapshot(): never {
+  throw new Error('点选不截图');
+}
+
+// 上下文里的就绪视图：工具视图加上视点高度、截图，点选用不到
 function contextView(kind: ViewKind): MapViewport {
-  return { ...toolView([], kind), eyeHeight: () => null, heading: () => null };
+  return { ...toolView([], kind), eyeHeight: () => null, heading: () => null, snapshot: noSnapshot };
 }
 
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)；渲染要素按数据源返回给定的
