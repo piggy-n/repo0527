@@ -97,24 +97,37 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 按钮上看得见的内容（叠着的"转圈 99%"只撑宽度，不算）
+const visible = (wrapper: ReturnType<typeof mountChip>['wrapper']) =>
+  wrapper.get('[data-request-chip]').element.firstElementChild?.textContent ?? null;
+
 describe('RequestStatusChip', () => {
-  it('空闲时什么也不显示；显示着时是加载中的项数和比例，有失败时带红点；结束后显示失败的项数', async () => {
+  it('按钮一直在（ADR 0170）：空闲时是勾；加载中只有转圈和百分比，上一轮有失败时转圈角上有红点；结束后是警告和失败的项数；全称在读屏名称里', async () => {
     const { wrapper, items, clock, display } = mountChip([], 1000, ALL_REQUEST_KINDS, null);
-    expect(wrapper.find('[data-request-status]').exists()).toBe(false);
+    const chip = () => wrapper.get('[data-request-chip]');
+    expect(chip().attributes('data-request-chip')).toBe('idle');
+    expect(visible(wrapper)).toBe('');
+    expect(chip().attributes('aria-label')).toBe('数据加载');
+    // 宽度由看不见的"转圈 99%"撑出，状态变了不变宽
+    expect(chip().element.lastElementChild?.getAttribute('aria-hidden')).toBe('true');
+    expect(chip().element.lastElementChild?.textContent).toBe('99%');
 
     // b 上一轮有失败，这一轮还在加载
     items.value = [item('a'), item('b', { previousFailed: 1, loaded: 6 })];
     display.value = SHOWING;
     await nextTick();
-    const chip = wrapper.get('[data-request-chip]');
-    expect(chip.attributes('data-request-chip')).toBe('loading');
-    expect(chip.text()).toBe('正在加载 2 项 · 50%');
-    expect(chip.find('[aria-label="1 项有失败"]').exists()).toBe(true);
+    expect(chip().attributes('data-request-chip')).toBe('loading');
+    expect(visible(wrapper)).toBe('50%');
+    expect(chip().attributes('aria-label')).toBe('正在加载 2 项，已完成 50%；1 项有失败');
+    expect(chip().findAll('.is-loading')).toHaveLength(1);
+    expect(chip().find('[data-request-badge]').exists()).toBe(true);
 
     items.value = [item('b', { failed: 1, loaded: 9, finishedAt: 900 })];
     clock.value = 2000;
     await nextTick();
-    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
+    expect(chip().attributes('data-request-chip')).toBe('failed');
+    expect(visible(wrapper)).toBe('1');
+    expect(chip().attributes('aria-label')).toBe('1 项加载失败');
   });
 
   it('点开是明细：分组列出，点一行交给页面选中（底图不能选），模型失败的可以重试；Esc、再点条目关闭', async () => {
@@ -231,12 +244,12 @@ describe('RequestStatusChip', () => {
     expect(FakeResizeObserver.watching(panel)).toBe(false);
   });
 
-  it('关掉加载失败（ADR 0167）：条目不说失败，明细没有有失败一组；都以失败结束时明细跟着关上', async () => {
+  it('关掉加载失败（ADR 0167）：按钮不说失败，明细没有有失败一组；都以失败结束时按钮回到空闲，明细里一组也没有', async () => {
     const shown = { loading: true, failed: false, done: true };
     const { wrapper, items, clock } = mountChip([item('a'), item('b', { failed: 1, loaded: 5 })], 1000, shown);
     const chip = wrapper.get('[data-request-chip]');
-    expect(chip.text()).toBe('正在加载 2 项 · 50%');
-    expect(chip.find('[aria-label="1 项有失败"]').exists()).toBe(false);
+    expect(visible(wrapper)).toBe('50%');
+    expect(chip.attributes('aria-label')).toBe('正在加载 2 项，已完成 50%');
 
     items.value = [item('a', { loaded: 10, finishedAt: 900 }), item('b', { failed: 1, loaded: 9, finishedAt: 900 })];
     clock.value = 1000;
@@ -249,8 +262,10 @@ describe('RequestStatusChip', () => {
 
     items.value = [item('b', { failed: 1, loaded: 9, finishedAt: 900 })];
     await nextTick();
-    await nextTick();
-    expect(wrapper.find('[data-request-status]').exists()).toBe(false);
+    expect(wrapper.get('[data-request-chip]').attributes('data-request-chip')).toBe('idle');
+    expect(wrapper.get('[data-request-popover]').findAll('li').map(row => row.text())).toStrictEqual([
+      '当前视野没有要加载的数据'
+    ]);
   });
 
   it('三类都关掉时条目不出现', async () => {
@@ -271,18 +286,24 @@ describe('RequestStatusChip', () => {
     ]);
   });
 
-  it('明细开着时加载都结束了也留着条目（已加载完成），关上后不再显示', async () => {
+  it('这一次显示里加载都结束了是绿色的勾；显示结束后回到空闲，明细开着时同样，关上后按钮照样在', async () => {
     const { wrapper, items, clock, display } = mountChip([item('a')]);
     await wrapper.get('[data-request-chip]').trigger('click');
-    // 这一次显示已经过去
     items.value = [item('a', { loaded: 10, finishedAt: 300 })];
+    display.value = { settledAt: 300 };
+    await nextTick();
+    expect(wrapper.get('[data-request-chip]').attributes('data-request-chip')).toBe('done');
+    expect(wrapper.get('[data-request-chip]').attributes('aria-label')).toBe('地图数据已加载完成');
+
+    // 这一次显示已经过去
     display.value = null;
     clock.value = 9000;
     await nextTick();
-    expect(wrapper.get('[data-request-chip]').text()).toBe('已加载完成');
+    expect(wrapper.get('[data-request-chip]').attributes('data-request-chip')).toBe('idle');
     expect(wrapper.find('[data-request-popover]').exists()).toBe(true);
 
     await wrapper.get('button[aria-label="关闭"]').trigger('click');
-    expect(wrapper.find('[data-request-status]').exists()).toBe(false);
+    expect(wrapper.find('[data-request-popover]').exists()).toBe(false);
+    expect(wrapper.find('[data-request-chip]').exists()).toBe(true);
   });
 });

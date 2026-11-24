@@ -1,8 +1,12 @@
-import { EYE_HEIGHT, type WalkView } from '@mx/map-core';
 import { useShownElementSize } from '@mx/map-vue';
+import { ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
+import { type IconName, SvgIcon } from '../../icons/SvgIcon';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
+import { MAP_TOOLTIP_PROPS } from '../tooltip';
 import {
+  belowSurface,
+  eyeHeightLabel,
   eyeText,
   fitStatusLayout,
   SCALE_MAX_WIDTH,
@@ -13,86 +17,101 @@ import {
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
 import styles from './MapStatusBar.module.scss';
 
-// 状态栏和后面插槽之间的距离，和样式里的一致
-const AFTER_GAP = 8;
+// 前面的插槽和状态栏之间的距离，和样式里的一致
+const BEFORE_GAP = 8;
 
-// 每种排法最多显示几段
-const LAYOUT_SEGMENTS: Readonly<Record<StatusLayout, number>> = { full: 3, 'no-angles': 2, 'scale-only': 1 };
+// 量尺按最宽的读数量，缩放、转动时排法不来回切换：比例尺最小级别 5 级是"200 km"，三维的视点高度在 5～8 级是四位数的千米
+const SCALE_SAMPLE: ScaleBar = { meters: 200_000, width: SCALE_MAX_WIDTH, label: '200 km' };
+const EYE_SAMPLE = 8_888_000;
+const ANGLE_SAMPLE = { bearing: -180, pitch: 85 };
 
-// 留位时按最宽的读数：比例尺在最小级别 5 级是"200 km"，三维的视点高度在 5～8 级是四位数的千米
-const SCALE_LABEL_SAMPLE = '200 km';
-const EYE_SAMPLE = eyeText(8_888_000);
+const CENTER_HINT = '画布中心的经纬度（鼠标不在地图上）';
+const POINTER_HINT = '鼠标所在位置的经纬度';
+
+// 读数前的图标：悬停说明它是什么（量尺里的不带提示）；只有图标接鼠标，状态栏别处不挡地图
+function readoutIcon(name: IconName, hint: string, tip: boolean) {
+  const icon = (
+    <span class={styles.icon} role="img" aria-label={hint}>
+      <SvgIcon name={name} size={14} />
+    </span>
+  );
+  return tip ? (
+    <ElTooltip {...MAP_TOOLTIP_PROPS} content={hint} placement="top">
+      {icon}
+    </ElTooltip>
+  ) : (
+    icon
+  );
+}
 
 // 段之间加分隔线；一段都没有时不显示
-const joined = (segments: readonly VNode[]) =>
+const joined = (segments: readonly VNode[], shown: boolean) =>
   segments.length === 0 ? null : (
-    <div class={styles.bar}>
+    <div class={styles.bar} data-map-readout={shown ? '' : undefined}>
       {segments.flatMap((segment, index) => (index === 0 ? [segment] : [<span class={styles.divider} />, segment]))}
     </div>
   );
 
 const scaleSegment = ({ width, label }: Pick<ScaleBar, 'width' | 'label'>) => (
-  <span class={styles.segment}>
+  <span class={[styles.segment, styles.scale]}>
     <span class={styles.scaleBar} style={{ width: `${width}px` }} />
     {label}
   </span>
 );
 
-// 三维代替比例尺的一段（ADR 0080 第 6 节）
-const eyeSegment = (meters: number) => <span class={styles.segment}>{eyeText(meters)}</span>;
-
-// 第一段留位：读数和二三维最宽的样子（80 像素的线段加最宽的长度、最宽的视点高度）叠在同一格里，格子按最宽的那个，
-// 读数贴左边；切换维度时宽度也不变
-const reserved = (content: VNode) => (
-  <span class={styles.reserved}>
-    {content}
-    <span class={styles.sample} aria-hidden="true">
-      {scaleSegment({ width: SCALE_MAX_WIDTH, label: SCALE_LABEL_SAMPLE })}
+// 三维代替比例尺的一段（ADR 0080 第 6 节）：图标加高度，地表以下换向下的图标，全称在提示里
+const eyeSegment = (meters: number, tip: boolean) => {
+  const below = belowSurface(meters);
+  return (
+    <span class={styles.segment}>
+      {readoutIcon(below ? 'readout-eye-below' : 'readout-eye-height', eyeText(meters), tip)}
+      {eyeHeightLabel(below ? -meters : meters)}
     </span>
-    <span class={styles.sample} aria-hidden="true">
-      <span class={styles.segment}>{EYE_SAMPLE}</span>
-    </span>
-  </span>
-);
+  );
+};
 
 // 旋转、俯仰都为 0 时没有这一段
-const anglesSegment = ({ bearing, pitch }: ViewAngles) =>
+const anglesSegment = ({ bearing, pitch }: ViewAngles, tip: boolean) =>
   bearing === null && pitch === null ? null : (
     <span class={[styles.segment, styles.angles]}>
-      {bearing !== null && <span>旋转 {bearing}°</span>}
-      {pitch !== null && <span>俯仰 {pitch}°</span>}
+      {bearing !== null && (
+        <span class={styles.segment}>
+          {readoutIcon('readout-bearing', `旋转 ${bearing}°`, tip)}
+          {bearing}°
+        </span>
+      )}
+      {pitch !== null && (
+        <span class={styles.segment}>
+          {readoutIcon('readout-pitch', `俯仰 ${pitch}°`, tip)}
+          {pitch}°
+        </span>
+      )}
     </span>
   );
 
-// 步行时的几段：第一视角、眼高、朝向（原型 `/dev/map-3d`），第三人称没有眼高；放不下时同样先去掉后面的
-const walkingSegments = (view: WalkView, heading: number) => [
-  <span class={styles.segment}>{view === 'first' ? '第一视角' : '第三视角'}</span>,
-  ...(view === 'first' ? [<span class={styles.segment}>眼高 {EYE_HEIGHT} m</span>] : []),
-  <span class={[styles.segment, styles.angles]}>朝向 {heading}°</span>
-];
+// 量尺里的角度：有的一项换成最宽的度数
+const angleSample = ({ bearing, pitch }: ViewAngles): ViewAngles => ({
+  bearing: bearing === null ? null : ANGLE_SAMPLE.bearing,
+  pitch: pitch === null ? null : ANGLE_SAMPLE.pitch
+});
 
 /**
- * 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：比例尺（三维是视点高度，ADR 0080 第 6 节）、鼠标所在的经纬度、
- * 不为 0 的旋转和俯仰；步行时是人称、眼高（第一人称）和朝向（ADR 0086 第 5 节、ADR 0090）。
- * 只显示、不拦截鼠标；三种排法的宽度由隐藏的量尺量出，放不下时按 fitStatusLayout 取舍。
- * 插槽 after 紧跟在状态栏右边（如请求状态，ADR 0158），它的宽度先让出来；插槽里的内容自己决定拦不拦截鼠标
+ * 左下角的状态栏（ADR 0053 第 5 节、ADR 0170）：经纬度（前面的图标分鼠标所在位置和画布中心）、比例尺（三维是视点高度，
+ * ADR 0080 第 6 节）、不为 0 的旋转和俯仰。宽度会变的排在后面，后面没有东西被它推动，不留位；只显示、不拦截鼠标，
+ * 读数前的图标除外（悬停说明）。三种排法的宽度由隐藏的量尺按最宽的读数量出，放不下时按 fitStatusLayout 取舍。
+ * 插槽 before 排在状态栏左边（现状底图的请求状态，ADR 0158、0170），它的宽度先让出来；插槽里的内容自己决定拦不拦截鼠标
  */
 export const MapStatusBar = defineComponent({
   name: 'MapStatusBar',
   props: {
     readout: { type: Object as PropType<MapReadout>, required: true },
     /** 经纬度的写法，跟着坐标定位面板 */
-    format: { type: String as PropType<CoordinateFormat>, required: true },
-    /**
-     * 第一段按二三维最宽的读数留位（比例尺的线段按 80 像素），"中心"不显示时也占着位置，不做字距调整（经纬度定宽）：缩放、
-     * 鼠标移动和进出画布、切换维度时宽度不变，插槽 after 里的内容不跟着左右移（现状底图的请求状态，用户 2026-11-22）
-     */
-    reserve: { type: Boolean, default: false }
+    format: { type: String as PropType<CoordinateFormat>, required: true }
   },
-  slots: Object as SlotsType<{ after?: () => VNode[] }>,
+  slots: Object as SlotsType<{ before?: () => VNode[] }>,
   setup(props, { slots }) {
     const root = ref<HTMLElement>();
-    const after = ref<HTMLElement>();
+    const before = ref<HTMLElement>();
     const fullRuler = ref<HTMLElement>();
     const noAnglesRuler = ref<HTMLElement>();
     const scaleOnlyRuler = ref<HTMLElement>();
@@ -103,72 +122,53 @@ export const MapStatusBar = defineComponent({
       'no-angles': useShownElementSize(noAnglesRuler, undefined, borderBox).width,
       'scale-only': useShownElementSize(scaleOnlyRuler, undefined, borderBox).width
     };
-    const { width: afterWidth } = useShownElementSize(after, undefined, borderBox);
+    const { width: beforeWidth } = useShownElementSize(before, undefined, borderBox);
     const layout = computed(() =>
       fitStatusLayout(
         { full: widths.full.value, 'no-angles': widths['no-angles'].value, 'scale-only': widths['scale-only'].value },
-        available.value - (slots.after ? afterWidth.value + AFTER_GAP : 0)
+        available.value - (slots.before ? beforeWidth.value + BEFORE_GAP : 0)
       )
     );
 
-    // 留位时"中心"一直在，鼠标在画布上时看不见
-    const positionSegment = ({ lngLat, center }: ReadoutPosition) => (
+    const positionSegment = ({ lngLat, center }: ReadoutPosition, tip: boolean) => (
       <span class={styles.segment}>
-        {(center || props.reserve) && (
-          <span class={[styles.muted, !center && styles.sample]} aria-hidden={center ? undefined : 'true'}>
-            中心
-          </span>
-        )}
+        {readoutIcon(center ? 'readout-center' : 'readout-pointer', center ? CENTER_HINT : POINTER_HINT, tip)}
         {formatLngLat(lngLat, props.format)}
       </span>
     );
 
-    // 第一段：二维是比例尺，三维是视点高度；留位时叠上最宽的样子
-    const firstSegment = (scale: ScaleBar | null, eye: number | null): VNode | null => {
-      let segment: VNode | null = null;
-      if (scale) {
-        segment = scaleSegment(scale);
-      } else if (eye !== null) {
-        segment = eyeSegment(eye);
-      }
-      return segment && props.reserve ? reserved(segment) : segment;
-    };
-
-    // 按排法取出要显示的几段
-    const bar = (shown: StatusLayout) => {
-      const { scale, eye, position, angles, walking } = props.readout;
-      if (walking.value) {
-        const { view, heading } = walking.value;
-        return joined(walkingSegments(view, heading).slice(0, LAYOUT_SEGMENTS[shown]));
-      }
+    // 按排法取出要显示的几段：经纬度、比例尺或视点高度、角度；量尺（measure）按最宽的读数，不带提示
+    const bar = (shown: StatusLayout, measure: boolean) => {
+      const { scale, eye, position, angles } = props.readout;
       const segments: VNode[] = [];
-      // 排法里的 scale-only 指只留第一段：二维是比例尺，三维是视点高度
-      const first = firstSegment(scale.value, eye.value);
-      if (first) {
-        segments.push(first);
-      }
       if (shown !== 'scale-only' && position.value) {
-        segments.push(positionSegment(position.value));
+        segments.push(positionSegment(position.value, !measure));
       }
-      const angleSegment = shown === 'full' ? anglesSegment(angles.value) : null;
+      if (scale.value) {
+        segments.push(scaleSegment(measure ? SCALE_SAMPLE : scale.value));
+      } else if (eye.value !== null) {
+        segments.push(eyeSegment(measure ? EYE_SAMPLE : eye.value, !measure));
+      }
+      const angleSegment =
+        shown === 'full' ? anglesSegment(measure ? angleSample(angles.value) : angles.value, !measure) : null;
       if (angleSegment) {
         segments.push(angleSegment);
       }
-      return joined(segments);
+      return joined(segments, !measure);
     };
 
     return () => (
-      <div ref={root} class={[styles.root, props.reserve && styles.reserving]} data-map-status-bar>
-        {bar(layout.value)}
-        {slots.after && (
-          <div ref={after} class={styles.after}>
-            {slots.after()}
+      <div ref={root} class={styles.root} data-map-status-bar>
+        {slots.before && (
+          <div ref={before} class={styles.before}>
+            {slots.before()}
           </div>
         )}
+        {bar(layout.value, false)}
         <div class={styles.rulers} aria-hidden="true">
-          <div ref={fullRuler}>{bar('full')}</div>
-          <div ref={noAnglesRuler}>{bar('no-angles')}</div>
-          <div ref={scaleOnlyRuler}>{bar('scale-only')}</div>
+          <div ref={fullRuler}>{bar('full', true)}</div>
+          <div ref={noAnglesRuler}>{bar('no-angles', true)}</div>
+          <div ref={scaleOnlyRuler}>{bar('scale-only', true)}</div>
         </div>
       </div>
     );

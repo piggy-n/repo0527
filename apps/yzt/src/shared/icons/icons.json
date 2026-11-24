@@ -738,6 +738,72 @@
     },
     "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm5-2v16\"/><path d=\"m14 10 2 2-2 2\"/>"
   },
+  "readout-bearing": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4\"/>"
+  },
+  "readout-center": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path fill=\"currentColor\" d=\"M11.5 12a.5.5 0 1 0 1 0 .5.5 0 1 0-1 0\"/><path d=\"M5 12a7 7 0 1 0 14 0 7 7 0 1 0-14 0m7-9v2m-9 7h2m7 7v2m7-9h2\"/>"
+  },
+  "readout-eye-below": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M4 5h16m-8 4v11m-4-4 4 4 4-4\"/>"
+  },
+  "readout-eye-height": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M4 20h16m-8-4V5M8 9l4-4 4 4\"/>"
+  },
+  "readout-pitch": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M3 19h18M3 19 16 6M9.5 19a6.5 6.5 0 0 0-1.9-4.6\"/>"
+  },
+  "readout-pointer": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M7 3.5v14.2l3.7-3.5 2.6 5.8 2.4-1.1-2.6-5.7 5.3-.3z\"/>"
+  },
   "resource-approval": {
     "viewBox": "0 0 24 24",
     "body": "<path fill-rule=\"evenodd\" d=\"M3 1h17v9c-6-3-13 4-10 13H3zm2 3v2h12V4zm0 4v2h8V8z\"/><path d=\"M18 12a3 3 0 0 0-2 5l-3 2v3h10v-3l-3-2a3 3 0 0 0-2-5\"/>"

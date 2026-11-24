@@ -18,7 +18,10 @@ import {
   type RequestDisplay,
   type RequestItem,
   requestGroups,
+  requestPercent,
   requestRowText,
+  requestStatusText,
+  requestStatusTip,
   requestSummary,
   withPreviousFailures
 } from './request-status';
@@ -61,10 +64,10 @@ const step = (memory: FailureMemory, rounds: readonly RequestItem[]) => {
 };
 
 describe('requestSummary', () => {
-  it('这一次显示里、明细开着时，有在加载的显示加载中的项数和瓦片完成的比例；没在显示时不显示加载中', () => {
-    expect(requestSummary([], null)).toStrictEqual({ kind: 'hidden' });
+  it('这一次显示里、明细开着时，有在加载的显示加载中的项数和瓦片完成的比例；没在显示时是空闲（ADR 0170）', () => {
+    expect(requestSummary([], null)).toStrictEqual({ kind: 'idle' });
     const items = [tiles('a', { loaded: 3, failed: 1 }), tiles('b', { loaded: 6 }), model('m')];
-    expect(requestSummary(items, null)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary(items, null)).toStrictEqual({ kind: 'idle' });
     expect(requestSummary(items, SHOWING)).toStrictEqual({ kind: 'loading', count: 3, ratio: 0.5, withFailures: 0 });
     // 明细开着时不等这一次显示开始
     expect(requestSummary(items, null, true)).toMatchObject({ kind: 'loading', count: 3 });
@@ -95,16 +98,34 @@ describe('requestSummary', () => {
     // 显示出加载中以后红点也算它
     expect(requestSummary(again, SHOWING)).toMatchObject({ kind: 'loading', withFailures: 1 });
     // 这一轮才有的失败：结束前不算
-    expect(requestSummary([tiles('a', { failed: 2, startedAt: 9000 })], null)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([tiles('a', { failed: 2, startedAt: 9000 })], null)).toStrictEqual({ kind: 'idle' });
     expect(requestSummary([tiles('a', { failed: 2, startedAt: 9000 })], SHOWING)).toMatchObject({ withFailures: 0 });
   });
 
-  it('这一次显示里加载都结束了是"已加载完成"，项都移走了的也是；这一次结束了不显示，明细开着时至少显示完成', () => {
+  it('这一次显示里加载都结束了是"已加载完成"，项都移走了的也是；这一次结束了回到空闲，明细开着时同样', () => {
     const done = [tiles('a', { loaded: 10, finishedAt: 2000 })];
     expect(requestSummary(done, SETTLED)).toStrictEqual({ kind: 'done' });
     expect(requestSummary([], SETTLED)).toStrictEqual({ kind: 'done' });
-    expect(requestSummary(done, null)).toStrictEqual({ kind: 'hidden' });
-    expect(requestSummary(done, null, true)).toStrictEqual({ kind: 'done' });
+    expect(requestSummary(done, null)).toStrictEqual({ kind: 'idle' });
+    expect(requestSummary(done, null, true)).toStrictEqual({ kind: 'idle' });
+  });
+});
+
+describe('状态按钮的百分比和说明（ADR 0170）', () => {
+  it('百分比向下取整，还在加载时最多 99', () => {
+    expect([0, 0.005, 0.629, 0.994, 1].map(requestPercent)).toStrictEqual([0, 0, 62, 99, 99]);
+  });
+
+  it('按钮上只有图标和数字，读屏名称写全，Tooltip 再加上点了做什么', () => {
+    const loading = { kind: 'loading', count: 3, ratio: 0.629, withFailures: 0 } as const;
+    expect(requestStatusText(loading)).toBe('正在加载 3 项，已完成 62%');
+    expect(requestStatusText({ ...loading, ratio: null, withFailures: 1 })).toBe('正在加载 3 项；1 项有失败');
+    expect(requestStatusText({ kind: 'failed', count: 2 })).toBe('2 项加载失败');
+    expect(requestStatusText({ kind: 'done' })).toBe('地图数据已加载完成');
+    expect(requestStatusText({ kind: 'idle' })).toBe('数据加载');
+    expect(requestStatusTip(loading)).toBe('正在加载 3 项，已完成 62%。点击查看明细');
+    expect(requestStatusTip({ kind: 'done' })).toBe('地图数据已加载完成。点击查看明细');
+    expect(requestStatusTip({ kind: 'idle' })).toBe('查看数据加载的明细');
   });
 });
 
@@ -289,8 +310,8 @@ describe('按类显示（ADR 0167）', () => {
     expect(requestSummary([slow, broken], SHOWING, false, kinds)).toStrictEqual({ kind: 'failed', count: 1 });
     expect(requestGroups([slow, broken], kinds).loading).toStrictEqual([]);
     // 这一轮的失败等结束才算；还有在加载的时也不说完成，明细开着时同样
-    expect(requestSummary([pendingWithFailure, recent], SETTLED, false, kinds)).toStrictEqual({ kind: 'hidden' });
-    expect(requestSummary([pendingWithFailure, recent], SETTLED, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([pendingWithFailure, recent], SETTLED, false, kinds)).toStrictEqual({ kind: 'idle' });
+    expect(requestSummary([pendingWithFailure, recent], SETTLED, true, kinds)).toStrictEqual({ kind: 'idle' });
     expect(requestGroups([pendingWithFailure], kinds).failed).toStrictEqual([]);
     // 带着上一轮失败的照样在有失败一组，和行内一致
     expect(requestSummary([carried], SHOWING, false, kinds)).toStrictEqual({ kind: 'failed', count: 1 });
@@ -305,24 +326,25 @@ describe('按类显示（ADR 0167）', () => {
       ratio: 0,
       withFailures: 0
     });
-    expect(requestSummary([broken], SETTLED, false, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([broken], SETTLED, false, kinds)).toStrictEqual({ kind: 'idle' });
     expect(requestSummary([broken, recent], SETTLED, false, kinds)).toStrictEqual({ kind: 'done' });
     expect(requestGroups([broken, recent], kinds)).toStrictEqual({ loading: [], failed: [], done: [recent] });
-    // 明细开着、项都以失败结束：明细里一组也没有，条目不留（明细跟着关上），不显示空的明细
-    expect(requestSummary([broken], null, true, kinds)).toStrictEqual({ kind: 'hidden' });
-    expect(requestSummary([], null, true, kinds)).toStrictEqual({ kind: 'done' });
+    // 明细开着、项都以失败结束：空闲，按钮照样在
+    expect(requestSummary([broken], null, true, kinds)).toStrictEqual({ kind: 'idle' });
+    expect(requestSummary([], null, true, kinds)).toStrictEqual({ kind: 'idle' });
   });
 
-  it('关掉加载完成：没有"已加载完成"，明细开着时也不留；明细没有已完成一组', () => {
+  it('关掉加载完成：没有"已加载完成"，是空闲；明细没有已完成一组', () => {
     const kinds = { loading: true, failed: true, done: false };
-    expect(requestSummary([recent], SETTLED, false, kinds)).toStrictEqual({ kind: 'hidden' });
-    expect(requestSummary([recent], SETTLED, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([recent], SETTLED, false, kinds)).toStrictEqual({ kind: 'idle' });
+    expect(requestSummary([recent], SETTLED, true, kinds)).toStrictEqual({ kind: 'idle' });
     expect(requestGroups([recent, broken], kinds).done).toStrictEqual([]);
   });
 
-  it('都关掉时条目不显示，明细三组都是空的', () => {
+  it('都关掉时按钮不显示，明细三组都是空的', () => {
     const kinds = { loading: false, failed: false, done: false };
     expect(requestSummary([slow, broken, recent], SHOWING, true, kinds)).toStrictEqual({ kind: 'hidden' });
+    expect(requestSummary([], null, false, kinds)).toStrictEqual({ kind: 'hidden' });
     expect(requestGroups([slow, broken, recent], kinds)).toStrictEqual({ loading: [], failed: [], done: [] });
   });
 

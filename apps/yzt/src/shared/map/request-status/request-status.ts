@@ -131,9 +131,13 @@ export interface RequestKinds {
 
 export const ALL_REQUEST_KINDS: RequestKinds = { loading: true, failed: true, done: true };
 
-/** 状态栏的条目：空闲时不显示 */
+/**
+ * 状态栏前面的状态按钮（ADR 0170）：三类都关掉时不显示（hidden）；没有要说的时是空闲（idle，灰色的勾），按钮一直在，
+ * 宽度固定，状态变了读数不动
+ */
 export type RequestSummary =
   | { readonly kind: 'hidden' }
+  | { readonly kind: 'idle' }
   /**
    * ratio 是加载中的二维瓦片和瓦片集的块完成了多少（0～1），按张数、块数合起来算；只有读索引的模型、高斯泼溅在加载时为 null
    * （泼溅的比例不是请求数，不算进去，只算在项数里）；withFailures 是同时有失败的
@@ -216,10 +220,12 @@ export function nextRequestDisplay(
   return settledAt === null || now >= settledAt + DONE_HOLD ? null : previous;
 }
 
+const IDLE: RequestSummary = Object.freeze({ kind: 'idle' });
+
 /**
- * 状态栏的条目（原型 DESIGN.v1"请求状态"）：这一次显示着加载中（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、
- * 几项和完成的比例；没有在显示的加载、有失败（hasFailure）时显示几项失败，留到下一轮结束；这一次显示里加载都结束了显示
- * "已加载完成"，明细开着时至少显示"已加载完成"。关掉的一类不算（ADR 0167）：都关掉时不显示
+ * 状态按钮（ADR 0158、0170）：这一次显示着加载中（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、几项和完成的比例；
+ * 没有在显示的加载、有失败（hasFailure）时显示几项失败，留到下一轮结束；这一次显示里加载都结束了显示"已加载完成"；
+ * 其余时候空闲。关掉的一类不算（ADR 0167）：都关掉时不显示
  */
 export function requestSummary(
   items: readonly RequestItem[],
@@ -227,6 +233,9 @@ export function requestSummary(
   open = false,
   kinds: RequestKinds = ALL_REQUEST_KINDS
 ): RequestSummary {
+  if (!kinds.loading && !kinds.failed && !kinds.done) {
+    return { kind: 'hidden' };
+  }
   const pending = kinds.loading ? items.filter(isPending) : [];
   const failed = kinds.failed ? items.filter(hasFailure) : [];
   if (pending.length > 0 && (display?.settledAt === null || open)) {
@@ -245,13 +254,36 @@ export function requestSummary(
   }
   // 关掉加载完成时没有"已加载完成"；关掉加载中、还有在加载的时也不说完成
   if (!kinds.done || (!kinds.loading && items.some(isPending))) {
-    return { kind: 'hidden' };
+    return IDLE;
   }
   // 这一次显示里要有成功结束的项（关掉加载失败时，都失败了不说完成）；项都移走了的留到这一次结束
   const settled = items.length === 0 || items.some(item => !isPending(item) && item.failed === 0);
-  // 明细开着时留着条目；有项、但关掉的几类把它们都藏了时不留，免得明细是空的
-  const shown = items.length === 0 || Object.values(requestGroups(items, kinds)).some(group => group.length > 0);
-  return (display !== null && settled) || (open && shown) ? { kind: 'done' } : { kind: 'hidden' };
+  return display !== null && settled ? { kind: 'done' } : IDLE;
+}
+
+/** 状态按钮上的百分比：向下取整，还在加载时最多 99（瓦片都到了、模型还在读索引时也没完成） */
+export function requestPercent(ratio: number): number {
+  return Math.min(99, Math.floor(ratio * 100));
+}
+
+/** 状态按钮的读屏名称：按钮上只有图标和数字，全称写在这里（ADR 0170）；空闲时是按钮的名字 */
+export function requestStatusText(summary: RequestSummary): string {
+  if (summary.kind === 'loading') {
+    const percent = summary.ratio === null ? '' : `，已完成 ${requestPercent(summary.ratio)}%`;
+    const failures = summary.withFailures > 0 ? `；${summary.withFailures} 项有失败` : '';
+    return `正在加载 ${summary.count} 项${percent}${failures}`;
+  }
+  if (summary.kind === 'failed') {
+    return `${summary.count} 项加载失败`;
+  }
+  return summary.kind === 'done' ? '地图数据已加载完成' : '数据加载';
+}
+
+/** 状态按钮的 Tooltip：说明加上点了做什么 */
+export function requestStatusTip(summary: RequestSummary): string {
+  return summary.kind === 'idle' || summary.kind === 'hidden'
+    ? '查看数据加载的明细'
+    : `${requestStatusText(summary)}。点击查看明细`;
 }
 
 /**

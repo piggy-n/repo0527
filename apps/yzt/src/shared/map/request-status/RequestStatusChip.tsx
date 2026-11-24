@@ -1,17 +1,22 @@
 import { Loading } from '@element-plus/icons-vue';
 import { useEventListener, useResizeObserver } from '@vueuse/core';
 import { usePageActive } from '@mx/map-vue';
-import { ElButton, ElIcon } from 'element-plus';
+import { ElButton, ElIcon, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, type VNode, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { useLightDismiss } from '../popover/useLightDismiss';
+import { MAP_TOOLTIP_PROPS } from '../tooltip';
 import { type RequestPopoverPlacement, requestPopoverPlacement } from './request-popover';
 import {
   failedRowText,
   type RequestItem,
   requestGroups,
+  requestPercent,
   type RequestRowText,
   requestRowText,
+  requestStatusText,
+  requestStatusTip,
+  type RequestSummary,
   requestSummary
 } from './request-status';
 import type { RequestStatus } from './useRequestStatus';
@@ -20,11 +25,31 @@ import styles from './RequestStatusChip.module.scss';
 // 高斯泼溅那一行的说明：库只给比例（ADR 0162）
 const DETAIL_HINT = '高斯泼溅只能知道当前视角的细节加载了多少，和瓦片集的块数不是一种算法';
 
+// 按钮上的图标和数字：加载中是转圈和百分比（上一轮有失败时转圈角上一个红点），失败是警告和项数，完成、空闲是勾
+function statusContent(summary: RequestSummary): VNode[] {
+  if (summary.kind === 'loading') {
+    return [
+      <span class={styles.icon}>
+        <ElIcon class={['is-loading', styles.spinner]} size={14}>
+          <Loading />
+        </ElIcon>
+        {summary.withFailures > 0 && <span class={styles.badge} data-request-badge />}
+      </span>,
+      ...(summary.ratio === null ? [] : [<span>{requestPercent(summary.ratio)}%</span>])
+    ];
+  }
+  if (summary.kind === 'failed') {
+    return [<SvgIcon name="status-warning" size={14} />, <span>{summary.count}</span>];
+  }
+  return [<SvgIcon name="check" size={14} />];
+}
+
 /**
- * 状态栏右边的请求状态（ADR 0158，原型 `/design.local/current-map-layers/`）：空闲时不显示；点开是"数据加载"的明细，
- * 分加载中、有失败、已完成三组。点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点条目关闭。
- * 明细贴着资源图层面板的右边、底边在状态栏上方（requestPopoverPlacement），不跟着条目左右移（用户 2026-11-16）。
- * 条目有最小宽度，文字变了不跳（用户 2026-11-22）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
+ * 状态栏前面的请求状态（ADR 0158、0170，原型 `/design.local/status-bar/`）：一直在的按钮，宽度按"转圈 99%"固定、内容居中，
+ * 状态变了读数不动；只有图标和数字，全称在 Tooltip 和读屏名称里。点开是"数据加载"的明细，分加载中、有失败、已完成三组。
+ * 点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点按钮关闭。明细贴着资源图层面板的右边、
+ * 底边在状态栏上方（requestPopoverPlacement，用户 2026-11-16）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，
+ * 不带动页面重渲染
  */
 export const RequestStatusChip = defineComponent({
   name: 'RequestStatusChip',
@@ -49,7 +74,7 @@ export const RequestStatusChip = defineComponent({
       requestSummary(props.status.items.value, props.status.display.value, open.value, props.status.kinds.value)
     );
     const groups = computed(() => requestGroups(props.status.items.value, props.status.kinds.value));
-    // 条目不显示了（没有在加载、没有失败）且明细关着：什么也不留
+    // 三类都关掉、按钮不显示了：明细一起关上
     watch(
       () => summary.value.kind,
       kind => {
@@ -93,51 +118,32 @@ export const RequestStatusChip = defineComponent({
     useResizeObserver(area, place);
     useEventListener(window, 'resize', place);
 
+    // 按钮的宽度由叠在同一格里、看不见的"转圈 99%"撑出，内容居中；明细开着时不提示
     const renderChip = (): VNode | null => {
       const current = summary.value;
       if (current.kind === 'hidden') {
         return null;
       }
-      const common = {
-        type: 'button' as const,
-        'aria-expanded': open.value,
-        'aria-haspopup': 'dialog' as const,
-        onClick: () => (open.value = !open.value)
-      };
-      if (current.kind === 'loading') {
-        const percent = current.ratio === null ? null : Math.round(current.ratio * 100);
-        return (
-          <button {...common} class={styles.chip} data-request-chip="loading">
-            <ElIcon class={['is-loading', styles.spinner]}>
-              <Loading />
-            </ElIcon>
-            <span>
-              正在加载 {current.count} 项{percent === null ? '' : ` · ${percent}%`}
-            </span>
-            {current.withFailures > 0 && (
-              <span class={styles.dot} role="img" aria-label={`${current.withFailures} 项有失败`} />
-            )}
-            {current.ratio !== null && (
-              <span class={styles.progress} aria-hidden="true">
-                <i style={{ width: `${current.ratio * 100}%` }} />
-              </span>
-            )}
-          </button>
-        );
-      }
-      if (current.kind === 'failed') {
-        return (
-          <button {...common} class={[styles.chip, styles.failed]} data-request-chip="failed">
-            <SvgIcon name="status-warning" size={14} />
-            <span>{current.count} 项加载失败</span>
-          </button>
-        );
-      }
       return (
-        <button {...common} class={[styles.chip, styles.done]} data-request-chip="done">
-          <SvgIcon name="check" size={14} />
-          <span>已加载完成</span>
-        </button>
+        <ElTooltip {...MAP_TOOLTIP_PROPS} content={requestStatusTip(current)} placement="top" disabled={open.value}>
+          <button
+            type="button"
+            class={[styles.chip, styles[current.kind]]}
+            aria-label={requestStatusText(current)}
+            aria-expanded={open.value}
+            aria-haspopup="dialog"
+            data-request-chip={current.kind}
+            onClick={() => (open.value = !open.value)}
+          >
+            <span class={styles.content}>{statusContent(current)}</span>
+            <span class={[styles.content, styles.sample]} aria-hidden="true">
+              <ElIcon size={14}>
+                <Loading />
+              </ElIcon>
+              <span>99%</span>
+            </span>
+          </button>
+        </ElTooltip>
       );
     };
 
@@ -233,7 +239,9 @@ export const RequestStatusChip = defineComponent({
             {renderGroup('加载中', loading, requestRowText)}
             {renderGroup('有失败', failed, failedRowText)}
             {renderGroup('已完成', done, requestRowText)}
-            {props.status.items.value.length === 0 && <li class={styles.empty}>当前视野没有要加载的数据</li>}
+            {loading.length + failed.length + done.length === 0 && (
+              <li class={styles.empty}>当前视野没有要加载的数据</li>
+            )}
           </ul>
         </div>
       );
