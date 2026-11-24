@@ -849,6 +849,27 @@ describe('useFeaturePick：清除', () => {
     expect(dltb).toStrictEqual([1, 2, 3, 4, 5]);
   });
 
+  it('过滤着时框选按后端的总数拦（ADR 0050、0173）：超过 5000 个提示缩小范围、只查一页；单击不拦', async () => {
+    const requests = mockIdentify((layerCode, pageNum) =>
+      layerCode === 'bgdc_dltb_2022' ? page(20000, parcels(pageNum * 100, 30, '0102')) : page(0, [])
+    );
+    const filtered = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    const boxed = setup(12, filtered);
+    const clicked = setup(12, filtered);
+    const dltbPages = () =>
+      requests.filter(({ layerCode }) => layerCode === 'bgdc_dltb_2022').map(({ pageNum }) => pageNum);
+
+    // 渲染要素只有符合条件的，估数远小于后端要统计的
+    dragBox(boxed.send, [landuseFeature(1, '0101')]);
+    await vi.waitFor(() => expect(kindOf(boxed.owner)).toBe('too-many'));
+    expect(boxed.owner.state.value).toMatchObject({ target: { sourceId: DLTB }, estimate: 20000 });
+    expect(dltbPages()).toStrictEqual([1]);
+
+    clicked.send(click(), []);
+    await vi.waitFor(() => expect(kindOf(clicked.owner)).toBe('empty'));
+    expect(dltbPages()).toStrictEqual([1, 1, 2, 3, 4, 5]);
+  });
+
   it('过滤条件变了（ADR 0173）：列表作废；详情里的要素还在时保留、不能再返回列表，被过滤掉时关闭', async () => {
     const { owner, send, resources } = setup(15);
     send(click(), [landuseFeature(1, '0101'), landuseFeature(2, '0102')]);

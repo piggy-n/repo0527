@@ -367,22 +367,31 @@ describe('printEntries', () => {
     ]);
   });
 
-  it('过滤着的资源带上类别列表体现不了的条件，同右侧图例（ADR 0173）：别的字段的条件、统一样式时分类的条件', () => {
+  it('过滤着的资源写出全部条件（ADR 0173、0174）：别的字段的、统一样式时分类的，按类别配色时分类的也写', () => {
     const classified = printEntries({ ...INPUT, state: FILTERED }, RENDERED);
     const uniform = printEntries(
       { ...INPUT, state: FILTERED, overrideOf: code => (code === 'bgdc_dltb' ? UNIFORM : undefined) },
       RENDERED
     );
 
-    // 按地类配色时类别列表就是条件，只列勾着的水田
+    // 右侧图例按地类配色时类别列表就是条件，打印的类别只列画面里出现的、体现不了，也写（用户 2026-11-24）
     expect(classified.map(({ code, filterNote }) => [code, filterNote])).toStrictEqual([
-      ['bgdc_dltb', null],
+      ['bgdc_dltb', '地类：水田'],
       ['csxhjctb_xxp', '类型：小学、初级中学'],
       ['test_farmland', null]
     ]);
     const [landuse] = classified;
     expect(landuse?.kind === 'classes' && landuse.items.map(item => item.key)).toStrictEqual(['0101']);
     expect(uniform[0]).toMatchObject({ kind: 'symbol', code: 'bgdc_dltb', filterNote: '地类：水田' });
+  });
+
+  it('勾着的类别画面里只出现一部分时，类别只列出现的，条件写全部勾着的', () => {
+    const state = withFilters({ bgdc_dltb: { [CLASS_FIELD]: ['0101', '0102'] } });
+
+    const [landuse] = printEntries({ ...INPUT, state }, new Map([['bgdc_dltb', new Set(['0101'])]]));
+
+    expect(landuse).toMatchObject({ kind: 'classes', code: 'bgdc_dltb', filterNote: '地类：水田、水浇地' });
+    expect(landuse?.kind === 'classes' && landuse.items.map(item => item.key)).toStrictEqual(['0101']);
   });
 });
 

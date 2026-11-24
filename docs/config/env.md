@@ -42,7 +42,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_BASEMAP` | `false` | 同上 | 底图和透明度（`basemap`）。`false` 时每次进入都是默认底图 |
 | `VITE_PREFERENCE_BASEMAP_LABELS` | `true` | 同上 | 底图标注的显隐（`basemap-labels`，ADR 0146）。和底图、透明度分开，上一项关着也记住 |
 | `VITE_PREFERENCE_BOUNDARIES` | `true` | 同上 | 行政区边界的级别和透明度（`boundaries`） |
-| `VITE_PREFERENCE_RESOURCE_LAYERS` | `true` | 同上 | 资源图层的加入、勾选（显隐）、透明度、顺序、年份和标注的显隐（`resource-layers`；没有 `added` 的老偏好按勾选算、没有 `labeled` 的不显示标注，版本不变，ADR 0157、0160） |
+| `VITE_PREFERENCE_RESOURCE_LAYERS` | `true` | 同上 | 资源图层的加入、勾选（显隐）、透明度、顺序、年份、标注的显隐和要素过滤的条件（`resource-layers`；没有 `added` 的老偏好按勾选算、没有 `labeled` 的不显示标注、没有 `filter` 的不过滤，版本不变，ADR 0157、0160、0173） |
 | `VITE_PREFERENCE_RESOURCE_SYMBOLS` | `true` | 同上 | 资源图层的符号样式和标注的样式（`resource-symbols`）。关闭时用户看到的是发布的默认符号和标注（ADR 0154、0160），调的样式不保存 |
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
 | `VITE_PREFERENCE_SCENE_MODELS` | `true` | 同上 | 图层里的三维模型：加入、显隐、白膜的效果（`scene-models`，ADR 0167） |

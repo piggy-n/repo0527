@@ -41,6 +41,7 @@ import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import { type FeatureDetail, queryFeaturesAt } from '../api';
 import {
+  BOX_ESTIMATE_LIMIT,
   type BoxTask,
   featureBounds,
   FILTER_SCAN_PAGES,
@@ -74,31 +75,37 @@ export interface ServerPages {
   readonly filtered: boolean;
 }
 
-// 查到的后端结果：符合条件的候选，查到了第几页
+// 查到的后端结果：符合条件的候选，查到了第几页；tooMany 是过滤着、后端的总数超过了上限，没有往下查
 interface ScannedPages {
   readonly candidates: readonly PickCandidate[];
   readonly loaded: number;
   readonly total: number;
+  readonly tooMany: boolean;
 }
 
 /**
  * 从第 first 页查后端；过滤着时这一页一个都不符合、后面还有页，就接着查下一页，最多 FILTER_SCAN_PAGES 页（ADR 0173）。
+ * 过滤着时渲染要素的估数只数符合条件的，拦不住后端按范围的统计：总数超过 limit 就不再查，交给调用方提示缩小范围。
  * 中止时以 AbortError 结束；调用方在等待以后自己再确认信号
  */
 async function scanPages(
   target: PickResource,
   geometry: QueryArea,
   first: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  limit = Number.POSITIVE_INFINITY
 ): Promise<ScannedPages> {
   const filtering = isFiltering(target.filter);
   for (let pageNum = first; ; pageNum++) {
     // oxlint-disable-next-line no-await-in-loop -- 一页一页查，前一页有符合的就不再查
     const page = await queryFeaturesAt(target.layerCode, geometry, { pageNum, pageSize: PICK_PAGE_SIZE }, signal);
+    if (filtering && page.total > limit) {
+      return { candidates: [], loaded: pageNum, total: page.total, tooMany: true };
+    }
     const candidates = serverCandidates(target, page.list);
     const more = pageNum * PICK_PAGE_SIZE < page.total;
     if (signal.aborted || candidates.length > 0 || !filtering || !more || pageNum - first + 1 >= FILTER_SCAN_PAGES) {
-      return { candidates, loaded: pageNum, total: page.total };
+      return { candidates, loaded: pageNum, total: page.total, tooMany: false };
     }
   }
 }
@@ -462,6 +469,8 @@ export function useFeaturePick(
   // 从上到下逐个资源识别，第一个有结果的胜出（ADR 0047 第 2 节、ADR 0049 第 2 节）
   const run = async (tasks: readonly BoxTask[], how: Identification, signal: AbortSignal) => {
     const { mode } = how;
+    // 框选的范围大，过滤着时按后端的总数拦（ADR 0050、0173）；单击的范围小，不拦
+    const limit = mode === 'box' ? BOX_ESTIMATE_LIMIT : Number.POSITIVE_INFINITY;
     // 查后端的识别可能以定位、露出结束：在开始等待之前就开始这次相机操作，等待期间用户发起的定位（默认视角、坐标定位等）
     // 会作废它，晚到的结果不再覆盖（ADR 0038、0039）；后端为空、转用下面资源的渲染要素时也用它
     let operation: CameraOperation | null = null;
@@ -483,7 +492,7 @@ export function useFeaturePick(
       let scanned: ScannedPages;
       try {
         // oxlint-disable-next-line no-await-in-loop -- 上面的资源有结果时下面的不再查询
-        scanned = await scanPages(task.target, task.geometry, 1, signal);
+        scanned = await scanPages(task.target, task.geometry, 1, signal, limit);
       } catch (error) {
         if (!signal.aborted) {
           remaining = { kind: 'tasks', tasks: tasks.slice(index), how };
@@ -492,6 +501,10 @@ export function useFeaturePick(
         return;
       }
       if (signal.aborted) {
+        return;
+      }
+      if (scanned.tooMany) {
+        setState({ kind: 'too-many', target: task.target, estimate: scanned.total });
         return;
       }
       // 过滤着时只有符合条件的（ADR 0173）；连查几页都没有符合的，同这个资源没有结果

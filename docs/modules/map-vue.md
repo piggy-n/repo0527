@@ -315,8 +315,10 @@ watch(pageActive, active => {
 import { useShownElementSize } from '@mx/map-vue';
 
 const { width, height } = useShownElementSize(root);
-const layout = computed(() => mapPageLayout(width.value, height.value));
+const layout = computed(() => mapPageLayout(width.value, height.value, TOOLBAR_GROUPS));
 ```
+
+`TOOLBAR_GROUPS` 是页面业务组的按钮分组，分两列的高度阈值按它算（ADR 0174，见 [shared-map.md](shared-map.md)）。
 
 为什么需要它：页面被缓存时 DOM 移出文档，`ResizeObserver` 量到 0；恢复时它要到下一帧才重新量，这一帧按 0 排的界面会闪一下（手机宽度的排法退回常规、状态栏去掉经纬度、测量标签翻到另一边、资源面板两区重新分）。浏览器测试 `use-shown-element-size.browser.test.tsx` 在真实的 `ResizeObserver` 上对比：再次激活的那一刻，`useElementSize` 读到 0，它读到原来的尺寸。
 

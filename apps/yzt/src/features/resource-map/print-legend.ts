@@ -5,6 +5,7 @@ import type { RenderedFeature, ScreenBox, ToolView } from '@mx/map-core';
 import { screenBoxPolygon } from '@mx/map-tools';
 import type { PrintLegendBlock, PrintLegendRow } from '@/shared/map/print/print-legend';
 import { clipToScope, intersectsScope, type RegionScope } from '@/shared/map/region/region-scope';
+import { filterText } from './feature-filter';
 import { type PickResource, pickResources } from './feature-query';
 import { landuseItemLabel, landuseLegendItems, legendEntry, type LegendSwatch } from './legend';
 import { drawLegendSwatch } from './legend-canvas';
@@ -137,8 +138,8 @@ export interface PrintItem {
 }
 
 /**
- * 打印图例里的一个资源：统一符号是一行；按属性配色的是一组，只有画面里出现的取值，次序同右侧图例。filterNote 是类别
- * 列表体现不了的过滤条件（ADR 0173），同右侧图例
+ * 打印图例里的一个资源：统一符号是一行；按属性配色的是一组，只有画面里出现的取值，次序同右侧图例。filterNote 是全部的
+ * 过滤条件（ADR 0173）：类别只列画面里出现的，看不出勾了哪些，分类字段的条件也写
  */
 export type PrintEntry =
   | {
@@ -160,7 +161,7 @@ export type PrintEntry =
       readonly filterNote: string | null;
     };
 
-/** 打印图例里的资源（纯数据）：符号和过滤条件同右侧图例的推导（legendEntry），名称后面带年份 */
+/** 打印图例里的资源（纯数据）：符号同右侧图例的推导（legendEntry），名称后面带年份，过滤着的写出全部条件 */
 export function printEntries(
   { state, invalid, overrideOf, zoom }: PrintLegendInput,
   rendered: RenderedClasses
@@ -174,7 +175,8 @@ export function printEntries(
     const opacity = state.displays.get(code)?.opacity ?? 1;
     const title = `${name}（${year}）`;
     const entry = legendEntry(resource, year, overrideOf(code), filter);
-    const { filterNote } = entry;
+    // 右侧图例的 filterNote 不写分类字段（类别列表就是条件），打印的类别只列画面里出现的，体现不了（用户 2026-11-24）
+    const filterNote = filterText(code, filter) || null;
     if (entry.kind === 'symbol' || entry.mode === 'uniform') {
       return [{ kind: 'symbol', code, title, opacity, swatch: entry.swatch, filterNote }];
     }
