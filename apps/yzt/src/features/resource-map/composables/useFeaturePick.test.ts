@@ -20,6 +20,8 @@ import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
+import { NO_FILTER } from '../feature-filter';
+import { CLASS_FIELD } from '../filter-fields';
 import type { PickCandidate } from '../feature-query';
 import { type ResourceDisplay, type ResourceLayersState, withYearForAll } from '../resource-layers';
 import type { PointMark } from '../point-shapes';
@@ -68,7 +70,14 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number): ResourceDisplay => ({ added: true, checked: true, opacity: 1, year, labeled: false });
+const display = (year: number): ResourceDisplay => ({
+  added: true,
+  checked: true,
+  opacity: 1,
+  year,
+  labeled: false,
+  filter: NO_FILTER
+});
 
 function withDisplay(state: ResourceLayersState, code: string, change: Partial<ResourceDisplay>): ResourceLayersState {
   const current = state.displays.get(code);
@@ -101,6 +110,11 @@ const FAILURE = { success: false, code: 500, data: null, msg: '系统异常' };
 
 function rendered(sourceId: string, id: number): RenderedFeature {
   return { sourceId, layerId: sourceId, properties: { guid: guid(id), name: `要素 ${id}` } };
+}
+
+// 地类图斑的渲染要素，带地类编码：要素过滤按它（ADR 0173）
+function landuseFeature(id: number, dlbm: string): RenderedFeature {
+  return { sourceId: DLTB, layerId: DLTB, properties: { guid: guid(id), dlbm } };
 }
 
 // 上下文里的就绪视图：工具视图加上视点高度，点选用不到
@@ -757,6 +771,44 @@ describe('useFeaturePick：清除', () => {
     send(click(), [rendered('resources-bgdc_czcdyd', 1)]);
     expect(kindOf(owner)).toBe('detail');
     resources.state.value = withDisplay(resources.state.value, 'bgdc_czcdyd', { year: 2021 });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('过滤着的资源只用渲染要素（ADR 0173）：后端不能按属性筛，13.99 级也不查后端', async () => {
+    const requests = mockIdentify(() => page(1, [{ guid: guid(5) }]));
+    const { owner, send, resources } = setup(13.99);
+    const filter = { [CLASS_FIELD]: ['0101'] };
+    resources.state.value = withDisplay(withDisplay(STATE, 'bgdc_czcdyd', { filter }), 'bgdc_dltb', { filter });
+
+    send(click(), [rendered(DLTB, 1)]);
+    expect(owner.state.value).toMatchObject({ kind: 'detail', candidate: { guid: guid(1), origin: 'rendered' } });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(requests).toStrictEqual([]);
+  });
+
+  it('过滤条件变了（ADR 0173）：列表作废；详情里的要素还在时保留、不能再返回列表，被过滤掉时关闭', async () => {
+    const { owner, send, resources } = setup(15);
+    send(click(), [landuseFeature(1, '0101'), landuseFeature(2, '0102')]);
+    expect(kindOf(owner)).toBe('candidates');
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101', '0102'] } });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+
+    send(click(), [landuseFeature(1, '0101'), landuseFeature(2, '0102')]);
+    const [first] = candidatesOf(owner);
+    if (!first) {
+      throw new Error('应有候选');
+    }
+    owner.choose(first);
+    expect(backOf(owner)).not.toBeNull();
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    await nextTick();
+    expect(kindOf(owner)).toBe('detail');
+    expect(backOf(owner)).toBeNull();
+
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0102'] } });
     await nextTick();
     expect(kindOf(owner)).toBe('idle');
   });

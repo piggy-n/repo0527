@@ -51,6 +51,31 @@ button.symbol {
   font-size: var(--font-size-xs);
 }
 
+// 过滤着的资源（ADR 0173）：名称后面一个主色的漏斗，点了打开过滤，条件在提示里
+.filtered {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-primary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
 // 三维里会把模型盖住的面（ADR 0161）：名称后面一个橙色的图标（划掉的模型），说明在提示里（用户 2026-11-16）
 .cover {
   display: inline-flex;

@@ -16,6 +16,8 @@ import { appConfig } from '@/shared/config/app-config';
 import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
+import { type FeatureFilter, isFiltering, normalizedFilter, sameFilter } from '../feature-filter';
+import { filterFieldsOf } from '../filter-fields';
 import { labelFieldsOf } from '../label-fields';
 import type { LabelEmphasis, LabelTarget } from '../labels';
 import {
@@ -92,6 +94,10 @@ export interface ResourceLayers {
   readonly setYear: (code: string, year: number) => void;
   /** 显示、隐藏标注（ADR 0160）；没有登记标注字段的资源抛错 */
   readonly setLabeled: (code: string, labeled: boolean) => void;
+  /**
+   * 要素过滤（ADR 0173）：换成给出的条件，按资源能过滤的字段整理（全勾的字段去掉）；资源没有可过滤的字段、又给了条件时抛错
+   */
+  readonly setFilter: (code: string, filter: FeatureFilter) => void;
   /**
    * 资源的标注图层要用的（ADR 0160）：画出标注（看得见）、校验通过、有标注字段，三维里分组不为空时才有，
    * 加强标注按它画；其他时候为 null
@@ -335,6 +341,15 @@ export function useResourceLayers(
     update(code, display => (display.labeled === labeled ? display : { ...display, labeled }));
   };
 
+  const setFilter = (code: string, filter: FeatureFilter) => {
+    const fields = filterFieldsOf(code);
+    if (fields.length === 0 && isFiltering(filter)) {
+      throw new Error(`资源 ${code} 没有可过滤的字段`);
+    }
+    const next = normalizedFilter(fields, filter);
+    update(code, display => (sameFilter(next, display.filter) ? display : { ...display, filter: next }));
+  };
+
   // 只改当前那一套，批量年份也按套记下（ADR 0169）
   const setYearForAll = (year: number) => {
     const slot = currentSlot.value;
@@ -377,6 +392,7 @@ export function useResourceLayers(
     setOpacity,
     setYear,
     setLabeled,
+    setFilter,
     labelTarget: code => {
       const current = state.value;
       const resource = current.catalog?.resources.get(code);

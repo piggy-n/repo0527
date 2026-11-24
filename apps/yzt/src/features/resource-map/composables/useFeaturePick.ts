@@ -56,6 +56,7 @@ import {
 import { type LabelEmphasis, type LabelTarget, selectionLabelsGroup } from '../labels';
 import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
+import { featurePasses, filterKey, sameFilter } from '../feature-filter';
 import { isDrawn, type ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
 import { sourceLayerOf } from '../style-registry';
@@ -208,18 +209,32 @@ function identityOf({ target, guid }: PickCandidate): SelectedFeature {
   return { sourceId: target.sourceId, featureId: guid };
 }
 
-// 资源仍然画在地图上、年份没变、还在目录里
-function isShown(state: ResourceLayersState, target: PickResource): boolean {
+/**
+ * 资源仍然画在地图上、年份没变、还在目录里；给了要素的属性时它没被过滤掉，没给时过滤条件没变（列出的候选按识别时的条件，
+ * ADR 0173）
+ */
+function isShown(
+  state: ResourceLayersState,
+  target: PickResource,
+  properties?: Readonly<Record<string, unknown>>
+): boolean {
   const { code } = target.resource;
   const display = state.displays.get(code);
-  return isDrawn(display) && display?.year === target.year && state.catalog?.resources.has(code) === true;
+  if (!display || !isDrawn(display) || display.year !== target.year || !state.catalog?.resources.has(code)) {
+    return false;
+  }
+  return properties ? featurePasses(code, display.filter, properties) : sameFilter(display.filter, target.filter);
 }
 
-// 参与识别的资源和年份，连同顺序；变了时进行中的识别作废
+// 参与识别的资源、年份和过滤条件，连同顺序；变了时进行中的识别作废
 function identifySignature(state: ResourceLayersState): string {
   return state.order
-    .filter(code => isDrawn(state.displays.get(code)) && state.catalog?.resources.has(code))
-    .map(code => `${code}@${state.displays.get(code)?.year}`)
+    .flatMap(code => {
+      const display = state.displays.get(code);
+      return display && isDrawn(display) && state.catalog?.resources.has(code)
+        ? [`${code}@${display.year}#${filterKey(display.filter)}`]
+        : [];
+    })
     .join();
 }
 
@@ -341,7 +356,7 @@ export function useFeaturePick(
   // 加强标注（ADR 0160）：不等详情，用瓦片里的这个要素；资源不再画在地图上、关了标注时没有
   const emphasis = computed((): { readonly target: LabelTarget; readonly guid: string } | null => {
     const candidate = selected.value;
-    if (!candidate || !isShown(resources.state.value, candidate.target)) {
+    if (!candidate || !isShown(resources.state.value, candidate.target, candidate.properties)) {
       return null;
     }
     const target = resources.labelTarget(candidate.target.resource.code);
@@ -613,7 +628,8 @@ export function useFeaturePick(
     }
   };
 
-  // 选中的资源取消勾选、换了年份、不在目录里时清除；叠放顺序变了时保留详情，但不能再返回旧的列表（ADR 0047 第 6 节）
+  // 选中的资源取消勾选、换了年份、不在目录里时清除；叠放顺序变了时保留详情，但不能再返回旧的列表（ADR 0047 第 6 节）。
+  // 过滤条件变了（ADR 0173）：列表、进行中的识别作废，详情里的要素还在时保留、不能再返回旧的列表
   watch(
     () => resources.state.value,
     (next, previous) => {
@@ -637,9 +653,13 @@ export function useFeaturePick(
           }
           break;
         case 'detail':
-          if (!isShown(next, current.candidate.target)) {
+          // 详情里的要素被过滤掉时关闭，条件变了但它还在时保留（ADR 0173）
+          if (!isShown(next, current.candidate.target, current.candidate.properties)) {
             close();
-          } else if (current.back && next.order.join() !== previous.order.join()) {
+          } else if (
+            current.back &&
+            (next.order.join() !== previous.order.join() || !isShown(next, current.candidate.target))
+          ) {
             state.value = { ...current, back: null };
           }
           break;

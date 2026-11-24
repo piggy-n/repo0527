@@ -4,7 +4,9 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 import { buildCatalog } from '@/features/resource-map/catalog';
+import type { FeatureFilter } from '@/features/resource-map/feature-filter';
 import { pointsInBox } from '@/features/resource-map/feature-query';
+import { CLASS_FIELD } from '@/features/resource-map/filter-fields';
 import { POINT_SHAPE_NAMES, shapeImageId } from '@/features/resource-map/point-shapes';
 import {
   EMPTY_RESOURCE_LAYERS,
@@ -142,10 +144,19 @@ function checkedState(): ResourceLayersState {
 
 const STATE = checkedState();
 
+// 一个资源加上要素过滤（ADR 0173）
+function withFilter(code: string, filter: FeatureFilter): ResourceLayersState {
+  const display = STATE.displays.get(code);
+  if (!display) {
+    throw new Error(`没有 ${code} 的显示状态`);
+  }
+  return { ...STATE, displays: new Map([...STATE.displays, [code, { ...display, filter }]]) };
+}
+
 // 推导出的分组，数据源换成内联 GeoJSON（不请求瓦片），图层去掉瓦片图层名
-function groupOf(overrides: Readonly<Record<string, ResourceSymbolOverride>>): StyleGroup {
+function groupOf(overrides: Readonly<Record<string, ResourceSymbolOverride>>, state = STATE): StyleGroup {
   const derived = resourcesGroup({
-    state: STATE,
+    state,
     invalid: new Map(),
     tileBase: 'http://localhost/',
     overrideOf: code => overrides[code]
@@ -537,4 +548,41 @@ describe('点的形状（ADR 0159）', () => {
       expect(ctx.errors).toStrictEqual([]);
     }
   );
+});
+
+describe('要素过滤（ADR 0173）', () => {
+  it('点按分类过滤：只画勾着的类别，查到的也只有它们，没有报错', async () => {
+    using ctx = setup({ ...POINT_CAMERA, zoom: 9 });
+    const { map, session } = ctx;
+    await nextRender(map, '首次渲染完成');
+    const kept = ['08H213', '08H215'];
+    const rendered = nextRender(map, '过滤后渲染完成');
+    session.style.setGroup('resources', groupOf({}, withFilter(XXP, { [CLASS_FIELD]: kept })));
+    // 样式没变时也要画一帧：等的是 idle，否则改坏的代码会超时而不是断言失败
+    map.triggerRepaint();
+    await rendered;
+
+    const classes = map.queryRenderedFeatures({ layers: [`resources-${XXP}`] }).map(({ properties }) => String(properties.cc));
+    const expected = POINTS.features.filter(({ properties }) => kept.includes(String(properties?.cc))).length;
+    expect(new Set(classes)).toStrictEqual(new Set(kept));
+    expect(classes).toHaveLength(expected);
+    expect(ctx.uncaught).toStrictEqual([]);
+    expect(ctx.errors).toStrictEqual([]);
+  });
+
+  it('面按地类过滤：主图层和拆出的描边图层都只画勾着的地类', async () => {
+    using ctx = setup();
+    const { map, session } = ctx;
+    await nextRender(map, '首次渲染完成');
+    const rendered = nextRender(map, '过滤后渲染完成');
+    session.style.setGroup('resources', groupOf({}, withFilter(DLTB, { [CLASS_FIELD]: ['0101'] })));
+    map.triggerRepaint();
+    await rendered;
+
+    const values = Object.values(renderedValues(map, 'dlbm', `resources-${DLTB}`)).filter(list => list.length > 0);
+    expect(values.length).toBeGreaterThan(0);
+    expect(values.every(list => list.length === 1 && list[0] === '0101')).toBe(true);
+    expect(ctx.uncaught).toStrictEqual([]);
+    expect(ctx.errors).toStrictEqual([]);
+  });
 });

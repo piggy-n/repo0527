@@ -118,8 +118,7 @@ const CURRENT_TOOLS: PanelToolItem[] = [
   { key: 'opacity', icon: 'layer-opacity', label: '透明度' },
   { key: 'legend', icon: 'map-legend', label: '图例' },
   { key: 'label', icon: 'map-label', label: '标注' },
-  'divider',
-  { key: 'remove-layer', icon: 'layer-remove', label: '移除' }
+  { key: 'filter', icon: 'layer-filter', label: '过滤' }
 ];
 
 /** 面板放在 width 宽的列里，标题行用真实的工具栏，搜索行下面是"全部 二维资源 三维模型"和数量 */

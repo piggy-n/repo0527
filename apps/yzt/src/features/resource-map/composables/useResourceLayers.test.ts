@@ -1,10 +1,13 @@
 // @vitest-environment node
+import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 import type { ViewKind } from '@mx/map-core';
 import type { SceneCapabilities } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, nextTick, shallowRef, watch } from 'vue';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
+import { NO_FILTER } from '../feature-filter';
+import { CLASS_FIELD } from '../filter-fields';
 import { EMPTY_RESOURCE_LAYERS, validateCatalog } from '../resource-layers';
 import type { ResourceSymbolOverride } from '../resource-symbols';
 import type { SymbolOverride } from '../symbols';
@@ -142,7 +145,8 @@ describe('useResourceLayers', () => {
       checked: true,
       opacity: 0.3,
       year: 2023,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(ctx.owner.deriveGroup().sources['resources-csxhjctb_hydl']).toMatchObject({
       tiles: [`${TILE_BASE}csxhjctb_hydl_2023/{z}/{x}/{y}.pbf`]
@@ -327,7 +331,8 @@ describe('useResourceLayers', () => {
       checked: true,
       opacity: 0.5,
       year: 2024,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
     const fill = fillOf();
@@ -458,7 +463,8 @@ describe('useResourceLayers：二维、三维各一套（ADR 0169）', () => {
       checked: false,
       opacity: 1,
       year: 2025,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(ctx.owner.batchYear.value).toBeNull();
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
@@ -503,5 +509,47 @@ describe('useResourceLayers：二维、三维各一套（ADR 0169）', () => {
     expect(validate).toHaveBeenCalledTimes(calls);
     expect(ctx.errors).toHaveLength(1);
     expect(layerIds(ctx.owner)).toStrictEqual([]);
+  });
+});
+
+// 按 MapLibre 的语义：这条线会不会被水域线层的图层画出
+function drawsLine(owner: ReturnType<typeof useResourceLayers>, properties: Record<string, unknown>): boolean {
+  const found = owner.deriveGroup().layers.find(({ id }) => id === 'resources-csxhjctb_hydl');
+  return (
+    found !== undefined &&
+    'filter' in found &&
+    featureFilter(found.filter, found.id).filter({ zoom: 12 }, { type: 'LineString', properties })
+  );
+}
+
+describe('useResourceLayers：要素过滤（ADR 0173）', () => {
+
+  it('换成给出的条件并整理，推导随之变化；和原来一样时不替换状态；没有可过滤字段的资源给了条件时抛错', async () => {
+    using ctx = await loaded({}, MAPLIBRE_LIKE);
+    ctx.owner.add(['csxhjctb_hydl']);
+    expect(drawsLine(ctx.owner, { ccn: '河流' })).toBe(true);
+
+    ctx.owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['水渠', '没有的取值'] });
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.filter).toStrictEqual({ [CLASS_FIELD]: ['水渠'] });
+    expect(drawsLine(ctx.owner, { ccn: '河流' })).toBe(false);
+    expect(drawsLine(ctx.owner, { ccn: '水渠' })).toBe(true);
+
+    const before = ctx.owner.state.value;
+    ctx.owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['水渠'] });
+    expect(ctx.owner.state.value).toBe(before);
+
+    ctx.owner.setFilter('csxhjctb_hydl', NO_FILTER);
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.filter).toBe(NO_FILTER);
+    expect(() => ctx.owner.setFilter('bgdc_cjdcq', { [CLASS_FIELD]: ['x'] })).toThrow('没有可过滤的字段');
+    expect(() => ctx.owner.setFilter('bgdc_cjdcq', NO_FILTER)).not.toThrow();
+    expect(() => ctx.owner.setFilter('没有这个资源', NO_FILTER)).toThrow('目录里没有资源');
+  });
+
+  it('二维、三维各一套时只改当前那一套（ADR 0169）', async () => {
+    using ctx = await loaded({ perDimension: true }, MAPLIBRE_LIKE);
+    ctx.owner.setFilter('bgdc_dltb', { [CLASS_FIELD]: ['0101'] });
+
+    expect(ctx.owner.forSet('2d').state.value.displays.get('bgdc_dltb')?.filter).toStrictEqual({ [CLASS_FIELD]: ['0101'] });
+    expect(ctx.owner.forSet('3d').state.value.displays.get('bgdc_dltb')?.filter).toBe(NO_FILTER);
   });
 });

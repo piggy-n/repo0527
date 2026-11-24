@@ -14,6 +14,7 @@ import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@mx/map-
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
+import { type FeatureFilter, isFiltering } from './feature-filter';
 import { isLabelLayer } from './labels';
 import { LANDUSE_FIELD_LABELS } from './landuse';
 import { markDistance } from './point-shapes';
@@ -22,7 +23,7 @@ import { type PointMarkOf, resourceStyle, tilesetOf } from './style-registry';
 
 // 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
 
-/** 后端查询的两种能力，各自判断（ADR 0048 第 1 节） */
+/** 后端查询的两种能力，各自判断（ADR 0048 第 1 节）；过滤着的资源不做后端范围识别（targetCapability） */
 export interface QueryCapability {
   /** 后端范围识别：分页结果带 guid */
   readonly identify: boolean;
@@ -46,6 +47,15 @@ export function queryCapabilityOf(code: string): QueryCapability {
   return { identify: IDENTIFIABLE.has(code), detail: DETAIL_PREFIXES.some(prefix => code.startsWith(prefix)) };
 }
 
+/**
+ * 一个识别目标的能力：过滤着的资源只用渲染要素（ADR 0173）——后端不能按属性筛，翻页和总数会对不上；
+ * 画出来的要素已经按条件过滤过
+ */
+export function targetCapability(target: PickResource): QueryCapability {
+  const capability = queryCapabilityOf(target.resource.code);
+  return isFiltering(target.filter) ? { ...capability, identify: false } : capability;
+}
+
 /** 渲染要素的查询容差（屏幕像素）：面只取包含点击位置的，线、点同旧项目 */
 export const PICK_TOLERANCES: Readonly<Record<ResourceGeometry, number>> = { fill: 0, line: 8, circle: 10 };
 
@@ -65,6 +75,8 @@ export interface PickResource {
   readonly sourceId: string;
   /** 查询接口的图层编码，同瓦片集名 */
   readonly layerCode: string;
+  /** 识别时的要素过滤（ADR 0173）：列出的候选按它，条件变了列表作废 */
+  readonly filter: FeatureFilter;
 }
 
 /** 参与识别的资源，从上到下：画在地图上（已加入并显示）、当前级别显示、没被校验拦下的 */
@@ -80,7 +92,7 @@ export function pickResources(
       return [];
     }
     const layerCode = tilesetOf(code, display.year);
-    return [{ resource, year: display.year, sourceId: resourceSourceId(code), layerCode }];
+    return [{ resource, year: display.year, sourceId: resourceSourceId(code), layerCode, filter: display.filter }];
   });
 }
 
@@ -316,7 +328,7 @@ export function planIdentify(
   };
   const tasks: IdentifyTask[] = [];
   for (const target of targets) {
-    const { geometry: type, code } = target.resource;
+    const { geometry: type } = target.resource;
     const tolerance = PICK_TOLERANCES[type];
     const anchorPoint = anchorOf(target);
     // 画在模型下面的资源：模型脚下在区划外（区划外的楼伸进来）时跳过
@@ -342,7 +354,7 @@ export function planIdentify(
       mark ? markScreenDistance(feature, mark, anchor, project) : screenDistance(feature.geometry, anchor, project)
     );
     const rendered = mark ? candidates.filter(({ distance }) => distance <= tolerance) : candidates;
-    const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
+    const server = identifyStep(targetCapability(target), view.kind, zoom, rendered).kind === 'server' && geometry();
     if (server) {
       const task = serverTask(target, server, prepared);
       tasks.push(task);
@@ -502,7 +514,7 @@ export function planBox(
   for (const target of targets) {
     const { code } = target.resource;
     const sources = [target.sourceId];
-    if (usesBackend(queryCapabilityOf(code), view.kind, zoom)) {
+    if (usesBackend(targetCapability(target), view.kind, zoom)) {
       const estimate = weightedEstimate(code, view.queryRendered(estimateArea, { sources }));
       if (estimate > BOX_ESTIMATE_LIMIT) {
         tasks.push({ kind: 'too-many', target, estimate });

@@ -32,11 +32,14 @@ import {
   type PickCandidate,
   type PickResource,
   queryCapabilityOf,
+  targetCapability,
   renderedCandidates,
   screenDistance,
   serverCandidates,
   weightedEstimate
 } from './feature-query';
+import { NO_FILTER } from './feature-filter';
+import { CLASS_FIELD } from './filter-fields';
 import type { ResourceDisplay, ResourceLayersState } from './resource-layers';
 
 function layer(code: string, geoType: ResourceTreeLayer['geoType'], ...yearList: [number, ...number[]]) {
@@ -70,7 +73,8 @@ const display = (year: number, checked = true): ResourceDisplay => ({
   checked,
   opacity: 1,
   year,
-  labeled: false
+  labeled: false,
+  filter: NO_FILTER
 });
 
 // 从上到下：水域线、村级调查区、地类图斑、坑塘（没勾选）、公用设施点
@@ -91,7 +95,7 @@ function targetOf(code: string, year: number): PickResource {
   if (!resource) {
     throw new Error(`测试目录里没有 ${code}`);
   }
-  return { resource, year, sourceId: `resources-${code}`, layerCode: `${code}_${year}` };
+  return { resource, year, sourceId: `resources-${code}`, layerCode: `${code}_${year}`, filter: NO_FILTER };
 }
 
 const DLTB = targetOf('bgdc_dltb', 2022);
@@ -114,6 +118,24 @@ describe('queryCapabilityOf', () => {
     for (const code of ['szy_kt', 'lcsh_lcshfbtb', 'gtkjgh_czkfbj', 'xbgdc_dltb']) {
       expect(queryCapabilityOf(code)).toStrictEqual({ identify: false, detail: false });
     }
+  });
+});
+
+describe('targetCapability（ADR 0173）', () => {
+  it('过滤着的资源不做后端范围识别，详情照常；没有过滤时同 queryCapabilityOf', () => {
+    expect(targetCapability(DLTB)).toStrictEqual({ identify: true, detail: true });
+    expect(targetCapability({ ...DLTB, filter: { [CLASS_FIELD]: ['0101'] } })).toStrictEqual({
+      identify: false,
+      detail: true
+    });
+  });
+
+  it('识别目标带着资源当时的过滤条件', () => {
+    const filter = { [CLASS_FIELD]: ['0101'] };
+    const displays = new Map([...STATE.displays].map(([code, item]) => [code, code === 'bgdc_dltb' ? { ...item, filter } : item]));
+    const targets = pickResources({ ...STATE, displays }, new Map(), 9);
+    expect(targets.find(target => target.resource.code === 'bgdc_dltb')?.filter).toBe(filter);
+    expect(targets.find(target => target.resource.code === 'csxhjctb_hydl')?.filter).toBe(NO_FILTER);
   });
 });
 

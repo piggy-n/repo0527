@@ -7,6 +7,7 @@ import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import type { ResourceTreeCategory } from '../api';
 import { buildCatalog } from '../catalog';
+import { NO_FILTER } from '../feature-filter';
 import type { PickCandidate, PickResource } from '../feature-query';
 import type { CandidateList, FeatureDetailStatus, FeaturePick, FeaturePickState } from '../composables/useFeaturePick';
 import { FeatureDetailPanel } from './FeatureDetailPanel';
@@ -30,7 +31,7 @@ function targetOf(code: string, year: number): PickResource {
   if (!resource) {
     throw new Error(`测试目录里没有 ${code}`);
   }
-  return { resource, year, sourceId: `resources-${code}`, layerCode: `${code}_${year}` };
+  return { resource, year, sourceId: `resources-${code}`, layerCode: `${code}_${year}`, filter: NO_FILTER };
 }
 
 const DLTB = targetOf('bgdc_dltb', 2022);
