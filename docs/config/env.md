@@ -48,9 +48,9 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_SCENE_MODELS` | `true` | 同上 | 图层里的三维模型：加入、显隐、白膜的效果（`scene-models`，ADR 0167） |
 | `VITE_PREFERENCE_CURRENT_LAYERS` | `true` | 同上 | 图层列表的顺序：资源和模型怎样穿插（`current-layers`，ADR 0167） |
 | `VITE_LAYER_HINTS_ENABLED` | `true` | `appConfig.layerHints` | 图层行内提示的总开关（ADR 0167）。`false` 时下面六类都不显示；只由部署方配置，界面上没有开关、不按账号记 |
-| `VITE_LAYER_HINT_LOADING` | `true` | 同上 | 加载中：名称后转圈，数据加载的"加载中"一组和条目。关掉时还在加载、已有失败的项不算失败，还有在加载的项时也不说"已加载完成" |
-| `VITE_LAYER_HINT_FAILED` | `true` | 同上 | 加载失败：资源行的"有瓦片加载失败"、模型行的失败和重试，数据加载的"有失败"一组和条目 |
-| `VITE_LAYER_HINT_DONE` | `true` | 同上 | 加载完成：数据加载的"已完成"一组和"已加载完成" |
+| `VITE_LAYER_HINT_LOADING` | `true` | 同上 | 加载中：名称后转圈，数据加载的"加载中"一组和状态栏前按钮的转圈、百分比。关掉时还在加载、已有失败的项不算失败，还有在加载的项时也不说已加载完成 |
+| `VITE_LAYER_HINT_FAILED` | `true` | 同上 | 加载失败：资源行的"有瓦片加载失败"、模型行的失败和重试，数据加载的"有失败"一组和按钮的警告、项数 |
+| `VITE_LAYER_HINT_DONE` | `true` | 同上 | 加载完成：数据加载的"已完成"一组和按钮上绿色的勾。三类都关掉时状态栏前没有按钮 |
 | `VITE_LAYER_HINT_CONFIG_ERROR` | `true` | 同上 | 配置错误：资源的配置不对、画不出来 |
 | `VITE_LAYER_HINT_MINZOOM` | `true` | 同上 | 未到显示级别：放大到第几级才显示 |
 | `VITE_LAYER_HINT_COVERING` | `true` | 同上 | 盖住模型：三维里排在模型上面、接近不透明的面（ADR 0161） |

@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import type { LngLat, WalkView } from '@mx/map-core';
+import type { LngLat } from '@mx/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, h, nextTick, shallowRef } from 'vue';
 import { required } from '../../testing/required';
@@ -16,15 +16,13 @@ function fakeReadout() {
   const position = shallowRef<ReadoutPosition | null>({ lngLat: POINT, center: false });
   const angles = shallowRef<ViewAngles>({ bearing: null, pitch: null });
   const eye = shallowRef<number | null>(null);
-  const walking = shallowRef<{ view: WalkView; heading: number } | null>(null);
   const readout: MapReadout = {
     scale: computed(() => scale.value),
     eye: computed(() => eye.value),
     position: computed(() => position.value),
-    angles: computed(() => angles.value),
-    walking: computed(() => walking.value)
+    angles: computed(() => angles.value)
   };
-  return { readout, scale, eye, position, angles, walking };
+  return { readout, scale, eye, position, angles };
 }
 
 function mountBar(format: CoordinateFormat = 'dms') {
@@ -38,49 +36,59 @@ type Wrapper = ReturnType<typeof mountBar>['wrapper'];
 const rootOf = (wrapper: Wrapper) => wrapper.get('[data-map-status-bar]').element;
 
 // 看得见的那一条（量尺里的不算）
-const shown = (wrapper: Wrapper) => rootOf(wrapper).firstElementChild?.textContent ?? null;
+const shownBar = (wrapper: Wrapper) => wrapper.find('[data-map-readout]');
+const shown = (wrapper: Wrapper) => (shownBar(wrapper).exists() ? shownBar(wrapper).text() : null);
+// 读数前图标的说明（悬停的提示、读屏名称）
+const iconHints = (wrapper: Wrapper) => shownBar(wrapper).findAll('[role="img"]').map(icon => icon.attributes('aria-label'));
 
 describe('MapStatusBar', () => {
-  it('比例尺和经纬度，经纬度按坐标定位面板的写法', async () => {
+  it('经纬度在前、比例尺在后（ADR 0171），经纬度按坐标定位面板的写法', async () => {
     const { wrapper } = mountBar();
 
-    expect(shown(wrapper)).toBe('10 km118°47′23.28″E, 32°03′41.04″N');
-    expect(wrapper.find('[style*="width: 77px"]').exists()).toBe(true);
+    expect(shown(wrapper)).toBe('118°47′23.28″E, 32°03′41.04″N10 km');
+    expect(shownBar(wrapper).find('[style*="width: 77px"]').exists()).toBe(true);
 
     await wrapper.setProps({ format: 'decimal' });
-    expect(shown(wrapper)).toBe('10 km118.789800, 32.061400');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km');
   });
 
-  it('三维：比例尺换成视点高度，其余照旧（ADR 0080 第 6 节）', async () => {
+  it('经纬度前一直有图标：鼠标在画布上是指针，不在时是画布中心，含义在说明里；没有"中心"两个字', async () => {
+    const { wrapper, position } = mountBar('decimal');
+    expect(iconHints(wrapper)).toStrictEqual(['鼠标所在位置的经纬度']);
+
+    position.value = { lngLat: POINT, center: true };
+    await nextTick();
+    expect(iconHints(wrapper)).toStrictEqual(['画布中心的经纬度（鼠标不在地图上）']);
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km');
+  });
+
+  it('三维：比例尺换成视点高度的图标和数字，全称在说明里；地表以下换图标（ADR 0080 第 6 节）', async () => {
     const { wrapper, scale, eye } = mountBar('decimal');
 
     scale.value = null;
     eye.value = 420_300;
     await nextTick();
+    expect(shown(wrapper)).toBe('118.789800, 32.061400420 km');
+    expect(iconHints(wrapper)).toStrictEqual(['鼠标所在位置的经纬度', '视点高度 420 km']);
 
-    expect(shown(wrapper)).toBe('视点高度 420 km118.789800, 32.061400');
-  });
-
-  it('鼠标不在画布上时，经纬度前面标"中心"', async () => {
-    const { wrapper, position } = mountBar('decimal');
-
-    position.value = { lngLat: POINT, center: true };
+    eye.value = -18.4;
     await nextTick();
-
-    expect(shown(wrapper)).toBe('10 km中心118.789800, 32.061400');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140018 m');
+    expect(iconHints(wrapper)).toStrictEqual(['鼠标所在位置的经纬度', '视点在地表以下 18 m']);
   });
 
-  it('旋转、俯仰不为 0 时才显示', async () => {
+  it('旋转、俯仰不为 0 时才有，排在最后，写成图标和角度（用户 2026-11-23）', async () => {
     const { wrapper, angles } = mountBar('decimal');
 
     angles.value = { bearing: -15, pitch: null };
     await nextTick();
-    expect(shown(wrapper)).toContain('旋转 -15°');
-    expect(shown(wrapper)).not.toContain('俯仰');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km-15°');
+    expect(iconHints(wrapper)).toStrictEqual(['鼠标所在位置的经纬度', '旋转 -15°']);
 
     angles.value = { bearing: -15, pitch: 30 };
     await nextTick();
-    expect(shown(wrapper)).toContain('旋转 -15°俯仰 30°');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km-15°30°');
+    expect(iconHints(wrapper).slice(1)).toStrictEqual(['旋转 -15°', '俯仰 30°']);
   });
 
   it('没有读数（视图不在就绪）时不显示', async () => {
@@ -90,40 +98,7 @@ describe('MapStatusBar', () => {
     position.value = null;
     await nextTick();
 
-    expect(wrapper.text()).toBe('');
-  });
-});
-
-// 看得见的那一条里看不见的部分：最宽的样子、鼠标在画布上时的"中心"
-const hiddenParts = (wrapper: Wrapper) =>
-  [...(rootOf(wrapper).firstElementChild?.querySelectorAll('[aria-hidden="true"]') ?? [])].map(
-    element => element.textContent
-  );
-
-describe('MapStatusBar 的留位（reserve，用户 2026-11-22）', () => {
-  it('第一段叠上二三维最宽的样子（80 像素的线段和最宽的长度、最宽的视点高度），"中心"不显示时也占位；看得见的读数不变', async () => {
-    const fake = fakeReadout();
-    const wrapper = mount(MapStatusBar, { props: { readout: fake.readout, format: 'decimal', reserve: true } });
-    expect(hiddenParts(wrapper)).toStrictEqual(['200 km', '视点高度 8888 km', '中心']);
-    const sample = required(rootOf(wrapper).firstElementChild?.querySelector('[aria-hidden="true"]'), '最宽的样子');
-    expect(sample.querySelector('[style*="width: 80px"]')).not.toBeNull();
-    expect(shown(wrapper)).toContain('10 km');
-
-    fake.position.value = { lngLat: POINT, center: true };
-    await nextTick();
-    expect(hiddenParts(wrapper)).toStrictEqual(['200 km', '视点高度 8888 km']);
-
-    // 三维：同样的两个样子，切换维度时宽度不变
-    fake.scale.value = null;
-    fake.eye.value = 420_300;
-    await nextTick();
-    expect(hiddenParts(wrapper)).toStrictEqual(['200 km', '视点高度 8888 km']);
-    expect(shown(wrapper)).toContain('视点高度 420 km');
-  });
-
-  it('不开时没有看不见的部分（其他地图页不变）', () => {
-    const { wrapper } = mountBar('decimal');
-    expect(hiddenParts(wrapper)).toStrictEqual([]);
+    expect(shown(wrapper)).toBeNull();
   });
 });
 
@@ -155,10 +130,13 @@ async function resize(wrapper: Wrapper, available: number, rulers: readonly [num
   const root = rootOf(wrapper);
   const elements = [root, ...(root.lastElementChild?.children ?? [])];
   for (const [index, width] of [available, ...rulers].entries()) {
-    observed.get(elements[index])?.(width);
+    observed.get(required(elements[index], '量尺'))?.(width);
   }
   await nextTick();
 }
+
+// 量尺里的文字：按最宽的读数排，缩放、转动时排法不来回切换
+const rulerTexts = (wrapper: Wrapper) => [...(rootOf(wrapper).lastElementChild?.children ?? [])].map(ruler => ruler.textContent);
 
 describe('MapStatusBar 放不下时', () => {
   afterEach(() => {
@@ -173,44 +151,52 @@ describe('MapStatusBar 放不下时', () => {
     await nextTick();
 
     await resize(wrapper, 500, [443, 322, 133]);
-    expect(shown(wrapper)).toBe('10 km118.789800, 32.061400旋转 15°俯仰 30°');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km15°30°');
 
     await resize(wrapper, 400, [443, 322, 133]);
-    expect(shown(wrapper)).toBe('10 km118.789800, 32.061400');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km');
 
     await resize(wrapper, 188, [443, 322, 133]);
     expect(shown(wrapper)).toBe('10 km');
   });
 
-  it('插槽 after 紧跟在状态栏右边，取舍前先让出它的宽度和 8 像素的间距（ADR 0158）', async () => {
+  it('量尺按最宽的读数排：比例尺 80 像素的"200 km"，视点高度"8888 km"，有的角度换成 -180°、85°；不带提示', async () => {
+    const { wrapper, angles, scale, eye } = mountBar('decimal');
+    angles.value = { bearing: 15, pitch: null };
+    await nextTick();
+    expect(rulerTexts(wrapper)).toStrictEqual([
+      '118.789800, 32.061400200 km-180°',
+      '118.789800, 32.061400200 km',
+      '200 km'
+    ]);
+    expect(rootOf(wrapper).lastElementChild?.querySelector('[style*="width: 80px"]')).not.toBeNull();
+
+    scale.value = null;
+    eye.value = 950;
+    angles.value = { bearing: 15, pitch: 40 };
+    await nextTick();
+    expect(rulerTexts(wrapper)).toStrictEqual([
+      '118.789800, 32.0614008888 km-180°85°',
+      '118.789800, 32.0614008888 km',
+      '8888 km'
+    ]);
+  });
+
+  it('插槽 before 排在状态栏左边，取舍前先让出它的宽度和 8 像素的间距（ADR 0171）', async () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     const fake = fakeReadout();
     fake.angles.value = { bearing: 15, pitch: 30 };
     const wrapper = mount(MapStatusBar, {
       props: { readout: fake.readout, format: 'decimal' },
-      slots: { after: () => [h('button', { type: 'button' }, '请求')] }
+      slots: { before: () => [h('button', { type: 'button' }, '请求')] }
     });
     await nextTick();
-    const after = rootOf(wrapper).children[1];
-    expect(after?.textContent).toBe('请求');
+    const before = rootOf(wrapper).firstElementChild;
+    expect(before?.textContent).toBe('请求');
+    expect(before?.nextElementSibling?.hasAttribute('data-map-readout')).toBe(true);
 
-    observed.get(required(after, '插槽'))?.(120);
+    observed.get(required(before, '插槽'))?.(120);
     await resize(wrapper, 500, [443, 322, 133]);
-    expect(shown(wrapper)).toBe('10 km118.789800, 32.061400');
-  });
-});
-
-describe('MapStatusBar 的步行（ADR 0086 第 5 节、ADR 0090）', () => {
-  it('步行时是第一视角、眼高和朝向，不显示视点高度、经纬度和角度；第三人称没有眼高', async () => {
-    const { wrapper, walking, eye, angles } = mountBar();
-    eye.value = -3.5;
-    angles.value = { bearing: 76, pitch: -6 };
-    walking.value = { view: 'first', heading: 76 };
-    await nextTick();
-    expect(shown(wrapper)).toBe('第一视角眼高 1.6 m朝向 76°');
-
-    walking.value = { view: 'third', heading: 80 };
-    await nextTick();
-    expect(shown(wrapper)).toBe('第三视角朝向 80°');
+    expect(shown(wrapper)).toBe('118.789800, 32.06140010 km');
   });
 });

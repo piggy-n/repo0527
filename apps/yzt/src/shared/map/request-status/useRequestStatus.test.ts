@@ -146,7 +146,7 @@ describe('useRequestStatus', () => {
     await nextTick();
     const quiet = () =>
       ctx.status.loadingKeys.value.size === 0 &&
-      requestSummary(ctx.status.items.value, ctx.status.display.value).kind === 'hidden';
+      requestSummary(ctx.status.items.value, ctx.status.display.value).kind === 'idle';
     // 时钟每 250 毫秒走一格：走到 500、750 都不出现
     await ctx.advance(200);
     expect(quiet()).toBe(true);
@@ -172,9 +172,9 @@ describe('useRequestStatus 的条目（用户 2026-11-22）', () => {
     using ctx = setup([tiles('a', 0)]);
     await ctx.advance(500);
     expect([...ctx.status.loadingKeys.value]).toStrictEqual(['a']);
-    expect(summary(ctx)).toBe('hidden');
+    expect(summary(ctx)).toBe('idle');
     await ctx.advance(250);
-    expect(summary(ctx)).toBe('hidden');
+    expect(summary(ctx)).toBe('idle');
     await ctx.advance(250);
     expect(summary(ctx)).toBe('loading');
 
@@ -192,11 +192,11 @@ describe('useRequestStatus 的条目（用户 2026-11-22）', () => {
     await nextTick();
     expect(summary(ctx)).toBe('done');
 
-    // 结束后 1.5 秒内都是已加载完成，之后隐藏、时钟停下
+    // 结束后 1.5 秒内都是已加载完成，之后回到空闲、时钟停下
     await ctx.advance(1250);
     expect(summary(ctx)).toBe('done');
     await ctx.advance(500);
-    expect(summary(ctx)).toBe('hidden');
+    expect(summary(ctx)).toBe('idle');
     const stopped = ctx.status.now.value;
     await ctx.advance(1000);
     expect(ctx.status.now.value).toBe(stopped);
@@ -222,7 +222,7 @@ describe('useRequestStatus 的条目（用户 2026-11-22）', () => {
     ctx.sources.value = [tiles('a', 250, 400)];
     await nextTick();
     expect(ctx.status.failedKeys.value.size).toBe(0);
-    expect(summary(ctx)).toBe('hidden');
+    expect(summary(ctx)).toBe('idle');
   });
 
   it('显示过的加载以失败结束后马上又开始一轮：仍是几项失败，不切成加载中；这一轮没有失败地结束后是已加载完成', async () => {

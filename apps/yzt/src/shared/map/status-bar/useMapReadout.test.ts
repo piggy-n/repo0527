@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { CameraState, LngLat, PickOptions, PickResult, RoamStatus, ScreenPoint } from '@mx/map-core';
+import type { CameraState, LngLat, PickOptions, PickResult, ScreenPoint } from '@mx/map-core';
 import type { MapViewport } from '@mx/map-vue';
 import { describe, expect, it } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
@@ -47,11 +47,10 @@ function setup() {
   const view = shallowRef<MapViewport | null>(null);
   const pointer = shallowRef<ScreenPoint | null>(null);
   const projectionRevision = ref(0);
-  const roamStatus = shallowRef<RoamStatus | null>(null);
   const fake = fakeViewport(camera);
   const scope = effectScope();
   const readout = scope.run(() =>
-    useMapReadout({ view, pointer, projectionRevision, roamStatus, useCamera: () => camera })
+    useMapReadout({ view, pointer, projectionRevision, useCamera: () => camera })
   );
   if (!readout) {
     throw new Error('作用域没有运行');
@@ -62,7 +61,6 @@ function setup() {
     view,
     pointer,
     projectionRevision,
-    roamStatus,
     ...fake,
     [Symbol.dispose]: () => scope.stop()
   };
@@ -169,30 +167,5 @@ describe('useMapReadout', () => {
 
     expect(ctx.readout.scale.value).toBeNull();
     expect(ctx.readout.position.value).toBeNull();
-  });
-});
-
-describe('useMapReadout 的步行（ADR 0086 第 5 节、ADR 0090）', () => {
-  it('步行中才有：人称取步行状态，朝向取视图的相机、取整到 0～359；进场、失败、路线漫游时没有', () => {
-    using ctx = setup();
-    ctx.view.value = ctx.sceneViewport;
-    expect(ctx.readout.walking.value).toBeNull();
-    const walk = { kind: 'walk', id: 'walk-1', view: 'first', notice: null, notices: 0, player: null } as const;
-
-    ctx.roamStatus.value = { ...walk, phase: 'entering' };
-    expect(ctx.readout.walking.value).toBeNull();
-    ctx.roamStatus.value = { ...walk, phase: 'walking' };
-    expect(ctx.readout.walking.value).toStrictEqual({ view: 'first', heading: 0 });
-
-    ctx.eye.heading = 75.6;
-    ctx.camera.value = { ...ctx.camera.value, bearing: 76 };
-    expect(ctx.readout.walking.value).toStrictEqual({ view: 'first', heading: 76 });
-    ctx.roamStatus.value = { ...walk, phase: 'walking', view: 'third' };
-    expect(ctx.readout.walking.value).toStrictEqual({ view: 'third', heading: 76 });
-
-    ctx.roamStatus.value = { ...walk, phase: 'failed' };
-    expect(ctx.readout.walking.value).toBeNull();
-    ctx.roamStatus.value = { kind: 'route', id: 'enter', run: 0, distance: 0, total: 10, finished: false };
-    expect(ctx.readout.walking.value).toBeNull();
   });
 });

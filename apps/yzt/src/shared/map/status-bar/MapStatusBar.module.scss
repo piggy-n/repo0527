@@ -1,6 +1,6 @@
-// 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：高 24，左右内边距 8；分隔线 1 × 12、左右各 8；比例尺线段最长 80
+// 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3；排法 ADR 0171）：高 24，左右内边距 8；分隔线 1 × 12、左右各 8；比例尺线段最长 80
 
-// 宽度由页面决定；状态栏贴在底边，只显示，不拦截地图的鼠标操作
+// 宽度由页面决定；状态栏贴在底边，只显示，不拦截地图的鼠标操作（读数前的图标除外）
 .root {
   position: relative;
   display: flex;
@@ -9,13 +9,7 @@
   pointer-events: none;
 }
 
-// 留位（reserve）时不做字距调整：普惠体的数字本来等宽，和"°′″."之间的字距调整让经纬度随数字变宽变窄（量尺同样继承）。
-// 根元素是容器 map-status-bar：它的宽度只由页面布局定，按它判断放不放得下留位，不会随内容来回切换
-.reserving {
-  container: map-status-bar / inline-size;
-  font-kerning: none;
-}
-
+// 等宽数字、不做字距调整：普惠体的数字和"°′″."之间有字距调整，经纬度会随数字变宽变窄（量尺同样继承）
 .bar {
   display: inline-flex;
   align-items: center;
@@ -31,6 +25,7 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tag);
   font-variant-numeric: tabular-nums;
+  font-kerning: none;
   white-space: nowrap;
 }
 
@@ -38,15 +33,23 @@
   display: inline-flex;
   flex: none;
   align-items: center;
+  gap: 4px;
+}
+
+.scale {
   gap: 6px;
 }
 
+// 旋转和俯仰之间
 .angles {
-  gap: 12px;
+  gap: 10px;
 }
 
-.muted {
+// 读数前的图标：悬停时说明含义
+.icon {
+  display: inline-flex;
   color: var(--color-text-secondary);
+  pointer-events: auto;
 }
 
 .divider {
@@ -67,30 +70,7 @@
   border-top: 0;
 }
 
-// 留位（reserve）：读数和最宽的样子叠在同一格里，格子按宽的那个，读数贴左边
-.reserved {
-  display: inline-grid;
-  flex: none;
-
-  > * {
-    grid-area: 1 / 1;
-  }
-}
-
-// 只占位置、看不见：最宽的样子，鼠标在画布上时的"中心"
-.sample {
-  visibility: hidden;
-}
-
-// 手机宽度（现状底图 375 宽时根元素约 250）：留位的第一段加上请求状态的条目（最小宽 160）放不下，比例尺会被截掉，
-// 不叠最宽的样子，回到按读数的宽度；条目的最小宽度在同一个宽度以下也不撑（RequestStatusChip.module.scss，两处一致）
-@container map-status-bar (width < 320px) {
-  .reserved > .sample {
-    display: none;
-  }
-}
-
-// 量尺：三种排法各排一份，量出宽度；不占位置、看不见，宽度按内容
+// 量尺：三种排法各排一份，按最宽的读数量出宽度；不占位置、看不见，宽度按内容
 .rulers {
   position: absolute;
   top: 0;
@@ -109,10 +89,10 @@
   }
 }
 
-// 紧跟状态栏的插槽，间距同 AFTER_GAP
-.after {
+// 状态栏左边的插槽，间距同 BEFORE_GAP
+.before {
   display: flex;
   flex: none;
   align-items: flex-end;
-  margin-left: 8px;
+  margin-right: 8px;
 }

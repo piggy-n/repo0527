@@ -674,6 +674,11 @@ function layerRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['g
   return wrapper.get(`[data-current-row="resource:${code}"]`);
 }
 
+// 状态栏前的数据加载按钮显示的是哪种状态（空闲、加载中、失败、完成，ADR 0171）
+function chipKind(wrapper: PageWrapper): string | undefined {
+  return wrapper.get('[data-request-chip]').attributes('data-request-chip');
+}
+
 // 页面的分组；图层 ID 以分组名为前缀，basemap 和 basemap-labels、region 和 region-clip 的前缀重叠，按最长的算
 const GROUPS = [
   'basemap',
@@ -1027,44 +1032,40 @@ describe('CurrentMapPage', () => {
     expect(map.flyToCalls.at(-1)).toStrictEqual({ bearing: 0, pitch: 0, duration: 300 });
   });
 
-  it('状态栏：比例尺和鼠标所在的经纬度，写法跟着坐标定位面板；鼠标离开画布时是中心；没有版权控件（ADR 0053 第 5 节）', async () => {
+  it('状态栏：前面是数据加载的按钮，后面是经纬度和比例尺，经纬度的写法跟着坐标定位面板；鼠标离开画布时经纬度前的图标换成画布中心；没有版权控件（ADR 0053 第 5 节、ADR 0171）', async () => {
     const { wrapper, map } = await readyPage();
-    const bar = () => required(wrapper.get('[data-map-status-bar]').element.firstElementChild, '状态栏');
-    // 看得见的文字；留位用的看不见的部分（最宽的比例尺、鼠标在画布上时的"中心"）另外列出
-    const hiddenParts = () => [...bar().querySelectorAll('[aria-hidden="true"]')].map(element => element.textContent);
-    const status = () => {
-      const shown = bar().cloneNode(true);
-      if (!(shown instanceof Element)) {
-        throw new Error('状态栏不是元素');
-      }
-      for (const element of shown.querySelectorAll('[aria-hidden="true"]')) {
-        element.remove();
-      }
-      return shown.textContent;
-    };
+    const status = () => wrapper.get('[data-map-readout]').text();
+    const coordinateIcon = () => wrapper.get('[data-map-readout] [role="img"]').attributes('aria-label');
     expect(map.options.attributionControl).toBe(false);
+    // 按钮在状态栏前面，空闲时也在
+    const chip = wrapper.get('[data-map-status-bar]').get('[data-request-chip]');
+    expect(chip.attributes('data-request-chip')).toBe('idle');
+    expect(
+      chip.element.compareDocumentPosition(wrapper.get('[data-map-readout]').element) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
 
     // 假地图每 100 像素 1 度：画布中间相距 100 像素的两点在北纬 32° 相距约 94.6 千米，比例尺取 50 千米
     map.moveTo([119, 32], 9, {});
     await nextTick();
-    expect(status()).toBe(`50 km中心${formatLngLat([119, 32], 'dms')}`);
+    expect(status()).toBe(`${formatLngLat([119, 32], 'dms')}50 km`);
+    expect(coordinateIcon()).toBe('画布中心的经纬度（鼠标不在地图上）');
 
     // 鼠标的位置在下一帧写入
     map.mouse('mousemove', 100, 50);
     await new Promise(resolve => requestAnimationFrame(resolve));
     await nextTick();
-    expect(status()).toBe(`50 km${formatLngLat([120, 31.5], 'dms')}`);
-    // 比例尺按最宽的留位，"中心"不显示时也占位：后面的请求状态不跟着左右移（用户 2026-11-22）
-    expect(hiddenParts()).toStrictEqual(['200 km', '视点高度 8888 km', '中心']);
+    expect(status()).toBe(`${formatLngLat([120, 31.5], 'dms')}50 km`);
+    expect(coordinateIcon()).toBe('鼠标所在位置的经纬度');
 
     await button(wrapper, '坐标定位').trigger('click');
     await wrapper.get('input[value="decimal"]').setValue();
-    expect(status()).toBe(`50 km${formatLngLat([120, 31.5], 'decimal')}`);
+    expect(status()).toBe(`${formatLngLat([120, 31.5], 'decimal')}50 km`);
 
     map.mouse('mouseout', 100, 50);
     await new Promise(resolve => requestAnimationFrame(resolve));
     await nextTick();
-    expect(status()).toBe(`50 km中心${formatLngLat([119, 32], 'decimal')}`);
+    expect(status()).toBe(`${formatLngLat([119, 32], 'decimal')}50 km`);
+    expect(coordinateIcon()).toBe('画布中心的经纬度（鼠标不在地图上）');
   });
 
   it('点"默认视角"按江苏的范围再定位一次', async () => {
@@ -1595,17 +1596,17 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
   });
 
-  it('请求状态（ADR 0158）：瓦片加载超过 0.4 秒时行内转圈、0.8 秒时状态栏右边出现条目；点开明细、点一行在当前图层里选中；都到了以后已加载完成', async () => {
+  it('请求状态（ADR 0158、0171）：瓦片加载超过 0.4 秒时行内转圈、0.8 秒时状态栏前的按钮转圈加百分比；点开明细、点一行在当前图层里选中；都到了以后是完成的勾', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
     map.fire('dataloading', parcelTile('1'));
     map.fire('dataloading', parcelTile('2'));
     map.fire('sourcedata', parcelTile('1'));
     await settle();
-    expect(wrapper.find('[data-request-chip]').exists()).toBe(false);
+    expect(chipKind(wrapper)).toBe('idle');
 
-    await vi.waitFor(() => expect(wrapper.find('[data-request-chip]').exists()).toBe(true), { timeout: 3000 });
-    expect(wrapper.get('[data-request-chip]').text()).toBe('正在加载 1 项 · 50%');
+    await vi.waitFor(() => expect(chipKind(wrapper)).toBe('loading'), { timeout: 3000 });
+    expect(wrapper.get('[data-request-chip]').attributes('aria-label')).toBe('正在加载 1 项，已完成 50%');
     expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(true);
 
     await wrapper.get('[data-request-chip]').trigger('click');
@@ -1614,7 +1615,7 @@ describe('CurrentMapPage', () => {
     expect(layerRow(wrapper, 'bgdc_dltb').attributes('aria-selected')).toBe('true');
 
     map.fire('sourcedata', parcelTile('2'));
-    await vi.waitFor(() => expect(wrapper.get('[data-request-chip]').text()).toBe('已加载完成'));
+    await vi.waitFor(() => expect(chipKind(wrapper)).toBe('done'));
     expect(layerRow(wrapper, 'bgdc_dltb').find('[aria-label="加载中"]').exists()).toBe(false);
   });
 
@@ -1624,7 +1625,7 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '收起资源图层').trigger('click');
     expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(true);
     map.fire('dataloading', parcelTile('1'));
-    await vi.waitFor(() => expect(wrapper.find('[data-request-chip]').exists()).toBe(true), { timeout: 3000 });
+    await vi.waitFor(() => expect(chipKind(wrapper)).toBe('loading'), { timeout: 3000 });
 
     await wrapper.get('[data-request-chip]').trigger('click');
     await wrapper.get('[data-request-row="resource:bgdc_dltb"]').trigger('click');
@@ -1676,7 +1677,7 @@ describe('CurrentMapPage', () => {
     const dltb = layerRow(wrapper, 'bgdc_dltb').get('[role="img"]');
     expect(dltb.attributes('aria-label')).toBe('有瓦片加载失败');
     expect(layerRow(wrapper, 'bgdc_dltb').text()).not.toContain('瓦片');
-    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
+    expect(wrapper.get('[data-request-chip]').attributes('aria-label')).toBe('1 项加载失败');
     expect(consoleError).toHaveBeenCalledWith('[map-vue]', tileError);
 
     // 级别不够的资源又有瓦片加载失败：图标换成更严重的，提示里两条都在
@@ -1694,14 +1695,14 @@ describe('CurrentMapPage', () => {
     await nextTick();
     expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('有瓦片加载失败');
 
-    // 失败留到下一轮结束（用户 2026-11-22）：下一轮开始时行内、条目都不变，没有失败地结束后和明细一起清掉
+    // 失败留到下一轮结束（用户 2026-11-22）：下一轮开始时行内、状态按钮都不变，没有失败地结束后和明细一起清掉
     map.fire('dataloading', parcelTile('2'));
     await settle();
     expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status="tile-error"]').exists()).toBe(true);
-    expect(wrapper.get('[data-request-chip]').text()).toBe('2 项加载失败');
+    expect(wrapper.get('[data-request-chip]').attributes('aria-label')).toBe('2 项加载失败');
     map.fire('sourcedata', parcelTile('2'));
     await vi.waitFor(() => expect(layerRow(wrapper, 'bgdc_dltb').find('[data-status]').exists()).toBe(false));
-    expect(wrapper.get('[data-request-chip]').text()).toBe('1 项加载失败');
+    expect(wrapper.get('[data-request-chip]').attributes('aria-label')).toBe('1 项加载失败');
   });
 
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {

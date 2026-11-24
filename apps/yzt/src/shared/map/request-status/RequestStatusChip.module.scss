@@ -1,6 +1,6 @@
-// 状态栏右边的请求状态（ADR 0158）：和状态栏同高、同底色；明细浮层贴着资源图层面板
+// 状态栏前面的请求状态（ADR 0158、0171）：和状态栏同高、同底色；明细浮层贴着资源图层面板
 
-// 弹性容器：块里放行内的按钮会形成行框，按页面的字号、行高撑到 25 像素，条目比状态栏高出 1 像素（用户 2026-11-22）
+// 弹性容器：块里放行内的按钮会形成行框，按页面的字号、行高撑到 25 像素，按钮比状态栏高出 1 像素（用户 2026-11-22）
 .root {
   position: relative;
   display: flex;
@@ -8,32 +8,33 @@
   pointer-events: auto;
 }
 
-// 最小宽度放得下带红点的"正在加载 3 项 · 100%"，文字变了不跳（用户 2026-11-22）；行高、盒模型同状态栏
+// 一直在的按钮：内容和看不见的"转圈 99%"叠在同一格里，宽度按后者固定，内容居中；状态变了宽度不变（ADR 0171）。
+// 行高、盒模型同状态栏
 .chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline-grid;
+  place-items: center;
   box-sizing: border-box;
-  min-width: 160px;
   height: 24px;
   padding: 0 8px;
-  overflow: hidden;
   border: 0;
   border-radius: var(--radius-sm);
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-sm);
-  color: var(--color-text-regular);
   font: inherit;
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tag);
   font-variant-numeric: tabular-nums;
+  font-kerning: none;
   white-space: nowrap;
   cursor: pointer;
 
+  > * {
+    grid-area: 1 / 1;
+  }
+
   &:hover,
   &[aria-expanded='true'] {
-    color: var(--color-primary);
+    background-color: var(--color-primary-bg);
   }
 
   &:focus-visible {
@@ -41,47 +42,51 @@
   }
 }
 
-// 手机宽度：状态栏（容器 map-status-bar，开了留位时才有）窄到放不下时不撑最小宽度，免得把比例尺挤掉，宽度同 MapStatusBar.module.scss
-@container map-status-bar (width < 320px) {
-  .chip {
-    min-width: 0;
-  }
+.content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.spinner {
-  color: var(--color-primary);
+.sample {
+  visibility: hidden;
 }
 
-.done {
-  color: var(--color-success-text);
+.loading {
+  color: var(--color-text-regular);
 }
 
 .failed {
   color: var(--color-warning-text);
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--color-danger);
+.done {
+  color: var(--color-success-text);
 }
 
-// 底边 2 像素的进度
-.progress {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  background-color: var(--color-primary-alpha-12);
+.idle {
+  color: var(--color-text-secondary);
+}
 
-  i {
-    display: block;
-    height: 100%;
-    background-color: var(--color-primary);
-    transition: width 0.2s linear;
-  }
+.icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.spinner {
+  color: var(--color-primary);
+}
+
+// 上一轮有失败：转圈右上角的红点，白边和背景隔开
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--color-bg-container);
+  border-radius: 50%;
+  background-color: var(--color-danger);
 }
 
 // 明细贴着资源图层面板的右边、底边在状态栏上方：位置、宽度和最大高度由 requestPopoverPlacement 算好写在 style 上（视口坐标）
