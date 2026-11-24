@@ -45,21 +45,12 @@ function statusContent(summary: RequestSummary): VNode[] {
   return [<SvgIcon name="check" size={14} />];
 }
 
-// 明细的位置写在 style 上：下方按顶边，右边按底边；量好之前先不显示，放好的位置在同一轮渲染里就到，看不到闪动
-function popoverStyle(box: RequestPopoverPlacement | null) {
-  if (box === null) {
-    return { visibility: 'hidden' as const };
-  }
-  const size = { left: `${box.left}px`, width: `${box.width}px`, maxHeight: `${box.maxHeight}px` };
-  return box.side === 'below' ? { ...size, top: `${box.top}px` } : { ...size, bottom: `${box.bottom}px` };
-}
-
 /**
  * 状态栏前面的请求状态（ADR 0158、0171，原型 `/design.local/status-bar/`）：一直在的按钮，宽度按"转圈 99%"固定、内容居中，
  * 状态变了读数不动；只有图标和数字，全称在 Tooltip 和读屏名称里。点开是"数据加载"的明细，分加载中、有失败、已完成三组。
- * 点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点按钮关闭。明细和资源图层面板同宽，面板下面
- * 放得下时在面板下方，否则贴着面板的右边、底边在状态栏上方（requestPopoverPlacement，用户 2026-11-16、2026-11-23）；
- * 外壳和标题同其他地图面板（MxPanel、MxTitle）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
+ * 点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点按钮关闭。明细和资源图层面板同宽、底边在状态栏
+ * 上方，面板下面放得下时在面板下方、和面板左对齐，否则贴着面板的右边（requestPopoverPlacement，用户 2026-11-16、
+ * 2026-11-23）；外壳和标题同其他地图面板（MxPanel、MxTitle）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
  */
 export const RequestStatusChip = defineComponent({
   name: 'RequestStatusChip',
@@ -237,10 +228,14 @@ export const RequestStatusChip = defineComponent({
     const renderPopover = () => {
       const { loading, failed, done } = groups.value;
       const box = placement.value;
+      // 量好之前先不显示：放好的位置在同一轮渲染里就到，看不到闪动
+      const style = box
+        ? { left: `${box.left}px`, bottom: `${box.bottom}px`, width: `${box.width}px`, maxHeight: `${box.maxHeight}px` }
+        : { visibility: 'hidden' as const };
       return (
         <div
           class={styles.popover}
-          style={popoverStyle(box)}
+          style={style}
           role="dialog"
           aria-label="数据加载"
           data-request-popover

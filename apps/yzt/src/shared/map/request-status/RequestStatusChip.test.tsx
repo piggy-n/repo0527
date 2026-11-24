@@ -233,7 +233,7 @@ describe('RequestStatusChip', () => {
     expect(style().left).toBe('344px');
   });
 
-  it('面板收起成竖条时明细在它下方、用面板展开时的宽度，展开后到右边：页面给的一直是同一个元素，靠尺寸监听；明细关着时不监听（用户 2026-11-23）', async () => {
+  it('面板收起成竖条时明细在它下方（底边在状态栏上方）、用面板展开时的宽度，展开后到右边：页面给的一直是同一个元素，靠尺寸监听；明细关着时不监听（用户 2026-11-23）', async () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const area = placed(16, 72, 1264, 760);
     let rect = new DOMRect(16, 72, 40, 140);
@@ -250,13 +250,13 @@ describe('RequestStatusChip', () => {
       const { left, top, bottom, width } = popover().style;
       return [popover().dataset.requestSide, left, top, bottom, width];
     };
-    // 竖条的底边 212，下面离 8
-    expect(box()).toStrictEqual(['below', '16px', '220px', '', '320px']);
+    // 竖条下面放得下：和竖条左对齐，底边在条目上边 736 再往上 8
+    expect(box()).toStrictEqual(['below', '16px', '', '40px', '320px']);
 
     // 在明细里点了一行，页面把竖条展开：元素不变，尺寸变了；面板还矮，仍在下方，和面板同宽
     rect = new DOMRect(16, 72, 300, 200);
     await wrapper.setProps({ panelCollapsed: false });
-    expect(box()).toStrictEqual(['below', '16px', '280px', '', '300px']);
+    expect(box()).toStrictEqual(['below', '16px', '', '40px', '300px']);
 
     // 面板的内容多了、变高，下面放不下：只有尺寸监听知道
     rect = new DOMRect(16, 72, 300, 652);

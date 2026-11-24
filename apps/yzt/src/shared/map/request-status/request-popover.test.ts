@@ -26,17 +26,17 @@ describe('requestPopoverPlacement', () => {
     });
   });
 
-  it('面板下面到状态栏上方放得下 420 时在面板下方，和面板左对齐、同宽；差 1 像素也放到右边', () => {
+  it('面板下面到状态栏上方放得下 420 时平移到面板下方：和面板左对齐、同宽，底边照样在状态栏上方；差 1 像素也放到右边', () => {
     // 面板底边 324：324 + 8 + 420 = 752 = 760 - 8
     const fits = requestPopoverPlacement({ ...WIDE, panel: box(16, 72, 336, 324) });
-    expect(fits).toStrictEqual({ side: 'below', left: 16, top: 332, width: 320, maxHeight: 420 });
+    expect(fits).toStrictEqual({ side: 'below', left: 16, bottom: 48, width: 320, maxHeight: 420 });
     const short = requestPopoverPlacement({ ...WIDE, panel: box(16, 72, 336, 325) });
     expect(short).toMatchObject({ side: 'beside', left: 344, bottom: 48 });
   });
 
   it('面板收起成竖条时用面板展开时的宽度：竖条矮，在它下方；放不下时在它右边', () => {
     const strip = requestPopoverPlacement({ ...WIDE, panel: box(16, 72, 56, 212), collapsed: true });
-    expect(strip).toStrictEqual({ side: 'below', left: 16, top: 220, width: 320, maxHeight: 420 });
+    expect(strip).toStrictEqual({ side: 'below', left: 16, bottom: 48, width: 320, maxHeight: 420 });
     const low = requestPopoverPlacement({
       ...WIDE,
       panel: box(16, 72, 56, 212),
