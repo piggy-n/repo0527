@@ -8,6 +8,7 @@ import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
+import { CLASS_FIELD } from '../filter-fields';
 import { ResourceLegend } from './ResourceLegend';
 import { ResourceLegendReset } from './ResourceLegendReset';
 
@@ -461,6 +462,25 @@ describe('ResourceLegend', () => {
     expect(wrapper.find('[data-symbol-editor="0101"]').exists()).toBe(false);
     await back(wrapper);
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+  });
+
+  it('正在编辑的一类被过滤掉（ADR 0173）：编辑器仍对着它，不换到别的类别，一类都不剩时也不改到统一符号上', async () => {
+    const { wrapper, owner } = mountLegend();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await button(wrapper, '编辑水渠样式').trigger('click');
+    const editing = () => ({
+      title: wrapper.get('[data-legend-settings] h3').text(),
+      target: wrapper.get('[data-legend-settings] [data-symbol-editor]').attributes('data-symbol-editor')
+    });
+    expect(editing()).toStrictEqual({ title: '水渠', target: '水渠' });
+
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
+    await nextTick();
+    expect(editing()).toStrictEqual({ title: '水渠', target: '水渠' });
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: [] });
+    await nextTick();
+    expect(editing()).toStrictEqual({ title: '水渠', target: '水渠' });
   });
 
   it('地类平铺且没有分类选择器；悬浮提示包含编码和含义，点击条目直接进入单项编辑', async () => {

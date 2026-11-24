@@ -162,6 +162,7 @@
 
 ## 以后再做
 
+- 要素过滤的后端识别改成后端按条件筛（ADR 0173）：现在后端结果在前端一页页筛，总数不准、符合的少时要多查几页；范围查询的 `conditions` 参数实测接受 `LIKE`（[迁移记录](archive/migration.md)"后端的范围查询"），先在真实后端试 `IN`、空值、地类的历史名称，再把条件换成后端的写法
 - 继续拆 `shared/map`：通用交互已经拆成 `@mx/map-tools`（ADR 0145）；工具栏、面板等通用界面，以及混着江苏内容的 `location`、`area`，等第二个地图项目的需求清楚了再说
 - 接入 Renovate；改用 Pull Request 后给 `main` 设分支保护（[ci-workflow](config/ci-workflow.md)）
 - 业务端到端测试、覆盖率门槛

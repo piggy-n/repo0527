@@ -139,8 +139,20 @@ describe('FeatureDetailPanel', () => {
     expect(wrapper.findAll('button').some(item => item.text() === '加载更多')).toBe(false);
   });
 
+  it('过滤着的后端结果（ADR 0173）：没筛完时写已列出的和还没筛的，筛完了才写"共"', () => {
+    const partial: CandidateList = { ...LIST, pages: { geometry: POINT, loaded: 1, total: 45, filtered: true } };
+    const first = mountPanel(fakePick({ kind: 'candidates', list: partial, more: { kind: 'idle' } }).pick);
+    expect(first.text()).toContain('2022 · 已筛出 2 个，15 个未筛');
+    expect(first.findAll('button').some(item => item.text() === '加载更多')).toBe(true);
+
+    const done: CandidateList = { ...LIST, pages: { geometry: POINT, loaded: 2, total: 45, filtered: true } };
+    const second = mountPanel(fakePick({ kind: 'candidates', list: done, more: { kind: 'idle' } }).pick);
+    expect(second.text()).toContain('2022 · 共 2 个');
+    expect(second.text()).not.toContain('45');
+  });
+
   it('后端识别还有更多页时可以加载更多，加载中不能再点；失败时显示原因并可以重试', async () => {
-    const list: CandidateList = { ...LIST, pages: { geometry: POINT, loaded: 1, total: 45 } };
+    const list: CandidateList = { ...LIST, pages: { geometry: POINT, loaded: 1, total: 45, filtered: false } };
     const { pick, state } = fakePick({ kind: 'candidates', list, more: { kind: 'idle' } });
     const wrapper = mountPanel(pick);
 
@@ -292,7 +304,7 @@ describe('FeatureDetailPanel', () => {
     expect(wrapper.text()).toContain('2022 · 地图上已画出的 2 个');
     expect(notice(wrapper, 'info').exists()).toBe(false);
 
-    const pages = { geometry: POINT, loaded: 1, total: 45 };
+    const pages = { geometry: POINT, loaded: 1, total: 45, filtered: false };
     state.value = { kind: 'candidates', list: { ...box, pages }, more: { kind: 'idle' } };
     await nextTick();
     expect(wrapper.text()).toContain('2022 · 共 45 个，已列出 2 个');

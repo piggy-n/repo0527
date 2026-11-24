@@ -14,7 +14,7 @@ import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@mx/map-
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
-import { type FeatureFilter, isFiltering } from './feature-filter';
+import { type FeatureFilter, featurePasses } from './feature-filter';
 import { isLabelLayer } from './labels';
 import { LANDUSE_FIELD_LABELS } from './landuse';
 import { markDistance } from './point-shapes';
@@ -23,7 +23,7 @@ import { type PointMarkOf, resourceStyle, tilesetOf } from './style-registry';
 
 // 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
 
-/** 后端查询的两种能力，各自判断（ADR 0048 第 1 节）；过滤着的资源不做后端范围识别（targetCapability） */
+/** 后端查询的两种能力，各自判断（ADR 0048 第 1 节） */
 export interface QueryCapability {
   /** 后端范围识别：分页结果带 guid */
   readonly identify: boolean;
@@ -47,15 +47,6 @@ export function queryCapabilityOf(code: string): QueryCapability {
   return { identify: IDENTIFIABLE.has(code), detail: DETAIL_PREFIXES.some(prefix => code.startsWith(prefix)) };
 }
 
-/**
- * 一个识别目标的能力：过滤着的资源只用渲染要素（ADR 0173）——后端不能按属性筛，翻页和总数会对不上；
- * 画出来的要素已经按条件过滤过
- */
-export function targetCapability(target: PickResource): QueryCapability {
-  const capability = queryCapabilityOf(target.resource.code);
-  return isFiltering(target.filter) ? { ...capability, identify: false } : capability;
-}
-
 /** 渲染要素的查询容差（屏幕像素）：面只取包含点击位置的，线、点同旧项目 */
 export const PICK_TOLERANCES: Readonly<Record<ResourceGeometry, number>> = { fill: 0, line: 8, circle: 10 };
 
@@ -64,6 +55,12 @@ export const RENDERED_PICK_ZOOM = 14;
 
 /** 后端识别每页的条数 */
 export const PICK_PAGE_SIZE = 30;
+
+/**
+ * 过滤着的资源（ADR 0173）：后端不按属性筛，一页里可能一个都不符合，接着查下一页；一次最多连查这么多页（150 个），
+ * 都不符合时这一次当作没有
+ */
+export const FILTER_SCAN_PAGES = 5;
 
 /** 框选时估数的拒绝阈值：框里的渲染要素去重后超过它时提示缩小范围，不请求后端（ADR 0049 第 2 节） */
 export const BOX_ESTIMATE_LIMIT = 5000;
@@ -75,7 +72,7 @@ export interface PickResource {
   readonly sourceId: string;
   /** 查询接口的图层编码，同瓦片集名 */
   readonly layerCode: string;
-  /** 识别时的要素过滤（ADR 0173）：列出的候选按它，条件变了列表作废 */
+  /** 识别时的要素过滤（ADR 0173）：后端的结果按它在前端筛，条件变了列表作废；画出来的要素已经按它过滤过 */
   readonly filter: FeatureFilter;
 }
 
@@ -140,12 +137,15 @@ export function renderedCandidates(
   return [...nearest.values()].toSorted((a, b) => a.distance - b.distance);
 }
 
-/** 后端范围识别的结果，按返回的顺序；没有 guid 的记录不算，重复的只留第一条 */
+/**
+ * 后端范围识别的结果，按返回的顺序；没有 guid 的记录不算，重复的只留第一条。过滤着的资源只留符合条件的（ADR 0173）：
+ * 后端不能按属性筛，记录的字段和瓦片一样，按地图的表达式求值
+ */
 export function serverCandidates(target: PickResource, records: readonly FeatureRecord[]): PickCandidate[] {
   const unique = new Map<string, PickCandidate>();
   for (const record of records) {
     const { guid } = record;
-    if (isFeatureGuid(guid) && !unique.has(guid)) {
+    if (isFeatureGuid(guid) && !unique.has(guid) && featurePasses(target.resource.code, target.filter, record)) {
       unique.set(guid, candidate(target, guid, record, 'server', 0));
     }
   }
@@ -328,7 +328,7 @@ export function planIdentify(
   };
   const tasks: IdentifyTask[] = [];
   for (const target of targets) {
-    const { geometry: type } = target.resource;
+    const { geometry: type, code } = target.resource;
     const tolerance = PICK_TOLERANCES[type];
     const anchorPoint = anchorOf(target);
     // 画在模型下面的资源：模型脚下在区划外（区划外的楼伸进来）时跳过
@@ -354,7 +354,7 @@ export function planIdentify(
       mark ? markScreenDistance(feature, mark, anchor, project) : screenDistance(feature.geometry, anchor, project)
     );
     const rendered = mark ? candidates.filter(({ distance }) => distance <= tolerance) : candidates;
-    const server = identifyStep(targetCapability(target), view.kind, zoom, rendered).kind === 'server' && geometry();
+    const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
     if (server) {
       const task = serverTask(target, server, prepared);
       tasks.push(task);
@@ -514,7 +514,7 @@ export function planBox(
   for (const target of targets) {
     const { code } = target.resource;
     const sources = [target.sourceId];
-    if (usesBackend(targetCapability(target), view.kind, zoom)) {
+    if (usesBackend(queryCapabilityOf(code), view.kind, zoom)) {
       const estimate = weightedEstimate(code, view.queryRendered(estimateArea, { sources }));
       if (estimate > BOX_ESTIMATE_LIMIT) {
         tasks.push({ kind: 'too-many', target, estimate });
