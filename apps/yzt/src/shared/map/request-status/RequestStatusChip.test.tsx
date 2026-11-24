@@ -56,6 +56,15 @@ function placed(left: number, top: number, right: number, bottom: number): HTMLE
   return element;
 }
 
+// 面板放在所在的列里：列的内容底边是面板最低能到的位置（现状底图的左列，下内边距给状态栏留位置）；rect 按调用时的值取
+function inColumn(rect: () => DOMRect, columnBottom: () => number): HTMLElement {
+  const column = document.body.appendChild(document.createElement('div'));
+  column.getBoundingClientRect = () => new DOMRect(16, 0, 320, columnBottom());
+  const panel = column.appendChild(document.createElement('div'));
+  panel.getBoundingClientRect = rect;
+  return panel;
+}
+
 // jsdom 没有 ResizeObserver：用例换成这个，记下每个观察者看着的元素，由用例通知尺寸变了
 class FakeResizeObserver {
   static readonly instances: FakeResizeObserver[] = [];
@@ -204,9 +213,10 @@ describe('RequestStatusChip', () => {
     expect(wrapper.emitted('retry')).toStrictEqual([['model:m']]);
   });
 
-  it('面板下面放不下时明细贴着面板的右边、底边在状态栏上方，和面板同宽：条目左右移时不动（用户 2026-11-16、2026-11-23）', async () => {
+  it('面板下面放不下时明细贴着面板的右边、和面板同宽，面板到了最大高度时两个底边齐平：条目左右移时不动（用户 2026-11-16、2026-11-23、2026-11-24）', async () => {
     const area = placed(16, 72, 1264, 760);
-    const panel = placed(16, 72, 336, 724);
+    // 面板到了最大高度：底边就是所在列的内容底边 724（条目上边 736 再往上 12）
+    const panel = inColumn(() => new DOMRect(16, 72, 320, 652), () => 724);
     const { wrapper } = mountChip([item('a')]);
     await wrapper.setProps({ panel: () => panel, area: () => area });
     const chip = wrapper.get('[data-request-status]').element;
@@ -216,12 +226,12 @@ describe('RequestStatusChip', () => {
     await wrapper.get('[data-request-chip]').trigger('click');
     const popover = () => wrapper.get<HTMLElement>('[data-request-popover]').element;
     const style = () => popover().style;
-    // jsdom 的视口高 768：底边在条目上边 736 再往上 8
+    // jsdom 的视口高 768：底边和面板的底边齐平在 724，不是条目上边再往上 8 的 728
     expect(popover().dataset.requestSide).toBe('beside');
     expect([style().left, style().top, style().bottom, style().width, style().maxHeight]).toStrictEqual([
       '344px',
       '',
-      '40px',
+      '44px',
       '320px',
       '420px'
     ]);
@@ -237,8 +247,7 @@ describe('RequestStatusChip', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const area = placed(16, 72, 1264, 760);
     let rect = new DOMRect(16, 72, 40, 140);
-    const panel = document.body.appendChild(document.createElement('div'));
-    panel.getBoundingClientRect = () => rect;
+    const panel = inColumn(() => rect, () => 724);
     const layout = shallowRef<unknown>(null);
     const { wrapper } = mountChip([item('a')]);
     await wrapper.setProps({ panel: () => panel, panelCollapsed: true, panelLayout: () => layout.value, area: () => area });
@@ -253,19 +262,19 @@ describe('RequestStatusChip', () => {
       const { left, top, bottom, width } = popover().style;
       return [popover().dataset.requestSide, left, top, bottom, width];
     };
-    // 竖条下面放得下：和竖条左对齐，底边在条目上边 736 再往上 8
-    expect(box()).toStrictEqual(['below', '16px', '', '40px', '320px']);
+    // 竖条下面放得下：和竖条左对齐，底边在面板最低能到的 724
+    expect(box()).toStrictEqual(['below', '16px', '', '44px', '320px']);
 
     // 在明细里点了一行，页面把竖条展开：元素不变，尺寸变了；面板还矮，仍在下方，和面板同宽
     rect = new DOMRect(16, 72, 300, 200);
     await wrapper.setProps({ panelCollapsed: false });
-    expect(box()).toStrictEqual(['below', '16px', '', '40px', '300px']);
+    expect(box()).toStrictEqual(['below', '16px', '', '44px', '300px']);
 
     // 面板的内容多了、变高，下面放不下：外壳发出新的两段高度
     rect = new DOMRect(16, 72, 300, 652);
     layout.value = { tree: 400, checked: 160, adjustable: true };
     await nextTick();
-    expect(box()).toStrictEqual(['beside', '324px', '', '40px', '300px']);
+    expect(box()).toStrictEqual(['beside', '324px', '', '44px', '300px']);
 
     await wrapper.get('[data-request-chip]').trigger('click');
     expect(FakeResizeObserver.watching(area)).toBe(false);
@@ -274,22 +283,21 @@ describe('RequestStatusChip', () => {
   it('页面滚动时明细跟着重新放（开发页的样例会滚动，2026-11-23 审查发现）', async () => {
     const area = placed(16, 72, 1264, 760);
     let top = 72;
-    const panel = document.body.appendChild(document.createElement('div'));
-    panel.getBoundingClientRect = () => new DOMRect(16, top, 320, 600);
+    const panel = inColumn(() => new DOMRect(16, top, 320, 600), () => top + 652);
     const { wrapper } = mountChip([item('a')]);
     await wrapper.setProps({ panel: () => panel, area: () => area });
     let chipTop = 736;
     wrapper.get('[data-request-status]').element.getBoundingClientRect = () => new DOMRect(400, chipTop, 120, 24);
     await wrapper.get('[data-request-chip]').trigger('click');
     const popover = wrapper.get<HTMLElement>('[data-request-popover]').element;
-    expect(popover.style.bottom).toBe('40px');
+    expect(popover.style.bottom).toBe('44px');
 
-    // 整页往上滚了 100：面板和条目一起上移
+    // 整页往上滚了 100：面板、所在的列和条目一起上移
     top = -28;
     chipTop = 636;
     document.dispatchEvent(new Event('scroll'));
     await nextTick();
-    expect(popover.style.bottom).toBe('140px');
+    expect(popover.style.bottom).toBe('144px');
   });
 
   it('关掉加载失败（ADR 0167）：按钮不说失败，明细没有有失败一组；都以失败结束时按钮回到空闲，明细里一组也没有', async () => {

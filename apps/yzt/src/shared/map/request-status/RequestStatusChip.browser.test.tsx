@@ -360,7 +360,7 @@ const SPACES = { '--space-xs': '4px', '--space-sm': '8px', '--space-md': '12px',
 const popover = () => required(document.querySelector<HTMLElement>('[data-request-popover]'), '明细');
 
 describe('明细和真实的资源图层面板', () => {
-  it('明细开着时面板变高：按面板发出的两段高度从下方换到右边，不报 ResizeObserver loop（2026-11-23 审查发现）', async () => {
+  it('明细开着时面板变高：按面板发出的两段高度从下方换到右边，面板到了最大高度时两个底边齐平，不报 ResizeObserver loop（2026-11-23 审查发现，用户 2026-11-24）', async () => {
     await page.viewport(1440, 900);
     using ctx = setupWithPanel();
     await settle();
@@ -375,6 +375,8 @@ describe('明细和真实的资源图层面板', () => {
     await settle();
     expect(popover().dataset.requestSide).toBe('beside');
     expect(popover().getBoundingClientRect().left).toBeCloseTo(ctx.panel().right + 8, 0);
+    // 面板到了最大高度：两个底边齐平（用户 2026-11-24）
+    expect(popover().getBoundingClientRect().bottom).toBeCloseTo(ctx.panel().bottom, 0);
     expect(ctx.loopErrors).toStrictEqual([]);
   });
 });

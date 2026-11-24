@@ -45,6 +45,14 @@ function statusContent(summary: RequestSummary): VNode[] {
   return [<SvgIcon name="check" size={14} />];
 }
 
+// 面板最低能到的位置：所在列的内容底边（列的下内边距给状态栏留了位置），同 LayerPanelShell 按所在的列量最大高度
+function columnBottom(column: Element | null): number | null {
+  if (column === null) {
+    return null;
+  }
+  return column.getBoundingClientRect().bottom - Number.parseFloat(getComputedStyle(column).paddingBottom || '0');
+}
+
 const samePlacement = (next: RequestPopoverPlacement, current: RequestPopoverPlacement | null) =>
   current !== null &&
   next.side === current.side &&
@@ -119,6 +127,7 @@ export const RequestStatusChip = defineComponent({
       }
       const next = requestPopoverPlacement({
         panel: panel.value?.getBoundingClientRect() ?? null,
+        panelLimit: columnBottom(panel.value?.parentElement ?? null),
         collapsed: props.panelCollapsed,
         area: area.value?.getBoundingClientRect() ?? {
           left: 0,

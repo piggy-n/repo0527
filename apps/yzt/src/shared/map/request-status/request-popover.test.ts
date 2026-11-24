@@ -6,9 +6,10 @@ import { type RequestPopoverInput, requestPopoverPlacement } from './request-pop
 const box = (left: number, top: number, right: number, bottom: number): ViewportBox => ({ left, top, right, bottom });
 
 // 1280×800 的窗口，顶栏 56，地图四周留白 16：地图区域是 (16, 72)～(1264, 784)，状态栏的上边在 760。
-// 面板展开着、到了列的底部
+// 面板展开着、到了列的底部；量不到所在的列（面板最低能到的位置）时只按状态栏
 const WIDE: RequestPopoverInput = {
   panel: box(16, 72, 336, 748),
+  panelLimit: null,
   collapsed: false,
   area: box(16, 72, 1264, 784),
   barTop: 760,
@@ -16,6 +17,20 @@ const WIDE: RequestPopoverInput = {
 };
 
 describe('requestPopoverPlacement', () => {
+  it('面板到了最大高度时两个底边齐平：底边是面板最低能到的位置，不是状态栏上方 8（用户 2026-11-24）', () => {
+    // 所在列的内容底边 748（状态栏上边 760 再往上 12），面板正好到这里
+    const aligned = requestPopoverPlacement({ ...WIDE, panelLimit: 748 });
+    expect(aligned).toStrictEqual({ side: 'beside', left: 344, bottom: 52, width: 320, maxHeight: 420 });
+    // 放在下方时也是这条底边，放不放得下按它算：324 + 8 + 420 = 752 > 748，要面板底边 320 才放得下
+    expect(requestPopoverPlacement({ ...WIDE, panelLimit: 748, panel: box(16, 72, 336, 324) }).side).toBe('beside');
+    expect(requestPopoverPlacement({ ...WIDE, panelLimit: 748, panel: box(16, 72, 336, 320) })).toMatchObject({
+      side: 'below',
+      bottom: 52
+    });
+    // 列一直到状态栏下面（量错、没有给状态栏留位置）时，照样离状态栏 8
+    expect(requestPopoverPlacement({ ...WIDE, panelLimit: 790 }).bottom).toBe(48);
+  });
+
   it('面板下面放不下时贴着面板的右边，底边在状态栏上方 8，最高 420，和面板同宽', () => {
     expect(requestPopoverPlacement(WIDE)).toStrictEqual({
       side: 'beside',
