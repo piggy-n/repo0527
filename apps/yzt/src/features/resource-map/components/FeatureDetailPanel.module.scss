@@ -15,13 +15,43 @@
 }
 
 .meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding-left: 12px;
-  overflow: hidden;
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
   color: var(--color-text-secondary);
+}
+
+// 说明放不下时省略说明，后面的图标不被挤掉
+.metaText {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// 不能查详情时说明行后面的图标（实心 14，用户 2026-11-23）：悬停、键盘聚焦时提示
+.metaHint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-secondary);
+  cursor: help;
+
+  &:hover {
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    border-radius: var(--radius-sm);
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
 }
 
 // 文字链接：返回列表、显示没有值的字段、重试、加载更多
