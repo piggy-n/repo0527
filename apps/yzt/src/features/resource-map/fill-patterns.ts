@@ -152,11 +152,19 @@ const PREVIEW_TILES: Readonly<Record<FillPattern, number>> = {
   dot: 8
 };
 
-/** 图例里的花纹预览：一个图块的 SVG 和它的边长，按同一份形状数据画（ADR 0045 第 3 节），平铺成背景 */
-export function patternPreviewSvg(
-  pattern: FillPattern,
-  color: string
-): { readonly svg: string; readonly size: number } {
+/** 图例里花纹预览的一个图块：线的 SVG 路径（线宽 0.8）、点的圆心（半径 0.8）和边长，平铺成背景 */
+export interface PatternPreviewTile {
+  readonly size: number;
+  /** 没有线时为空串 */
+  readonly path: string;
+  readonly dots: readonly (readonly [x: number, y: number])[];
+}
+
+/** 预览里线宽和点的半径 */
+export const PREVIEW_STROKE = 0.8;
+
+/** 图例里的花纹预览图块，按同一份形状数据画（ADR 0045 第 3 节）；页面的 SVG 和导出图片的 canvas 共用 */
+export function patternPreviewTile(pattern: FillPattern): PatternPreviewTile {
   const shape = PATTERN_SHAPES[pattern];
   const size = PREVIEW_TILES[pattern];
   const step = size / shape.divisions;
@@ -169,12 +177,22 @@ export function patternPreviewSvg(
     diagonal: () => offsets.map(c => `M${c} 0L${c + size} ${size}`),
     backDiagonal: () => offsets.map(c => `M${c + size} 0L${c} ${size}`)
   };
-  const lines = shape.lines.flatMap(line => paths[line]());
-  const dots = shape.dots ? centers.flatMap(x => centers.map(y => `<circle cx="${x}" cy="${y}" r="0.8"/>`)) : [];
-  const path = lines.length > 0 ? `<path d="${lines.join('')}"/>` : '';
+  const path = shape.lines.flatMap(line => paths[line]()).join('');
+  const dots = shape.dots ? centers.flatMap(x => centers.map(y => [x, y] as const)) : [];
+  return { size, path, dots };
+}
+
+/** 图例里的花纹预览：一个图块的 SVG 和它的边长，平铺成背景 */
+export function patternPreviewSvg(
+  pattern: FillPattern,
+  color: string
+): { readonly svg: string; readonly size: number } {
+  const { size, path, dots } = patternPreviewTile(pattern);
+  const lines = path === '' ? '' : `<path d="${path}"/>`;
+  const circles = dots.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${PREVIEW_STROKE}"/>`).join('');
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" ` +
-    `stroke="${color}" stroke-width="0.8" fill="${color}">${path}${dots.join('')}</svg>`;
+    `stroke="${color}" stroke-width="${PREVIEW_STROKE}" fill="${color}">${lines}${circles}</svg>`;
   return { svg, size };
 }
 

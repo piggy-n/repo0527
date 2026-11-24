@@ -54,6 +54,11 @@ function mockQueries() {
   return requests;
 }
 
+// 数据查询不截图
+function noSnapshot(): never {
+  throw new Error('数据查询不截图');
+}
+
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)
 function toolView(): ToolView {
   return {
@@ -87,7 +92,12 @@ function setup(topicId: TopicId = 'space-monitoring') {
   const map = {
     beginCameraOperation,
     useCamera: () => shallowRef<CameraState>({ center: [119, 33], zoom: 7, bearing: 0, pitch: 0 }),
-    view: shallowRef<MapViewport | null>({ ...toolView(), eyeHeight: () => null, heading: () => null }),
+    view: shallowRef<MapViewport | null>({
+      ...toolView(),
+      eyeHeight: () => null,
+      heading: () => null,
+      snapshot: noSnapshot
+    }),
     pointer: shallowRef(null),
     activeTool,
     activateTool: (id: string) => {

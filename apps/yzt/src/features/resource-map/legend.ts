@@ -1,6 +1,8 @@
 import { Color } from '@maplibre/maplibre-gl-style-spec';
 import type { Resource, ResourceGeometry } from './catalog';
 import { type ClassItem, classItems, legacyItem, OTHER_ITEM } from './classification';
+import { conditionText, type FeatureFilter, filterConditions, isFiltering, NO_FILTER } from './feature-filter';
+import { CLASS_FIELD } from './filter-fields';
 import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
 import { isDrawn, type ResourceLayersState } from './resource-layers';
 import {
@@ -80,10 +82,19 @@ export interface LegendValue {
 }
 
 /**
- * 图例的一条：统一符号；按取值配色；地类（按编码或按名称配色，内容是完整的地类图例）。
- * 按属性配色的条目带样式方式，swatch 是统一样式的预览
+ * 图例条目的过滤（ADR 0173）：filtered 是有过滤条件；filterNote 是类别列表体现不了的条件，写在名称下面——别的字段的条件，
+ * 统一样式时、一项都没勾时的分类条件；没有时为 null
  */
-export type LegendEntry =
+export interface LegendFiltering {
+  readonly filtered: boolean;
+  readonly filterNote: string | null;
+}
+
+/**
+ * 图例的一条：统一符号；按取值配色；地类（按编码或按名称配色，内容是完整的地类图例）。
+ * 按属性配色的条目带样式方式，swatch 是统一样式的预览；按分类过滤时只有勾着的类别（ADR 0173）
+ */
+export type LegendEntry = (
   | {
       readonly kind: 'symbol';
       readonly code: string;
@@ -114,7 +125,9 @@ export type LegendEntry =
       readonly match: 'code' | 'name';
       /** 各取值的预览，按取值的键 */
       readonly swatches: ReadonlyMap<string, LegendSwatch>;
-    };
+    }
+) &
+  LegendFiltering;
 
 const dashOf = (dash: LineDash): readonly number[] | null => LINE_DASHES[dash].dasharray;
 
@@ -156,21 +169,34 @@ export function fillOpacityOf(entry: LegendEntry): number {
   return Math.max(0, ...swatches.map(fillAlpha));
 }
 
-/** 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code */
+// 类别列表体现不了的条件连成一句：别的字段；分类字段在统一样式时、一项都没勾时也写
+function legendFiltering(code: string, filter: FeatureFilter, classesListed: boolean): LegendFiltering {
+  const notes = filterConditions(code, filter)
+    .filter(({ field }) => !(classesListed && field.id === CLASS_FIELD))
+    .map(conditionText);
+  return { filtered: isFiltering(filter), filterNote: notes.length > 0 ? notes.join('；') : null };
+}
+
+/**
+ * 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code。
+ * 按分类过滤时只留勾着的类别，摘要也只用它们（ADR 0173）
+ */
 export function legendEntry(
   resource: Resource,
   year: number,
-  override: ResourceSymbolOverride | undefined
+  override: ResourceSymbolOverride | undefined,
+  filter: FeatureFilter = NO_FILTER
 ): LegendEntry {
   const { code, name } = resource;
   const style = resourceStyle(code);
   const rule = style.color;
   const swatch = swatchOf(uniformSymbol(resource, override, style));
   if (!rule) {
-    return { kind: 'symbol', code, name, year, swatch };
+    return { kind: 'symbol', code, name, year, swatch, ...legendFiltering(code, filter, false) };
   }
   const mode = symbolModeOf(style, override);
-  const items = classItems(rule);
+  const kept = filter[CLASS_FIELD];
+  const items = classItems(rule).filter(item => kept === undefined || kept.includes(item.key));
   const values = items.map(item => ({
     key: item.key,
     label: item.label,
@@ -178,11 +204,12 @@ export function legendEntry(
   }));
   const swatches = new Map(values.map(value => [value.key, value.swatch]));
   const summary = summaryItems(items, style, resource.geometry).flatMap(item => swatches.get(item.key) ?? []);
+  const filtering = legendFiltering(code, filter, mode === 'classified' && items.length > 0);
   if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {
     const match = rule.kind === 'landuse-code' ? 'code' : 'name';
-    return { kind: 'landuse', code, name, year, mode, swatch, summary, match, swatches };
+    return { kind: 'landuse', code, name, year, mode, swatch, summary, match, swatches, ...filtering };
   }
-  return { kind: 'values', code, name, year, mode, swatch, summary, values };
+  return { kind: 'values', code, name, year, mode, swatch, summary, values, ...filtering };
 }
 
 /** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */
@@ -197,7 +224,7 @@ export function legendEntries(
     if (!resource || !display || !isDrawn(display) || invalid.has(code)) {
       return [];
     }
-    return [legendEntry(resource, display.year, overrideOf(code))];
+    return [legendEntry(resource, display.year, overrideOf(code), display.filter)];
   });
 }
 

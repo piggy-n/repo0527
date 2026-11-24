@@ -534,3 +534,14 @@ describe('StyleModel', () => {
     });
   });
 });
+
+describe('StyleModel.layerIdsOf（ADR 0174）', () => {
+  it('给出这些分组当前的图层 ID；空的分组没有，不认识的分组抛错', () => {
+    using model = new StyleModel({ groups: ['basemap', 'business', 'measure'] });
+    model.setGroups({ basemap: lineGroup('tdt'), business: lineGroup('dltb') });
+
+    expect([...model.layerIdsOf(['business', 'measure'])]).toStrictEqual(['dltb-line']);
+    expect(model.layerIdsOf([]).size).toBe(0);
+    expect(() => model.layerIdsOf(['labels'])).toThrow('没有分组 labels');
+  });
+});

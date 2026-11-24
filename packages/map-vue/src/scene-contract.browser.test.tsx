@@ -318,6 +318,18 @@ const isBackdrop = (color: readonly number[]) =>
 const dominant = (color: readonly number[], channel: 0 | 1 | 2) =>
   color.every((value, index) => index === channel || (color[channel] ?? 0) > value * 2) && (color[channel] ?? 0) > 60;
 
+// 截图（ADR 0174）里某个通道压过另外两个的像素有多少
+function countDominant(image: HTMLCanvasElement, channel: 0 | 1 | 2): number {
+  const data = image.getContext('2d')?.getImageData(0, 0, image.width, image.height).data ?? new Uint8ClampedArray();
+  let count = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if (dominant([data[index] ?? 0, data[index + 1] ?? 0, data[index + 2] ?? 0], channel)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 // 漫游的屋子（3C.3）：room 是 20 × 20 米、4 米高的一间，地板在 [120.66, 31.31] 地下 10 米；glTF 是文本的，
 // 导航网格只读 b3dm，测试里把它的缓冲解出来拼成 GLB 再包成 b3dm
 const ROOM_FLOOR = -10;
@@ -936,5 +948,52 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     await until(() => !gl.isContextLost() && pickedModel(), '恢复后再次拾取到模型');
 
     expect(page.stateOf('box')).toBe('ready');
+  });
+
+  // 立方体和它东边约 140 米的泼溅都在视野里
+  const SNAPSHOT_CAMERA: Partial<CameraState> = {
+    center: [MODEL_AT[0] + 0.0008, MODEL_AT[1] - 0.0004],
+    zoom: 16,
+    bearing: 0,
+    pitch: 50
+  };
+
+  it('截图（ADR 0174）：加上瓦片集后立即等画面完整，截下的画布里有它；三维照屏幕的像素比', async () => {
+    const page = await mountPage();
+    page.map.runCameraOperation(camera => camera.flyTo(SNAPSHOT_CAMERA, { duration: 0, padding: 0 }));
+    // 不等它就绪：刚交给会话时视图还没登记它，MapLibre 在读索引、选瓦片之间照样会空闲
+    page.content.value = { tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)], underground: null };
+
+    await within(page.map.whenComplete(), '画面完整');
+    const { image } = readyView(page).snapshot({ pixelRatio: 2 });
+
+    expect([image.width, image.height]).toStrictEqual([WIDTH * devicePixelRatio, HEIGHT * devicePixelRatio]);
+    expect(countDominant(image, 0)).toBeGreaterThan(100);
+    expect(page.errors).toStrictEqual([]);
+  });
+
+  it('截图（ADR 0174）：高斯泼溅画出来以后，等画面完整截下的画布里瓦片集和泼溅都在', async () => {
+    const page = await mountPage();
+    const url = await writtenSplat();
+    const east = splatLayer(url, { placement: { lng: MODEL_AT[0] + 0.0015, lat: MODEL_AT[1], height: 0, heading: 0 } });
+    page.map.runCameraOperation(camera => camera.flyTo(SNAPSHOT_CAMERA, { duration: 0, padding: 0 }));
+    page.content.value = {
+      tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)],
+      splats: [east],
+      underground: null
+    };
+    // 泼溅的加载统计在库第一次选细节之前就报完成（进度 0，和视野里没有分不开，docs/backlog.md）：等它画出来
+    const drawnSplat = () => {
+      const at = page.map.view.value?.project([MODEL_AT[0] + 0.0015, MODEL_AT[1]]);
+      return at !== null && at !== undefined && dominant(pixel(at), 1);
+    };
+    await until(drawnSplat, '画出泼溅');
+
+    await within(page.map.whenComplete(), '画面完整');
+    const { image } = readyView(page).snapshot();
+
+    expect(countDominant(image, 0)).toBeGreaterThan(100);
+    expect(countDominant(image, 1)).toBeGreaterThan(100);
+    expect(page.errors).toStrictEqual([]);
   });
 });

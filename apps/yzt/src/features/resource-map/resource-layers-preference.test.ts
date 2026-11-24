@@ -6,6 +6,8 @@ import { createTestPreferenceScope } from '@/shared/storage/testing';
 import { PREFERENCE_READ_TIMEOUT, PREFERENCE_WRITE_DEBOUNCE } from '@/shared/storage/use-preference';
 import type { ResourceTreeLayer } from './api';
 import { buildCatalog, type ResourceCatalog } from './catalog';
+import { NO_FILTER } from './feature-filter';
+import { CLASS_FIELD } from './filter-fields';
 import { useResourceLayers } from './composables/useResourceLayers';
 import { storedResourceLayersSchema } from './resource-layers-preference';
 
@@ -126,7 +128,8 @@ describe('资源图层的偏好', () => {
       checked: true,
       opacity: 0.5,
       year: 2023,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(ctx.owner.state.value.displays.get('bgdc_dltb')).toMatchObject({ added: false, checked: false });
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl']);
@@ -275,9 +278,9 @@ describe('资源图层的偏好', () => {
       version: 1,
       value: {
         displays: {
-          bgdc_dltb: { added: true, checked: false, opacity: 1, year: 2022, labeled: false },
-          bgdc_cjdcq: { added: false, checked: false, opacity: 1, year: 2024, labeled: false },
-          csxhjctb_hydl: { added: true, checked: true, opacity: 0.4, year: 2025, labeled: false }
+          bgdc_dltb: { added: true, checked: false, opacity: 1, year: 2022, labeled: false, filter: {} },
+          bgdc_cjdcq: { added: false, checked: false, opacity: 1, year: 2024, labeled: false, filter: {} },
+          csxhjctb_hydl: { added: true, checked: true, opacity: 0.4, year: 2025, labeled: false, filter: {} }
         },
         order: ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_cjdcq'],
         batchYear: null
@@ -388,3 +391,37 @@ function storedValue(store: ReturnType<typeof createMemoryStore>): object {
   }
   return value;
 }
+
+describe('要素过滤的偏好（ADR 0173）', () => {
+  it('过滤条件写进已有的这一项、按账号记住；恢复时按能过滤的字段整理', async () => {
+    const store = createMemoryStore(
+      stored(
+        {
+          csxhjctb_hydl: { checked: true, opacity: 1, year: 2025, filter: { [CLASS_FIELD]: ['水渠', '没有的取值'], type: ['x'] } },
+          bgdc_dltb: HIDDEN,
+          bgdc_cjdcq: { ...HIDDEN, year: 2024 }
+        },
+        ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']
+      )
+    );
+    using ctx = setup(store);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.filter).toStrictEqual({ [CLASS_FIELD]: ['水渠'] });
+    expect(ctx.owner.state.value.displays.get('bgdc_dltb')?.filter).toBe(NO_FILTER);
+
+    ctx.owner.setFilter('bgdc_dltb', { [CLASS_FIELD]: ['0101'] });
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(store.entries.get(KEY)).toMatchObject({
+      version: 1,
+      value: { displays: { bgdc_dltb: { filter: { [CLASS_FIELD]: ['0101'] } } } }
+    });
+  });
+
+  it('条件的格式不对（取值不是字符串）：整条不通过', () => {
+    const display = { checked: true, opacity: 0.5, year: 2024 };
+    const value = (filter: unknown) => ({ displays: { a: { ...display, filter } }, order: ['a'] });
+    expect(storedResourceLayersSchema.safeParse(value({ type: ['小学'] })).success).toBe(true);
+    expect(storedResourceLayersSchema.safeParse(value({ type: [1] })).success).toBe(false);
+    expect(storedResourceLayersSchema.safeParse(value(['小学'])).success).toBe(false);
+  });
+});

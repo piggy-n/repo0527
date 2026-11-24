@@ -1,0 +1,75 @@
+// 地图打印的浮层内容（ADR 0174）：外观和内边距由 Popover 外壳负责，这里只排上下几块
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+// 预览：图片按比例缩到浮层宽，浅灰底衬出图片的边界
+.preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-page);
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+}
+
+.hidden {
+  display: none;
+}
+
+.empty,
+.meta,
+.note,
+.waiting {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+
+  > :last-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.label {
+  flex: none;
+  width: 48px;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-base);
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+}

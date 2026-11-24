@@ -139,7 +139,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `view.value.eyeHeight()` | 就绪视图的视点高度（米），只有三维视图有，二维为 `null`；在相机变化时读取（ADR 0080 第 6 节） |
 | `view.value.heading()` | 就绪视图的视点朝向（度，正北为 0、顺时针），只有三维视图有，二维为 `null`；步行时状态栏用（ADR 0086 第 3 节） |
 | `setDimension(kind)` | 切换二维、三维：旧的当前视图暂停、新的恢复；切换时的业务（如换底图）由页面决定 |
-| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`（第二个参数 `{ hover }` 标出悬停的拾取，跳过高斯泼溅，ADR 0149）、`project`、`queryRendered`（ADR 0047）和三维的读数 `eyeHeight`、`heading`；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
+| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`（第二个参数 `{ hover }` 标出悬停的拾取，跳过高斯泼溅，ADR 0149）、`project`、`queryRendered`（ADR 0047）、三维的读数 `eyeHeight`、`heading` 和截图 `snapshot`（ADR 0174，视图没有这项能力时抛错，见 [map-core.md](map-core.md)"截图"）；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。现在没有拥有者读它：资源行的"加载失败"按请求状态这一轮的失败（ADR 0167） |
@@ -151,6 +151,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `retry()` | 引擎失败后重新创建视图；当前种类的模块加载失败（`module`）时只让视图重新加载模块，不重建；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@mx/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `whenSettled(signal?)` | 等到视图下一次画面稳定（视图的 `settle` 事件：没有动画，视野里的瓦片都已画出），用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）。没有视图时等视图挂上；和 `whenReady` 一样绑定具体的视图实例，它被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束，`signal` 中止时以它的原因结束；结束时取消订阅。在 Promise 外面订阅，订阅本身出错（视图已释放）时以这个错误结束 |
+| `whenComplete(signal?)` | 截图前等画面完整（ADR 0174）：先等当前视图就绪，再等视图的 `whenComplete`（视野里的瓦片都画出，三维还要模型这一轮加载完）。和 `whenSettled` 不同，已经稳定时也重画一帧确认，一直有东西在加载时一直等。等待绑定具体的视图实例：卸下、替换、切换二三维、`provideMap` 所在的组件卸载时以 `AbortError` 结束，`signal` 中止时以它的原因结束，同时结束视图那边的等待。视图没有这项能力时等到就绪为止 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
 | `runCameraOperation(action)` | 用户发起的定位（默认视角、坐标定位等）都从这里执行，等于 `beginCameraOperation().run(action)` |
 | `beginCameraOperation()` | 开始一次相机操作，之前没完成的定位作废，返回操作对象 `CameraOperation`（ADR 0038、0039）。要先异步准备数据的定位（如区划定位等边界）在开始时调用，准备好后 `run` |

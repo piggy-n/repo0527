@@ -1,6 +1,6 @@
 import { useEventListener } from '@vueuse/core';
-import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
-import { MapCanvas, provideMap, usePageActive, useShownElementSize } from '@mx/map-vue';
+import { BROWSE_TOOL, type StyleGroup, type ViewKind } from '@mx/map-core';
+import { MapCanvas, type MapViewport, provideMap, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, KeepAlive, ref, shallowRef, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
@@ -11,8 +11,10 @@ import { useResourceLayers } from '@/features/resource-map/composables/useResour
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { resourceRequests } from '@/features/resource-map/layer-panel';
+import { printEntries, renderedClasses, resourcePrintBlocks } from '@/features/resource-map/print-legend';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { roamPlaceOf } from '@/features/scene-models/catalog';
+import { modelPrintBlock, printedModels } from '@/features/scene-models/print-legend';
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
 import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
@@ -24,6 +26,7 @@ import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
+import { boundaryPrintBlock } from '@/shared/map/boundary/boundary-print';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_SCENE_ZOOM_RANGE, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
@@ -37,6 +40,10 @@ import type { ListSplit } from '@/shared/map/layer-panel/panel-split';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
+import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
+import { MapPrintPanel } from '@/shared/map/print/MapPrintPanel';
+import type { PrintLegendBlock } from '@/shared/map/print/print-legend';
+import { DEFAULT_PRINT_SETTINGS, type PrintSettings, useMapPrint } from '@/shared/map/print/useMapPrint';
 import { mergedActivity, type RequestSource } from '@/shared/map/request-status/request-status';
 import { RequestStatusChip } from '@/shared/map/request-status/RequestStatusChip';
 import { useRequestStatus } from '@/shared/map/request-status/useRequestStatus';
@@ -46,7 +53,7 @@ import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { RegionScopeBar } from '@/shared/map/region/RegionScopeBar';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
-import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
+import { MapToolbar, type ToolbarButtonSlotProps } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useMapLoadMarks } from '@/shared/map/useMapLoadMarks';
 import { useSwitchTo3dMarks } from '@/shared/map/useSwitchTo3dMarks';
@@ -71,14 +78,21 @@ const PANEL_LABELS = {
 
 type FunctionPanel = (typeof FUNCTION_PANELS)[number];
 
-// 地图操作、测量、定位、显示辅助、清理分组
+// 地图操作、测量、定位、显示辅助、输出、清理分组；打印单独一组（ADR 0174）
 const TOOLBAR_GROUPS = [
   ['browse', 'feature-pick'],
   ['measure-distance', 'measure-area'],
   ['region-locate', 'coordinate-locate'],
   ['boundaries', 'legend'],
+  ['print'],
   ['clear']
 ] as const;
+
+// 打印时不画的分组：测量、选中高亮这些临时的标记（用户 2026-11-24）；测量的读数、位置点本来就是页面元素，不在画布里。
+// 选中要素的加强标注不在这里：它要换回普通标注，样式变了要重新排版，打印浮层开着时就撤掉
+const PRINT_OMITTED_GROUPS = ['measure', 'selection'] as const;
+
+const EMPTY_GROUP: StyleGroup = { sources: {}, layers: [] };
 
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/archive/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
@@ -114,7 +128,7 @@ export const CurrentMapPage = defineComponent({
     // 业务组始终只显示图标，矮屏时分成两列；还量不到尺寸时按常规（ADR 0066）
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
-    const layout = computed(() => mapPageLayout(width.value, height.value));
+    const layout = computed(() => mapPageLayout(width.value, height.value, TOOLBAR_GROUPS));
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写；每一项是否生效看开关（ADR 0140）
     const preferences = usePreferenceScope();
     const basemap = useBasemap({ preferences });
@@ -197,6 +211,8 @@ export const CurrentMapPage = defineComponent({
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
     const basemapOpen = ref(false);
+    // 地图打印的浮层（ADR 0174），和底图的浮层一样算右边打开着的
+    const printOpen = ref(false);
     const detailOpen = ref(false);
     const lane = ref<HTMLElement>();
     const { height: laneHeight } = useShownElementSize(lane);
@@ -220,7 +236,7 @@ export const CurrentMapPage = defineComponent({
     const leftCollapsed = computed(() => (roaming.value ? roamCollapsed.value : panelLayout.collapsed.value));
     const sides = useSideExclusion({
       leftExpanded: () => !leftCollapsed.value,
-      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || detailOpen.value
+      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || printOpen.value || detailOpen.value
     });
 
     // 识别只打开独立详情，不切走正在查看的功能标签
@@ -252,9 +268,10 @@ export const CurrentMapPage = defineComponent({
       'basemap-labels': basemap.deriveLabelsGroup,
       resources: resources.deriveGroup,
       selection: pick.deriveGroup,
-      // 加强标注的要素原来的标注滤掉，两组读同一份状态、同一轮提交（ADR 0160）
-      'resource-labels': () => resources.deriveLabelsGroup(pick.labelEmphasis.value),
-      'selection-labels': pick.deriveLabelsGroup,
+      // 加强标注的要素原来的标注滤掉，两组读同一份状态、同一轮提交（ADR 0160）；打印浮层开着时撤掉加强，
+      // 这个要素显示普通标注，同没有选中时的地图（ADR 0174）
+      'resource-labels': () => resources.deriveLabelsGroup(printOpen.value ? null : pick.labelEmphasis.value),
+      'selection-labels': () => (printOpen.value ? EMPTY_GROUP : pick.deriveLabelsGroup()),
       // 选中市或区县、边界加载好后裁剪（ADR 0051 第 1 节）。遮罩一直画在模型上面，漫游时区划不适用、撤掉遮罩，
       // 不盖住漫游的画面；区划的选择不变，退出后原样回来（ADR 0161 第 7 节）
       'region-clip': () => regionClipGroup(roaming.value ? null : readyBoundary(region.state.value)),
@@ -349,19 +366,63 @@ export const CurrentMapPage = defineComponent({
       measure.clear();
       location.remove();
     };
-    // 回调保持同一对象；按下状态只随面板的显示状态变化
+
+    // 地图打印（ADR 0174）：当前视角原样截图加图例导出 PNG，入口上的浮层同底图；图例只列画面里画出来的资源和取值，
+    // 三维加上显示着的模型，最后是打开的行政区边界（用户 2026-11-24）
+    const camera = map.useCamera();
+    const printLegend = (view: MapViewport, size: { readonly width: number; readonly height: number }) => {
+      const input = {
+        state: resources.state.value,
+        invalid: resources.configErrors.value,
+        overrideOf: symbols.overrideOf,
+        zoom: camera.value.zoom
+      };
+      // 三维里不显示资源图层时（能力 styleLayers 为 false，ADR 0080 第 5 节）没有资源
+      const rendered = resources.hiddenInScene.value
+        ? new Map()
+        : renderedClasses({ ...input, view, size, scope: readyBoundary(region.state.value)?.geometry ?? null });
+      const shownModels =
+        map.dimension.value === '3d'
+          ? printedModels(models.models.value, models.added.value, models.hidden.value, models.stateOf)
+          : [];
+      const boundaryState = { visible: boundaries.visible.value, opacity: boundaries.opacity.value };
+      return [
+        ...resourcePrintBlocks(printEntries(input, rendered)),
+        modelPrintBlock(shownModels),
+        boundaryPrintBlock(boundaryState)
+      ].filter((block): block is PrintLegendBlock => block !== null);
+    };
+    const print = useMapPrint(map, { name: '现状底图', omitGroups: PRINT_OMITTED_GROUPS, legend: printLegend });
+    // 设置在这次打开页面期间记住，不进偏好
+    const printSettings = shallowRef<PrintSettings>(DEFAULT_PRINT_SETTINGS);
+    const changePrintOpen = (open: boolean) => {
+      printOpen.value = open;
+      if (open) {
+        sides.activate('right');
+      }
+    };
+    // 漫游时工具栏隐藏，不提供打印（ADR 0174）：开着的浮层关掉，退出后不自己弹出来
+    watch(roaming, entered => {
+      if (entered) {
+        printOpen.value = false;
+      }
+    });
+
+    // 回调保持同一对象；按下状态只随面板的显示状态变化。打印的浮层由入口外面的 Popover 开关，这里只让右边显示出来
     const toolbarActions = {
       clear,
       'region-locate': () => toggleFunction('region-locate'),
       'coordinate-locate': () => toggleFunction('coordinate-locate'),
       boundaries: () => toggleFunction('boundaries'),
-      legend: () => toggleFunction('legend')
+      legend: () => toggleFunction('legend'),
+      print: () => sides.activate('right')
     };
-    // 当前显示用浅底，后台标签只标主色；左右让出或收起后不显示为当前面板
+    // 当前显示用浅底，后台标签只标主色；左右让出或收起后不显示为当前面板；打印的浮层开着时打印按下
     const pressed = computed(() => {
       const { current } = functions.state.value;
       const shown = sides.right.value && !stack.layout.value.collapsed.functions;
-      return shown && current !== null ? [current] : [];
+      const panels = shown && current !== null ? [current] : [];
+      return printOpen.value && sides.right.value ? [...panels, 'print' as const] : panels;
     });
 
     // 当前底图的缩略图入口固定在地图控制栏下方
@@ -561,7 +622,32 @@ export const CurrentMapPage = defineComponent({
                     opened={functions.state.value.open}
                     compact
                     columns={toolbarColumns}
-                  />
+                  >
+                    {{
+                      print: ({ button }: ToolbarButtonSlotProps) => [
+                        <MapOptionsPopover
+                          name="print"
+                          open={printOpen.value}
+                          visible={sides.right.value}
+                          onUpdate:open={changePrintOpen}
+                        >
+                          {{
+                            reference: () => [button],
+                            default: ({ active, close }: MapOptionsContext) => [
+                              <MapPrintPanel
+                                print={print}
+                                settings={printSettings.value}
+                                active={active}
+                                dimension={map.dimension.value}
+                                onUpdate:settings={(settings: PrintSettings) => (printSettings.value = settings)}
+                                onDone={close}
+                              />
+                            ]
+                          }}
+                        </MapOptionsPopover>
+                      ]
+                    }}
+                  </MapToolbar>
                 </div>
               )}
               {!underground && (

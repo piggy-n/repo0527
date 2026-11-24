@@ -6,6 +6,7 @@ import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries } from '../legend';
 import type { SymbolTarget } from '../resource-symbols';
+import { FilterNote } from './FilterNote';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
 import { LegendPreview } from './LegendPreview';
 import { LegendSettings } from './LegendSettings';
@@ -16,7 +17,8 @@ import { ValueLegend } from './ValueLegend';
  * 资源图层的图例（ADR 0043、0044，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
  * 不读地图、不等视图就绪；复合图例默认展开、可以收起成按几何画的摘要（ADR 0159），配置由独立按钮打开（ADR 0066、0094）。
  * 放在功能面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器、取色器和弹出层随之卸载，丢弃取色预览；
- * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置
+ * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置。
+ * 过滤着的资源（ADR 0173）：只列勾着的类别，名称后面一个漏斗，类别体现不了的条件写在名称下面
  */
 export const ResourceLegend = defineComponent({
   name: 'ResourceLegend',
@@ -177,6 +179,11 @@ export const ResourceLegend = defineComponent({
             <LegendPreview entry={entry} />
           </span>
           <span class={styles.name} title={entry.name}>{entry.name}</span>
+          {entry.filtered && (
+            <span class={styles.filtered} title="已过滤" data-legend-filtered>
+              <SvgIcon name="layer-filter" size={14} />
+            </span>
+          )}
           <span class={styles.year}>{entry.year}</span>
           <span class={styles.editedSlot}>
             {props.symbols.isCustomized(entry.code) && <span class={styles.edited} title="改过符号" data-edited />}
@@ -223,6 +230,11 @@ export const ResourceLegend = defineComponent({
               </button>
             )}
           </div>
+          {entry.filterNote !== null && (
+            <div class={styles.note}>
+              <FilterNote text={entry.filterNote} />
+            </div>
+          )}
           {isOpen && !uniform && (
             <div class={styles.content}>{renderClassified(entry)}</div>
           )}

@@ -1,6 +1,6 @@
-import type { ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { LayerSpecification, ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { GPUInitializationError, LngLat as MapLibreLngLat, Map as MapLibreMap } from 'maplibre-gl';
-import { safeReporter } from '@mx/utils';
+import { abortReason, safeReporter } from '@mx/utils';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
@@ -17,8 +17,10 @@ import {
   type FitBoundsOptions,
   type FlyToOptions,
   type MapView,
+  type MapSnapshot,
   type MapViewFailure,
   NO_SOURCE_ERRORS,
+  type SnapshotOptions,
   type SourceErrors,
   type ViewBounds,
   type ViewPadding,
@@ -180,6 +182,41 @@ function reportToConsole(error: unknown): void {
   console.error('[MapLibreView]', error);
 }
 
+// 截图时省略的图层把这些不透明度设成 0（ADR 0174）；山体阴影没有不透明度，不省略
+const OPACITY_PROPERTIES: Readonly<Record<LayerSpecification['type'], readonly string[]>> = {
+  fill: ['fill-opacity'],
+  line: ['line-opacity'],
+  symbol: ['icon-opacity', 'text-opacity'],
+  circle: ['circle-opacity', 'circle-stroke-opacity'],
+  heatmap: ['heatmap-opacity'],
+  'fill-extrusion': ['fill-extrusion-opacity'],
+  raster: ['raster-opacity'],
+  hillshade: [],
+  'color-relief': ['color-relief-opacity'],
+  background: ['background-opacity']
+};
+
+// 截图那一帧的不透明度立即生效，不按样式的默认过渡（300 毫秒）
+const NO_TRANSITION = Object.freeze({ duration: 0, delay: 0 });
+
+// 图层的 paint：各种图层的类型不同，这里只按属性名读
+function paintOf(layer: LayerSpecification): Readonly<Record<string, unknown>> {
+  return 'paint' in layer && layer.paint ? layer.paint : {};
+}
+
+// 画布的像素拷到一张新的二维画布上：要在 redraw 的同一个任务里拷，之后 WebGL 的绘制缓冲就交给合成器清掉了（ADR 0174）
+function copyCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+  const canvas = source.ownerDocument.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('无法创建截图的画布');
+  }
+  context.drawImage(source, 0, 0);
+  return canvas;
+}
+
 /**
  * 二维视图：唯一写 MapLibre 地图的地方，把会话的样式和相机同步到地图（ADR 0020、0022、0024、0026）。
  * 给了三维渲染器时同时担任三维（ADR 0147 第 2 节），种类随上下文的维度切换
@@ -234,6 +271,10 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly #roam: MapLibreRoam | undefined;
   // 漫游抬高期间二维图层隐藏着：应用样式命令、整体重建以后再隐藏一遍
   #layersHidden = false;
+  // 页面指定的像素比，没指定时为 null（跟随设备像素比）：截图临时改了以后还原成它（ADR 0174）
+  readonly #pixelRatio: number | null;
+  // 释放时中止：等画面完整的等待者以 AbortError 结束（释放时会清掉事件的监听，不能靠 statechange）
+  readonly #lifetime = new AbortController();
   // 交给工具的视图能力：只有种类、拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）；种类随维度变化
   readonly #toolView: ToolView = (() => {
     const currentKind = () => this.#kind;
@@ -269,6 +310,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#maxPitch2d = mapOptions?.maxPitch ?? DEFAULT_MAX_PITCH;
     this.#maxZoom2d = mapOptions?.maxZoom ?? DEFAULT_MAX_ZOOM;
     this.#maxZoom3d = sceneMaxZoom ?? this.#maxZoom2d;
+    this.#pixelRatio = mapOptions?.pixelRatio ?? null;
     // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
     this.#onError = safeReporter(onError, 'MapLibreView');
     const { current: style, images, revision, sceneBefore } = session.style;
@@ -736,6 +778,157 @@ export class MapLibreView<const G extends string> implements MapView {
     });
   }
 
+  /**
+   * 等到画面完整（ADR 0174）：三维先等会话里的模型都登记了、读完索引、这一轮加载完，然后请求重画一帧、等 MapLibre 空闲，
+   * 三维再确认一帧；其间模型又开始了新的一轮就再来一遍。MapLibre 的 idle 不管模型：高斯泼溅还在加载时照样发出（实测）。
+   * 泼溅的统计在库第一次选细节之前就报完成，刚加上泼溅时可能早于它画出来（docs/backlog.md）
+   */
+  async whenComplete(signal?: AbortSignal): Promise<void> {
+    const map = this.#readyMap();
+    const idle = () =>
+      this.#waitFor(resolve => {
+        const subscription = map.on('idle', resolve);
+        map.triggerRepaint();
+        return () => subscription.unsubscribe();
+      }, signal);
+    await this.#waitFor(resolve => this.#untilSceneSettled(resolve), signal);
+    await idle();
+    // 三维再确认一帧：模型读完索引以后，下一帧选瓦片时才开始这一轮，那之前 MapLibre 可能已经空闲了
+    if (this.#sceneSettled() && this.#kind === '3d') {
+      await idle();
+    }
+    if (!this.#sceneSettled()) {
+      await this.whenComplete(signal);
+    }
+  }
+
+  /**
+   * 同步截一帧（ADR 0174）：omitGroups 的图层这一帧不透明度为 0，二维时按 pixelRatio 调整画布，redraw 之后立刻拷进新的画布，
+   * 再全部还原。不改 visibility：它会让数据源重新解析瓦片（选中高亮画在资源的瓦片上），还原后要等解析完才画得出来；
+   * 不透明度只重新求值，过渡临时设成 0，屏幕上不会淡入。还原以后同步再画一帧：调整画布会清空它，截图常在 MapLibre 的
+   * requestAnimationFrame 回调之后的微任务里执行，请求的重画赶不上这一次合成。漫游抬高期间二维图层本来就隐藏着，不再动它们
+   */
+  snapshot({ omitGroups = [], pixelRatio }: SnapshotOptions = {}): MapSnapshot {
+    const map = this.#readyMap();
+    if (pixelRatio !== undefined && !(pixelRatio > 0 && Number.isFinite(pixelRatio))) {
+      throw new Error(`截图的像素比不是正数：${pixelRatio}`);
+    }
+    const omitted = this.#session.style.layerIdsOf(omitGroups);
+    const { status, style } = this.#mapStyle;
+    const faded =
+      this.#layersHidden || status !== 'loaded'
+        ? []
+        : style.layers.filter(layer => omitted.has(layer.id) && layer.layout?.visibility !== 'none');
+    const ratio =
+      this.#kind === '2d' && pixelRatio !== undefined && pixelRatio !== map.getPixelRatio() ? pixelRatio : null;
+    try {
+      for (const layer of faded) {
+        for (const property of OPACITY_PROPERTIES[layer.type]) {
+          map.setPaintProperty(layer.id, `${property}-transition`, NO_TRANSITION);
+          map.setPaintProperty(layer.id, property, 0);
+        }
+      }
+      if (ratio !== null) {
+        map.setPixelRatio(ratio);
+      }
+      map.redraw();
+      const canvas = map.getCanvas();
+      return { image: copyCanvas(canvas), width: canvas.clientWidth, height: canvas.clientHeight };
+    } finally {
+      // 每一步出错都只报告，不挡住后面的还原，也不盖掉截图本身的错误
+      this.#guard(() => {
+        for (const layer of faded) {
+          for (const property of OPACITY_PROPERTIES[layer.type]) {
+            map.setPaintProperty(layer.id, property, paintOf(layer)[property]);
+          }
+        }
+      });
+      if (ratio !== null) {
+        this.#guard(() => map.setPixelRatio(this.#pixelRatio));
+      }
+      if (faded.length > 0 || ratio !== null) {
+        this.#guard(() => map.redraw());
+        this.#guard(() => {
+          for (const layer of faded) {
+            for (const property of OPACITY_PROPERTIES[layer.type]) {
+              map.setPaintProperty(layer.id, `${property}-transition`, paintOf(layer)[`${property}-transition`]);
+            }
+          }
+        });
+      }
+      this.#guard(() => map.triggerRepaint());
+    }
+  }
+
+  // 会话里的模型都有了状态、读完了索引（刚交给会话时视图还没登记它们），这一轮都加载完；显示二维时没有模型
+  #sceneSettled(): boolean {
+    if (this.#kind !== '3d') {
+      return true;
+    }
+    const status = this.sceneStatus;
+    const { tilesets, splats = [] } = this.#session.scene.current;
+    return (
+      [...tilesets, ...splats].every(({ id }) => status.has(id)) &&
+      [...status.values()].every(({ state }) => state !== 'loading') &&
+      [...this.sceneActivity.values()].every(({ finishedAt }) => finishedAt !== null)
+    );
+  }
+
+  #untilSceneSettled(resolve: () => void): () => void {
+    const check = () => {
+      if (this.#sceneSettled()) {
+        resolve();
+      }
+    };
+    const unsubscribes = [this.#emitter.on('sceneactivitychange', check), this.#emitter.on('scenestatuschange', check)];
+    check();
+    return () => unsubscribes.forEach(unsubscribe => unsubscribe());
+  }
+
+  // 等 start 订阅的条件（它返回撤销订阅的函数）：视图离开 ready、释放时以 AbortError 结束，signal 中止时以它的原因结束；结束时撤掉订阅
+  #waitFor(start: (resolve: () => void) => () => void, signal?: AbortSignal): Promise<void> {
+    const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
+    return new Promise<void>((resolve, reject) => {
+      const cleanups: (() => void)[] = [];
+      let settled = false;
+      const settle = (error?: Error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanups.splice(0).forEach(cleanup => cleanup());
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      };
+      const aborted = signals.find(item => item.aborted);
+      if (aborted) {
+        settle(abortReason(aborted));
+        return;
+      }
+      for (const item of signals) {
+        const onAbort = () => settle(abortReason(item));
+        item.addEventListener('abort', onAbort);
+        cleanups.push(() => item.removeEventListener('abort', onAbort));
+      }
+      cleanups.push(
+        this.#emitter.on('statechange', state => {
+          if (state !== 'ready') {
+            settle(new DOMException(`等待中视图变为 ${state}`, 'AbortError'));
+          }
+        })
+      );
+      const stop = start(() => settle());
+      if (settled) {
+        stop();
+      } else {
+        cleanups.push(stop);
+      }
+    });
+  }
+
   on<E extends keyof MapLibreViewEvents>(event: E, callback: MapLibreViewEvents[E]): Unsubscribe {
     this.#assertAlive();
     return this.#emitter.on(event, callback);
@@ -748,6 +941,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#state = 'disposed';
     this.#failure = null;
     this.#sourceErrors = NO_SOURCE_ERRORS;
+    this.#lifetime.abort(new DOMException('MapLibreView 已释放', 'AbortError'));
     this.#emitter.events = {};
     this.#stack.dispose();
   }

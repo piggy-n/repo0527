@@ -342,6 +342,16 @@ store.clear();
 - `scene/scene-activity.ts` 的 `SceneActivity`：瓦片集、高斯泼溅读完索引以后、随相机流式加载的这一轮。瓦片集是 `{ kind: 'blocks', ...SourceActivity }`（块数）；高斯泼溅是 `{ kind: 'detail', progress, startedAt, finishedAt }`，库只给当前视角的细节到了多少，没有块数。键同 `SceneStatus`
 - 渲染器（`SceneRenderer`）给出 `activity` 和事件 `activitychange`，`MapLibreScene` 原样转出；`MapLibreView` 的 `sceneActivity`、`onSceneActivityChange` 只在显示三维时有内容，切换种类时通知一次。统计怎样做见 [map-three.md](map-three.md)"加载的统计"
 
+### 截图（ADR 0174）
+
+- `MapView` 的两项可选能力，只有 `MapLibreView` 实现，页面经 map-vue 的上下文使用（`whenComplete`、`view.snapshot`）：
+  - `whenComplete(signal?)`：等到画面完整。三维先等会话里的模型都有了状态（刚交给会话时视图还没登记它们）、读完索引（`sceneStatus` 没有 `loading`）、这一轮加载完（`sceneActivity` 都有 `finishedAt`），再 `triggerRepaint` 等 MapLibre 的 `idle`，三维再确认一帧（读完索引以后下一帧选瓦片时才开始这一轮，那之前 MapLibre 可能已经空闲）；其间模型又开始了新的一轮就再来一遍。高斯泼溅的统计在第一次选细节之前就报完成，刚加上泼溅时可能早于它画出（`docs/backlog.md`）。MapLibre 的 `idle` 不管 custom layer 里的模型：高斯泼溅还在加载时照样发出，刚加载完的那一帧泼溅也还没画出来（实测）。不在 `ready`、等待中离开 `ready`（`statechange`）、释放（视图自己的 `AbortController`）时以 `AbortError` 结束，`signal` 中止时以它的原因结束；一直有东西在加载时一直等
+  - `snapshot({ omitGroups, pixelRatio })`：同步 `redraw()` 一帧、立刻 `drawImage` 到一张新的二维画布，返回 `MapSnapshot`（`image` 和地图的 CSS 尺寸 `width`、`height`）。WebGL 不保留绘图缓冲：这一帧交给合成器以后再读是空的，所以必须在同一个任务里画完就拷；和开 `preserveDrawingBuffer` 截的逐像素相同（实测三种视野差 0 个像素）
+- `omitGroups`：按样式模型的 `layerIdsOf` 找到这些分组的图层（不认识的分组抛错），这一帧把各自的不透明度属性（`OPACITY_PROPERTIES`，按图层类型）设成 0、过渡设成 0；截完还原不透明度、再 `redraw()` 一帧（还原的值立即生效，屏幕上不淡入），最后还原过渡。不改 `visibility`：它让数据源重新解析瓦片，选中高亮画在资源的瓦片上，还原以后要等解析完才画得出来（实测下一帧还是空的）。本来隐藏的图层、漫游抬高期间隐藏的二维图层不动
+- `pixelRatio`：只在二维生效，临时 `setPixelRatio` 再画，截完还原成页面在 `mapOptions` 里指定的值（没指定时 `null`，跟随设备）、再 `redraw()` 一帧；`setPixelRatio` 会调整画布（清空它）并同步发出移动和 `resize` 事件。三维照屏幕：瓦片集按屏幕误差选精度，像素翻倍会去加载更细的一级。MapLibre 的画布上限（默认 4096）会把像素比收小，以返回的图片尺寸为准
+- 还原的每一步出错都只报告（`onError`），不挡住后面的还原，也不盖掉截图本身的错误；最后 `triggerRepaint`。改了不透明度或像素比就在还原后同步再画一帧，下一次合成之前地图已经按原样画好：导出时截图常在 MapLibre 的 requestAnimationFrame 回调之后的微任务里执行，请求的重画赶不上这一次合成（审查发现，2 倍、没有要省略的图层时空一帧）
+- 测试：`maplibre-view.test.ts`"截图"（调用的先后、还原、三维不调像素比、等待的结束方式）、`maplibre-view.browser.test.ts`"截图"（真实 MapLibre：不保留缓冲也截得到、省略的分组只在这一帧不画、下一帧照常画出、2 倍的尺寸和范围）、map-vue 的三维契约测试（截下的图里有瓦片集和高斯泼溅）
+
 ### 服务器底图的紧凑缓存（ADR 0165 第 3 节）
 
 内网服务器随数据提供的 ArcGIS 切片缓存（第一代紧凑缓存）由浏览器直接读，MapLibre 经自定义协议拿到瓦片。

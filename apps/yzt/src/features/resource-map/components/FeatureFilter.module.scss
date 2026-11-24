@@ -1,0 +1,231 @@
+// 要素过滤（ADR 0173）：放在图层浮层可滚动的内容区里，上面的字段、搜索、全选和下面的条件、清空过滤贴住上下边，取值在中间滚动。
+// 贴住的两块压在 2：Element 复选框的方框自带 z-index 1，滚动时会从下面透上来
+
+.filter {
+  display: flex;
+  flex-direction: column;
+}
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-bottom: 2px;
+  background-color: var(--color-bg-container);
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 4px;
+}
+
+.lead {
+  margin-right: 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 字段：同资源图层面板的标签（PanelTabs）
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--color-text-regular);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-neutral-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+span.field {
+  cursor: default;
+}
+
+.selected {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+}
+
+// 过滤着的字段后面勾了几项
+.badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xxs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+  text-align: center;
+}
+
+.hint {
+  padding-bottom: 4px;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+}
+
+.search {
+  margin: 2px 0 4px;
+}
+
+.values {
+  padding: 2px 0 4px;
+}
+
+// 一项：复选框（带符号和名称）占满，悬停时右边"仅此项"
+.value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 30px;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+}
+
+.child {
+  padding-left: 26px;
+}
+
+.all {
+  border-bottom: 1px solid var(--color-border-light);
+  border-radius: 0;
+}
+
+.group .label {
+  color: var(--color-text-strong);
+  font-weight: var(--font-weight-semibold);
+}
+
+.check {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  margin-right: 0;
+
+  :global(.el-checkbox__label) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+    color: var(--color-text-regular);
+    font-size: var(--font-size-xs);
+  }
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code {
+  margin-right: 4px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.count {
+  flex: none;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.only {
+  flex: none;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  opacity: 0;
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--color-primary-border-hover);
+    opacity: 1;
+  }
+}
+
+.value:hover .only,
+.value:focus-within .only {
+  opacity: 1;
+}
+
+// 触屏没有悬停：一直显示
+@media (hover: none) {
+  .only {
+    opacity: 1;
+  }
+}
+
+.none {
+  padding: var(--space-sm) 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 条件和清空过滤：贴住内容区的下边，盖住内容区的下留白（浮层内容区下边留 16）
+.foot {
+  position: sticky;
+  bottom: calc(-1 * var(--space-lg));
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: calc(-1 * var(--space-lg));
+  padding: var(--space-sm) 0 var(--space-lg);
+  border-top: 1px solid var(--color-border-light);
+  background-color: var(--color-bg-container);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.summary {
+  flex: 1;
+  min-width: 0;
+}
+
+.conditions {
+  color: var(--color-text-regular);
+  font-weight: var(--font-weight-semibold);
+}
+
+.warning {
+  display: block;
+  color: var(--color-warning-text);
+}

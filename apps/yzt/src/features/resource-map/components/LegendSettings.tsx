@@ -4,8 +4,10 @@ import { ElButton, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'eleme
 import { defineComponent, type PropType } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
+import { classItems } from '../classification';
 import { type LegendEntry, landuseItemLabel, landuseLegendItems } from '../legend';
 import type { SymbolMode, SymbolTarget } from '../resource-symbols';
+import { resourceStyle } from '../style-registry';
 import styles from './ResourceLegend.module.scss';
 import { SymbolEditor } from './SymbolEditor';
 
@@ -17,7 +19,8 @@ const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] =
 // 平铺目录供图层设置选择地类，不改变地图按编码或名称匹配符号的规则
 const LANDUSE_ITEMS = landuseLegendItems();
 
-// 图层设置只保留可搜索的条目选择，分类分组不再占用浏览区
+// 图层设置只保留可搜索的条目选择，分类分组不再占用浏览区。类别用不过滤的全部（ADR 0173）：图例只列勾着的，
+// 正在编辑的一类被过滤掉时编辑器仍对着它，过滤掉的类别也能从下拉里选来改
 const choicesOf = (entry: LegendEntry) => {
   if (entry.kind === 'landuse') {
     return LANDUSE_ITEMS.map(item => ({
@@ -26,8 +29,9 @@ const choicesOf = (entry: LegendEntry) => {
       label: landuseItemLabel(item)
     }));
   }
-  if (entry.kind === 'values') {
-    return entry.values.map(item => ({ key: item.key, name: item.label, label: item.label }));
+  const rule = resourceStyle(entry.code).color;
+  if (entry.kind === 'values' && rule) {
+    return classItems(rule).map(item => ({ key: item.key, name: item.label, label: item.label }));
   }
   return [];
 };

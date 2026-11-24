@@ -6,6 +6,7 @@ import rowStyles from '@/shared/map/layer-panel/layer-row.module.scss';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
+import { filterText, isFiltering } from '../feature-filter';
 import { legendEntry } from '../legend';
 import { RESOURCE_STATUS_KINDS, type ResourceStatusKind, resourceStatuses } from '../resource-status';
 import { LegendPreview } from './LegendPreview';
@@ -17,7 +18,8 @@ const COVER_TRIGGERS: ('hover' | 'focus')[] = ['hover', 'focus'];
 
 /**
  * 当前图层里一个资源的行内容（ADR 0157），放在图层列表的手柄、复选框后面：符号（点了选中并打开图例）、名称、
- * 紧跟名称的状态（会把模型盖住时一个橙色的图标，ADR 0161；瓦片加载超过 0.4 秒时转圈，ADR 0158；状态图标，ADR 0059）、
+ * 紧跟名称的状态（过滤着时一个主色的漏斗，点了打开过滤，ADR 0173；会把模型盖住时一个橙色的图标，ADR 0161；
+ * 瓦片加载超过 0.4 秒时转圈，ADR 0158；状态图标，ADR 0059）、
  * 年份（多年份是不带箭头的小下拉）、移除。
  * 拥有者里没有这个资源时不显示
  */
@@ -43,6 +45,8 @@ export const ResourceLayerRow = defineComponent({
   },
   emits: {
     legend: () => true,
+    /** 点了名称后面的漏斗：打开过滤（ADR 0173） */
+    filter: () => true,
     remove: () => true
   },
   setup(props, { emit }) {
@@ -73,13 +77,33 @@ export const ResourceLayerRow = defineComponent({
             data-row-symbol
             onClick={() => emit('legend')}
           >
-            <LegendPreview entry={legendEntry(item, shown.year, props.symbols.overrideOf(props.code))} small />
+            <LegendPreview
+              entry={legendEntry(item, shown.year, props.symbols.overrideOf(props.code), shown.filter)}
+              small
+            />
           </button>
         </ElTooltip>,
         <span class={rowStyles.name} title={name} data-row-text>
           {name}
         </span>,
         <span class={rowStyles.status}>
+          {isFiltering(shown.filter) && (
+            <ElTooltip
+              {...MAP_TOOLTIP_PROPS}
+              content={`已过滤：${filterText(props.code, shown.filter)}`}
+              placement="top"
+            >
+              <button
+                type="button"
+                class={rowStyles.filtered}
+                aria-label={`${name}已过滤：${filterText(props.code, shown.filter)}。打开过滤`}
+                data-row-filtered
+                onClick={() => emit('filter')}
+              >
+                <SvgIcon name="layer-filter" size={16} />
+              </button>
+            </ElTooltip>
+          )}
           {props.covering && (
             <ElTooltip {...MAP_TOOLTIP_PROPS} content={COVER_TIP} placement="top" trigger={COVER_TRIGGERS}>
               <span class={rowStyles.cover} tabindex={0} role="img" aria-label={COVER_TIP} data-row-cover>

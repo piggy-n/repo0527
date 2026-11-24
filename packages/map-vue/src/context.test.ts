@@ -3,6 +3,7 @@ import {
   type CameraState,
   type FitBoundsOptions,
   type MapInputEvent,
+  type MapSnapshot,
   type MapView,
   type MapViewFailure,
   MapSession,
@@ -16,6 +17,7 @@ import {
   type RoamStatus,
   type SceneActivities,
   type SceneStatus,
+  type SnapshotOptions,
   type SourceActivities,
   type SourceErrors,
   type ToolView,
@@ -1553,5 +1555,92 @@ describe('MapContextState 的瓦片请求（ADR 0158）', () => {
 
     ctx.state.detachView(ctx.view);
     expect(ctx.state.context.sceneActivity.value).toBe(NO_SCENE_ACTIVITY);
+  });
+});
+
+// 能截图的视图（ADR 0174）：whenComplete 的每次调用记下 signal，由用例结束；snapshot 记下选项，返回固定的画布
+class CapturingView extends FakeView {
+  readonly completions: { readonly signal: AbortSignal | undefined; readonly resolve: () => void }[] = [];
+  readonly snapshots: (SnapshotOptions | undefined)[] = [];
+  readonly shot: MapSnapshot = { image: { width: 1440, height: 620 } as HTMLCanvasElement, width: 1440, height: 620 };
+
+  whenComplete(signal?: AbortSignal): Promise<void> {
+    return new Promise(resolve => this.completions.push({ signal, resolve }));
+  }
+
+  snapshot(options?: SnapshotOptions): MapSnapshot {
+    this.snapshots.push(options);
+    return this.shot;
+  }
+}
+
+describe('MapContextState 的截图（ADR 0174）', () => {
+  it('whenComplete 先等视图就绪，再等视图的画面完整', async () => {
+    using env = setup();
+    const view = new CapturingView();
+    let markReady: (() => void) | undefined;
+    view.ready = new Promise(resolve => (markReady = resolve));
+    env.state.attachView(view, CANVAS);
+    const waiting = env.state.context.whenComplete();
+    await settle();
+    expect(view.completions).toHaveLength(0);
+
+    markReady?.();
+    view.emit('ready');
+    await settle();
+    expect(view.completions).toHaveLength(1);
+    expect(await settled(waiting)).toBe('pending');
+
+    view.completions[0]?.resolve();
+    expect(await settled(waiting)).toBe('resolved');
+  });
+
+  it('还没有视图时等视图挂上；视图不能截图时等到就绪为止', async () => {
+    using env = setup();
+    const waiting = env.state.context.whenComplete();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+
+    expect(await settled(waiting)).toBe('resolved');
+  });
+
+  it('signal 中止、视图被卸下时以 AbortError 结束，视图那边的等待也一起停下', async () => {
+    using env = setup();
+    const view = new CapturingView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const controller = new AbortController();
+    const bySignal = env.state.context.whenComplete(controller.signal);
+    await settle();
+
+    controller.abort();
+    expect(await settled(bySignal)).toBe('AbortError');
+    expect(view.completions[0]?.signal?.aborted).toBe(true);
+
+    const byDetach = env.state.context.whenComplete();
+    await settle();
+    env.state.detachView(view);
+    view.completions[1]?.resolve();
+    expect(await settled(byDetach)).toBe('AbortError');
+    expect(view.completions[1]?.signal?.aborted).toBe(true);
+  });
+
+  it('就绪视图的 snapshot 交给视图；视图不能截图时抛错', () => {
+    using env = setup();
+    const view = new CapturingView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+
+    const shot = env.state.context.view.value?.snapshot({ omitGroups: ['measure'], pixelRatio: 2 });
+
+    expect(shot).toBe(view.shot);
+    expect(view.snapshots).toStrictEqual([{ omitGroups: ['measure'], pixelRatio: 2 }]);
+
+    env.state.detachView(view);
+    const plain = new FakeView();
+    env.state.attachView(plain, CANVAS);
+    plain.emit('ready');
+    expect(() => env.state.context.view.value?.snapshot()).toThrow('当前视图不能截图');
   });
 });

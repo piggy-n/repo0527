@@ -145,6 +145,18 @@ button.summary {
   color: var(--color-text-secondary);
 }
 
+// 过滤着（ADR 0173）：年份前面一个主色的漏斗
+.filtered {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-primary);
+}
+
+// 类别体现不了的过滤条件，和展开的内容对齐
+.note {
+  padding-left: var(--space-xl);
+}
+
 .editedSlot {
   display: flex;
   align-items: center;

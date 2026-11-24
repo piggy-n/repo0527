@@ -194,6 +194,7 @@ packages/icons/
 | `status-zoom` | `zoom-in` | 图层列表里的说明状态（当前级别不显示） |
 | `status-info` | 自制（2026-11-23，照 `status-error` 上下翻过来） | 资源详情里不能查详情的资源，说明行后面的提示图标：实心圆，i 镂空，颜色跟随文字 |
 | `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
+| `map-print` | `printer` | 业务组的地图打印入口（ADR 0174） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 | `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |
 | `focus` | `focus-2` | 定位到要素 |
@@ -205,13 +206,14 @@ packages/icons/
 | `menu-list` | `list-details` | 数据下载页面内导航的数据列表（2026-11-02 加入，ADR 0127） |
 | `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
 | `vertex-edit` / `undo` / `trash` | `edit` / `arrow-back-up` / `trash` | 自定义范围弹窗的编辑节点、撤销、删除节点（2026-10-31 加入，ADR 0121） |
-| `layer-add` / `layer-remove` | `plus` / `x`（2026-11-22 用户确认添加换成加号：原来是勾，和已加入的 `layer-added` 同一个图形，分不清动作和状态；2026-11-15 定的勾和叉先后取代过改绘的地图加减、简约的加减号）；`layer-remove` 的图形和 `close` 相同，按用途另起名字，以后换图形只改这两个文件；描边 2（2026-11-16 用户要求加粗，比别的面板图标粗） | 资源图层面板的添加到当前地图、从当前地图移除（ADR 0157）：资源的标题和行尾、图层的工具栏和行尾、右键菜单 |
+| `layer-add` / `layer-remove` | `plus` / `x`（2026-11-22 用户确认添加换成加号：原来是勾，和已加入的 `layer-added` 同一个图形，分不清动作和状态；2026-11-15 定的勾和叉先后取代过改绘的地图加减、简约的加减号）；`layer-remove` 的图形和 `close` 相同，按用途另起名字，以后换图形只改这两个文件；描边 2（2026-11-16 用户要求加粗，比别的面板图标粗） | 资源图层面板的添加到当前地图、从当前地图移除（ADR 0157）：资源的标题和行尾、图层的行尾、右键菜单（图层工具栏最右的移除 2026-11-24 换成过滤，ADR 0173） |
 | `layer-added` | `check`，描边 2.25 | 资源里已加入的项行尾的绿色勾（2026-11-16 从 `check` 分出来）：显示 14，描边 2.25 时和 16、描边 2 的 `layer-add` / `layer-remove` 一样粗（约 1.3 像素）；`check` 别处还在用，保持 1.5 |
 | `tree-expand-all` / `tree-collapse-all` | 自绘，仿 `selector`：箭头向外、向内 | 资源的全部展开、全部收起（ADR 0157），和上移、下移的三角区分开 |
 | `move-top` / `move-bottom` | 自制：和 `move-up` / `move-down` 同样的实心三角，加一条到头的横线 | 图层的置顶、置底（ADR 0157） |
 | `eye` / `eye-off` | `eye` / `eye-off` | 图层右键菜单的显示、隐藏 |
 | `model-3d` / `roam-walk` | `box` / `walk` | 图层列表里三维模型的图标、行内的漫游按钮（ADR 0157） |
 | `model-covered` | 自绘：`model-3d` 加一道斜线，照 Tabler 的 `*-off` 图标在斜线一侧断开 | 图层里会把模型盖住的资源，名称后面的橙色图标（ADR 0161，2026-11-16 取代文字"盖住模型"） |
+| `layer-filter` | `filter` | 图层的要素过滤：工具栏最右、右键菜单的"过滤…"、过滤着的行和图例名称后面的主色漏斗（ADR 0173） |
 | `readout-pointer` / `readout-center` | 自绘，仿 `pointer`（鼠标指针）/ `focus-2`（和 `focus` 同一个图形，按用途另起名字） | 状态栏经纬度前面的图标：鼠标所在位置、画布中心（ADR 0171，取代文字"中心"） |
 | `readout-eye-height` / `readout-eye-below` | 自绘：地面线加向上、向下的箭头 | 三维状态栏的视点高度、视点在地表以下（ADR 0171） |
 | `readout-bearing` / `readout-pitch` | 自绘：顺时针的圆弧加箭头 / 地面线和斜线夹一个角 | 状态栏的旋转、俯仰（ADR 0171） |

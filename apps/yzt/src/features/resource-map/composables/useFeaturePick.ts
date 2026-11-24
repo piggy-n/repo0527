@@ -39,10 +39,11 @@ import {
 } from 'vue';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
-import { type FeatureDetail, type FeaturePage, queryFeaturesAt } from '../api';
+import { type FeatureDetail, queryFeaturesAt } from '../api';
 import {
   type BoxTask,
   featureBounds,
+  FILTER_SCAN_PAGES,
   PICK_PAGE_SIZE,
   type PickCandidate,
   type PickResource,
@@ -56,6 +57,7 @@ import {
 import { type LabelEmphasis, type LabelTarget, selectionLabelsGroup } from '../labels';
 import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
+import { featurePasses, filterKey, isFiltering, sameFilter } from '../feature-filter';
 import { isDrawn, type ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
 import { sourceLayerOf } from '../style-registry';
@@ -68,6 +70,37 @@ export interface ServerPages {
   /** 已加载的页数 */
   readonly loaded: number;
   readonly total: number;
+  /** 识别时过滤着（ADR 0173）：列出的是后端结果里符合条件的，总数是筛之前的 */
+  readonly filtered: boolean;
+}
+
+// 查到的后端结果：符合条件的候选，查到了第几页
+interface ScannedPages {
+  readonly candidates: readonly PickCandidate[];
+  readonly loaded: number;
+  readonly total: number;
+}
+
+/**
+ * 从第 first 页查后端；过滤着时这一页一个都不符合、后面还有页，就接着查下一页，最多 FILTER_SCAN_PAGES 页（ADR 0173）。
+ * 中止时以 AbortError 结束；调用方在等待以后自己再确认信号
+ */
+async function scanPages(
+  target: PickResource,
+  geometry: QueryArea,
+  first: number,
+  signal: AbortSignal
+): Promise<ScannedPages> {
+  const filtering = isFiltering(target.filter);
+  for (let pageNum = first; ; pageNum++) {
+    // oxlint-disable-next-line no-await-in-loop -- 一页一页查，前一页有符合的就不再查
+    const page = await queryFeaturesAt(target.layerCode, geometry, { pageNum, pageSize: PICK_PAGE_SIZE }, signal);
+    const candidates = serverCandidates(target, page.list);
+    const more = pageNum * PICK_PAGE_SIZE < page.total;
+    if (signal.aborted || candidates.length > 0 || !filtering || !more || pageNum - first + 1 >= FILTER_SCAN_PAGES) {
+      return { candidates, loaded: pageNum, total: page.total };
+    }
+  }
 }
 
 /** 结果来自单击还是框选（ADR 0049 第 3 节） */
@@ -208,18 +241,32 @@ function identityOf({ target, guid }: PickCandidate): SelectedFeature {
   return { sourceId: target.sourceId, featureId: guid };
 }
 
-// 资源仍然画在地图上、年份没变、还在目录里
-function isShown(state: ResourceLayersState, target: PickResource): boolean {
+/**
+ * 资源仍然画在地图上、年份没变、还在目录里；给了要素的属性时它没被过滤掉，没给时过滤条件没变（列出的候选按识别时的条件，
+ * ADR 0173）
+ */
+function isShown(
+  state: ResourceLayersState,
+  target: PickResource,
+  properties?: Readonly<Record<string, unknown>>
+): boolean {
   const { code } = target.resource;
   const display = state.displays.get(code);
-  return isDrawn(display) && display?.year === target.year && state.catalog?.resources.has(code) === true;
+  if (!display || !isDrawn(display) || display.year !== target.year || !state.catalog?.resources.has(code)) {
+    return false;
+  }
+  return properties ? featurePasses(code, display.filter, properties) : sameFilter(display.filter, target.filter);
 }
 
-// 参与识别的资源和年份，连同顺序；变了时进行中的识别作废
+// 参与识别的资源、年份和过滤条件，连同顺序；变了时进行中的识别作废
 function identifySignature(state: ResourceLayersState): string {
   return state.order
-    .filter(code => isDrawn(state.displays.get(code)) && state.catalog?.resources.has(code))
-    .map(code => `${code}@${state.displays.get(code)?.year}`)
+    .flatMap(code => {
+      const display = state.displays.get(code);
+      return display && isDrawn(display) && state.catalog?.resources.has(code)
+        ? [`${code}@${display.year}#${filterKey(display.filter)}`]
+        : [];
+    })
     .join();
 }
 
@@ -341,7 +388,7 @@ export function useFeaturePick(
   // 加强标注（ADR 0160）：不等详情，用瓦片里的这个要素；资源不再画在地图上、关了标注时没有
   const emphasis = computed((): { readonly target: LabelTarget; readonly guid: string } | null => {
     const candidate = selected.value;
-    if (!candidate || !isShown(resources.state.value, candidate.target)) {
+    if (!candidate || !isShown(resources.state.value, candidate.target, candidate.properties)) {
       return null;
     }
     const target = resources.labelTarget(candidate.target.resource.code);
@@ -433,11 +480,10 @@ export function useFeaturePick(
         return;
       }
       operation ??= map.beginCameraOperation();
-      let page: FeaturePage;
+      let scanned: ScannedPages;
       try {
-        const first = { pageNum: 1, pageSize: PICK_PAGE_SIZE };
         // oxlint-disable-next-line no-await-in-loop -- 上面的资源有结果时下面的不再查询
-        page = await queryFeaturesAt(task.target.layerCode, task.geometry, first, signal);
+        scanned = await scanPages(task.target, task.geometry, 1, signal);
       } catch (error) {
         if (!signal.aborted) {
           remaining = { kind: 'tasks', tasks: tasks.slice(index), how };
@@ -448,9 +494,10 @@ export function useFeaturePick(
       if (signal.aborted) {
         return;
       }
-      const candidates = serverCandidates(task.target, page.list);
+      // 过滤着时只有符合条件的（ADR 0173）；连查几页都没有符合的，同这个资源没有结果
+      const { candidates, loaded, total } = scanned;
       if (candidates.length > 0) {
-        const serverPages = { geometry: task.geometry, loaded: 1, total: page.total };
+        const serverPages = { geometry: task.geometry, loaded, total, filtered: isFiltering(task.target.filter) };
         const list = { id: ++listIds, mode, target: task.target, candidates, pages: serverPages };
         found(list, operation, true, how, signal);
         return;
@@ -554,10 +601,9 @@ export function useFeaturePick(
   };
 
   const fetchMore = async (list: CandidateList, serverPages: ServerPages, signal: AbortSignal) => {
-    const range = { pageNum: serverPages.loaded + 1, pageSize: PICK_PAGE_SIZE };
-    let page: FeaturePage;
+    let scanned: ScannedPages;
     try {
-      page = await queryFeaturesAt(list.target.layerCode, serverPages.geometry, range, signal);
+      scanned = await scanPages(list.target, serverPages.geometry, serverPages.loaded + 1, signal);
     } catch (error) {
       if (!signal.aborted) {
         setState({ kind: 'candidates', list, more: { kind: 'failed', error } });
@@ -569,9 +615,9 @@ export function useFeaturePick(
     }
     // 翻页期间数据可能变化，已经列出的不再重复
     const known = new Set(list.candidates.map(({ key }) => key));
-    const added = serverCandidates(list.target, page.list).filter(({ key }) => !known.has(key));
+    const added = scanned.candidates.filter(({ key }) => !known.has(key));
     const candidates = [...list.candidates, ...added];
-    const next = { geometry: serverPages.geometry, loaded: range.pageNum, total: page.total };
+    const next = { ...serverPages, loaded: scanned.loaded, total: scanned.total };
     setState({ kind: 'candidates', list: { ...list, candidates, pages: next }, more: MORE_IDLE });
   };
 
@@ -613,7 +659,8 @@ export function useFeaturePick(
     }
   };
 
-  // 选中的资源取消勾选、换了年份、不在目录里时清除；叠放顺序变了时保留详情，但不能再返回旧的列表（ADR 0047 第 6 节）
+  // 选中的资源取消勾选、换了年份、不在目录里时清除；叠放顺序变了时保留详情，但不能再返回旧的列表（ADR 0047 第 6 节）。
+  // 过滤条件变了（ADR 0173）：列表、进行中的识别作废，详情里的要素还在时保留、不能再返回旧的列表
   watch(
     () => resources.state.value,
     (next, previous) => {
@@ -637,9 +684,13 @@ export function useFeaturePick(
           }
           break;
         case 'detail':
-          if (!isShown(next, current.candidate.target)) {
+          // 详情里的要素被过滤掉时关闭，条件变了但它还在时保留（ADR 0173）
+          if (!isShown(next, current.candidate.target, current.candidate.properties)) {
             close();
-          } else if (current.back && next.order.join() !== previous.order.join()) {
+          } else if (
+            current.back &&
+            (next.order.join() !== previous.order.join() || !isShown(next, current.candidate.target))
+          ) {
             state.value = { ...current, back: null };
           }
           break;

@@ -9,7 +9,7 @@ export const FEATURE_PICK_TOOL = 'feature-pick';
 export type ToolbarToolId = typeof BROWSE_TOOL | typeof FEATURE_PICK_TOOL | MeasureToolId;
 
 /** 工具栏上的动作：由页面给出回调；开关面板的动作由页面告诉工具栏是否显示为按下（ADR 0036）。默认视角在基础组里（ADR 0053） */
-export type ToolbarActionId = 'clear' | 'region-locate' | 'coordinate-locate' | 'boundaries' | 'legend';
+export type ToolbarActionId = 'clear' | 'region-locate' | 'coordinate-locate' | 'boundaries' | 'legend' | 'print';
 
 export type ToolbarItemId = ToolbarToolId | ToolbarActionId;
 
@@ -36,7 +36,9 @@ export const TOOLBAR_ACTIONS: Readonly<Record<ToolbarActionId, ToolbarItem>> = {
   'coordinate-locate': { label: '坐标定位', icon: 'map-coordinate-locate' },
   // "行政区"三个字不拆开
   boundaries: { label: '行政区边界', icon: 'map-boundaries', lines: ['行政区', '边界'] },
-  legend: { label: '图例', icon: 'map-legend' }
+  legend: { label: '图例', icon: 'map-legend' },
+  // 当前视角导出成图片（ADR 0174）
+  print: { label: '地图打印', icon: 'map-print' }
 };
 
 export function isToolbarTool(id: ToolbarItemId): id is ToolbarToolId {

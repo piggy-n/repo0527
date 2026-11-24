@@ -39,6 +39,20 @@ export async function fetchFile(url: string, options: FetchFileOptions): Promise
 // 浏览器没有“写入磁盘完成”事件，给已触发的下载保留读取时间后释放 URL
 const DOWNLOAD_URL_LIFETIME = 60_000;
 
+/** 画布编码成 PNG（驾驶舱、地图打印的导出图片） */
+export function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const encoded = (blob: Blob | null) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('图片编码失败'));
+      }
+    };
+    canvas.toBlob(encoded, 'image/png');
+  });
+}
+
 /** 将内容交给浏览器保存；调用成功不表示用户已经完成保存 */
 export function saveFile(file: DownloadedFile): void {
   const url = URL.createObjectURL(file.blob);

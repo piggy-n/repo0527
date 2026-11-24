@@ -20,6 +20,8 @@ import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
+import { NO_FILTER } from '../feature-filter';
+import { CLASS_FIELD } from '../filter-fields';
 import type { PickCandidate } from '../feature-query';
 import { type ResourceDisplay, type ResourceLayersState, withYearForAll } from '../resource-layers';
 import type { PointMark } from '../point-shapes';
@@ -68,7 +70,14 @@ const tree: ResourceTreeCategory[] = [
 ];
 const CATALOG = buildCatalog(tree);
 
-const display = (year: number): ResourceDisplay => ({ added: true, checked: true, opacity: 1, year, labeled: false });
+const display = (year: number): ResourceDisplay => ({
+  added: true,
+  checked: true,
+  opacity: 1,
+  year,
+  labeled: false,
+  filter: NO_FILTER
+});
 
 function withDisplay(state: ResourceLayersState, code: string, change: Partial<ResourceDisplay>): ResourceLayersState {
   const current = state.displays.get(code);
@@ -103,9 +112,24 @@ function rendered(sourceId: string, id: number): RenderedFeature {
   return { sourceId, layerId: sourceId, properties: { guid: guid(id), name: `要素 ${id}` } };
 }
 
-// 上下文里的就绪视图：工具视图加上视点高度，点选用不到
+// 地类图斑的渲染要素，带地类编码：要素过滤按它（ADR 0173）
+function landuseFeature(id: number, dlbm: string): RenderedFeature {
+  return { sourceId: DLTB, layerId: DLTB, properties: { guid: guid(id), dlbm } };
+}
+
+// 后端识别返回的地类图斑记录：从 start 起 n 个 guid，同一个地类编码（ADR 0173 的过滤按它）
+function parcels(start: number, n: number, dlbm: string) {
+  return Array.from({ length: n }, (_, index) => ({ guid: guid(start + index), bsm: String(start + index), dlbm }));
+}
+
+// 点选不截图
+function noSnapshot(): never {
+  throw new Error('点选不截图');
+}
+
+// 上下文里的就绪视图：工具视图加上视点高度、截图，点选用不到
 function contextView(kind: ViewKind): MapViewport {
-  return { ...toolView([], kind), eyeHeight: () => null, heading: () => null };
+  return { ...toolView([], kind), eyeHeight: () => null, heading: () => null, snapshot: noSnapshot };
 }
 
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)；渲染要素按数据源返回给定的
@@ -761,6 +785,106 @@ describe('useFeaturePick：清除', () => {
     expect(kindOf(owner)).toBe('idle');
   });
 
+  it('过滤着的地类图斑 13.99 级照样查后端（ADR 0173）：瓦片不带 guid，后端的结果按条件筛，只剩一个时进入详情', async () => {
+    const requests = mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022'
+        ? page(2, [
+            { guid: guid(1), bsm: '1', dlbm: '0102', dlmc: '水浇地' },
+            { guid: guid(2), bsm: '2', dlbm: '0101', dlmc: '水田' }
+          ])
+        : page(0, [])
+    );
+    mockDetail();
+    const { owner, send, resources } = setup(13.99);
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    // 条件变了的作废在下一轮处理，先让它过去再点
+    await nextTick();
+
+    // 14 级以下地类图斑的瓦片只有 bsm、dlbm、dlmc，没有 guid（ADR 0050）：渲染要素列不出候选
+    send(click(), [{ sourceId: DLTB, layerId: DLTB, properties: { bsm: '2', dlbm: '0101', dlmc: '水田' } }]);
+
+    await vi.waitFor(() =>
+      expect(owner.state.value).toMatchObject({ kind: 'detail', candidate: { guid: guid(2), origin: 'server' } })
+    );
+    expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
+  });
+
+  it('过滤着时后端的一页一个都不符合：接着查下一页；加载更多同样接着筛，数量写还没筛的', async () => {
+    const requests = mockIdentify((layerCode, pageNum) => {
+      if (layerCode !== 'bgdc_dltb_2022') {
+        return page(0, []);
+      }
+      const misses = parcels(pageNum * 100, pageNum === 3 ? 9 : 29, '0102');
+      return page(70, pageNum === 1 ? [...misses, ...parcels(150, 1, '0102')] : [...misses, ...parcels(pageNum, 1, '0101')]);
+    });
+    const { owner, send, resources } = setup(12);
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    // 条件变了的作废在下一轮处理，先让它过去再点
+    await nextTick();
+
+    dragBox(send);
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(owner.state.value).toMatchObject({ list: { mode: 'box', pages: { loaded: 2, total: 70, filtered: true } } });
+    expect(candidatesOf(owner).map(({ guid: id }) => id)).toStrictEqual([guid(2)]);
+
+    owner.loadMore();
+    await vi.waitFor(() => expect(owner.state.value).toMatchObject({ more: { kind: 'idle' }, list: { pages: { loaded: 3 } } }));
+    expect(candidatesOf(owner).map(({ guid: id }) => id)).toStrictEqual([guid(2), guid(3)]);
+    const dltb = requests.filter(({ layerCode }) => layerCode === 'bgdc_dltb_2022').map(({ pageNum }) => pageNum);
+    expect(dltb).toStrictEqual([1, 2, 3]);
+  });
+
+  it('过滤着时连查 5 页（150 个）都不符合：当作这个资源没有结果', async () => {
+    const requests = mockIdentify((layerCode, pageNum) =>
+      layerCode === 'bgdc_dltb_2022' ? page(1000, parcels(pageNum * 100, 30, '0102')) : page(0, [])
+    );
+    const { owner, send, resources } = setup(13.99);
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    // 条件变了的作废在下一轮处理，先让它过去再点
+    await nextTick();
+
+    send(click(), []);
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('empty'));
+    const dltb = requests.filter(({ layerCode }) => layerCode === 'bgdc_dltb_2022').map(({ pageNum }) => pageNum);
+    expect(dltb).toStrictEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('过滤条件变了（ADR 0173）：列表作废；详情里的要素还在时保留、不能再返回列表，被过滤掉时关闭', async () => {
+    const { owner, send, resources } = setup(15);
+    send(click(), [landuseFeature(1, '0101'), landuseFeature(2, '0102')]);
+    expect(kindOf(owner)).toBe('candidates');
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101', '0102'] } });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+
+    send(click(), [landuseFeature(1, '0101'), landuseFeature(2, '0102')]);
+    const [first] = candidatesOf(owner);
+    if (!first) {
+      throw new Error('应有候选');
+    }
+    owner.choose(first);
+    expect(backOf(owner)).not.toBeNull();
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    await nextTick();
+    expect(kindOf(owner)).toBe('detail');
+    expect(backOf(owner)).toBeNull();
+
+    resources.state.value = withDisplay(STATE, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0102'] } });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('识别中过滤条件变了时作废（ADR 0173）：晚到的结果按旧条件筛过，不能显示', async () => {
+    mockIdentify(() => new Promise(() => {}));
+    const { owner, send, resources } = setup(12);
+    send(click());
+    expect(kindOf(owner)).toBe('identifying');
+
+    resources.state.value = withDisplay(resources.state.value, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+  });
+
   it('识别中参与识别的资源变了时作废，只改透明度不影响', async () => {
     mockIdentify(() => new Promise(() => {}));
     const { owner, send, resources } = setup(12);
@@ -1218,8 +1342,8 @@ describe('hasMorePages', () => {
   it('已加载的页数乘每页条数小于总数时还有更多', () => {
     const geometry: Point = { type: 'Point', coordinates: [119, 33] };
     expect(hasMorePages(null)).toBe(false);
-    expect(hasMorePages({ geometry, loaded: 1, total: 31 })).toBe(true);
-    expect(hasMorePages({ geometry, loaded: 1, total: 30 })).toBe(false);
+    expect(hasMorePages({ geometry, loaded: 1, total: 31, filtered: false })).toBe(true);
+    expect(hasMorePages({ geometry, loaded: 1, total: 30, filtered: false })).toBe(false);
   });
 });
 

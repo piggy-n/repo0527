@@ -14,6 +14,7 @@ import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@mx/map-
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
+import { type FeatureFilter, featurePasses } from './feature-filter';
 import { isLabelLayer } from './labels';
 import { LANDUSE_FIELD_LABELS } from './landuse';
 import { markDistance } from './point-shapes';
@@ -55,6 +56,12 @@ export const RENDERED_PICK_ZOOM = 14;
 /** 后端识别每页的条数 */
 export const PICK_PAGE_SIZE = 30;
 
+/**
+ * 过滤着的资源（ADR 0173）：后端不按属性筛，一页里可能一个都不符合，接着查下一页；一次最多连查这么多页（150 个），
+ * 都不符合时这一次当作没有
+ */
+export const FILTER_SCAN_PAGES = 5;
+
 /** 框选时估数的拒绝阈值：框里的渲染要素去重后超过它时提示缩小范围，不请求后端（ADR 0049 第 2 节） */
 export const BOX_ESTIMATE_LIMIT = 5000;
 
@@ -65,6 +72,8 @@ export interface PickResource {
   readonly sourceId: string;
   /** 查询接口的图层编码，同瓦片集名 */
   readonly layerCode: string;
+  /** 识别时的要素过滤（ADR 0173）：后端的结果按它在前端筛，条件变了列表作废；画出来的要素已经按它过滤过 */
+  readonly filter: FeatureFilter;
 }
 
 /** 参与识别的资源，从上到下：画在地图上（已加入并显示）、当前级别显示、没被校验拦下的 */
@@ -80,7 +89,7 @@ export function pickResources(
       return [];
     }
     const layerCode = tilesetOf(code, display.year);
-    return [{ resource, year: display.year, sourceId: resourceSourceId(code), layerCode }];
+    return [{ resource, year: display.year, sourceId: resourceSourceId(code), layerCode, filter: display.filter }];
   });
 }
 
@@ -128,12 +137,15 @@ export function renderedCandidates(
   return [...nearest.values()].toSorted((a, b) => a.distance - b.distance);
 }
 
-/** 后端范围识别的结果，按返回的顺序；没有 guid 的记录不算，重复的只留第一条 */
+/**
+ * 后端范围识别的结果，按返回的顺序；没有 guid 的记录不算，重复的只留第一条。过滤着的资源只留符合条件的（ADR 0173）：
+ * 后端不能按属性筛，记录的字段和瓦片一样，按地图的表达式求值
+ */
 export function serverCandidates(target: PickResource, records: readonly FeatureRecord[]): PickCandidate[] {
   const unique = new Map<string, PickCandidate>();
   for (const record of records) {
     const { guid } = record;
-    if (isFeatureGuid(guid) && !unique.has(guid)) {
+    if (isFeatureGuid(guid) && !unique.has(guid) && featurePasses(target.resource.code, target.filter, record)) {
       unique.set(guid, candidate(target, guid, record, 'server', 0));
     }
   }

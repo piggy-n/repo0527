@@ -187,6 +187,24 @@ export class StyleModel<const G extends string> implements Disposable {
     return this.#revision;
   }
 
+  /** 这些分组当前的图层 ID（截图时隐藏用，ADR 0174）；不认识的分组抛错 */
+  layerIdsOf(groups: readonly string[]): ReadonlySet<string> {
+    const ids = new Set<string>();
+    for (const id of groups) {
+      if (!this.#isGroup(id)) {
+        throw new Error(`没有分组 ${id}`);
+      }
+      for (const layer of this.#groups.get(id)?.layers ?? []) {
+        ids.add(layer.id);
+      }
+    }
+    return ids;
+  }
+
+  #isGroup(id: string): id is G {
+    return (this.#order as readonly string[]).includes(id);
+  }
+
   setGroup(id: G, group: StyleGroup): void {
     this.#commit([[id, group]]);
   }

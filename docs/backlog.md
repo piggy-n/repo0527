@@ -158,9 +158,11 @@
 - TXT 预览的行距 1.9 没有行高令牌；资源面板拖动手柄、位置信息卡片两处写死的阴影要新的阴影令牌
 - 是否用 oxlint 的 `typescript/no-non-null-assertion` 防止非空断言回退
 - 第三人称的入口（ADR 0090）：只有已移除的 Cesium 引擎画过人物（ADR 0153），MapLibre 引擎下要先用 map-three 的 `AnimatedModel` 画出来（[map-three](modules/map-three.md)）；开放前还要解决 Cesium 下看到的人物的腿被操作条挡住、停下时双臂平伸
+- 要素过滤还要登记哪些字段（ADR 0173，现在是分类字段加学校面层、学校点层的"类型"）：探查推荐的候选有地类图斑的权属性质 `qsxz`（瓦片里只有代码，要名称）、耕地等别 `gddb`、城镇村属性码 `czcsxm`、种植属性 `zzsxdm`，水域面层的 `use`，水域线层的 `pass`、`grade`，铁路线层的 `sdtf`；确认叫法和代码的名称后按 [resource-registry](config/resource-registry.md)"过滤的字段怎么选"登记
 
 ## 以后再做
 
+- 要素过滤的后端识别改成后端按条件筛（ADR 0173）：现在后端结果在前端一页页筛，总数不准、符合的少时要多查几页；范围查询的 `conditions` 参数实测接受 `LIKE`（[迁移记录](archive/migration.md)"后端的范围查询"），先在真实后端试 `IN`、空值、地类的历史名称，再把条件换成后端的写法
 - 继续拆 `shared/map`：通用交互已经拆成 `@mx/map-tools`（ADR 0145）；工具栏、面板等通用界面，以及混着江苏内容的 `location`、`area`，等第二个地图项目的需求清楚了再说
 - 接入 Renovate；改用 Pull Request 后给 `main` 设分支保护（[ci-workflow](config/ci-workflow.md)）
 - 业务端到端测试、覆盖率门槛
@@ -184,6 +186,7 @@
 - Slow 4G 下画面稳定比"运行时到了就预热"慢 0.7 秒，用户决定保留；资源目录到达时规范化约 80～120 ms 的长任务没有处理
 - 综合分析驾驶舱在 ≤720px 时，外壳给筛选行固定 760px，六个一级的筛选内容约 860px，要在面板里滚到二级列表（原驾驶舱约多 10px）；外壳的筛选行还没有 `--dashboard-charts-row` 那样的变量（[land-space-dashboard](modules/land-space-dashboard.md)"尺寸"）
 - 开发时的热更新：改了被缓存页面用到的文件后会报 Vue 的 `emitsOptions` 之类的错误，刷新即可，生产构建没有这个问题
+- 高斯泼溅的加载统计在库第一次选细节之前就报这一轮完成（进度 0、没有在路上的块，和"视野里没有泼溅"分不开，map-three 的 `detailLoad`），之后数据到了也不再开始新的一轮：地图打印"等画面完整"（ADR 0174）在刚加上泼溅时可能早于它画出来，等加载的明细里泼溅也一闪就完成。要从库的统计区分"还没选"和"视野里没有"；软件渲染下实测，真显卡上没测。打印的预览按当前画面合成，用户看得到
 
 ## 不迁移的范围
 

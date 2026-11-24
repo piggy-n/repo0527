@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, effectScope, nextTick, shallowRef, watchEffect } from 'vue';
 import type { ResourceTreeCategory } from '@/features/resource-map/api';
 import { buildCatalog, type ResourceCatalog } from '@/features/resource-map/catalog';
+import { OTHER_ITEM } from '@/features/resource-map/classification';
+import { CLASS_FIELD } from '@/features/resource-map/filter-fields';
 import { type ResourceLayers, useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
@@ -415,6 +417,60 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()?.getAttribute('aria-label')).toBe('水域线层的标注');
   });
 
+  it('过滤（ADR 0173）：工具栏最右的过滤打开第四种浮层，勾选立即生效；过滤着的行名称后面一个漏斗，点了也打开', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    expect(row(wrapper, 'csxhjctb_hydl').find('[data-row-filtered]').exists()).toBe(false);
+
+    await tool(wrapper, 'filter').trigger('click');
+    expect(popover()?.getAttribute('aria-label')).toBe('水域线层的过滤');
+    expect(tool(wrapper, 'filter').attributes('aria-pressed')).toBe('true');
+    const canal = required(
+      popover()?.querySelector<HTMLInputElement>('[data-feature-filter="csxhjctb_hydl"] [data-filter-value="水渠"] input'),
+      '水渠的复选框'
+    );
+    canal.click();
+    await nextTick();
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.filter).toStrictEqual({ [CLASS_FIELD]: ['河流', OTHER_ITEM] });
+    expect(row(wrapper, 'csxhjctb_hydl').find('[data-row-filtered]').attributes('aria-label')).toContain(
+      '已过滤：分类：河流、其他'
+    );
+
+    await tool(wrapper, 'filter').trigger('click');
+    expect(popover()).toBeNull();
+    await row(wrapper, 'csxhjctb_hydl').get('[data-row-filtered]').trigger('click');
+    expect(popover()?.getAttribute('aria-label')).toBe('水域线层的过滤');
+    await row(wrapper, 'csxhjctb_hydl').get('[data-row-filtered]').trigger('click');
+    expect(popover()).toBeNull();
+  });
+
+  it('过滤：右键菜单的"过滤…"打开；没有可过滤字段的资源、三维模型不能过滤，选中它们时过滤浮层关闭', async () => {
+    const { wrapper, owner, current } = await mountPanel();
+    owner.add(['csxhjctb_hydl', 'bgdc_cjdcq']);
+    current.add(['model:white']);
+    await nextTick();
+
+    await row(wrapper, 'csxhjctb_hydl').trigger('contextmenu');
+    menuItem('filter').click();
+    await nextTick();
+    expect(selectedRow(wrapper)).toBe('csxhjctb_hydl');
+    expect(popover()?.getAttribute('aria-label')).toBe('水域线层的过滤');
+
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    expect(popover()).toBeNull();
+    expect(tool(wrapper, 'filter').attributes('aria-disabled')).toBe('true');
+    await row(wrapper, 'bgdc_cjdcq').trigger('contextmenu');
+    expect(menuItem('filter').disabled).toBe(true);
+    expect(menuItem('filter').textContent).toContain('没有可过滤的字段');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+
+    await wrapper.get('[data-current-row="model:white"]').trigger('click');
+    expect(tool(wrapper, 'filter').attributes('aria-disabled')).toBe('true');
+  });
+
   it('换选中的行时浮层跟着换；隐藏的行仍在图层里，复选框不改选中', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
@@ -443,7 +499,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(row(wrapper, 'bgdc_dltb').classes().some(name => name.includes('flash'))).toBe(true);
   });
 
-  it('定位在右键菜单和双击里（工具栏换成了移除）：二维图层没到最小显示级别时放大到那一级，到了就不可用（后端给不出范围）', async () => {
+  it('定位在右键菜单和双击里：二维图层没到最小显示级别时放大到那一级，到了就不可用（后端给不出范围）', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_lrdl']);
     await nextTick();
@@ -457,14 +513,15 @@ describe('CurrentMapLayerPanel', () => {
     expect(locateItem()?.disabled).toBe(true);
   });
 
-  it('工具栏的移除（用户 2026-11-15）：移除选中的一行，选中相邻的；没有选中时不可用', async () => {
+  it('工具栏最右是过滤，没有移除（用户 2026-11-24，ADR 0173）；移除选中的一行用 Delete，选中相邻的', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_lrdl']);
     await nextTick();
-    expect(tool(wrapper, 'remove-layer').attributes('aria-disabled')).toBe('true');
+    const keys = wrapper.findAll('[aria-label="图层的操作"] [data-tool]').map(item => item.attributes('data-tool'));
+    expect(keys).toStrictEqual(['move-up', 'move-down', 'move-top', 'move-bottom', 'opacity', 'legend', 'label', 'filter']);
 
     await row(wrapper, 'csxhjctb_lrdl').trigger('click');
-    await tool(wrapper, 'remove-layer').trigger('click');
+    await row(wrapper, 'csxhjctb_lrdl').trigger('keydown', { key: 'Delete' });
     expect(currentOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
     expect(selectedRow(wrapper)).toBe('bgdc_dltb');
   });
@@ -483,6 +540,7 @@ describe('CurrentMapLayerPanel', () => {
       'legend',
       'label-visible',
       'label',
+      'filter',
       'locate',
       'move-up',
       'move-down',
