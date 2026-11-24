@@ -86,7 +86,7 @@ describe('useBasemap', () => {
 
     expect(basemap.opacity.value).toBeNull();
     expect(basemap.deriveGroup().sources).toStrictEqual({});
-    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(1));
   });
 
   it('切换二三维：三维选影像、二维选矢量；关闭天地图时保持原来的底图', () => {
@@ -205,7 +205,7 @@ describe('useBasemap', () => {
     expect(opacities(basemap.deriveGroup())).toStrictEqual({ 'basemap-imagery': 0.2 });
   });
 
-  it('开启天地图时标注默认显示；关掉后切换底图、二三维都沿用，无底图时也保留', () => {
+  it('开启天地图时标注默认显示；关掉后切换底图、二三维都沿用，无底图也跟着开关', () => {
     const basemap = useBasemap({ tianditu: TIANDITU });
     expect(basemap.labelsVisible.value).toBe(true);
     expect(Object.keys(basemap.deriveLabelsGroup().sources)).toStrictEqual(['basemap-labels-vector']);
@@ -220,10 +220,31 @@ describe('useBasemap', () => {
     expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
     basemap.select('none');
     expect(basemap.labelsVisible.value).toBe(false);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+    basemap.setLabelsVisible(true);
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(1));
 
     basemap.select('imagery');
-    basemap.setLabelsVisible(true);
     expect(Object.keys(basemap.deriveLabelsGroup().sources)).toStrictEqual(['basemap-labels-imagery']);
+  });
+
+  it('内网的无底图叠静态底图同一份地名：静态底图上打开的标注切过去仍显示、文字不透明，二三维切换时沿用', () => {
+    const basemap = useBasemap({ tianditu: null });
+    basemap.setOpacity(0.5);
+    basemap.setLabelsVisible(true);
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(0.5));
+
+    basemap.select('none');
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(1));
+    basemap.selectForDimension('3d');
+    expect(basemap.selected.value).toBe('none');
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(1));
+
+    basemap.setLabelsVisible(false);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+    basemap.select('static');
+    expect(basemap.labelsVisible.value).toBe(false);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
   });
 
   it('切换标注不影响底图分组，也不重新推导它', () => {

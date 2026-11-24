@@ -31,10 +31,10 @@ export interface BasemapState {
 }
 
 /**
- * 标注开关对一种底图的作用：switchable 跟着开关（天地图的注记、静态底图的地名）；
- * baked 地名印在底图上，开关不起作用，面板里置灰（ADR 0165 第 7 节）；none 没有标注（无底图）
+ * 标注开关对一种底图的作用：switchable 跟着开关（天地图的注记、静态底图的地名，无底图也叠静态底图的地名）；
+ * baked 地名印在底图上，开关不起作用，面板里置灰（ADR 0165 第 7 节）
  */
-export type BasemapLabels = 'switchable' | 'baked' | 'none';
+export type BasemapLabels = 'switchable' | 'baked';
 
 export interface BasemapOption {
   readonly id: BasemapId;
@@ -72,7 +72,7 @@ const OPTION_BY_ID: Readonly<Record<BasemapId, BasemapOption>> = {
   standard: { id: 'standard', label: '标准底图', shortLabel: '标准', labels: serverLabels('standard') },
   black: { id: 'black', label: '黑色底图', shortLabel: '黑色', labels: serverLabels('black') },
   'night-blue': { id: 'night-blue', label: '极夜蓝底图', shortLabel: '极夜蓝', labels: serverLabels('night-blue') },
-  none: { id: 'none', label: '无底图', shortLabel: '无底图', labels: 'none' }
+  none: { id: 'none', label: '无底图', shortLabel: '无底图', labels: 'switchable' }
 };
 const TIANDITU_OPTIONS: readonly BasemapOption[] = [OPTION_BY_ID.vector, OPTION_BY_ID.imagery, OPTION_BY_ID.none];
 
@@ -289,8 +289,9 @@ export function createBasemapStyles(
       if (selected === 'static') {
         return staticLabelsGroup(opacity.static);
       }
+      // 无底图叠静态底图的地名，两种部署都不请求天地图（用户 2026-11-24）；没有透明度，地名不透明
       if (selected === 'none') {
-        return EMPTY;
+        return staticLabelsGroup(1);
       }
       const basemap = tiled[selected];
       if (!basemap || basemap.labels === 'baked') {

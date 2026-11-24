@@ -59,7 +59,7 @@ describe('可选的底图与初始状态', () => {
     expect(basemapOptions(TIANDITU)).toStrictEqual([
       { id: 'vector', label: '矢量底图', shortLabel: '矢量', labels: 'switchable' },
       { id: 'imagery', label: '影像底图', shortLabel: '影像', labels: 'switchable' },
-      { id: 'none', label: '无底图', shortLabel: '无底图', labels: 'none' }
+      { id: 'none', label: '无底图', shortLabel: '无底图', labels: 'switchable' }
     ]);
     expect(initialBasemapState(TIANDITU)).toStrictEqual({ selected: 'vector', opacity: ALL_OPACITY_ONE });
   });
@@ -67,7 +67,7 @@ describe('可选的底图与初始状态', () => {
   it('关闭天地图、服务器没有服务器底图：静态底图和无底图，进入时是静态底图（ADR 0133）', () => {
     expect(basemapOptions(null)).toStrictEqual([
       { id: 'static', label: '静态底图', shortLabel: '静态', labels: 'switchable' },
-      { id: 'none', label: '无底图', shortLabel: '无底图', labels: 'none' }
+      { id: 'none', label: '无底图', shortLabel: '无底图', labels: 'switchable' }
     ]);
     expect(initialBasemapState(null)).toStrictEqual({ selected: 'static', opacity: ALL_OPACITY_ONE });
   });
@@ -119,11 +119,12 @@ describe('createBasemapStyles：开启天地图', () => {
     });
   });
 
-  it('无底图：只有背景，没有注记', () => {
-    const basemap = state('none', { vector: 0.6, imagery: 0.3 });
+  it('无底图：只有背景；标注是静态底图同一份地名，不透明，不用天地图的注记', () => {
+    const basemap = state('none', { vector: 0.6, imagery: 0.3, static: 0.5 });
 
     expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
-    expect(styles.labelsGroup(basemap, true)).toStrictEqual({ sources: {}, layers: [] });
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual(staticLabelsGroup(1));
+    expect(JSON.stringify(styles.labelsGroup(basemap, true))).not.toContain('tianditu');
   });
 
   it.each(SELECTIONS)('%s：ID 以所在分组的名称为前缀，组合后通过样式模型的校验', selected => {
@@ -178,11 +179,19 @@ describe('createBasemapStyles：开启天地图', () => {
 describe('createBasemapStyles：关闭天地图（内网部署）', () => {
   const styles = createBasemapStyles(null);
 
-  it.each(['vector', 'imagery', 'standard', 'black', 'night-blue', 'none'] as const)('选择 %s 时也只有背景', selected => {
+  it.each(['vector', 'imagery', 'standard', 'black', 'night-blue'] as const)('选择 %s 时也只有背景', selected => {
     const basemap = state(selected);
 
     expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
     expect(styles.labelsGroup(basemap, true)).toStrictEqual({ sources: {}, layers: [] });
+  });
+
+  it('无底图：只有背景，标注是静态底图同一份地名，不透明', () => {
+    const basemap = state('none', { static: 0.5 });
+
+    expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual(staticLabelsGroup(1));
+    expect(styles.labelsGroup(basemap, false)).toStrictEqual({ sources: {}, layers: [] });
   });
 
   it.each(SELECTIONS)('选择 %s 时推导结果里没有天地图', selected => {
@@ -218,6 +227,16 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
         ['setPaintProperty', 'basemap-background']
       ])
     );
+  });
+
+  it('开着标注在静态底图和无底图之间切换：地名不重新加载，只跟着透明度改文字的不透明度', () => {
+    const toNone = diffStyle(compose(styles, state('static', { static: 0.5 })), compose(styles, state('none')));
+    const labelCommands = toNone.filter(({ args: [id] }) => typeof id === 'string' && id.startsWith('basemap-labels-'));
+
+    expect(labelCommands.map(({ command, args }) => [command, args[0], args[1], args[2]])).toStrictEqual([
+      ['setPaintProperty', 'basemap-labels-static-county', 'text-opacity', 1],
+      ['setPaintProperty', 'basemap-labels-static-city', 'text-opacity', 1]
+    ]);
   });
 });
 
@@ -300,7 +319,7 @@ describe('内网的服务器底图：目录与默认（ADR 0165 第 1 节）', (
     expect(defaultBasemap(TIANDITU, ALL_SERVERS)).toBe('vector');
   });
 
-  it('标注开关的作用：三套矢量的地名印在图上，影像、静态跟着开关，无底图没有标注', () => {
+  it('标注开关的作用：三套矢量的地名印在图上，影像、静态、无底图跟着开关', () => {
     const labels = Object.fromEntries(basemapOptions(null, ALL_SERVERS).map(option => [option.id, option.labels]));
     expect(labels).toStrictEqual({
       standard: 'baked',
@@ -308,7 +327,7 @@ describe('内网的服务器底图：目录与默认（ADR 0165 第 1 节）', (
       static: 'switchable',
       black: 'baked',
       'night-blue': 'baked',
-      none: 'none'
+      none: 'switchable'
     });
     expect([basemapOption('standard').label, basemapOption('night-blue').shortLabel]).toStrictEqual(['标准底图', '极夜蓝']);
   });

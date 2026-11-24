@@ -934,12 +934,17 @@ describe('CurrentMapPage', () => {
     await optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').trigger('click');
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
 
-    // 无底图没有可调的：选了就关闭，再打开时没有入口
+    // 无底图也有入口：选了就关闭，再打开时收起；点开有标注开关，透明度置灰、写 100%
     await optionsPopover('basemap').get('[aria-label="无底图"]').trigger('click');
     await button(wrapper, '底图：无底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    expect(optionsPopover('basemap').find('[aria-label="调整标注和透明度"]').exists()).toBe(false);
+    const noneAdjust = optionsPopover('basemap').find('[aria-label="调整标注和透明度"]');
+    expect(noneAdjust.exists(), '无底图也有入口').toBe(true);
+    expect(noneAdjust.attributes('aria-pressed')).toBe('false');
+    await noneAdjust.trigger('click');
+    expect(optionsPopover('basemap').find('[role="switch"]').exists()).toBe(true);
+    expect(wrapper.getComponent(ElSlider).props()).toMatchObject({ modelValue: 100, disabled: true });
     await optionsPopover('basemap').get('[aria-label="矢量底图"]').trigger('click');
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));

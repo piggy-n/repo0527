@@ -66,8 +66,8 @@ export const BasemapPanel = defineComponent({
                       <span class={styles.label}>{option.shortLabel}</span>
                     </span>
                   </button>
-                  {/* 和缩略图并列，不嵌套：按钮里不能再放按钮；无底图没有可调的 */}
-                  {on && opacity.value !== null && (
+                  {/* 和缩略图并列，不嵌套：按钮里不能再放按钮；每种底图都有，无底图也能开关标注 */}
+                  {on && (
                     <ElTooltip {...MAP_TOOLTIP_PROPS} content="标注和透明度" placement="top">
                       <button
                         type="button"
@@ -84,7 +84,7 @@ export const BasemapPanel = defineComponent({
               );
             })}
           </div>
-          {adjusting.value && opacity.value !== null && (
+          {adjusting.value && (
             <div class={styles.adjustments}>
               <div class={styles.labels}>
                 <span class={styles.labelsName} aria-hidden="true">
@@ -101,7 +101,13 @@ export const BasemapPanel = defineComponent({
                   onUpdate:modelValue={value => props.basemap.setLabelsVisible(value === true)}
                 />
               </div>
-              <OpacitySlider value={opacity.value} label="底图的透明度" onChange={props.basemap.setOpacity} />
+              {/* 无底图没有透明度：一行置灰、写 100%，展开后每种底图一样高（用户 2026-11-24） */}
+              <OpacitySlider
+                value={opacity.value ?? 1}
+                disabled={opacity.value === null}
+                label="底图的透明度"
+                onChange={props.basemap.setOpacity}
+              />
             </div>
           )}
         </div>
