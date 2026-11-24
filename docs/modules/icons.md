@@ -186,12 +186,13 @@ packages/icons/
 | `drag-handle` | `grip-vertical` | 拖动排序的手柄 |
 | `move-up` / `move-down` | 自制（2026-10-28 由 `arrow-up` / `arrow-down` 换成实心三角，ADR 0102） | 资源图层面板的上移、下移（ADR 0096）：24 × 24 里宽 14、高 8 的三角，描边 1.5 圆角 |
 | `splitter-handle` | `menu-2` | 可拖动的分割线中间的手柄 |
-| `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
+| `panel-collapse` / `panel-expand` | 自制（2026-11-23 由 `layout-sidebar-left-collapse` / `-expand` 换成双箭头，用户要笔画少、好认） | 收起、展开左侧的面板（资源图层、漫游、数据查询、监测指标）：双左箭头 «、双右箭头 »，两道折线高 12、相隔 7，描边 1.5 |
 | `close` | `x` | 取消勾选、关闭 |
 | `info` | `info-circle` | 带提示的信息图标 |
 | `status-error` | 自制（ADR 0059） | 图层列表里的错误状态（资源、模型加载失败）：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
 | `status-warning` | 自制（ADR 0059） | 图层列表里的警告状态、请求状态的"N 项加载失败"：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
 | `status-zoom` | `zoom-in` | 图层列表里的说明状态（当前级别不显示） |
+| `status-info` | 自制（2026-11-23，照 `status-error` 上下翻过来） | 资源详情里不能查详情的资源，说明行后面的提示图标：实心圆，i 镂空，颜色跟随文字 |
 | `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 | `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |

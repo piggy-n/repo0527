@@ -232,7 +232,7 @@ describe('FeatureDetailPanel', () => {
     expect(pick.back).toHaveBeenCalledOnce();
   });
 
-  it('详情失败时显示原因并可以重试；不能查详情的资源注明，列出地图上的属性，没有"定位"', async () => {
+  it('详情失败时显示原因并可以重试；不能查详情的资源列出地图上的属性，没有"定位"', async () => {
     const error = new Error('系统异常');
     const failed = fakePick({ kind: 'detail', candidate: FIRST, back: null }, { kind: 'failed', error });
     const wrapper = mountPanel(failed.pick);
@@ -245,12 +245,34 @@ describe('FeatureDetailPanel', () => {
     const unsupported = fakePick({ kind: 'detail', candidate: pond, back: null }, { kind: 'unsupported' });
     const other = mountPanel(unsupported.pick);
     expect(titleOf(other)).toBe('某坑塘');
-    expect(notice(other, 'info').text()).toBe('这个资源暂不支持查询完整信息，下面是地图上的属性');
     expect(rows(other)).toStrictEqual([
       ['name', '某坑塘'],
       ['mj', '120']
     ]);
     expect(other.find('[aria-label="定位到要素"]').exists()).toBe(false);
+  });
+
+  it('不能查详情的资源：说明不常显，放在说明行后面图标的提示里，键盘能聚焦，读屏名称是同一句', async () => {
+    const tip = '这个资源暂不支持查询完整信息，下面是地图上的属性';
+    const pond = candidate(SZY, 3, { guid: '3'.repeat(32), name: '某坑塘', mj: 120 });
+    const unsupported = fakePick({ kind: 'detail', candidate: pond, back: null }, { kind: 'unsupported' });
+    const wrapper = mountPanel(unsupported.pick);
+
+    expect(wrapper.find('[data-notice]').exists()).toBe(false);
+    expect(document.body.textContent).not.toContain(tip);
+    const hint = wrapper.get('[data-detail-hint]');
+    expect(hint.text()).toBe('');
+    expect(hint.attributes()).toMatchObject({ role: 'img', 'aria-label': tip, tabindex: '0' });
+    // 紧跟在"资源名 · 年份"后面，不在标题右边的操作里
+    expect(hint.element.parentElement?.textContent).toBe('坑塘 · 2025');
+
+    await hint.trigger('focus');
+    await vi.waitFor(() => expect(document.body.textContent).toContain(tip));
+
+    // 能查详情的资源没有这个图标
+    const ready: FeatureDetailStatus = { kind: 'ready', detail: { properties: FIRST.properties, geometry: POINT } };
+    const { pick } = fakePick({ kind: 'detail', candidate: FIRST, back: null }, ready);
+    expect(mountPanel(pick).find('[data-detail-hint]').exists()).toBe(false);
   });
 
   it('没有名称字段的要素：标题是资源名称', () => {

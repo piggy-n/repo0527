@@ -1,10 +1,11 @@
 import { Loading } from '@element-plus/icons-vue';
 import { useVirtualList } from '@vueuse/core';
 import { MxTitle } from '@mx/ui';
-import { ElIcon } from 'element-plus';
+import { ElIcon, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
+import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { FeatureRecord } from '../api';
 import {
   BOX_ESTIMATE_LIMIT,
@@ -22,6 +23,18 @@ const CANDIDATE_HEIGHT = 34;
 type NoticeTone = 'info' | 'warning' | 'error';
 
 const NOTICE_ICONS: Readonly<Record<NoticeTone, IconName>> = { info: 'info', warning: 'warning', error: 'warning' };
+
+// 不能查详情的资源（ADR 0047）：说明不常显，放进说明行后面图标的提示，悬停或键盘聚焦时显示，读屏名称是同一句
+const UNSUPPORTED_TIP = '这个资源暂不支持查询完整信息，下面是地图上的属性';
+const HINT_TRIGGERS: ('hover' | 'focus')[] = ['hover', 'focus'];
+
+const renderUnsupportedHint = () => (
+  <ElTooltip {...MAP_TOOLTIP_PROPS} content={UNSUPPORTED_TIP} placement="top" trigger={HINT_TRIGGERS}>
+    <span class={styles.metaHint} tabindex={0} role="img" aria-label={UNSUPPORTED_TIP} data-detail-hint>
+      <SvgIcon name="status-info" size={14} />
+    </span>
+  </ElTooltip>
+);
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : '未知错误';
@@ -65,8 +78,8 @@ function renderState(text: string, options: { readonly loading?: boolean; readon
   );
 }
 
-// 标题（区块标题的规格）和下面一行灰色的说明；操作放在标题右边
-function renderTitle(title: string, meta: string, actions: VNode[] = []) {
+// 标题（区块标题的规格）和下面一行灰色的说明；操作放在标题右边，说明图标紧跟说明
+function renderTitle(title: string, meta: string, actions: VNode[] = [], hint?: VNode) {
   return (
     <div class={styles.heading}>
       <MxTitle>
@@ -75,7 +88,10 @@ function renderTitle(title: string, meta: string, actions: VNode[] = []) {
           extra: actions.length > 0 ? () => actions : undefined
         }}
       </MxTitle>
-      <div class={styles.meta}>{meta}</div>
+      <div class={styles.meta}>
+        <span class={styles.metaText}>{meta}</span>
+        {hint}
+      </div>
     </div>
   );
 }
@@ -221,12 +237,7 @@ export const FeatureDetailPanel = defineComponent({
         case 'ready':
           return renderRows(status.detail.properties);
         case 'unsupported':
-          return (
-            <>
-              {renderNotice('info', '这个资源暂不支持查询完整信息，下面是地图上的属性')}
-              {renderRows(candidate.properties)}
-            </>
-          );
+          return renderRows(candidate.properties);
         case 'failed':
           return renderNotice('error', `详情加载失败：${messageOf(status.error)}`, {
             label: '重试',
@@ -254,8 +265,9 @@ export const FeatureDetailPanel = defineComponent({
           </button>
         );
       }
+      const unsupported = status?.kind === 'unsupported';
       // 不能查详情的资源没有完整几何，不能定位
-      if (status?.kind !== 'unsupported') {
+      if (!unsupported) {
         actions.push(
           <button
             type="button"
@@ -271,7 +283,7 @@ export const FeatureDetailPanel = defineComponent({
       }
       return (
         <>
-          {renderTitle(title, `${resource.name} · ${year}`, actions)}
+          {renderTitle(title, `${resource.name} · ${year}`, actions, unsupported ? renderUnsupportedHint() : undefined)}
           {renderDetailBody(candidate)}
         </>
       );
