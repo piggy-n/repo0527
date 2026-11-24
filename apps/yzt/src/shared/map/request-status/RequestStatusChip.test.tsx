@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { type DOMWrapper, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, shallowRef } from 'vue';
 import { ALL_REQUEST_KINDS, type RequestDisplay, type RequestItem, type RequestKinds } from './request-status';
@@ -97,6 +97,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 明细里从上到下的组标题、行和空状态
+const lines = (popover: Omit<DOMWrapper<Element>, 'exists'>) =>
+  popover.findAll('h3, li, [data-request-empty]').map(line => line.text());
+
 // 按钮上看得见的内容（叠着的"转圈 99%"只撑宽度，不算）
 const visible = (wrapper: ReturnType<typeof mountChip>['wrapper']) =>
   wrapper.get('[data-request-chip]').element.firstElementChild?.textContent ?? null;
@@ -139,7 +143,14 @@ describe('RequestStatusChip', () => {
     ]);
     await wrapper.get('[data-request-chip]').trigger('click');
     const popover = wrapper.get('[data-request-popover]');
-    expect(popover.findAll('li').map(row => row.text())).toStrictEqual([
+    // 标题同其他面板（MxPanel 的面板标题），三组是区块标题（用户 2026-11-23）
+    expect(popover.findAll('header h2').map(title => title.text())).toStrictEqual(['数据加载']);
+    expect(popover.findAll('[data-request-group] h3').map(title => title.text())).toStrictEqual([
+      '加载中',
+      '有失败',
+      '已完成'
+    ]);
+    expect(lines(popover)).toStrictEqual([
       '加载中',
       'resource:a 的名称4/10 张',
       '底图4/10 张',
@@ -193,7 +204,7 @@ describe('RequestStatusChip', () => {
     expect(wrapper.emitted('retry')).toStrictEqual([['model:m']]);
   });
 
-  it('明细贴着资源图层面板的右边、底边在状态栏上方：条目左右移时不动（用户 2026-11-16）', async () => {
+  it('面板下面放不下时明细贴着面板的右边、底边在状态栏上方，和面板同宽：条目左右移时不动（用户 2026-11-16、2026-11-23）', async () => {
     const area = placed(16, 72, 1264, 760);
     const panel = placed(16, 72, 336, 724);
     const { wrapper } = mountChip([item('a')]);
@@ -203,12 +214,15 @@ describe('RequestStatusChip', () => {
     chip.getBoundingClientRect = () => new DOMRect(chipLeft, 736, 120, 24);
 
     await wrapper.get('[data-request-chip]').trigger('click');
-    const style = () => wrapper.get<HTMLElement>('[data-request-popover]').element.style;
+    const popover = () => wrapper.get<HTMLElement>('[data-request-popover]').element;
+    const style = () => popover().style;
     // jsdom 的视口高 768：底边在条目上边 736 再往上 8
-    expect([style().left, style().bottom, style().width, style().maxHeight]).toStrictEqual([
+    expect(popover().dataset.requestSide).toBe('beside');
+    expect([style().left, style().top, style().bottom, style().width, style().maxHeight]).toStrictEqual([
       '344px',
+      '',
       '40px',
-      '340px',
+      '320px',
       '420px'
     ]);
 
@@ -219,26 +233,36 @@ describe('RequestStatusChip', () => {
     expect(style().left).toBe('344px');
   });
 
-  it('面板展开、收起时明细跟着面板的右边走：页面给的一直是同一个元素，靠尺寸监听；明细关着时不监听', async () => {
+  it('面板收起成竖条时明细在它下方、用面板展开时的宽度，展开后到右边：页面给的一直是同一个元素，靠尺寸监听；明细关着时不监听（用户 2026-11-23）', async () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     const area = placed(16, 72, 1264, 760);
-    let right = 40;
+    let rect = new DOMRect(16, 72, 40, 140);
     const panel = document.body.appendChild(document.createElement('div'));
-    panel.getBoundingClientRect = () => new DOMRect(16, 72, right - 16, 652);
+    panel.getBoundingClientRect = () => rect;
     const { wrapper } = mountChip([item('a')]);
-    await wrapper.setProps({ panel: () => panel, area: () => area });
+    await wrapper.setProps({ panel: () => panel, panelCollapsed: true, area: () => area });
     wrapper.get('[data-request-status]').element.getBoundingClientRect = () => new DOMRect(400, 736, 120, 24);
     expect(FakeResizeObserver.watching(panel)).toBe(false);
 
     await wrapper.get('[data-request-chip]').trigger('click');
-    const left = () => wrapper.get<HTMLElement>('[data-request-popover]').element.style.left;
-    expect(left()).toBe('48px');
+    const popover = () => wrapper.get<HTMLElement>('[data-request-popover]').element;
+    const box = () => {
+      const { left, top, bottom, width } = popover().style;
+      return [popover().dataset.requestSide, left, top, bottom, width];
+    };
+    // 竖条的底边 212，下面离 8
+    expect(box()).toStrictEqual(['below', '16px', '220px', '', '320px']);
 
-    // 在明细里点了一行，页面把竖条展开：元素不变，宽度变了
-    right = 336;
+    // 在明细里点了一行，页面把竖条展开：元素不变，尺寸变了；面板还矮，仍在下方，和面板同宽
+    rect = new DOMRect(16, 72, 300, 200);
+    await wrapper.setProps({ panelCollapsed: false });
+    expect(box()).toStrictEqual(['below', '16px', '280px', '', '300px']);
+
+    // 面板的内容多了、变高，下面放不下：只有尺寸监听知道
+    rect = new DOMRect(16, 72, 300, 652);
     FakeResizeObserver.resized(panel);
     await nextTick();
-    expect(left()).toBe('344px');
+    expect(box()).toStrictEqual(['beside', '324px', '', '40px', '300px']);
 
     await wrapper.get('[data-request-chip]').trigger('click');
     expect(FakeResizeObserver.watching(panel)).toBe(false);
@@ -255,7 +279,7 @@ describe('RequestStatusChip', () => {
     clock.value = 1000;
     await nextTick();
     await wrapper.get('[data-request-chip]').trigger('click');
-    expect(wrapper.get('[data-request-popover]').findAll('li').map(row => row.text())).toStrictEqual([
+    expect(lines(wrapper.get('[data-request-popover]'))).toStrictEqual([
       '已完成',
       'a 的名称10 张'
     ]);
@@ -263,7 +287,7 @@ describe('RequestStatusChip', () => {
     items.value = [item('b', { failed: 1, loaded: 9, finishedAt: 900 })];
     await nextTick();
     expect(wrapper.get('[data-request-chip]').attributes('data-request-chip')).toBe('idle');
-    expect(wrapper.get('[data-request-popover]').findAll('li').map(row => row.text())).toStrictEqual([
+    expect(lines(wrapper.get('[data-request-popover]'))).toStrictEqual([
       '当前视野没有要加载的数据'
     ]);
   });
@@ -278,7 +302,7 @@ describe('RequestStatusChip', () => {
   it('上一轮有失败、这一轮还在加载的项在加载中、有失败两组里都有：加载中写这一轮的进度，有失败写上一轮的张数（用户 2026-11-22）', async () => {
     const { wrapper } = mountChip([item('resource:a', { previousFailed: 2 })]);
     await wrapper.get('[data-request-chip]').trigger('click');
-    expect(wrapper.get('[data-request-popover]').findAll('li').map(row => row.text())).toStrictEqual([
+    expect(lines(wrapper.get('[data-request-popover]'))).toStrictEqual([
       '加载中',
       'resource:a 的名称4/10 张',
       '有失败',

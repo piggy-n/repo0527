@@ -2,6 +2,7 @@ import { buildCatalog } from '@/features/resource-map/catalog';
 import { sceneManifestSchema } from '@/features/scene-models/api';
 import { buildModelCatalog } from '@/features/scene-models/catalog';
 import { type BasemapId, type BasemapThumbnail, basemapThumbnails } from '@/shared/map/basemap/basemap-style';
+import type { RequestItem } from '@/shared/map/request-status/request-status';
 import imagery from './sample-imagery.svg?url';
 import vector from './sample-vector.svg?url';
 
@@ -76,3 +77,39 @@ export const SAMPLE_THUMBNAILS: Readonly<Record<BasemapId, BasemapThumbnail | nu
   'night-blue': { base: vector, labels: null, focus: 'center' },
   none: null
 };
+
+// 数据加载明细的一项；时间按样例的时钟 10000
+const request = (item: Pick<RequestItem, 'key' | 'kind' | 'name' | 'icon'> & Partial<RequestItem>): RequestItem => ({
+  requested: 0,
+  loaded: 0,
+  failed: 0,
+  previousFailed: 0,
+  detail: null,
+  startedAt: 9000,
+  finishedAt: null,
+  ...item
+});
+
+/** 数据加载明细的固定几项：三组都有，不随时间变化 */
+export const SAMPLE_REQUESTS: readonly RequestItem[] = [
+  request({
+    key: 'resource:bgdc_dltb',
+    kind: 'tiles',
+    name: '地类图斑（城镇村）',
+    icon: 'geometry-polygon',
+    requested: 52,
+    loaded: 34
+  }),
+  request({ key: 'model:sample-white', kind: 'model', name: '星海广场站周边建筑白模', icon: 'model-3d' }),
+  request({
+    key: 'resource:bgdc_cjdcq',
+    kind: 'tiles',
+    name: '村级调查区界线',
+    icon: 'geometry-line',
+    requested: 20,
+    loaded: 18,
+    failed: 2,
+    finishedAt: 9500
+  }),
+  request({ key: 'basemap', kind: 'tiles', name: '底图', icon: 'nav-current-map', requested: 24, loaded: 24, finishedAt: 9600 })
+];

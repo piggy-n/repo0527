@@ -85,6 +85,32 @@
   height: var(--sample-height);
 }
 
+// 占满一行的样例
+.wide {
+  grid-column: 1 / -1;
+}
+
+// 数据加载：左列是面板，底部一行是状态按钮，同现状底图页的左下角；可用高度是面板这一列
+.requestStage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 24px;
+  gap: var(--space-md);
+  height: calc(var(--sample-height) + 24px + var(--space-md));
+}
+
+.requestColumn {
+  display: flex;
+  flex-direction: column;
+  width: var(--sample-width);
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.requestBar {
+  display: flex;
+}
+
 .toolsRow {
   display: flex;
   align-items: flex-start;

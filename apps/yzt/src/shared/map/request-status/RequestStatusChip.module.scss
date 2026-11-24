@@ -89,27 +89,15 @@
   background-color: var(--color-danger);
 }
 
-// 明细贴着资源图层面板的右边、底边在状态栏上方：位置、宽度和最大高度由 requestPopoverPlacement 算好写在 style 上（视口坐标）
+// 明细在资源图层面板下方或右边：位置、宽度和最大高度由 requestPopoverPlacement 算好写在 style 上（视口坐标）；
+// 外壳是浮在地图上的 MxPanel，放不下时它被压缩、内容区滚动
 .popover {
   position: fixed;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  width: 340px;
+  width: 320px;
   max-height: 420px;
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-container);
-  box-shadow: var(--shadow-lg);
-}
-
-.head {
-  display: flex;
-  flex: none;
-  align-items: center;
-  height: 44px;
-  padding: 0 8px 0 16px;
-  border-bottom: 1px solid var(--color-divider);
-  color: var(--color-text-title);
 }
 
 .close {
@@ -118,7 +106,6 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -132,20 +119,23 @@
   }
 }
 
-.list {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  padding: 4px 8px 8px;
-  overflow-y: auto;
-  list-style: none;
+// 内容区（MxPanel 的 flush 内容区负责滚动）：加载中、有失败、已完成三组
+.groups {
+  padding: 4px 0 8px;
 }
 
-.group {
-  padding: 8px 8px 4px;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+// 组的标题：竖条和面板标题的竖条对齐（左边 16），行的图标也在 16
+.groupHead {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-lg);
+}
+
+.rows {
+  margin: 0;
+  padding: 0 8px;
+  list-style: none;
 }
 
 .row {
@@ -233,6 +223,7 @@
 }
 
 .empty {
+  margin: 0;
   padding: var(--space-md) var(--space-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);

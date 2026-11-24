@@ -1,6 +1,7 @@
 import { Loading } from '@element-plus/icons-vue';
 import { useEventListener, useResizeObserver } from '@vueuse/core';
 import { usePageActive } from '@mx/map-vue';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElIcon, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, type VNode, watch } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
@@ -44,12 +45,21 @@ function statusContent(summary: RequestSummary): VNode[] {
   return [<SvgIcon name="check" size={14} />];
 }
 
+// 明细的位置写在 style 上：下方按顶边，右边按底边；量好之前先不显示，放好的位置在同一轮渲染里就到，看不到闪动
+function popoverStyle(box: RequestPopoverPlacement | null) {
+  if (box === null) {
+    return { visibility: 'hidden' as const };
+  }
+  const size = { left: `${box.left}px`, width: `${box.width}px`, maxHeight: `${box.maxHeight}px` };
+  return box.side === 'below' ? { ...size, top: `${box.top}px` } : { ...size, bottom: `${box.bottom}px` };
+}
+
 /**
  * 状态栏前面的请求状态（ADR 0158、0171，原型 `/design.local/status-bar/`）：一直在的按钮，宽度按"转圈 99%"固定、内容居中，
  * 状态变了读数不动；只有图标和数字，全称在 Tooltip 和读屏名称里。点开是"数据加载"的明细，分加载中、有失败、已完成三组。
- * 点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点按钮关闭。明细贴着资源图层面板的右边、
- * 底边在状态栏上方（requestPopoverPlacement，用户 2026-11-16）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，
- * 不带动页面重渲染
+ * 点一行交给页面在面板的图层列表里选中，模型失败的可以重试；点外面、Esc、再点按钮关闭。明细和资源图层面板同宽，面板下面
+ * 放得下时在面板下方，否则贴着面板的右边、底边在状态栏上方（requestPopoverPlacement，用户 2026-11-16、2026-11-23）；
+ * 外壳和标题同其他地图面板（MxPanel、MxTitle）。时钟在加载时每 250 毫秒走一格，只在这个组件里读，不带动页面重渲染
  */
 export const RequestStatusChip = defineComponent({
   name: 'RequestStatusChip',
@@ -57,8 +67,10 @@ export const RequestStatusChip = defineComponent({
     status: { type: Object as PropType<RequestStatus>, required: true },
     /** 能在面板的图层列表里选中的项 */
     selectable: { type: Function as PropType<(key: string) => boolean>, default: () => false },
-    /** 资源图层面板所在的一列：明细贴在它右边，宽度变了、收起时跟着走；没有时贴着区域的左边 */
+    /** 资源图层面板（按内容定高，收起后是竖条）：明细在它下方或右边，跟着它的高度、宽度走；没有时贴着区域的左边 */
     panel: { type: Function as PropType<() => HTMLElement | null>, default: () => null },
+    /** 面板收起成了竖条：明细用面板展开时的宽度 */
+    panelCollapsed: Boolean,
     /** 明细能放的区域（地图上四周留白以内）；没有时用整个视口 */
     area: { type: Function as PropType<() => HTMLElement | null>, default: () => null }
   },
@@ -90,8 +102,8 @@ export const RequestStatusChip = defineComponent({
       onEscape: () => (open.value = false)
     });
 
-    // 明细的位置：开着时量面板、区域和状态栏（条目的上边），面板的宽度、收起和窗口变了重新放；页面停用时量不到，激活后再放。
-    // 页面给的面板一直是同一个元素，展开、收起只改它的宽度，靠尺寸监听；只在开着时监听，元素没换时不重建监听
+    // 明细的位置：开着时量面板、区域和状态栏（条目的上边），面板的尺寸、收起和窗口变了重新放；页面停用时量不到，激活后再放。
+    // 页面给的面板一直是同一个元素，展开、收起、内容变了只改它的尺寸，靠尺寸监听；只在开着时监听，元素没换时不重建监听
     const placement = shallowRef<RequestPopoverPlacement | null>(null);
     const pageActive = usePageActive();
     const panel = computed(() => (open.value ? props.panel() : null));
@@ -103,6 +115,7 @@ export const RequestStatusChip = defineComponent({
       }
       placement.value = requestPopoverPlacement({
         panel: panel.value?.getBoundingClientRect() ?? null,
+        collapsed: props.panelCollapsed,
         area: area.value?.getBoundingClientRect() ?? {
           left: 0,
           top: 0,
@@ -113,7 +126,7 @@ export const RequestStatusChip = defineComponent({
         viewport: { height: window.innerHeight }
       });
     };
-    watch([open, pageActive, panel, area], place, { immediate: true, flush: 'post' });
+    watch([open, pageActive, panel, area, () => props.panelCollapsed], place, { immediate: true, flush: 'post' });
     useResizeObserver(panel, place);
     useResizeObserver(area, place);
     useEventListener(window, 'resize', place);
@@ -147,13 +160,13 @@ export const RequestStatusChip = defineComponent({
       );
     };
 
-    // 带着上一轮失败、还在加载的项在加载中、有失败两组里都有：行的 key 带上组名
-    const renderRow = (group: string, item: RequestItem, { text, progress, tone, waited }: RequestRowText) => {
+    // 带着上一轮失败、还在加载的项在加载中、有失败两组里都有：每组一个列表，行的 key 在组内不重复
+    const renderRow = (item: RequestItem, { text, progress, tone, waited }: RequestRowText) => {
       const selectable = props.selectable(item.key);
       const failedModel = item.kind === 'model' && item.failed > 0;
       return (
         <li
-          key={`${group}:${item.key}`}
+          key={item.key}
           class={[styles.row, selectable && styles.selectable]}
           title={selectable ? '在图层列表中选中' : undefined}
           data-request-row={item.key}
@@ -206,43 +219,54 @@ export const RequestStatusChip = defineComponent({
       );
     };
 
+    // 一组：区块标题（MxTitle，同其他面板的竖条）和这一组的列表；三组按条件出现，都带 key
     const renderGroup = (
       title: string,
       items: readonly RequestItem[],
       rowText: (item: RequestItem, now: number) => RequestRowText
     ) =>
-      items.length === 0
-        ? []
-        : [
-            <li key={`group:${title}`} class={styles.group}>
-              {title}
-            </li>,
-            ...items.map(item => renderRow(title, item, rowText(item, props.status.now.value)))
-          ];
+      items.length > 0 && (
+        <section key={title} data-request-group={title}>
+          <div class={styles.groupHead}>
+            <MxTitle>{title}</MxTitle>
+          </div>
+          <ul class={styles.rows}>{items.map(item => renderRow(item, rowText(item, props.status.now.value)))}</ul>
+        </section>
+      );
 
     const renderPopover = () => {
       const { loading, failed, done } = groups.value;
       const box = placement.value;
-      // 量好之前先不显示：放好的位置在同一轮渲染里就到，看不到闪动
-      const style = box
-        ? { left: `${box.left}px`, bottom: `${box.bottom}px`, width: `${box.width}px`, maxHeight: `${box.maxHeight}px` }
-        : { visibility: 'hidden' as const };
       return (
-        <div class={styles.popover} style={style} role="dialog" aria-label="数据加载" data-request-popover>
-          <div class={styles.head}>
-            <strong>数据加载</strong>
-            <button type="button" class={styles.close} aria-label="关闭" onClick={() => (open.value = false)}>
-              <SvgIcon name="close" size={16} />
-            </button>
-          </div>
-          <ul class={styles.list}>
-            {renderGroup('加载中', loading, requestRowText)}
-            {renderGroup('有失败', failed, failedRowText)}
-            {renderGroup('已完成', done, requestRowText)}
-            {loading.length + failed.length + done.length === 0 && (
-              <li class={styles.empty}>当前视野没有要加载的数据</li>
-            )}
-          </ul>
+        <div
+          class={styles.popover}
+          style={popoverStyle(box)}
+          role="dialog"
+          aria-label="数据加载"
+          data-request-popover
+          data-request-side={box?.side}
+        >
+          <MxPanel floating flush headerTone="muted" title="数据加载">
+            {{
+              actions: () => [
+                <button type="button" class={styles.close} aria-label="关闭" onClick={() => (open.value = false)}>
+                  <SvgIcon name="close" size={16} />
+                </button>
+              ],
+              default: () => [
+                <div class={styles.groups}>
+                  {renderGroup('加载中', loading, requestRowText)}
+                  {renderGroup('有失败', failed, failedRowText)}
+                  {renderGroup('已完成', done, requestRowText)}
+                  {loading.length + failed.length + done.length === 0 && (
+                    <p key="empty" class={styles.empty} data-request-empty>
+                      当前视野没有要加载的数据
+                    </p>
+                  )}
+                </div>
+              ]
+            }}
+          </MxPanel>
         </div>
       );
     };

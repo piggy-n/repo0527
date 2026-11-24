@@ -19,13 +19,26 @@ import { MapCard } from '@/shared/map/card/MapCard';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
+import { ALL_REQUEST_KINDS } from '@/shared/map/request-status/request-status';
+import { RequestStatusChip } from '@/shared/map/request-status/RequestStatusChip';
+import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { RouteName } from '@/shared/router/route-names';
 import { modelKey } from '@/features/scene-models/layer-panel';
 import { CurrentMapLayerPanel } from '../../current-map/layer-panel/CurrentMapLayerPanel';
 import { useCurrentLayers } from '../../current-map/layer-panel/useCurrentLayers';
 import styles from './DevMapUiPage.module.scss';
-import { SAMPLE_CATALOG, SAMPLE_MODELS, SAMPLE_THUMBNAILS } from './samples';
+import { SAMPLE_CATALOG, SAMPLE_MODELS, SAMPLE_REQUESTS, SAMPLE_THUMBNAILS } from './samples';
+
+// 数据加载的明细用固定的几项，时钟不走：只看明细的位置和外观
+const SAMPLE_REQUEST_STATUS: RequestStatus = {
+  items: computed(() => SAMPLE_REQUESTS),
+  now: ref(10_000),
+  display: ref({ settledAt: null }),
+  loadingKeys: computed(() => new Set<string>()),
+  failedKeys: computed(() => new Set<string>()),
+  kinds: computed(() => ALL_REQUEST_KINDS)
+};
 
 // 示例只装配现有组件；不挂载地图引擎、不绑定瓦片、不传入偏好范围
 const MapUiSamples = defineComponent({
@@ -57,6 +70,13 @@ const MapUiSamples = defineComponent({
     const legendCode = ref<string | null>(null);
     const legendEditingCode = ref<string | null>(null);
     const basemapOpen = ref(false);
+    // 数据加载的明细量这里的面板（列里的第一个元素）和区域，同现状底图页
+    const requestArea = ref<HTMLElement>();
+    const requestColumn = ref<HTMLElement>();
+    const requestPanel = () => {
+      const panel = requestColumn.value?.firstElementChild;
+      return panel instanceof HTMLElement ? panel : null;
+    };
     // 切换样例只改加入当前地图的资源，年份与样式继续由真实拥有者维护
     const codes = [...SAMPLE_CATALOG.resources.keys()];
     const modelKeys = SAMPLE_MODELS.map(model => modelKey(model.id));
@@ -208,6 +228,36 @@ const MapUiSamples = defineComponent({
               </p>
             </div>
           </section>
+          <section class={[styles.sample, styles.wide]}>
+            <MxTitle level="panel">数据加载</MxTitle>
+            <p class={styles.note}>
+              点下方的状态按钮打开明细：面板下面放得下明细（最高 420）时在面板下方，否则在面板右边，宽度同面板。
+              换"勾选场景""可用高度"或收起面板后再打开比较；面板与左上的资源列表是同一套状态。
+            </p>
+            <div ref={requestArea} class={[styles.stage, styles.requestStage]}>
+              <div ref={requestColumn} class={styles.requestColumn}>
+                <CurrentMapLayerPanel
+                  resources={layers}
+                  current={layerList}
+                  symbols={symbols}
+                  layout={layout}
+                  models={models}
+                  collapsed={layout.collapsed.value}
+                  legendYield={legendEditingCode.value}
+                  onUpdate:collapsed={layout.setCollapsed}
+                  onLegendCode={(code: string | null) => (legendCode.value = code)}
+                />
+              </div>
+              <div class={styles.requestBar}>
+                <RequestStatusChip
+                  status={SAMPLE_REQUEST_STATUS}
+                  panel={requestPanel}
+                  panelCollapsed={layout.collapsed.value}
+                  area={() => requestArea.value ?? null}
+                />
+              </div>
+            </div>
+          </section>
         </div>
         <section class={styles.state}>
           <MxTitle level="panel">年份与图层状态</MxTitle>
@@ -274,7 +324,7 @@ export const DevMapUiPage = defineComponent({
             onUpdate:modelValue={value => (height.value = Number(value))}
             size="small"
           >
-            {[520, 360].map(value => (
+            {[800, 520, 360].map(value => (
               <ElRadioButton key={value} value={value}>
                 {value}px
               </ElRadioButton>
