@@ -1,4 +1,4 @@
-import { RoutePath, RouteTimeline, type SplatSource } from '@mx/map-core';
+import { type GroundPoint, RoutePath, RouteTimeline, type SplatSource } from '@mx/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import type { ManifestModel, SceneManifest } from './api';
 
@@ -78,6 +78,8 @@ export interface SceneModel {
   readonly routes: readonly ModelRoute[];
   /** 高斯泼溅（ADR 0149）的索引地址和摆放；其他模型为 null */
   readonly splat: SplatSource | null;
+  /** 贴地的参照（ADR 0170）：清单写了才有；室内、地下的模型没有 */
+  readonly ground: GroundPoint | null;
 }
 
 /** 按市分组的目录 */
@@ -126,7 +128,8 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
       cityCode: model.cityCode,
       cityName: cityNameOf(model.cityCode),
       kind: model.kind,
-      underground: model.underground
+      underground: model.underground,
+      ground: model.kind === 'indoor' ? null : (model.ground ?? null)
     };
     if (model.kind === 'splat') {
       const splat = { url: resolve(model.lcc2), placement: model.placement };

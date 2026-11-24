@@ -106,6 +106,8 @@ export interface SceneModelsOptions {
   readonly avatarUrl?: string;
   /** 偏好范围：给了就按账号记住加入的模型、显隐和白膜的效果（ADR 0167）；开发页不传 */
   readonly preferences?: PreferenceScope | null;
+  /** 贴地（ADR 0170）：清单写了地面点的模型平移到引擎表面上；现状底图按 appConfig.sceneGroundClamp 给，不给时不贴地 */
+  readonly groundClamp?: boolean;
 }
 
 export interface SceneModels {
@@ -219,7 +221,8 @@ export function useSceneModels(
     loadNavigation = defaultLoadNavigation,
     loadSplatNavigation = defaultLoadSplatNavigation,
     avatarUrl = walkAvatarUrl(),
-    preferences = null
+    preferences = null,
+    groundClamp = false
   }: SceneModelsOptions = {}
 ): SceneModels {
   const models = computed(() =>
@@ -885,6 +888,6 @@ export function useSceneModels(
     closeMap: () => setMapOpen(false),
     teleportWalk,
     exitRoam,
-    deriveContent: () => deriveSceneContent(models.value, state())
+    deriveContent: () => deriveSceneContent(models.value, state(), { groundClamp })
   };
 }

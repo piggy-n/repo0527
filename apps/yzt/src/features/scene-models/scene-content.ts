@@ -94,9 +94,15 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
  * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：加入的模型各一个瓦片集，隐藏的不显示（ADR 0157），白膜显示过的效果都留着、只显示当前的；
  * 地下、室内的用头灯光照；高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，倾斜摄影在泼溅的范围里不画。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：
  * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）；MapLibre 引擎抬高这个模型期间隐藏全部二维图层，地表的不透明度没有视图读（ADR 0153）。
- * 漫游高斯泼溅时隔离它（ADR 0156 R.5）：别的模型都不显示，视图隐藏二维、用底色清屏，这份拿全部泼溅预算
+ * 漫游高斯泼溅时隔离它（ADR 0156 R.5）：别的模型都不显示，视图隐藏二维、用底色清屏，这份拿全部泼溅预算。
+ * 贴地（ADR 0170，部署的开关）打开时，清单写了地面点的模型带上它，视图把模型平移到引擎表面上
  */
-export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
+export function deriveSceneContent(
+  models: readonly SceneModel[],
+  state: SceneModelsState,
+  { groundClamp = false }: { readonly groundClamp?: boolean } = {}
+): SceneContent {
+  const groundOf = (model: SceneModel) => (groundClamp && model.ground ? { ground: model.ground } : {});
   const byId = new Map(models.map(model => [model.id, model]));
   const roaming = state.roam && state.added.includes(state.roam.modelId) ? byId.get(state.roam.modelId) : undefined;
   // 抬高只给瓦片集；泼溅不抬高，隔离
@@ -113,7 +119,8 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
     if (model.splat) {
       const { url, placement } = model.splat;
       const hidden = (!model.underground && undergroundModel !== undefined) || (isolated !== undefined && id !== isolated.id);
-      splats.push({ id, url, placement, show: shown && !hidden, attempt: state.attempts.get(id) ?? 0 });
+      const attempt = state.attempts.get(id) ?? 0;
+      splats.push({ id, url, placement, show: shown && !hidden, attempt, ...groundOf(model) });
       continue;
     }
     const current = currentEffect(model, state.effects);
@@ -135,7 +142,8 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
         ...(model.kind === 'white' ? { group: model.id } : {}),
         ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError }),
         // 倾斜摄影和同一处的 LCC2 一起显示时，在泼溅的范围里不画（ADR 0149）
-        ...(model.kind === 'oblique' ? { clippedBySplats: true } : {})
+        ...(model.kind === 'oblique' ? { clippedBySplats: true } : {}),
+        ...groundOf(model)
       });
     }
   }

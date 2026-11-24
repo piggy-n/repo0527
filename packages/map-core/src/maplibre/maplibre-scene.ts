@@ -3,12 +3,13 @@ import type { Unsubscribe } from '../events';
 import type { LoadJson, PreparedTileset } from '../scene/prepare-tileset';
 import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import {
+  type GroundPoint,
   NO_SCENE_STATUS,
   type SceneContent,
   type SceneContentModel,
   type SceneStatus
 } from '../scene/scene-content-model';
-import { tilesetCamera } from '../scene/tileset-camera';
+import { tilesetCamera, type TilesetSphere } from '../scene/tileset-camera';
 import { mergeSceneStatus, SceneSplatSync, type SplatOptions, type SplatSource } from '../scene/splat-sync';
 import { SceneTilesetSync, type TilesetOptions } from '../scene/tileset-sync';
 import { deferred, type Deferred } from '../view/view-lifecycle';
@@ -47,7 +48,12 @@ export interface MapLibreSceneOptions {
   readonly onActivity?: () => void;
   /** 瓦片集之外的三维内容（漫游、地下）要应用：和瓦片集同时，只在显示三维、渲染器建好以后 */
   readonly onContent?: (content: SceneContent) => void;
+  /** 贴地的表面高度（ADR 0170）：有地形时是这个经纬度的地形高度（米）；不给时表面是 0 米 */
+  readonly surfaceHeight?: SurfaceHeight;
 }
+
+/** 这个经纬度上引擎表面的高度（米）；signal 中止时以它的原因结束 */
+export type SurfaceHeight = (lngLat: LngLat, signal: AbortSignal) => Promise<number>;
 
 const IDLE: SceneModuleState = Object.freeze({ kind: 'idle' });
 const LOADING: SceneModuleState = Object.freeze({ kind: 'loading' });
@@ -67,6 +73,7 @@ export class MapLibreScene implements Disposable {
   readonly #onContent: ((content: SceneContent) => void) | undefined;
   readonly #onStatus: (status: SceneStatus) => void;
   readonly #onActivity: (() => void) | undefined;
+  readonly #surfaceHeight: SurfaceHeight | undefined;
   readonly #sync: SceneTilesetSync;
   readonly #splats: SceneSplatSync;
   readonly #unsubscribeContent: Unsubscribe;
@@ -97,10 +104,12 @@ export class MapLibreScene implements Disposable {
     onStatus,
     onModuleChange,
     onContent,
-    onActivity
+    onActivity,
+    surfaceHeight
   }: MapLibreSceneOptions) {
     this.#map = map;
     this.#onActivity = onActivity;
+    this.#surfaceHeight = surfaceHeight;
     this.#content = scene;
     this.#loadRenderer = loadRenderer;
     this.#onError = onError;
@@ -109,7 +118,7 @@ export class MapLibreScene implements Disposable {
     this.#onStatus = onStatus;
     this.#sync = new SceneTilesetSync({
       host: {
-        addTileset: (id, tileset, options, signal) => this.#addTileset(id, tileset, options, signal),
+        addTileset: (id, tileset, options, signal, ground) => this.#addTileset(id, tileset, options, signal, ground),
         updateTileset: (id, options) => this.#renderer?.updateTileset(id, options),
         removeTileset: id => this.#renderer?.removeTileset(id)
       },
@@ -118,7 +127,7 @@ export class MapLibreScene implements Disposable {
     });
     this.#splats = new SceneSplatSync({
       host: {
-        addSplat: (id, source, options, signal) => this.#addSplat(id, source, options, signal),
+        addSplat: (id, source, options, signal, ground) => this.#addSplat(id, source, options, signal, ground),
         updateSplat: (id, options) => this.#renderer?.updateSplat(id, options),
         removeSplat: id => this.#renderer?.removeSplat(id)
       },
@@ -319,26 +328,62 @@ export class MapLibreScene implements Disposable {
     id: string,
     tileset: PreparedTileset,
     options: TilesetOptions,
-    signal: AbortSignal
+    signal: AbortSignal,
+    ground: GroundPoint | undefined
   ): Promise<CameraState> {
-    const renderer = this.#renderer;
     // 只在渲染器建好以后应用三维内容
-    if (!renderer) {
-      throw new Error('三维模块还没有加载');
-    }
-    const sphere = await renderer.addTileset(id, tileset, options, signal);
+    this.#requireRenderer();
+    const offset = await this.#offsetFor(ground, signal);
     signal.throwIfAborted();
-    return tilesetCamera(sphere, this.#map.getCanvas().clientHeight);
+    const sphere = await this.#requireRenderer().addTileset(id, tileset, options, signal, offset);
+    signal.throwIfAborted();
+    return this.#cameraFor(sphere, ground);
   }
 
-  async #addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<CameraState> {
-    const renderer = this.#renderer;
-    if (!renderer) {
+  async #addSplat(
+    id: string,
+    source: SplatSource,
+    options: SplatOptions,
+    signal: AbortSignal,
+    ground: GroundPoint | undefined
+  ): Promise<CameraState> {
+    this.#requireRenderer();
+    const offset = await this.#offsetFor(ground, signal);
+    signal.throwIfAborted();
+    const sphere = await this.#requireRenderer().addSplat(id, source, options, signal, offset);
+    signal.throwIfAborted();
+    return this.#cameraFor(sphere, ground);
+  }
+
+  #requireRenderer(): SceneRenderer {
+    if (!this.#renderer) {
       throw new Error('三维模块还没有加载');
     }
-    const sphere = await renderer.addSplat(id, source, options, signal);
-    signal.throwIfAborted();
-    return tilesetCamera(sphere, this.#map.getCanvas().clientHeight);
+    return this.#renderer;
+  }
+
+  // 贴地的平移（ADR 0170）：让参照点落到表面上。取不到地形高度时按 0 米的表面，报告错误、照样显示
+  async #offsetFor(ground: GroundPoint | undefined, signal: AbortSignal): Promise<number> {
+    if (!ground) {
+      return 0;
+    }
+    const surfaceHeight = this.#surfaceHeight;
+    if (!surfaceHeight) {
+      return -ground.height;
+    }
+    try {
+      return (await surfaceHeight([ground.lng, ground.lat], signal)) - ground.height;
+    } catch (error) {
+      signal.throwIfAborted();
+      this.#onError(new Error('取不到贴地处的地形高度，按 0 米摆放', { cause: error }));
+      return -ground.height;
+    }
+  }
+
+  // 建议的相机按画面上的位置：贴地时球心离表面的高度是它离参照点的高度（有地形时相机的中心也在地形上）
+  #cameraFor(sphere: TilesetSphere, ground: GroundPoint | undefined): CameraState {
+    const height = ground ? sphere.height - ground.height : sphere.height;
+    return tilesetCamera({ ...sphere, height }, this.#map.getCanvas().clientHeight);
   }
 
   #publishStatus(): void {

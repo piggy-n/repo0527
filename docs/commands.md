@@ -25,6 +25,7 @@
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
 | 三维的性能实测、高斯泼溅的预算（显卡机器上，ADR 0149 L.3） | `pnpm --filter yzt measure:3d` |
 | 算 LCC2 模型在清单里的摆放（ADR 0149） | `pnpm --filter yzt lcc2:register <索引> --datum <米>` |
+| 估计三维模型贴地的参照点（ADR 0170） | `pnpm --filter yzt 3dt:ground [模型 ID ...] --origin <服务器>` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
 | 把调好的图例样式作为默认（先用控制台片段导出，ADR 0154） | `pnpm --filter yzt symbols:import <导出文件>`，确认后加 `--write` |
@@ -256,6 +257,20 @@ pnpm --filter yzt measure:3d --only jkq-z16-tilt --repeat 1 --upload-mb none --c
 - 站点名见 `tools/site/sites.json`（现在是 `15-111`、`153-194`、`1-180`）；地址默认用站点的 `origin`，`--origin <地址>` 指定别的（前端部署在子路径下时连路径一起写）；`--timeout <秒>` 是每个请求的超时，默认 15
 - 本机连不到 `192.168.153.194`，要在能访问它的机器上运行
 - 站点名写错、连不上服务器时只打印一行原因
+
+### `pnpm --filter yzt 3dt:ground [模型 ID ...] --origin <服务器>`
+
+**作用**：给清单里的模型估计贴地的参照点 `ground`（ADR 0170，[config/3dt-manifest.md](config/3dt-manifest.md)"贴地的参照"），只读、不写文件。瓦片集从根往下按层找第一层有模型内容的瓦片（外部索引照着走进去），均匀挑最多 `--limit` 块（默认 16）读顶点，取低的一半里按 1 米分档最多的那一档当地面；打印高度的分布和建议的 `ground`。高斯泼溅不自己估：在某个读到的倾斜摄影的范围里时建议用它的点。室内、地下的模型跳过。最后打印一段 JSON（模型 ID → `ground`），人核对过再抄进清单。
+
+**什么时候用**：新加倾斜摄影、白膜，或者清单里的模型还没有 `ground` 时。同一处的泼溅要和倾斜摄影一起列在参数里，才知道它在谁的范围里。
+
+**执行了什么**：Node 运行 `tools/3dt-ground/cli.ts`（层的遍历在 `coarse.ts`，读 b3dm、glb 的顶点和估计在 `ground.ts`）。模型的列表来自入库的清单，数据从 `<服务器>/3dt/` 取，一块一块地读。
+
+**注意事项**：
+- `--origin` 是模型所在服务器的前端地址（如 `http://192.168.15.111:5173`），不写时用环境变量 `YZT_3DT_PROXY`；本机开发服务器映射了 `local/3dt` 时也可以写 `http://localhost:5173`
+- 读不了 Draco、meshopt 压缩和量化过的网格（会说出来），glTF 1.0 的 b3dm 也不读
+- 本机连不到 `192.168.15.111`、`192.168.153.194` 时，要在能访问的机器上运行，把输出带回来
+- 有模型读失败时退出码 1，其余照常打印
 
 ### `pnpm --filter yzt probe:resource-classes`
 

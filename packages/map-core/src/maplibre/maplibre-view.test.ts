@@ -1,4 +1,8 @@
-import type { LayerSpecification, ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type {
+  LayerSpecification,
+  ProjectionSpecification,
+  TerrainSpecification
+} from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { createNanoEvents } from 'nanoevents';
@@ -28,6 +32,7 @@ import type {
 } from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
 import type { SceneRenderer, SceneRendererEvents } from './scene-renderer';
+import { type MapTerrain, TERRAIN_SOURCE_ID } from './terrain';
 
 const NANJING: CameraState = { center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0 };
 
@@ -122,6 +127,7 @@ class FakeMap implements MapLike {
   readonly calls: unknown[][] = [];
   maxPitch = 60;
   projection: ProjectionSpecification | undefined;
+  terrain: TerrainSpecification | null = null;
   // MapLibre 相机的变换：天空、地球背面由用例设置
   readonly transform = {
     altitude: 1234,
@@ -187,8 +193,12 @@ class FakeMap implements MapLike {
   removeImage = this.#record('removeImage');
   setStyle = this.#record('setStyle');
 
-  getSource(): unknown {
-    return undefined;
+  // 只认最近一次整体加载样式以后加的数据源（视图自己加的地形）；样式里的数据源这里不记
+  getSource(id: string): unknown {
+    const last = this.calls.findLastIndex(
+      ([name, sourceId]) => name === 'setStyle' || (name === 'addSource' && sourceId === id)
+    );
+    return last >= 0 && this.calls[last][0] === 'addSource' ? {} : undefined;
   }
 
   on(type: 'style.load', listener: () => void): MapSubscription;
@@ -408,6 +418,19 @@ class FakeMap implements MapLike {
     this.clamped = clamped;
   }
 
+  getCenterElevation(): number {
+    return 0;
+  }
+
+  getTerrain(): TerrainSpecification | null {
+    return this.terrain;
+  }
+
+  setTerrain(terrain: TerrainSpecification | null): void {
+    this.calls.push(['setTerrain', terrain]);
+    this.terrain = terrain;
+  }
+
   // 像 MapLibre 一样：俯角超过新的上限时收回，发出不带 eventData 的移动
   setMaxPitch(maxPitch: number): void {
     this.calls.push(['setMaxPitch', maxPitch]);
@@ -524,6 +547,7 @@ function setup(
       | 'loadSceneRenderer'
       | 'loadJson'
       | 'mouseSchemes'
+      | 'terrain'
     >
   > = {},
   camera = NANJING
@@ -2642,6 +2666,7 @@ function fakeRenderer(): SceneRenderer {
     project: () => ({ x: 7, y: 9 }),
     setLift: () => undefined,
     lowestHeight: () => null,
+    offsetOf: () => 0,
     setInteriorFog: () => undefined,
     setMarker: () => undefined,
     on: (event, callback) => emitter.on(event, callback),
@@ -3492,5 +3517,115 @@ describe('MapLibreView 地球投影下中心不变的定位', () => {
     ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
     ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 7 });
     expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 7 });
+  });
+});
+
+// 地形相关的调用：加数据源、开关地形
+const terrainCalls = (calls: readonly unknown[][]) =>
+  calls.flatMap(([name, value]) => {
+    if (name === 'addSource' && value === TERRAIN_SOURCE_ID) {
+      return ['addSource'];
+    }
+    return name === 'setTerrain' ? [value === null ? 'off' : 'on'] : [];
+  });
+
+describe('MapLibreView 的地形（ADR 0170）', () => {
+  const TERRAIN: MapTerrain = {
+    source: { type: 'raster-dem', tiles: ['test-terrain://{z}/{x}/{y}'], tileSize: 256, encoding: 'terrarium' },
+    heightAt: async () => 28
+  };
+  const STATION = {
+    id: 'station',
+    url: 'https://models.test/station/tileset.json',
+    show: true,
+    lighting: 'sun'
+  } as const;
+
+  const terrainSetup = (renderer: () => SceneRenderer = fakeRenderer) =>
+    setup({ loadSceneRenderer: async () => renderer, loadJson: async () => STATION_JSON, terrain: TERRAIN });
+
+  it('只在三维打开地形；切回二维关掉，数据源留着，再切回三维不重新加', () => {
+    using ctx = terrainSetup();
+    ctx.map.fire('style.load');
+    expect(terrainCalls(ctx.map.calls)).toStrictEqual([]);
+
+    ctx.view.setKind('3d');
+    expect(terrainCalls(ctx.map.calls)).toStrictEqual(['addSource', 'on']);
+    expect(ctx.map.terrain).toStrictEqual({ source: TERRAIN_SOURCE_ID, exaggeration: 1 });
+
+    ctx.view.setKind('2d');
+    ctx.view.setKind('3d');
+    expect(terrainCalls(ctx.map.calls)).toStrictEqual(['addSource', 'on', 'off', 'on']);
+  });
+
+  it('三维里样式整体重建以后重新加数据源、打开地形', async () => {
+    using ctx = terrainSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.map.failOn = 'addSource';
+    ctx.session.style.setGroup('business', lineGroup('roads'));
+    await nextMicrotask();
+    ctx.map.failOn = undefined;
+    expect(callNames(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+    // MapLibre 整体加载新样式时地形回到样式里写的（这里没有）
+    ctx.map.terrain = null;
+    ctx.map.calls.length = 0;
+
+    ctx.map.fire('style.load');
+
+    expect(terrainCalls(ctx.map.calls)).toStrictEqual(['addSource', 'on']);
+  });
+
+  it('漫游接管地图期间关掉地形，结束后打开', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = terrainSetup(() => ({ ...fakeRenderer(), lowestHeight: () => -6 }));
+      ctx.map.fire('style.load');
+      ctx.view.setKind('3d');
+      await vi.advanceTimersByTimeAsync(0);
+      const route = {
+        kind: 'route',
+        id: 'route-1',
+        path: [
+          [118.8, 32.05, -5],
+          [118.8001, 32.05, -5]
+        ],
+        playing: false,
+        speed: 1,
+        run: 0
+      } as const;
+      const underground = { tilesetId: 'station', surfaceOpacity: 0.25 };
+      ctx.session.scene.set({ tilesets: [{ ...STATION, attempt: 0 }], underground, roam: route });
+      await vi.advanceTimersByTimeAsync(200);
+      expect(ctx.map.terrain).toBeNull();
+
+      ctx.session.scene.set({ tilesets: [{ ...STATION, attempt: 0 }], underground: null });
+      await vi.advanceTimersByTimeAsync(200);
+      expect(ctx.map.terrain).toStrictEqual({ source: TERRAIN_SOURCE_ID, exaggeration: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('贴地按地形的高度：交给渲染器的平移是地面点处的地形高减去地面高', async () => {
+    const offsets: (number | undefined)[] = [];
+    using ctx = terrainSetup(() => ({
+      ...fakeRenderer(),
+      addTileset: async (_id, _tileset, _options, _signal, offset) => {
+        offsets.push(offset);
+        return { center: [118.8, 32.05], height: 0, radius: 50 };
+      }
+    }));
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    await nextTask();
+    ctx.session.scene.set({
+      tilesets: [{ ...STATION, attempt: 0, ground: { lng: 118.8, lat: 32.05, height: 30 } }],
+      underground: null
+    });
+    await nextTask();
+    await nextTask();
+
+    expect(offsets).toStrictEqual([-2]);
   });
 });

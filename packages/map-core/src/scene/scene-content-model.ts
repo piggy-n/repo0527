@@ -9,6 +9,20 @@ import { EYE_HEIGHT } from './route-path';
 /** 瓦片集的光照：地面上的按太阳，地下、室内用以相机为光源的头灯（ADR 0081 第 3 节） */
 export type TilesetLighting = 'sun' | 'headlight';
 
+/**
+ * 贴地的参照（ADR 0170）：模型里一处地面的经纬度和真实椭球高，口径和摆放、路线相同。视图把整个模型竖直平移，
+ * 让这一处落到引擎的表面上：没有地形时是 0 米，有地形时是这个经纬度的地形高度。平移只在渲染里，拾取、漫游对外仍是真实高度
+ */
+export interface GroundPoint {
+  readonly lng: number;
+  readonly lat: number;
+  readonly height: number;
+}
+
+/** 两个贴地参照是否相同（都没有也算相同） */
+export const sameGround = (a: GroundPoint | undefined, b: GroundPoint | undefined): boolean =>
+  a === b || (a !== undefined && b !== undefined && a.lng === b.lng && a.lat === b.lat && a.height === b.height);
+
 /** 一个 3D Tiles 瓦片集（ADR 0081 第 2 节） */
 export interface TilesetLayer {
   readonly id: string;
@@ -25,6 +39,8 @@ export interface TilesetLayer {
    * 进到 LCC2 里面时倾斜模型的表面像盖子一样挡住。只在范围重叠时生效，泼溅卸载、隐藏后恢复；不能画泼溅的引擎忽略
    */
   readonly clippedBySplats?: boolean;
+  /** 贴地（ADR 0170）：不写时按真实高度摆；变了重新加载 */
+  readonly ground?: GroundPoint;
   /** 失败后重试时加 1，视图看到新的值就重新加载 */
   readonly attempt: number;
 }
@@ -49,6 +65,8 @@ export interface SplatLayer {
   readonly url: string;
   readonly show: boolean;
   readonly placement: SplatPlacement;
+  /** 贴地（ADR 0170）：不写时按真实高度摆；变了重新加载。同一处配准过的模型要用同一个点 */
+  readonly ground?: GroundPoint;
   /** 失败后重试时加 1，视图看到新的值就重新加载 */
   readonly attempt: number;
 }
@@ -242,7 +260,13 @@ function validateRoam(roam: SceneRoam): void {
   }
 }
 
-function validateSplat({ id, url, attempt, placement }: SplatLayer): void {
+function validateGround(what: string, ground: GroundPoint | undefined): void {
+  if (ground && (![ground.lng, ground.lat, ground.height].every(Number.isFinite) || Math.abs(ground.lat) > 90)) {
+    throw new Error(`${what} 的贴地参照有不是数的值，或者纬度超出范围`);
+  }
+}
+
+function validateSplat({ id, url, attempt, placement, ground }: SplatLayer): void {
   if (!URL.canParse(url)) {
     throw new Error(`高斯泼溅 ${id} 的地址不是绝对地址：${url}`);
   }
@@ -253,11 +277,12 @@ function validateSplat({ id, url, attempt, placement }: SplatLayer): void {
   if (![lng, lat, height, heading].every(Number.isFinite) || Math.abs(lat) > 90) {
     throw new Error(`高斯泼溅 ${id} 的摆放有不是数的值，或者纬度超出范围`);
   }
+  validateGround(`高斯泼溅 ${id}`, ground);
 }
 
 function validate({ tilesets, splats = [], underground, isolatedSplat, roam }: SceneContent): void {
   const ids = new Set<string>();
-  for (const { id, url, attempt, maximumScreenSpaceError: screenError } of tilesets) {
+  for (const { id, url, attempt, maximumScreenSpaceError: screenError, ground } of tilesets) {
     if (ids.has(id)) {
       throw new Error(`瓦片集 ID 重复：${id}`);
     }
@@ -271,6 +296,7 @@ function validate({ tilesets, splats = [], underground, isolatedSplat, roam }: S
     if (screenError !== undefined && !(Number.isFinite(screenError) && screenError > 0)) {
       throw new Error(`瓦片集 ${id} 的屏幕误差不是正数：${screenError}`);
     }
+    validateGround(`瓦片集 ${id}`, ground);
   }
   // 地下空间只能是瓦片集：先查它，再把泼溅的 ID 加进来查重复
   if (underground && !ids.has(underground.tilesetId)) {

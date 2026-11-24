@@ -131,7 +131,10 @@ export default defineConfig(({ mode }) => {
         VITE_LAYER_HINT_COVERING: 'true',
         VITE_MAP_MOUSE_2D: 'maplibre',
         VITE_MAP_MOUSE_3D: 'cesium',
-        VITE_LAYERS_PER_DIMENSION: 'false'
+        VITE_LAYERS_PER_DIMENSION: 'false',
+        // 地形会请求天地图：测试里一律没有（ADR 0170）
+        VITE_SCENE_GROUND_CLAMP: 'true',
+        VITE_SCENE_TERRAIN: 'none'
       },
       // 两个项目继承上面的插件、别名和 Sass 配置（ADR 0040）
       projects: [

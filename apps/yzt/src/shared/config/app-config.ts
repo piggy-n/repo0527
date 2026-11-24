@@ -55,6 +55,25 @@ function tianditu(enabled: string | undefined, key: string | undefined): Tiandit
   return { key: matching('VITE_TIANDITU_KEY', key, TIANDITU_KEY_PATTERN, '不是有效的天地图 key（应为 32 位十六进制）') };
 }
 
+/** 三维的地形（ADR 0170）：none 是没有地形，tianditu 是天地图的三维地形服务 */
+export type SceneTerrain = 'none' | 'tianditu';
+
+// 天地图的地形要开着天地图：内网没有天地图，写成 tianditu 时启动就报错，不悄悄当成没有地形（ADR 0031）
+function sceneTerrain(value: string | undefined, tiandituConfig: TiandituConfig | null): SceneTerrain {
+  const name = 'VITE_SCENE_TERRAIN';
+  const text = required(name, value);
+  if (text === 'none') {
+    return text;
+  }
+  if (text !== 'tianditu') {
+    throw new Error(`环境变量 ${name} 只能是 none 或 tianditu，当前是 "${text}"`);
+  }
+  if (!tiandituConfig) {
+    throw new Error(`环境变量 ${name} 是 tianditu，但 VITE_TIANDITU_ENABLED 关着天地图`);
+  }
+  return text;
+}
+
 // 总开关和分项开关都为 true 才生效；总开关关闭时分项开关照样校验，拼错了不等到打开时才发现（ADR 0140）
 function preferenceSwitches() {
   const enabled = flag('VITE_PREFERENCES_ENABLED', import.meta.env.VITE_PREFERENCES_ENABLED);
@@ -88,6 +107,8 @@ function layerHintSwitches(): ReadonlySet<LayerHint> {
   return new Set(LAYER_HINTS.filter(hint => enabled && items[hint]));
 }
 
+const tiandituConfig = tianditu(import.meta.env.VITE_TIANDITU_ENABLED, import.meta.env.VITE_TIANDITU_KEY);
+
 /** 校验过的应用配置；自定义环境变量只在这里读取 */
 export const appConfig = {
   /** 系统名称 */
@@ -102,7 +123,7 @@ export const appConfig = {
     '不是有效的 SM2 公钥（应为 04 开头的 130 位十六进制）'
   ),
   /** 天地图；为 null 时不能向天地图发任何请求 */
-  tianditu: tianditu(import.meta.env.VITE_TIANDITU_ENABLED, import.meta.env.VITE_TIANDITU_KEY),
+  tianditu: tiandituConfig,
   /** AI 对话后端的基础地址，与 apiBaseUrl 是两个服务 */
   aiApiBaseUrl: required('VITE_AI_API_BASE_URL', import.meta.env.VITE_AI_API_BASE_URL),
   /** 离开页面后重置：为 true 时不缓存页面，每次进入都是初始状态（ADR 0114）；不影响偏好（ADR 0140） */
@@ -122,7 +143,14 @@ export const appConfig = {
    */
   layersPerDimension: flag('VITE_LAYERS_PER_DIMENSION', import.meta.env.VITE_LAYERS_PER_DIMENSION),
   /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
-  resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
+  resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED),
+  /**
+   * 三维模型贴地（ADR 0170）：为 true 时清单写了地面点的模型整体竖直平移，地面落到引擎的表面上（没有地形时是 0 米，
+   * 有地形时是那里的地形高度）；为 false 时按真实高度摆
+   */
+  sceneGroundClamp: flag('VITE_SCENE_GROUND_CLAMP', import.meta.env.VITE_SCENE_GROUND_CLAMP),
+  /** 三维的地形（ADR 0170）：tianditu 要开着天地图；只在三维、不在漫游时显示 */
+  sceneTerrain: sceneTerrain(import.meta.env.VITE_SCENE_TERRAIN, tiandituConfig)
 } as const;
 
 /** 偏好的名称：新增偏好先在 preferenceSwitches 登记开关，否则 usePreference 的 name 通不过类型检查 */

@@ -1,7 +1,8 @@
 import type {
   LayerSpecification,
   ProjectionSpecification,
-  StyleSpecification
+  StyleSpecification,
+  TerrainSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import type { CustomLayerInterface, LngLatLike, MapOptions } from 'maplibre-gl';
@@ -220,6 +221,11 @@ export interface MapLike extends StyleTarget {
   /** 中心点的高度夹到地面：漫游时关掉，第一人称的目标点不在地面上（PoC 的坑 3） */
   getCenterClampedToGround(): boolean;
   setCenterClampedToGround(clamped: boolean): void;
+  /** 中心点的高度（米）：有地形、中心夹到地面时是地形高度，没有地形时是最近一次设的（漫游结束时设回 0） */
+  getCenterElevation(): number;
+  /** 地形（ADR 0170）：三维、不在漫游时由视图打开，数据源是视图自己加的 raster-dem；样式加载完成之前调用会抛错 */
+  getTerrain(): TerrainSpecification | null;
+  setTerrain(terrain: TerrainSpecification | null): void;
   readonly _camera: { readonly transform: CameraTransformLike };
   remove(): void;
 }

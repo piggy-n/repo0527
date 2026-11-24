@@ -44,6 +44,7 @@ import type {
 import { MapLibreScene, type SceneModuleState } from './maplibre-scene';
 import { MapLibreRoam } from './roam/maplibre-roam';
 import type { SceneRendererLoader } from './scene-renderer';
+import { type MapTerrain, TERRAIN_SOURCE_ID } from './terrain';
 import { CesiumDrag, MAPLIBRE_MOUSE, type MouseSchemes } from '../view/cesium-drag';
 import { type ClientPoint, ModifierPan } from '../view/modifier-pan';
 
@@ -71,6 +72,8 @@ export interface MapLibreViewOptions<G extends string> {
   readonly loadJson?: LoadJson;
   /** 二维、三维各用哪种鼠标操作（ADR 0168）；不给时都用 MapLibre 自带的 */
   readonly mouseSchemes?: MouseSchemes;
+  /** 三维的地形（ADR 0170）：只在显示三维、不在漫游时打开，贴地按它的高度；不给时没有地形，表面是 0 米 */
+  readonly terrain?: MapTerrain;
 }
 
 /** 滚轮缩放的速率（ADR 0053 第 3 节）：wheel 是普通鼠标的滚轮，trackpad 是触控板，数值越小越慢 */
@@ -192,6 +195,7 @@ export class MapLibreView<const G extends string> implements MapView {
   // 二维、三维各用哪种鼠标操作；Cesium 式的拖动和地图一起创建，按 MapLibre 自带的时它不接手（ADR 0168）
   readonly #mouse: MouseSchemes;
   readonly #cesiumDrag: CesiumDrag | undefined;
+  readonly #terrain: MapTerrain | undefined;
   // 用 Cesium 式时关掉了 MapLibre 的旋转手势：换回 MapLibre 自带的时只打开自己关掉的
   #rotateOff = false;
   readonly #onError: (error: unknown) => void;
@@ -254,11 +258,13 @@ export class MapLibreView<const G extends string> implements MapView {
     sceneMaxZoom,
     loadSceneRenderer,
     loadJson = fetchJson,
-    mouseSchemes = MAPLIBRE_MOUSE
+    mouseSchemes = MAPLIBRE_MOUSE,
+    terrain
   }: MapLibreViewOptions<G>) {
     this.#session = session;
     this.#active = active;
     this.#mouse = mouseSchemes;
+    this.#terrain = loadSceneRenderer ? terrain : undefined;
     this.kinds = loadSceneRenderer ? ['2d', '3d'] : ['2d'];
     this.#maxPitch2d = mapOptions?.maxPitch ?? DEFAULT_MAX_PITCH;
     this.#maxZoom2d = mapOptions?.maxZoom ?? DEFAULT_MAX_ZOOM;
@@ -368,6 +374,7 @@ export class MapLibreView<const G extends string> implements MapView {
             scene: session.scene,
             loadRenderer: loadSceneRenderer,
             loadJson,
+            ...(terrain ? { surfaceHeight: (lngLat, signal) => terrain.heightAt(lngLat, signal) } : {}),
             onError: this.#onError,
             onStatus: status => this.#onSceneStatus(status),
             onModuleChange: state => this.#onModuleChange(state),
@@ -681,10 +688,13 @@ export class MapLibreView<const G extends string> implements MapView {
     return { x, y };
   }
 
-  /** 三维时视点在海平面以上的高度（米），来自 MapLibre 自己的相机，漫游抬高期间减掉抬高量；二维时为 null */
+  /**
+   * 三维时视点在海平面以上的高度（米），来自 MapLibre 自己的相机，漫游抬高（含隔离）期间减掉那个模型的抬高量和贴地平移，
+   * 是真实的高度；二维时为 null
+   */
   eyeHeight(): number | null {
     const map = this.#readyMap();
-    return this.#kind === '3d' ? cameraTransform(map).getCameraAltitude() - (this.#roam?.lift ?? 0) : null;
+    return this.#kind === '3d' ? cameraTransform(map).getCameraAltitude() - (this.#roam?.shift ?? 0) : null;
   }
 
   /** 三维时视点的朝向（度，正北为 0、顺时针，0～360）；二维时为 null */
@@ -757,9 +767,10 @@ export class MapLibreView<const G extends string> implements MapView {
       if (this.#mapStyle.status === 'loaded') {
         this.#ready.resolve();
       }
-      // 整体加载的新样式带着自己的投影：按当前种类再设一次；地图上的全部图层也换了，三维模型层要重新加上，
-      // 漫游抬高期间新的图层也要隐藏
+      // 整体加载的新样式带着自己的投影：按当前种类再设一次，地形的数据源也没了；地图上的全部图层也换了，
+      // 三维模型层要重新加上，漫游抬高期间新的图层也要隐藏
       this.#applyProjection(map);
+      this.#applyTerrain(map);
       this.#syncScene();
       if (this.#layersHidden) {
         this.#setLayersVisible(map, false);
@@ -824,6 +835,7 @@ export class MapLibreView<const G extends string> implements MapView {
     if (this.kinds.length > 1) {
       this.#setLimits(map);
       this.#applyProjection(map);
+      this.#applyTerrain(map);
     }
     // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图。
     // 漫游接管着地图时相机归漫游，恢复时由它放回第一人称的位置
@@ -992,6 +1004,7 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#layersHidden = lifted;
       this.#setLayersVisible(map, !lifted);
     }
+    this.#applyTerrain(map);
     if (!engaged && this.#state === 'ready') {
       this.#applyTool(map);
     }
@@ -1032,6 +1045,7 @@ export class MapLibreView<const G extends string> implements MapView {
     );
     this.#setLimits(map);
     this.#applyProjection(map);
+    this.#applyTerrain(map);
     this.#writeCamera(map, 'sync');
     this.#applyMouse(map);
   }
@@ -1091,6 +1105,25 @@ export class MapLibreView<const G extends string> implements MapView {
     const current = map.getProjection() ?? MERCATOR;
     if (JSON.stringify(current.type) !== JSON.stringify(wanted.type)) {
       map.setProjection(wanted);
+    }
+  }
+
+  // 地形（ADR 0170）只在显示三维、样式已加载、不在漫游时打开：漫游的视点在墓里、站里，MapLibre 会把相机推到地形上面，
+  // 抬高、隔离期间二维本来就隐藏着。数据源留在地图上，切回三维不用重新请求；整体重建的样式没有它，加载完成时再加
+  #applyTerrain(map: MapLike): void {
+    const terrain = this.#terrain;
+    if (!terrain || this.#mapStyle.status !== 'loaded') {
+      return;
+    }
+    const wanted = this.#kind === '3d' && !this.#roam?.engaged;
+    if (wanted && map.getSource(TERRAIN_SOURCE_ID) === undefined) {
+      map.addSource(TERRAIN_SOURCE_ID, terrain.source);
+    }
+    const on = map.getTerrain() !== null;
+    if (wanted && !on) {
+      map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1 });
+    } else if (!wanted && on) {
+      map.setTerrain(null);
     }
   }
 

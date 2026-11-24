@@ -47,6 +47,7 @@ export type RoamMap = Pick<
   | 'setVerticalFieldOfView'
   | 'getCenterClampedToGround'
   | 'setCenterClampedToGround'
+  | 'getCenterElevation'
 > &
   Readonly<Record<RoamGesture, GestureHandlerLike>>;
 
@@ -178,6 +179,12 @@ export class MapLibreRoam implements RoamHost, Disposable {
     return this.#takeover?.lift?.meters ?? 0;
   }
 
+  /** 抬高（含隔离）的模型画在真实高度以上多少米：抬高量加上它贴地的平移（ADR 0170）；没有抬高时为 0 */
+  get shift(): number {
+    const lift = this.#takeover?.lift;
+    return lift ? lift.meters + this.#offsetOf(lift.modelId) : 0;
+  }
+
   /** 写回会话的相机（真实的高度）；还没设过第一人称的相机时为 null，按地图的读 */
   sessionCamera(viewportHeight: number): CameraState | null {
     return this.#takeover && this.#eye ? groundCamera(this.#eye, Math.max(1, viewportHeight)) : null;
@@ -297,7 +304,7 @@ export class MapLibreRoam implements RoamHost, Disposable {
       map.setVerticalFieldOfView(degrees, PROGRAM);
     }
     const { center, elevation, zoom, bearing, pitch } = firstPersonCamera(eye, {
-      lift: takeover.lift?.meters ?? 0,
+      shift: this.shift,
       viewportHeight: Math.max(1, this.canvas.clientHeight),
       fovy
     });
@@ -394,10 +401,12 @@ export class MapLibreRoam implements RoamHost, Disposable {
     const map = this.#map;
     const transform = this.#options.cameraTransform();
     const { lng, lat } = transform.getCameraLngLat();
+    // 要漫游的模型贴地平移过（ADR 0170）：地图上的高度减去平移量才是真实高度；画面中心的地面有地形时在地形上
+    const offset = this.#offsetOf(this.#liftTarget());
     const eye = eyeOf({
       lng,
       lat,
-      height: transform.getCameraAltitude(),
+      height: transform.getCameraAltitude() - offset,
       heading: map.getBearing(),
       pitch: map.getPitch() - 90
     });
@@ -406,7 +415,12 @@ export class MapLibreRoam implements RoamHost, Disposable {
       return { eye, ground: null };
     }
     const ground = map.unproject([center.x, center.y]);
-    return { eye, ground: toEcef(ground.lng, ground.lat, 0) };
+    return { eye, ground: toEcef(ground.lng, ground.lat, map.getCenterElevation() - offset) };
+  }
+
+  // 模型贴地的平移：渲染器还没加载、没有这个模型时为 0
+  #offsetOf(modelId: string | null): number {
+    return modelId === null ? 0 : (this.#options.renderer()?.offsetOf(modelId) ?? 0);
   }
 
   /**
@@ -499,7 +513,8 @@ export class MapLibreRoam implements RoamHost, Disposable {
     if (lowest === null) {
       return this.#options.tilesetState(tilesetId) === 'loading' ? 'wait' : null;
     }
-    const meters = liftFor(lowest);
+    // 贴地平移过的模型按画面上的最低处算（ADR 0170）
+    const meters = liftFor(lowest + this.#offsetOf(tilesetId));
     return meters > 0 ? { modelId: tilesetId, meters } : null;
   }
 

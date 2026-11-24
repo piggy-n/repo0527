@@ -267,6 +267,37 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
     expect(ctx.errors).toStrictEqual([]);
   });
 
+  // 底面在 50 米、边长 10 米的立方体：斜着看画布中心的视线在 50 米高处离中心还有约 60 米，打不到悬着的立方体
+  it('贴地（ADR 0170）：按地面点整体下沉，画在地图的 0 米上；拾取到的仍是真实高度', async () => {
+    const ctx = await setup({ center: MODEL_AT, zoom: 18, bearing: 0, pitch: 50 });
+    const glb = await boxGlb(5);
+    onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, 5, 'box.glb', 50), '/box/box.glb': glb }));
+    const ground = { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 50 };
+    const url = `${FIXTURE_ORIGIN}/box/tileset.json`;
+    const box = { id: 'box', url, show: true, lighting: 'sun', attempt: 0 } as const;
+    ctx.session.scene.set({
+      tilesets: [{ ...box, ground }],
+      underground: null
+    });
+
+    await until(() => pickedModel(ctx), '画出下沉的立方体');
+
+    const hit = ctx.view.pick({ x: WIDTH / 2, y: HEIGHT / 2 });
+    if (hit.kind !== 'hit') {
+      throw new Error('画布中心没有拾取到东西');
+    }
+    expect(hit.height).toBeGreaterThan(49.5);
+    expect(hit.height).toBeLessThan(60.5);
+    expect(ctx.renderer.offsetOf('box')).toBe(-50);
+
+    // 不贴地时悬在 50 米上：画布中心打不到它
+    ctx.session.scene.set({ tilesets: [box], underground: null });
+    await until(() => ctx.view.sceneStatus.get('box')?.state === 'ready' && ctx.renderer.offsetOf('box') === 0, '重新加载');
+    await nextFrames(10);
+    expect(pickedModel(ctx)).toBe(false);
+    expect(ctx.errors).toStrictEqual([]);
+  });
+
   it.each([
     ['地球（z10.5）', 10.5, 3000],
     ['地球投影的过渡段（z11.6）', 11.6, 1200]

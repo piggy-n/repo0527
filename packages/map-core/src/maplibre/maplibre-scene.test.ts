@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NO_SCENE_ACTIVITY, type SceneActivities } from '../scene/scene-activity';
 import { SceneContentModel, type SceneStatus, type SplatLayer, type TilesetLayer } from '../scene/scene-content-model';
 import type { SplatOptions, SplatSource } from '../scene/splat-sync';
-import type { TilesetSphere } from '../scene/tileset-camera';
+import { tilesetCamera, type TilesetSphere } from '../scene/tileset-camera';
 import type { TilesetOptions } from '../scene/tileset-sync';
-import { MapLibreScene, type SceneMap, type SceneModuleState } from './maplibre-scene';
+import { MapLibreScene, type SceneMap, type SceneModuleState, type SurfaceHeight } from './maplibre-scene';
 import { SCENE_LAYER_ID, type SceneLayer } from './scene-layer';
 import type { CreateSceneRenderer, SceneRenderer, SceneRendererEvents, SceneSurface } from './scene-renderer';
 
@@ -82,8 +82,18 @@ class FakeRenderer implements SceneRenderer {
   endFrame(): void {
     this.calls.push('endFrame');
   }
-  async addTileset(id: string, _tileset: unknown, options: TilesetOptions): Promise<TilesetSphere> {
+  // 加进来时给的贴地平移
+  readonly offsets = new Map<string, number>();
+
+  async addTileset(
+    id: string,
+    _tileset: unknown,
+    options: TilesetOptions,
+    _signal: AbortSignal,
+    offset = 0
+  ): Promise<TilesetSphere> {
     this.calls.push(`add ${id} ${options.lighting}`);
+    this.offsets.set(id, offset);
     return SPHERE;
   }
   updateTileset(id: string, options: TilesetOptions): void {
@@ -92,8 +102,15 @@ class FakeRenderer implements SceneRenderer {
   removeTileset(id: string): void {
     this.calls.push(`remove ${id}`);
   }
-  async addSplat(id: string, source: SplatSource, options: SplatOptions): Promise<TilesetSphere> {
+  async addSplat(
+    id: string,
+    source: SplatSource,
+    options: SplatOptions,
+    _signal: AbortSignal,
+    offset = 0
+  ): Promise<TilesetSphere> {
     this.calls.push(`add splat ${id} ${source.placement.height} ${options.show ? 'show' : 'hide'}`);
+    this.offsets.set(id, offset);
     return SPLAT_SPHERE;
   }
   updateSplat(id: string, options: SplatOptions): void {
@@ -111,6 +128,9 @@ class FakeRenderer implements SceneRenderer {
   setLift(): void {}
   lowestHeight(): number | null {
     return null;
+  }
+  offsetOf(id: string): number {
+    return this.offsets.get(id) ?? 0;
   }
   setInteriorFog(): void {}
   setMarker(): void {}
@@ -155,7 +175,7 @@ function settled<T>(promise: Promise<T>): Promise<T | 'pending'> {
 const disposables: Disposable[] = [];
 afterEach(() => disposables.splice(0).forEach(item => item[Symbol.dispose]()));
 
-function setup(load?: () => Promise<CreateSceneRenderer>) {
+function setup(load?: () => Promise<CreateSceneRenderer>, { surfaceHeight }: { surfaceHeight?: SurfaceHeight } = {}) {
   const map = new FakeSceneMap();
   const content = new SceneContentModel();
   const renderer = new FakeRenderer();
@@ -176,7 +196,8 @@ function setup(load?: () => Promise<CreateSceneRenderer>) {
     onError: error => errors.push(error),
     onStatus: status => statuses.push(status),
     onModuleChange: state => modules.push(state.kind),
-    onActivity: () => activityChanges++
+    onActivity: () => activityChanges++,
+    ...(surfaceHeight ? { surfaceHeight } : {})
   });
   disposables.push(scene, content);
   const state = () => scene.status.get('station')?.state;
@@ -464,5 +485,82 @@ describe('MapLibreScene', () => {
 
     scene[Symbol.dispose]();
     expect(renderer.disposed).toBe(true);
+  });
+});
+
+// 就绪时建议的相机；还没就绪时为 null
+function cameraOf(ctx: ReturnType<typeof setup>, id: string) {
+  const status = ctx.scene.status.get(id);
+  return status?.state === 'ready' ? status.camera : null;
+}
+
+describe('MapLibreScene 的贴地（ADR 0170）', () => {
+  const STATION_GROUND = { lng: 120.66, lat: 31.31, height: 30 };
+  const CWS_GROUND = { lng: 117.06, lat: 34.27, height: 33.5 };
+
+  it('没有地形时把地面点放到 0 米：交给渲染器的平移是负的地面高，建议的相机按球心离地面点的高度', async () => {
+    const ctx = setup();
+    ctx.content.set({
+      tilesets: [{ ...tileset(), ground: STATION_GROUND }, { ...tileset(), id: 'plain' }],
+      splats: [splat({ ground: CWS_GROUND })],
+      underground: null
+    });
+    await shown(ctx);
+    await flush();
+
+    expect(ctx.renderer.offsets).toStrictEqual(
+      new Map([
+        ['station', -30],
+        ['plain', 0],
+        ['cws', -33.5]
+      ])
+    );
+    const height = ctx.map.getCanvas().clientHeight;
+    expect(cameraOf(ctx, 'station')).toStrictEqual(tilesetCamera({ ...SPHERE, height: SPHERE.height - 30 }, height));
+    expect(cameraOf(ctx, 'plain')).toStrictEqual(tilesetCamera(SPHERE, height));
+    expect(cameraOf(ctx, 'cws')).toStrictEqual(
+      tilesetCamera({ ...SPLAT_SPHERE, height: SPLAT_SPHERE.height - 33.5 }, height)
+    );
+  });
+
+  it('有地形时按地面点的经纬度取表面高：平移是表面高减去地面高', async () => {
+    const asked: (readonly [number, number])[] = [];
+    const ctx = setup(undefined, {
+      surfaceHeight: async lngLat => {
+        asked.push(lngLat);
+        return 28;
+      }
+    });
+    ctx.content.set({ tilesets: [{ ...tileset(), ground: STATION_GROUND }], underground: null });
+    await shown(ctx);
+    await flush();
+
+    expect(asked).toStrictEqual([[120.66, 31.31]]);
+    expect(ctx.renderer.offsets.get('station')).toBe(-2);
+    expect(ctx.state()).toBe('ready');
+  });
+
+  it('取不到地形高度时报告错误，按 0 米的表面摆，照常显示', async () => {
+    const ctx = setup(undefined, { surfaceHeight: () => Promise.reject(new Error('HTTP 418')) });
+    ctx.content.set({ tilesets: [{ ...tileset(), ground: STATION_GROUND }], underground: null });
+    await shown(ctx);
+    await flush();
+
+    expect(ctx.renderer.offsets.get('station')).toBe(-30);
+    expect(ctx.state()).toBe('ready');
+    expect(ctx.errors).toHaveLength(1);
+    expect(String(ctx.errors[0])).toContain('取不到贴地处的地形高度');
+  });
+
+  it('贴地参照变了就重新加载这个模型', async () => {
+    const ctx = setup();
+    ctx.content.set({ tilesets: [tileset()], underground: null });
+    await shown(ctx);
+    ctx.content.set({ tilesets: [{ ...tileset(), ground: STATION_GROUND }], underground: null });
+    await flush();
+    await flush();
+
+    expect(ctx.renderer.calls).toStrictEqual(['attach', 'add station sun', 'remove station', 'add station sun']);
+    expect(ctx.renderer.offsets.get('station')).toBe(-30);
   });
 });

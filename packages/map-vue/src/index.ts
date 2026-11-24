@@ -7,6 +7,7 @@ export {
   MAP_MOUSE_SCHEMES,
   MAP_RUNTIME_PRELOAD,
   MAP_SCENE_ENGINE,
+  MAP_TERRAIN,
   MAPLIBRE_ENGINE,
   type MapRuntimePreloader,
   type SceneCapabilities,

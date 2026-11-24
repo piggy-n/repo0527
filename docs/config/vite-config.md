@@ -117,7 +117,7 @@ const site = sitePlugin(process.env.YZT_SITE);
 |---|---|---|
 | `fsModuleCache` | `true` | 把转换结果缓存到根目录的 `node_modules/.vitest-cache`，之后的运行跳过转换，见下文"测试耗时" |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
-| `env` | `VITE_RESOURCE_MIN_ZOOM_ENABLED`、`VITE_PREFERENCES_ENABLED`、八个 `VITE_PREFERENCE_*`、`VITE_LAYER_HINTS_ENABLED`、六个 `VITE_LAYER_HINT_*`，都是 `'true'`；`VITE_MAP_MOUSE_2D`、`VITE_MAP_MOUSE_3D` 是 `'maplibre'`、`'cesium'`（同提交的 `.env`）；`VITE_LAYERS_PER_DIMENSION` 是 `'false'`（提交的 `.env` 是 true） | 固定部署时决定的开关：很多用例依赖"有最小显示级别""偏好照常恢复""行内提示都显示""二三维共用一套已添加的资源"的行为，改 `.env` 不影响测试（ADR 0132、0140、0167、0169）。测试开关本身的用例用 `vi.stubEnv` 覆盖 |
+| `env` | `VITE_RESOURCE_MIN_ZOOM_ENABLED`、`VITE_PREFERENCES_ENABLED`、八个 `VITE_PREFERENCE_*`、`VITE_LAYER_HINTS_ENABLED`、六个 `VITE_LAYER_HINT_*`，都是 `'true'`；`VITE_MAP_MOUSE_2D`、`VITE_MAP_MOUSE_3D` 是 `'maplibre'`、`'cesium'`（同提交的 `.env`）；`VITE_LAYERS_PER_DIMENSION` 是 `'false'`（提交的 `.env` 是 true）；`VITE_SCENE_GROUND_CLAMP` 是 `'true'`、`VITE_SCENE_TERRAIN` 是 `'none'`（测试不请求天地图，ADR 0170） | 固定部署时决定的开关：很多用例依赖"有最小显示级别""偏好照常恢复""行内提示都显示""二三维共用一套已添加的资源"的行为，改 `.env` 不影响测试（ADR 0132、0140、0167、0169）。测试开关本身的用例用 `vi.stubEnv` 覆盖 |
 
 `unit` 项目：
 

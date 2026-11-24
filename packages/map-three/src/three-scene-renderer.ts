@@ -392,7 +392,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
     id: string,
     tileset: PreparedTileset,
     options: TilesetOptions,
-    signal: AbortSignal
+    signal: AbortSignal,
+    offset = 0
   ): Promise<TilesetSphere> {
     this.#assertAlive();
     if (this.#tilesets.has(id)) {
@@ -407,6 +408,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       uploader: this.#uploader,
       requestCullWindow: this.#requestCullWindow,
       releaseImages: this.#releaseImages,
+      offset,
       onRequest: (tile, probe) => this.#activity.requested(id, tile, probe),
       events: {
         failed: error => {
@@ -459,7 +461,13 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#surface?.requestRepaint();
   }
 
-  async addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<TilesetSphere> {
+  async addSplat(
+    id: string,
+    source: SplatSource,
+    options: SplatOptions,
+    signal: AbortSignal,
+    offset = 0
+  ): Promise<TilesetSphere> {
     this.#assertAlive();
     this.#releaseAbortedSplat(id);
     const library = await this.#loadSplatLibrary();
@@ -472,6 +480,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       options,
       math: this.#math,
       budget: this.#splatBudget,
+      offset,
       events: {
         failed: error => this.#emitter.emit('splatfailed', id, new Error(`高斯泼溅 ${id} 的数据加载失败`, { cause: error })),
         repaint: () => this.#surface?.requestRepaint()
@@ -568,9 +577,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
       return null;
     }
     const { clientWidth: width, clientHeight } = surface.canvas;
-    // 抬高期间整个场景一起上移：真实的高度加上抬高量
-    const lifted = height + (this.#activeLift()?.meters ?? 0);
-    return this.#math.project(this.#frame, surface.anchor(...lngLat), lifted, { width, height: clientHeight }, this.#scratch);
+    // 抬高（含隔离）期间只画那一个模型：真实的高度加上它的抬高量和贴地平移
+    const shifted = height + this.#liftShift();
+    const size = { width, height: clientHeight };
+    return this.#math.project(this.#frame, surface.anchor(...lngLat), shifted, size, this.#scratch);
   }
 
   setLift(lift: SceneLift | null): void {
@@ -581,13 +591,17 @@ export class ThreeSceneRenderer implements SceneRenderer {
       entry.setLift(lift?.modelId === id ? lift.meters : 0);
     }
     this.#shareSplatBudget();
-    this.#marker.setLift(this.#activeLift()?.meters ?? 0);
+    this.#marker.setLift(this.#liftShift());
     this.#scale.release();
     this.#surface?.requestRepaint();
   }
 
   lowestHeight(id: string): number | null {
     return this.#tilesets.get(id)?.lowestHeight() ?? null;
+  }
+
+  offsetOf(id: string): number {
+    return this.#tilesets.get(id)?.offset ?? this.#splats.get(id)?.offset ?? 0;
   }
 
   setInteriorFog(enabled: boolean): void {
@@ -597,7 +611,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
 
   setMarker(marker: SceneMarker | null): void {
     if (marker) {
-      this.#marker.setLift(this.#activeLift()?.meters ?? 0);
+      this.#marker.setLift(this.#liftShift());
       this.#marker.show(marker);
     } else {
       this.#marker.hide();
@@ -742,6 +756,12 @@ export class ThreeSceneRenderer implements SceneRenderer {
   #activeLift(): SceneLift | null {
     const lift = this.#lift;
     return lift && (this.#tilesets.has(lift.modelId) || this.#splats.has(lift.modelId)) ? lift : null;
+  }
+
+  // 抬高（含隔离）的模型画在真实高度以上多少米：抬高量加上它贴地的平移；没有抬高时为 0
+  #liftShift(): number {
+    const lift = this.#activeLift();
+    return lift ? lift.meters + this.offsetOf(lift.modelId) : 0;
   }
 
   // 丢掉 WebGLRenderer：它跟踪的 GPU 资源随之作废，下次画时重新上传；内容（瓦片、泼溅、模型）保留。

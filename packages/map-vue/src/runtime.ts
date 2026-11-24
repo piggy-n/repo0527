@@ -1,4 +1,4 @@
-import type { MouseSchemes, SceneRendererLoader } from '@mx/map-core';
+import type { MapTerrain, MouseSchemes, SceneRendererLoader } from '@mx/map-core';
 import type { InjectionKey } from 'vue';
 
 /**
@@ -43,6 +43,9 @@ export const MAP_RUNTIME_PRELOAD: InjectionKey<MapRuntimePreloader> = Symbol('ma
 
 /** app 用它 provide 二维、三维各用哪种鼠标操作（ADR 0168）；没有 provide 时都用 MapLibre 自带的 */
 export const MAP_MOUSE_SCHEMES: InjectionKey<MouseSchemes> = Symbol('map-mouse-schemes');
+
+/** app 用它 provide 三维的地形（ADR 0170）：按部署的配置，为 null 或没有 provide 时没有地形，贴地按 0 米 */
+export const MAP_TERRAIN: InjectionKey<MapTerrain | null> = Symbol('map-terrain');
 
 /** app 用它 provide 地图错误的报告器，处理鉴权这类 map-vue 不认识的事；页面传了 onError 时以页面的为准，都没有时打印到控制台 */
 export const MAP_ERROR_REPORTER: InjectionKey<(error: unknown) => void> = Symbol('map-error-reporter');

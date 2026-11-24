@@ -256,6 +256,13 @@ class FakeMap implements MapLike {
     return true;
   }
   setCenterClampedToGround(): void {}
+  getCenterElevation(): number {
+    return 0;
+  }
+  getTerrain(): null {
+    return null;
+  }
+  setTerrain(): void {}
 
   getLayer(): unknown {
     return undefined;
@@ -354,6 +361,7 @@ function fakeRenderer() {
     project: () => null,
     setLift: () => undefined,
     lowestHeight: () => null,
+    offsetOf: () => 0,
     setInteriorFog: () => undefined,
     setMarker: () => undefined,
     on: () => () => undefined,

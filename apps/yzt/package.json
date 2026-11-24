@@ -22,6 +22,7 @@
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "measure:3d": "node tools/measure-3d/cli.ts",
     "lcc2:register": "node tools/lcc2-register/cli.ts",
+    "3dt:ground": "node tools/3dt-ground/cli.ts",
     "site:check": "node tools/site/cli.ts",
     "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
     "scope-files:generate": "node tools/scope-test-files/cli.ts",

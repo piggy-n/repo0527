@@ -15,6 +15,7 @@ const oblique = (id: string, extra: Partial<SceneModel> = {}): SceneModel => ({
   spawn: undefined,
   routes: [],
   splat: null,
+  ground: null,
   ...extra
 });
 
@@ -57,6 +58,30 @@ describe('deriveSceneContent', () => {
     // 室内、白膜不裁
     const indoor = deriveSceneContent([oblique('room', { kind: 'indoor', underground: true })], added(['room']));
     expect(indoor.tilesets[0]).not.toHaveProperty('clippedBySplats');
+  });
+
+  it('贴地打开时清单写了地面点的模型带上它，没写的、贴地关着时都不带（ADR 0170）', () => {
+    const ground = { lng: 117.18, lat: 34.266, height: 33.5 };
+    const placement = { lng: 117.18, lat: 34.266, height: 59.45, heading: 0 };
+    const models = [
+      oblique('xz-gc', { ground }),
+      oblique('plain'),
+      oblique('xz-pc', {
+        kind: 'splat',
+        effects: [],
+        splat: { url: 'https://maps.test/3dt/pc.lcc2', placement },
+        ground
+      })
+    ];
+    const state = added(['xz-gc', 'plain', 'xz-pc']);
+
+    const clamped = deriveSceneContent(models, state, { groundClamp: true });
+    expect(clamped.tilesets.map(layer => layer.ground)).toStrictEqual([ground, undefined]);
+    expect(clamped.tilesets[1]).not.toHaveProperty('ground');
+    expect(clamped.splats?.[0]?.ground).toStrictEqual(ground);
+
+    const off = deriveSceneContent(models, state);
+    expect([...off.tilesets, ...(off.splats ?? [])].some(layer => 'ground' in layer)).toBe(false);
   });
 
   it('高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，带上重试次数；没有泼溅时不写 splats', () => {

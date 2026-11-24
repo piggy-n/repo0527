@@ -112,12 +112,13 @@ const cameraToCenter = (viewportHeight: number, fovy: number) => (0.5 / Math.tan
 
 /**
  * 第一人称的 MapLibre 相机：目标点放在视线前方（缩放不超过 23.5 级），视点和目标点都按真实位置换成墨卡托，
- * 再加上抬高量，按 MapLibre 墨卡托的 calculateCameraOptionsFromTo 解出中心、高度、缩放、方位和俯仰
- * （俯仰可以超过 90°）。不用 MapLibre 自己的：地球投影时它把目标当作在地面上（PoC 的坑 11）。fovy 是弧度
+ * 再加上 shift（模型画在真实高度以上多少米：抬高量加上贴地的平移，ADR 0170），按 MapLibre 墨卡托的
+ * calculateCameraOptionsFromTo 解出中心、高度、缩放、方位和俯仰（俯仰可以超过 90°）。
+ * 不用 MapLibre 自己的：地球投影时它把目标当作在地面上（PoC 的坑 11）。fovy 是弧度
  */
 export function firstPersonCamera(
   { position, direction }: RoamEye,
-  { lift, viewportHeight, fovy }: { readonly lift: number; readonly viewportHeight: number; readonly fovy: number }
+  { shift, viewportHeight, fovy }: { readonly shift: number; readonly viewportHeight: number; readonly fovy: number }
 ): ElevatedCamera {
   const [lng, lat, height] = fromEcef(position);
   const metersPerUnit = 2 * Math.PI * MAPLIBRE_EARTH_RADIUS * Math.cos(toRadians(lat));
@@ -125,8 +126,8 @@ export function firstPersonCamera(
   const nearest = (cameraToCenter(viewportHeight, fovy) / TILE_SIZE / 2 ** TARGET_MAX_ZOOM) * metersPerUnit;
   const distance = Math.max(TARGET_DISTANCE, nearest);
   const target = fromEcef([0, 1, 2].map(i => position[i] + direction[i] * distance) as Point3);
-  const from = mercator(lng, lat, height + lift);
-  const to = mercator(target[0], target[1], target[2] + lift);
+  const from = mercator(lng, lat, height + shift);
+  const to = mercator(target[0], target[1], target[2] + shift);
   const dx = to[0] - from[0];
   const dy = to[1] - from[1];
   const dz = to[2] - from[2];
@@ -135,7 +136,7 @@ export function firstPersonCamera(
   const tilt = toDegrees(Math.acos(Math.min(1, ground / length)));
   return {
     center: lngLatOfMercator(to[0], to[1]),
-    elevation: target[2] + lift,
+    elevation: target[2] + shift,
     zoom: Math.log2(cameraToCenter(viewportHeight, fovy) / length / TILE_SIZE),
     bearing: toDegrees(Math.atan2(dx, -dy)),
     pitch: dz < 0 ? 90 - tilt : 90 + tilt

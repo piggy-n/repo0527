@@ -117,6 +117,9 @@ class FakeMap implements RoamMap {
   setCenterClampedToGround(clamped: boolean): void {
     this.clamped = clamped;
   }
+  getCenterElevation(): number {
+    return this.camera.elevation ?? 0;
+  }
   gestures(): boolean[] {
     return [this.dragPan, this.scrollZoom, this.boxZoom, this.dragRotate, this.keyboard].map(g => g.enabled);
   }
@@ -158,6 +161,11 @@ class FakeRenderer implements SceneRenderer {
   }
   lowestHeight(): number | null {
     return this.lowest;
+  }
+  // 贴地的平移（ADR 0170）：按模型由用例设
+  readonly offsets = new Map<string, number>();
+  offsetOf(id: string): number {
+    return this.offsets.get(id) ?? 0;
   }
   setInteriorFog(enabled: boolean): void {
     this.fog = enabled;
@@ -417,6 +425,32 @@ describe('MapLibreRoam (ADR 0147 §4)', () => {
     advance(FADE_OUT);
     expect(ctx.renderer.lifts.at(-1)).toBeNull();
     expect(ctx.takeovers.at(-1)).toStrictEqual({ engaged: false, lifted: false });
+  });
+
+  it('places the camera at a ground-clamped splat where it is drawn, below its real height (ADR 0170)', () => {
+    using plain = setup();
+    plain.roam.apply(isolatedTomb(route()), true);
+    advance(FADE_OUT);
+    using clamped = setup();
+    clamped.renderer.offsets.set('tomb', -33.5);
+    clamped.roam.apply(isolatedTomb(route()), true);
+    advance(FADE_OUT);
+
+    expect(clamped.roam.lift).toBe(0);
+    expect(clamped.roam.shift).toBe(-33.5);
+    expect((clamped.map.camera.elevation ?? 0) - (plain.map.camera.elevation ?? 0)).toBeCloseTo(-33.5, 6);
+    expect(clamped.map.camera.center).toStrictEqual(plain.map.camera.center);
+  });
+
+  it('lifts a shifted model by its drawn lowest point; the camera adds the lift and the shift (ADR 0170)', () => {
+    using ctx = setup();
+    ctx.renderer.offsets.set('room', -5);
+    ctx.roam.apply(content(route()), true);
+    advance(FADE_OUT);
+
+    // 画面上的最低处 -6 - 5 = -11 米，加眼高 1.6 米要高出 0 米 2 米：抬高 ceil(11.4) = 12 米
+    expect(ctx.roam.lift).toBe(12);
+    expect(ctx.roam.shift).toBe(7);
   });
 
   it('stops at once without flying back when another positioning takes over', () => {

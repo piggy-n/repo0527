@@ -882,6 +882,32 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     expect(page.errors).toStrictEqual([]);
   });
 
+  it('贴地（ADR 0170）：离地的泼溅写了地面点就下沉到 0 米，建议的相机对着画出来的位置；拾取到的仍是真实高度', async () => {
+    const page = await mountPage();
+    const url = await writtenSplat();
+    const height = 150;
+    const placement = { lng: MODEL_AT[0], lat: MODEL_AT[1], height, heading: 0 };
+    const ground = { lng: MODEL_AT[0], lat: MODEL_AT[1], height };
+
+    page.content.value = { tilesets: [], splats: [{ ...splatLayer(url, { placement }), ground }], underground: null };
+    await until(() => page.stateOf('square') === 'ready', '泼溅就绪');
+    const ready = page.map.sceneStatus.value.get('square');
+    if (ready?.state !== 'ready') {
+      throw new Error('泼溅没有就绪');
+    }
+    // 画在 0 米上：视线的落点就在模型处
+    expect(Math.abs((ready.camera.center[1] - MODEL_AT[1]) * 111320)).toBeLessThan(2);
+    page.map.runCameraOperation(camera => camera.flyTo(ready.camera, { duration: 0, padding: 0 }));
+    const pickedHeight = () => {
+      const hit = page.map.view.value?.pick({ x: WIDTH / 2, y: HEIGHT / 2 });
+      return hit?.kind === 'hit' && hit.surface === 'model' ? (hit.height ?? null) : null;
+    };
+    await until(() => pickedHeight() !== null, '画布中心拾取到下沉的泼溅');
+
+    expect(pickedHeight()).toBeCloseTo(height, 0);
+    expect(page.errors).toStrictEqual([]);
+  });
+
   it('GL 上下文丢失后恢复：瓦片集仍是就绪，照样拾取到模型', async () => {
     const page = await mountPage();
     page.content.value = { tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)], underground: null };

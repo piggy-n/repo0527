@@ -141,7 +141,8 @@ export const CurrentMapPage = defineComponent({
     const readout = useMapReadout(map);
     // 三维模型（ADR 0081）：资源目录里列出模型，二维里也能加入（ADR 0157），所以进页面就读清单
     const sceneModelsQuery = useSceneModelsQuery(true);
-    const models = useSceneModels(map, sceneModelsQuery.data, { preferences });
+    // 模型贴地按部署（ADR 0170）
+    const models = useSceneModels(map, sceneModelsQuery.data, { preferences, groundClamp: appConfig.sceneGroundClamp });
     // 图层里平铺的资源和模型（ADR 0161）：顺序就是叠放，面板显示和操作，地图按它放模型层
     const layerList = useCurrentLayers(resources, models, { preferences });
     // 图层行内提示显示哪几类（用户 2026-11-17，ADR 0167）：部署时在 .env 里配，同时管数据加载的条目和明细

@@ -459,6 +459,40 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
       expect(pickedHeight(ctx)).toBeCloseTo(16, 0);
     });
 
+    // 立方体和泼溅都在 50 米：同一处配准过的模型用同一个地面点（ADR 0170）
+    it('贴地：用同一个地面点一起下沉，照样裁、拾取到真实高度；只有泼溅下沉时盒子跟着它走，不再裁立方体', async () => {
+      const ctx = await setup();
+      const glb = await boxGlb(8);
+      const files = { '/box/tileset.json': boxTileset(MODEL_AT, 8, 'box.glb', 50), '/box/box.glb': glb };
+      onTestFinished(serveFixtures(files));
+      const ground = { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 50 };
+      const plain: TilesetLayer = {
+        id: 'box',
+        url: `${FIXTURE_ORIGIN}/box/tileset.json`,
+        show: true,
+        lighting: 'sun',
+        attempt: 0,
+        clippedBySplats: true
+      };
+      const splat = tall({ placement: { ...tall().placement, height: 50 }, ground });
+
+      ctx.session.scene.set({ tilesets: [{ ...plain, ground }], splats: [splat], underground: null });
+      await boxContentDrawn(ctx);
+      await splatDrawn(ctx);
+      await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '一起下沉后中心画出泼溅（立方体被裁掉）');
+      expect(clipped(ctx)).toBe(true);
+      expect(pickedHeight(ctx)).toBeCloseTo(50, 0);
+      expect(ctx.renderer.offsetOf('square')).toBe(-50);
+
+      ctx.session.scene.set({ tilesets: [plain], splats: [splat], underground: null });
+      await until(() => ctx.renderer.offsetOf('box') === 0, '立方体按真实高度重新加载');
+      await boxContentDrawn(ctx);
+      await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '立方体悬在泼溅上方、不再被裁');
+      expect(clipped(ctx)).toBe(false);
+      expect(pickedHeight(ctx)).toBeCloseTo(66, 0);
+      expect(ctx.errors).toStrictEqual([]);
+    });
+
     it('先加泼溅、后加立方体也裁；不要求裁剪的瓦片集不裁', async () => {
       const ctx = await setup();
       ctx.session.scene.set({ tilesets: [], splats: [tall()], underground: null });

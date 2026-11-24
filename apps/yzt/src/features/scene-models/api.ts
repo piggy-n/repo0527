@@ -52,6 +52,15 @@ const placementSchema = z.strictObject({
   heading: z.number()
 });
 
+// 贴地的参照（ADR 0170）：模型里一处地面（墓葬取入口外）的经纬度和椭球高，口径同 placement；同一处配准过的模型写同一个点。
+// 室内、地下的模型不贴地，不能写
+const groundSchema = z.strictObject({
+  lng: z.number().min(-180).max(180),
+  lat: z.number().min(-90).max(90),
+  /** 椭球高，米 */
+  height: z.number()
+});
+
 // 瓦片集模型（白膜、倾斜摄影、室内）共有的
 const common = {
   ...base,
@@ -64,15 +73,23 @@ const common = {
 };
 
 // 白膜用 effects（第一种是默认），倾斜摄影、室内用 tileset，高斯泼溅（ADR 0149）用 lcc2 和 placement；
-// 严格对象，写错位置时整份清单不合法。泼溅不写屏幕误差；出生点、路线由配准工具从扫描轨迹生成（ADR 0156 第 4 节）
+// 严格对象，写错位置时整份清单不合法。泼溅不写屏幕误差；出生点、路线由配准工具从扫描轨迹生成（ADR 0156 第 4 节）；
+// 室内不写贴地的参照
 const modelSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ ...common, kind: z.literal('white'), effects: z.array(effectSchema).nonempty() }),
-  z.strictObject({ ...common, kind: z.enum(['oblique', 'indoor']), tileset: nonEmpty }),
+  z.strictObject({
+    ...common,
+    kind: z.literal('white'),
+    effects: z.array(effectSchema).nonempty(),
+    ground: groundSchema.optional()
+  }),
+  z.strictObject({ ...common, kind: z.literal('oblique'), tileset: nonEmpty, ground: groundSchema.optional() }),
+  z.strictObject({ ...common, kind: z.literal('indoor'), tileset: nonEmpty }),
   z.strictObject({
     ...base,
     kind: z.literal('splat'),
     lcc2: nonEmpty,
     placement: placementSchema,
+    ground: groundSchema.optional(),
     spawn: spawnSchema.optional(),
     routes: z.array(routeSchema).optional()
   })
@@ -102,6 +119,13 @@ export const sceneManifestSchema = manifestShape.superRefine(({ models }, contex
   const noSpawn = models.find(model => model.kind === 'splat' && (model.routes ?? []).length > 0 && !model.spawn);
   if (noSpawn) {
     context.addIssue({ code: 'custom', message: `高斯泼溅 ${noSpawn.id} 有路线、没有出生点` });
+  }
+  // 地下的模型本来就在地面以下，漫游时另外抬高（ADR 0147 第 4 节），不贴地（ADR 0170）
+  const undergroundGround = models.find(
+    model => model.underground && model.kind !== 'indoor' && model.ground !== undefined
+  );
+  if (undergroundGround) {
+    context.addIssue({ code: 'custom', message: `地下的模型 ${undergroundGround.id} 不能写贴地的参照` });
   }
 });
 
