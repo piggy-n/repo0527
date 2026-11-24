@@ -17,8 +17,10 @@ async function box(locator: Locator, name: string): Promise<{ x: number; y: numb
 }
 
 // 数据加载的明细（ADR 0158，用户 2026-11-23）：量的是左列里的面板本身（按内容定高，收起后是竖条），不是撑满高度的一列；
-// 底边都在状态栏上方 8；面板下面放得下最高的明细（420）时平移到面板下方、和面板左对齐，放不下时在它右边，宽度同面板展开时。
-// fixtures 的资源目录是空的，展开的面板只有空状态，约 316 高：窗口 1000 高时下面约有 530，在下方；压到 640 高放不下，回到右边
+// 底边和面板最低能到的位置齐平（左列给状态栏留的间距，状态栏上方 12，用户 2026-11-24）；面板下面放得下最高的明细（420）时
+// 平移到面板下方、和面板左对齐，放不下时在它右边，宽度同面板展开时。
+// fixtures 的资源目录是空的，展开的面板只有空状态，约 316 高：窗口 1000 高时下面约有 530，在下方；压到 440 高时面板到了
+// 最大高度、下面放不下，回到右边，两个底边齐平
 // （900 高时余量只有十几像素，面板多一行就换边，所以先把窗口调高）
 test('数据加载的明细：面板下面放得下时平移到面板下方、放不下时在右边，底边在状态栏上方，和面板同宽；收起成竖条后在竖条下方', async ({
   page
@@ -31,9 +33,9 @@ test('数据加载的明细：面板下面放得下时平移到面板下方、�
   const chip = page.locator('[data-request-chip]');
   const popover = page.locator('[data-request-popover]');
   await expect(panel.getByRole('heading', { name: '资源图层' })).toBeVisible();
-  // 底边离状态栏 8，不盖住面板
+  // 底边在状态栏上方 12（面板最低能到的位置），不盖住面板
   const expectAbove = async (shown: { y: number; height: number }, owner: { y: number; height: number }) => {
-    expect(shown.y + shown.height, '底边在状态栏上方 8').toBeCloseTo((await box(chip, '状态按钮')).y - 8, 0);
+    expect(shown.y + shown.height, '底边在状态栏上方 12').toBeCloseTo((await box(chip, '状态按钮')).y - 12, 0);
     expect(shown.y, '不盖住面板').toBeGreaterThanOrEqual(owner.y + owner.height + 8);
   };
 
@@ -46,14 +48,15 @@ test('数据加载的明细：面板下面放得下时平移到面板下方、�
   expect(below.width, '和面板同宽').toBeCloseTo(expanded.width, 0);
   await expectAbove(below, expanded);
 
-  // 窗口变矮：面板下面放不下 420，开着的明细换到右边
-  await page.setViewportSize({ width: 1600, height: 640 });
+  // 窗口变矮：面板到了最大高度，下面放不下 420，开着的明细换到右边
+  await page.setViewportSize({ width: 1600, height: 440 });
   await expect(popover).toHaveAttribute('data-request-side', 'beside');
   const short = await box(panel, '面板');
   const beside = await box(popover, '明细');
   expect(beside.x, '左边离面板右边 8').toBeCloseTo(short.x + short.width + 8, 0);
   expect(beside.width, '和面板同宽').toBeCloseTo(short.width, 0);
-  expect(beside.y + beside.height, '底边在状态栏上方 8').toBeCloseTo((await box(chip, '状态按钮')).y - 8, 0);
+  expect(short.y + short.height, '面板到了最大高度').toBeCloseTo((await box(chip, '状态按钮')).y - 12, 0);
+  expect(beside.y + beside.height, '和面板的底边齐平').toBeCloseTo(short.y + short.height, 0);
 
   await page.setViewportSize({ width: 1600, height: 1000 });
   await chip.click();
