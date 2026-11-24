@@ -1,5 +1,6 @@
-// 拉直的诊断（lcc2:register --route 时打印）：每条路线拉直以后留下的拐点按原因计数，--diagnose 时逐个列出
+// 打印的诊断：拉直（--route 时）每条路线留下的拐点按原因计数，--diagnose 时逐个列出；断口候选（--roam 时，ADR 0172）
 import type { CornerReason, RouteCorner, Stretch } from './roam.ts';
+import type { WalkwayGap } from './walkway.ts';
 
 /** 拐点留下的原因，按这个顺序列 */
 export const CORNER_REASONS: Readonly<Record<CornerReason, string>> = {
@@ -46,5 +47,18 @@ export function cornerLine({ distance, x, y, offset, tolerance, reason, at }: Ro
   return (
     `${distance.toFixed(1).padStart(8)} 米：局部 (${x.toFixed(1)}, ${y.toFixed(1)})，` +
     `离连线 ${offset.toFixed(2)} 米（容差 ${tolerance} 米），${CORNER_REASONS[reason]}，在 (${at.x.toFixed(1)}, ${at.y.toFixed(1)})${above}`
+  );
+}
+
+/** 断口候选的一行（ADR 0172）：起止、长度、各种"断"的个数、建议的 --walkway */
+export function gapLine(gap: WalkwayGap, span: { readonly from: number; readonly to: number }): string {
+  const counts = [
+    gap.jumps > 0 ? `${gap.jumps} 处和前一个点差一级台阶以上` : '',
+    gap.sunken > 0 ? `${gap.sunken} 个点陷在坑里` : '',
+    gap.holes > 0 ? `${gap.holes} 个点脚下没有网格` : ''
+  ].filter(Boolean);
+  return (
+    `  ${gap.from.toFixed(1)}～${gap.to.toFixed(1)} 米（${(gap.to - gap.from).toFixed(1)} 米，${gap.samples} 个取样点）：` +
+    `${counts.join('，')}；建议 --walkway ${span.from}-${span.to}`
   );
 }

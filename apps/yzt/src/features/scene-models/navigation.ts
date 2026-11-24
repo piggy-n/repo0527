@@ -3,13 +3,15 @@ import {
   buildScanNavigation,
   type NavBuildProgress,
   type Navigation,
+  type NavFrame,
   prepareTileset,
   type ScanMesh,
   type ScanNavigation,
+  type ScanWalkway,
   type SplatSource,
   splatNavigationFrame
 } from '@mx/map-core';
-import { fetchLcc2Index, fetchTilesetJson, type Lcc2Index } from './api';
+import { fetchLcc2Index, fetchTilesetJson, type Lcc2Index, type ManifestWalkway } from './api';
 
 interface BuildOptions {
   readonly signal: AbortSignal;
@@ -52,20 +54,37 @@ export function scanMeshesOf(index: Lcc2Index, indexUrl: string): ScanMesh[] {
   return meshes;
 }
 
-/** 建泼溅（LCC2）的导航网格（ADR 0156）：读索引里的碰撞网格，按清单的摆放和出生点建；测试时换掉 */
+/** 清单里建泼溅的导航网格要用的：出生点、补的地板（ADR 0172） */
+export interface SplatWalkSetup {
+  readonly spawn: SpawnSpot | undefined;
+  readonly walkways: readonly ManifestWalkway[];
+}
+
+/** 补的地板换到导航网格的局部系：经纬度、椭球高换成局部坐标，宽度不变 */
+export function scanWalkwaysOf(walkways: readonly ManifestWalkway[], frame: NavFrame): ScanWalkway[] {
+  return walkways.map(({ width, path }) => ({
+    width,
+    path: path.map(([lng, lat, height]) => frame.toLocal(lng, lat, height))
+  }));
+}
+
+/** 建泼溅（LCC2）的导航网格（ADR 0156）：读索引里的碰撞网格，按清单的摆放、出生点和补的地板建；测试时换掉 */
 export type LoadSplatNavigation = (
   splat: SplatSource,
-  spawn: SpawnSpot | undefined,
+  walk: SplatWalkSetup,
   options: BuildOptions
 ) => Promise<ScanNavigation>;
 
-export const loadSplatNavigation: LoadSplatNavigation = async (splat, spawn, { signal, onProgress }) => {
+export const loadSplatNavigation: LoadSplatNavigation = async (splat, { spawn, walkways }, { signal, onProgress }) => {
   const index = await fetchLcc2Index(splat.url, signal);
   signal.throwIfAborted();
   // 地面（楼层名、出生点用）取出生点的地板；网格太多时从出生点附近读起
   const near = spawn ? splatNavigationFrame(splat.placement).toLocal(spawn.lng, spawn.lat, spawn.height) : null;
   const frame = splatNavigationFrame(splat.placement, near?.[2]);
-  return buildScanNavigation({ meshes: scanMeshesOf(index, splat.url), frame, near }, { signal, onProgress });
+  return buildScanNavigation(
+    { meshes: scanMeshesOf(index, splat.url), frame, near, walkways: scanWalkwaysOf(walkways, frame) },
+    { signal, onProgress }
+  );
 };
 
 /** 进度换成 0～1：下载占八成，之后在 Worker 里构建 */

@@ -18,6 +18,7 @@ describe('parseOptions', () => {
       routes: [],
       stretches: [],
       diagnose: false,
+      walkways: [],
       plan: null,
       help: false
     });
@@ -33,6 +34,19 @@ describe('parseOptions', () => {
     expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '15-50'])).toThrow('起-止:容差');
     expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '50-15:3'])).toThrow('止要大于起');
     expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '15-50:0'])).toThrow('容差要大于 0');
+  });
+
+  it('--walkway：补的地板（ADR 0172），起-止，可以再写宽，可以写多次，带上它就是 --roam；写错、止不大于起、宽不在 0～5 米都报错', () => {
+    const options = parseOptions(['a.lcc2', ...DATUM, '--walkway', '266-300', '--walkway=625.5-662:1.5']);
+    expect(options.roam).toBe(true);
+    expect(options.walkways).toStrictEqual([
+      { from: 266, to: 300 },
+      { from: 625.5, to: 662, width: 1.5 }
+    ]);
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--walkway', '266'])).toThrow('起-止');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--walkway', '300-266'])).toThrow('止要大于起');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--walkway', '266-300:0'])).toThrow('不超过 5 米');
+    expect(() => parseOptions(['a.lcc2', ...DATUM, '--walkway', '266-300:120'])).toThrow('不超过 5 米');
   });
 
   it('--diagnose：逐个列出拉直留下的拐点，带上它就是 --roam，不带值', () => {

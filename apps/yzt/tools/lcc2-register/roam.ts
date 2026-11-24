@@ -658,6 +658,8 @@ export interface RouteOptions {
   readonly tolerance?: number;
   /** 按轨迹米数分段的容差，比 tolerance 优先；几段重叠时取写在后面的 */
   readonly stretches?: readonly Stretch[];
+  /** 给定的地板（轨迹取样点的序号 → 高度）：补的地板经过的取样点（ADR 0172），这些点不按 steadyFloors 选 */
+  readonly floors?: ReadonlyMap<number, number>;
 }
 
 /** 同 routeOf，另外给出拉直以后留下的拐点和原因（诊断用） */
@@ -666,7 +668,7 @@ export function routeWithCorners(
   from: number,
   to: number,
   grid: FloorGrid,
-  { tolerance = STRAIGHT_HORIZONTAL, stretches = [] }: RouteOptions = {}
+  { tolerance = STRAIGHT_HORIZONTAL, stretches = [], floors: given = new Map() }: RouteOptions = {}
 ): { readonly points: RoamPoint[]; readonly corners: RouteCorner[] } {
   for (const value of [tolerance, ...stretches.map(stretch => stretch.tolerance)]) {
     if (!(value > 0)) {
@@ -677,7 +679,7 @@ export function routeWithCorners(
   if (!(from >= 0 && to > from && to <= total + ROUTE_SPACING)) {
     throw new ToolError(`路线段 ${from}～${to} 米不在轨迹里（轨迹共 ${total.toFixed(1)} 米）`);
   }
-  const chosen = steadyFloors(track, grid);
+  const chosen = steadyFloors(track, grid).map((floor, i) => given.get(i) ?? floor);
   const part = track
     .map((sample, i) => ({ ...sample, floor: chosen[i] }))
     .filter((sample) => sample.distance >= from && sample.distance <= to);

@@ -8,7 +8,8 @@ export interface NavTile {
 
 /**
  * 导航网格 Worker 的协议（ADR 0085 第 3 节）：瓦片转移进去，网格的类型化数组转移回来。
- * buildScan 是扫描模型（ADR 0156 第 2 节）：LCC2 碰撞网格的 PLY，坐标就是导航网格的局部系
+ * buildScan 是扫描模型（ADR 0156 第 2 节）：LCC2 碰撞网格的 PLY，坐标就是导航网格的局部系；
+ * extra 是补的地板（ADR 0172）换成的三角形，同一个局部系，没有时为空数组
  */
 export interface NavWorkerProtocol {
   readonly build: {
@@ -16,7 +17,11 @@ export interface NavWorkerProtocol {
     readonly response: NavGridData;
   };
   readonly buildScan: {
-    readonly request: { readonly meshes: readonly ArrayBuffer[]; readonly options: Partial<NavOptions> };
+    readonly request: {
+      readonly meshes: readonly ArrayBuffer[];
+      readonly extra: Float32Array;
+      readonly options: Partial<NavOptions>;
+    };
     readonly response: NavGridData;
   };
 }

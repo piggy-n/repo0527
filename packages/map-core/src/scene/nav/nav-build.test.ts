@@ -8,7 +8,8 @@ import {
   buildScanNavigation,
   keepMainRegion,
   type NavBuildProgress,
-  type ScanMesh
+  type ScanMesh,
+  type ScanSource
 } from './nav-build';
 import { SCAN_NAV_OPTIONS } from './nav-data';
 import { type Point3, splatNavigationFrame, toEcef, translation } from './nav-frame';
@@ -153,9 +154,20 @@ const SCAN_MESHES: readonly ScanMesh[] = [
   { url: 'https://maps.test/west.ply', triangles: 2, min: [0, 0, 0], max: [6, 4, 0] },
   { url: 'https://maps.test/east.ply', triangles: 2, min: [6, 0, 0], max: [12, 4, 0] }
 ];
+// 两块 12 × 10 米的地面中间隔着 3 米宽、0.8 米深的坑，坑上只有两根 0.2 米宽的梁和地面一样高：人走的玻璃面没采到（ADR 0172）
+const PIT_MESH: ScanMesh = { url: 'https://maps.test/pit.ply', triangles: 10, min: [0, 0, -0.8], max: [27, 10, 0] };
 const PLYS: Readonly<Record<string, ArrayBuffer>> = {
   'https://maps.test/west.ply': plyOf(triangles(floorQuad(0, 0, 6, 4, 0))),
-  'https://maps.test/east.ply': plyOf(triangles(floorQuad(6, 0, 12, 4, 0)))
+  'https://maps.test/east.ply': plyOf(triangles(floorQuad(6, 0, 12, 4, 0))),
+  'https://maps.test/pit.ply': plyOf(
+    triangles(
+      floorQuad(0, 0, 12, 10, 0),
+      floorQuad(12, 0, 15, 10, -0.8),
+      floorQuad(12.9, 0, 13.1, 10, 0),
+      floorQuad(13.9, 0, 14.1, 10, 0),
+      floorQuad(15, 0, 27, 10, 0)
+    )
+  )
 };
 const SCAN_FRAME = splatNavigationFrame({ lng: 117.18, lat: 34.25, height: 42, heading: -0.1 }, 0);
 
@@ -165,11 +177,18 @@ const downloadPly = (url: string) => {
   return buffer ? Promise.resolve(buffer.slice(0)) : Promise.reject(new Error(`没有 ${url}`));
 };
 
+// 在坑的碰撞网格上建，出生点在西边的地面上
+const buildPit = (walkways: ScanSource['walkways']) =>
+  buildScanNavigation(
+    { meshes: [PIT_MESH], frame: SCAN_FRAME, near: [2, 5, 0], walkways },
+    { signal: new AbortController().signal, download: downloadPly, createWorker }
+  );
+
 describe('buildScanNavigation', () => {
   it('下载碰撞网格，在 Worker 里按扫描模型的参数构建：0.1 米的格子、露天的地板也能站', async () => {
     const progress: NavBuildProgress[] = [];
     const { grid, frame, partial } = await buildScanNavigation(
-      { meshes: SCAN_MESHES, frame: SCAN_FRAME, near: null },
+      { meshes: SCAN_MESHES, frame: SCAN_FRAME, near: null, walkways: [] },
       {
         signal: new AbortController().signal,
         download: downloadPly,
@@ -195,7 +214,7 @@ describe('buildScanNavigation', () => {
   it('超过上限时只读离 near 近的：由近到远，下一个放不下就停', async () => {
     const fetchPly = vi.fn<typeof downloadPly>(downloadPly);
     const { grid, partial } = await buildScanNavigation(
-      { meshes: SCAN_MESHES, frame: SCAN_FRAME, near: [11, 2, 0] },
+      { meshes: SCAN_MESHES, frame: SCAN_FRAME, near: [11, 2, 0], walkways: [] },
       { signal: new AbortController().signal, download: fetchPly, createWorker, maxTriangles: 3 }
     );
 
@@ -205,10 +224,32 @@ describe('buildScanNavigation', () => {
     expect(grid.cellOf(3, 2)).toBeNull();
   });
 
+  it('补的地板和碰撞网格一起构建：隔着坑、只有窄梁的两块地面连成一片', async () => {
+    const apart = await buildPit([]);
+    expect(apart.grid.componentAt(2, 5, 0)).toBeGreaterThan(0);
+    expect(apart.grid.componentAt(24, 5, 0)).toBe(0);
+
+    const joined = await buildPit([
+      {
+        path: [
+          [11, 5, 0],
+          [16, 5, 0]
+        ],
+        width: 1.2
+      }
+    ]);
+    const west = joined.grid.componentAt(2, 5, 0);
+    expect(west).toBeGreaterThan(0);
+    expect(joined.grid.componentAt(13.5, 5, 0)).toBe(west);
+    expect(joined.grid.componentAt(24, 5, 0)).toBe(west);
+    // 带子以外的坑照旧：站在坑底的不属于这一片
+    expect(joined.grid.componentAt(13.5, 1, -0.8)).not.toBe(west);
+  });
+
   it('没有碰撞网格时报错，不创建 Worker', async () => {
     await expect(
       buildScanNavigation(
-        { meshes: [], frame: SCAN_FRAME, near: null },
+        { meshes: [], frame: SCAN_FRAME, near: null, walkways: [] },
         { signal: new AbortController().signal, download: downloadPly, createWorker }
       )
     ).rejects.toThrow('模型没有碰撞网格');

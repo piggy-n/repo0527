@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { RouteCorner } from './roam.ts';
-import { cornerLine, cornerSummary, toleranceLabel } from './roam-report.ts';
+import { cornerLine, cornerSummary, gapLine, toleranceLabel } from './roam-report.ts';
 
 const corner = (reason: RouteCorner['reason'], offset: number, tolerance = 1): RouteCorner => ({
   distance: 123.456,
@@ -52,6 +52,18 @@ describe('cornerLine', () => {
   it('轨迹上的米数、局部坐标、离连线多远和容差、原因、位置和挡住的表面离地多高', () => {
     expect(cornerLine({ ...corner('obstacle', 0.345, 3), at: { x: 1.5, y: -4.25, above: 0.91 } })).toBe(
       '   123.5 米：局部 (1.2, -4.6)，离连线 0.34 米（容差 3 米），中线身高范围有东西，在 (1.5, -4.3)，离地 0.91 米'
+    );
+  });
+});
+
+describe('gapLine', () => {
+  it('起止、长度、取样点数，各种"断"只列有的，最后是建议的 --walkway', () => {
+    const gap = { from: 269.7, to: 284.4, samples: 55, jumps: 19, sunken: 30, holes: 0 };
+    expect(gapLine(gap, { from: 267.5, to: 286.5 })).toBe(
+      '  269.7～284.4 米（14.7 米，55 个取样点）：19 处和前一个点差一级台阶以上，30 个点陷在坑里；建议 --walkway 267.5-286.5'
+    );
+    expect(gapLine({ ...gap, jumps: 0, sunken: 0, holes: 55 }, { from: 267.5, to: 286.5 })).toContain(
+      '：55 个点脚下没有网格；'
     );
   });
 });

@@ -570,7 +570,7 @@ export function useSceneModels(
     try {
       // 高斯泼溅用碰撞网格建，按清单的摆放和出生点（ADR 0156）；瓦片集用最精细一级的瓦片
       const navigation = model.splat
-        ? await loadSplatNavigation(model.splat, model.spawn, options)
+        ? await loadSplatNavigation(model.splat, model, options)
         : await loadNavigation(currentEffectUrl(model), options);
       if (signal.aborted) {
         return;

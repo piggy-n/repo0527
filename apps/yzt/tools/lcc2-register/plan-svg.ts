@@ -3,6 +3,7 @@
 import type { FloorGrid } from './floor-grid.ts';
 import { manifestEye, outlineLine, outlineSamples } from './roam-manifest.ts';
 import { EYE_HEIGHT, eyeAbove, HEAD_CLEARANCE, type RoamPoint, type TrackSample } from './roam.ts';
+import type { WalkwayGap } from './walkway.ts';
 
 /** 画在图上的一条路线：轨迹上的起止米数，和生成的路线（局部系，就是写进清单的那些点） */
 export interface PlanRoute {
@@ -10,6 +11,14 @@ export interface PlanRoute {
   readonly name: string;
   readonly from: number;
   readonly to: number;
+  readonly points: readonly RoamPoint[];
+}
+
+/** 画在图上的一条补的地板（ADR 0172）：轨迹上的起止米数、宽度（米）和生成的点（局部系） */
+export interface PlanWalkway {
+  readonly from: number;
+  readonly to: number;
+  readonly width: number;
   readonly points: readonly RoamPoint[];
 }
 
@@ -23,6 +32,9 @@ export interface PlanInput {
   /** 出生点（局部系）和朝向（从局部 x 轴逆时针的弧度） */
   readonly spawn: { readonly point: RoamPoint; readonly yaw: number };
   readonly routes: readonly PlanRoute[];
+  readonly walkways: readonly PlanWalkway[];
+  /** 断口候选（walkwayGaps）：在轨迹上标出来 */
+  readonly gaps: readonly Pick<WalkwayGap, 'from' | 'to'>[];
 }
 
 /** 局部系到画布的换算：正北朝上 */
@@ -54,6 +66,9 @@ const INK = '#0b0b0b';
 const INK_SECONDARY = '#52514e';
 const NO_FLOOR = '#8a8985';
 const LOW = '#d03b3b';
+// 补的地板画成按宽度的半透明带子，断口候选是垫在轨迹下面的一道橙色虚线
+const WALKWAY = '#2f9e8f';
+const GAP = '#e08a00';
 export const HEIGHT_RAMP: readonly string[] = [
   '#86b6ef',
   '#6da7ec',
@@ -242,6 +257,46 @@ function trackLayers(track: readonly TrackSample[], { toCanvas }: PlanProjection
   );
 }
 
+const walkwaySummary = ({ from, to, width, points }: PlanWalkway) =>
+  `补的地板：${from}～${to} 米，宽 ${width} 米，${points.length} 个点`;
+
+// 补的地板：按宽度画的带子，两头方的（同导航网格里伸出半个宽度）
+function walkwayLayer(walkways: readonly PlanWalkway[], { toCanvas, scale }: PlanProjection): string {
+  const parts = walkways.map(walkway => {
+    const points = walkway.points
+      .map(({ x, y }) => toCanvas(x, y))
+      .map(([x, y]) => `${px(x)},${px(y)}`)
+      .join(' ');
+    return (
+      `<polyline data-walkway="${walkway.from}-${walkway.to}" points="${points}" ` +
+      `stroke-width="${px(walkway.width * scale)}"><title>${escape(walkwaySummary(walkway))}</title></polyline>`
+    );
+  });
+  return (
+    `<g data-layer="walkways" fill="none" stroke="${WALKWAY}" stroke-opacity="0.45" stroke-linecap="square" ` +
+    `stroke-linejoin="round">${parts.join('')}</g>`
+  );
+}
+
+// 断口候选：轨迹上这一段垫一道橙色虚线
+function gapLayer(gaps: PlanInput['gaps'], track: readonly TrackSample[], { toCanvas }: PlanProjection): string {
+  const parts = gaps.map(({ from, to }) => {
+    const points = track
+      .filter(({ distance }) => distance >= from && distance <= to)
+      .map(({ point }) => toCanvas(point[0], point[1]))
+      .map(([x, y]) => `${px(x)},${px(y)}`)
+      .join(' ');
+    return (
+      `<polyline data-gap="${from.toFixed(1)}-${to.toFixed(1)}" points="${points}">` +
+      `<title>断口候选：${from.toFixed(1)}～${to.toFixed(1)} 米</title></polyline>`
+    );
+  });
+  return (
+    `<g data-layer="gaps" fill="none" stroke="${GAP}" stroke-width="10" stroke-dasharray="6 4" ` +
+    `stroke-linejoin="round">${parts.join('')}</g>`
+  );
+}
+
 const routeColor = (index: number) => ROUTE_COLORS[index] ?? INK_SECONDARY;
 
 /** 路线的长度（米）：水平加地板的高差 */
@@ -414,6 +469,11 @@ function panel(input: PlanInput, { scale }: PlanProjection, heights: HeightScale
     `路线上眼高低于 ${EYE_HEIGHT} 的点`
   );
   item(`<path d="M0 0h40" stroke="${NO_FLOOR}" stroke-width="2" stroke-dasharray="4 3"/>`, '脚下没有网格的轨迹');
+  item(
+    `<path d="M3 0h34" stroke="${GAP}" stroke-width="10" stroke-dasharray="6 4"/>`,
+    '断口候选：脚下缺人走的那层表面（--roam 列出）'
+  );
+  item(`<path d="M3 0h34" stroke="${WALKWAY}" stroke-opacity="0.45" stroke-width="10"/>`, '补的地板（--walkway）');
 
   if (routes.length > 0) {
     y += 8;
@@ -439,6 +499,8 @@ export function planSvg(input: PlanInput): string {
     `<title>${escape(input.title)} 的轨迹平面图</title>` +
     `<rect width="${width}" height="${height}" fill="${SURFACE}"/>` +
     floorPaths(input.grid, projection, input.heading, heights) +
+    walkwayLayer(input.walkways, projection) +
+    gapLayer(input.gaps, input.track, projection) +
     trackLayers(input.track, projection, heights) +
     routeLayers(input.routes, projection) +
     markLayer(input.track, projection) +

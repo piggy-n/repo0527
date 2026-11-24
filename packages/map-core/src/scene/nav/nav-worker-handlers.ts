@@ -29,10 +29,6 @@ export const navWorkerHandlers: WorkerHandlers<NavWorkerProtocol> = {
       options,
       context
     ),
-  buildScan: ({ meshes, options }, context) =>
-    buildGrid(
-      meshes.map(buffer => parsePlyTriangles(buffer)),
-      options,
-      context
-    )
+  buildScan: ({ meshes, extra, options }, context) =>
+    buildGrid([...meshes.map(buffer => parsePlyTriangles(buffer)), extra], options, context)
 };

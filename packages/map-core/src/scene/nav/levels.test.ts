@@ -35,12 +35,40 @@ function pixel(level: (typeof levels)[number], east: number, north: number, bear
   return Array.from(image.data);
 }
 
+// 扫描模型的网格：parts 是 [x0, y0, x1, y1, z] 的水平地面
+const scanGrid = (...parts: [number, number, number, number, number][]) =>
+  new NavGrid(
+    labelRegions(
+      buildNavGrid([triangles(...parts.map(part => floorQuad(...part)))], SCAN_NAV_OPTIONS),
+      SCAN_NAV_OPTIONS
+    )
+  );
+
 describe('detectLevels', () => {
   it('一层要多大按平方米算：0.1 米的格子上 11 × 11 米的一片（1 万多格）不够一层（ADR 0156）', () => {
     const parts = triangles(floorQuad(0, 0, 20, 20, 0), floorQuad(30, 0, 41, 11, 5));
     const scan = new NavGrid(labelRegions(buildNavGrid([parts], SCAN_NAV_OPTIONS), SCAN_NAV_OPTIONS));
     expect(scan.componentSize(scan.componentAt(35, 5, 5))).toBeGreaterThan(10000);
     expect(detectLevels(scan).map(level => level.height)).toStrictEqual([0]);
+  });
+
+  it('高差都在 2 米以内连成一组时，上下叠着的地面分到两层，切在高差最大的空档（龟山汉墓的两层展厅）', () => {
+    // 下层展厅（-2.8）正上方是上层展厅（0.6）；旁边的广场（-1）、墓（-3.5）不和谁叠着，把四片连成一组
+    const halls = scanGrid([0, 0, 20, 20, -2.8], [0, 0, 20, 20, 0.6], [-30, 0, -10, 15, -1], [30, 0, 50, 10, -3.5]);
+    const split = detectLevels(halls);
+
+    expect(split.map(({ height }) => height)).toStrictEqual([0.6, -2.8]);
+    // 切在广场和下层展厅之间，广场归上层、墓归下层
+    expect(split[0].from).toBeCloseTo(-1.9);
+    expect(levelOf(split, -1)?.index).toBe(0);
+    expect(levelOf(split, -3.5)?.index).toBe(1);
+  });
+
+  it('叠着的不多（不到 20 平方米）时不分：上面那片只伸出一点在下面那片上', () => {
+    const little = scanGrid([0, 0, 20, 20, 0], [19.5, 0, 39.5, 20, 1.6]);
+    expect(detectLevels(little).map(({ height }) => height)).toStrictEqual([0]);
+    const much = scanGrid([0, 0, 20, 20, 0], [10, 0, 30, 20, 1.6]);
+    expect(detectLevels(much).map(({ height }) => height)).toStrictEqual([1.6, 0]);
   });
 
   it('两片地面高差 5 米分成两层，楼梯不单独成层；地下从上往下 -1F、-2F，高度范围在中点相接', () => {

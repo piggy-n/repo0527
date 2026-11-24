@@ -1,6 +1,6 @@
 import { type GroundPoint, RoutePath, RouteTimeline, type SplatSource } from '@mx/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
-import type { ManifestModel, SceneManifest } from './api';
+import type { ManifestModel, ManifestWalkway, SceneManifest } from './api';
 
 export type ModelKind = ManifestModel['kind'];
 
@@ -76,6 +76,8 @@ export interface SceneModel {
   readonly defaultEffect: string;
   readonly spawn: ManifestModel['spawn'];
   readonly routes: readonly ModelRoute[];
+  /** 补的地板（ADR 0172），建导航网格时加进去；只有高斯泼溅有，其他模型为空 */
+  readonly walkways: readonly ManifestWalkway[];
   /** 高斯泼溅（ADR 0149）的索引地址和摆放；其他模型为 null */
   readonly splat: SplatSource | null;
   /** 贴地的参照（ADR 0170）：清单写了才有；室内、地下的模型没有 */
@@ -133,7 +135,15 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
     };
     if (model.kind === 'splat') {
       const splat = { url: resolve(model.lcc2), placement: model.placement };
-      return { ...shared, effects: [], defaultEffect: '', spawn: model.spawn, routes: routesOf(model), splat };
+      return {
+        ...shared,
+        effects: [],
+        defaultEffect: '',
+        spawn: model.spawn,
+        routes: routesOf(model),
+        walkways: model.walkways ?? [],
+        splat
+      };
     }
     return {
       ...shared,
@@ -145,6 +155,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
       defaultEffect: model.kind === 'white' ? model.effects[0].id : '',
       spawn: model.spawn,
       routes: routesOf(model),
+      walkways: [],
       splat: null
     };
   });

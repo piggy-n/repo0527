@@ -5,6 +5,7 @@ import { type NavFrame, navigationFrame, type Point3 } from './nav-frame';
 import { NavGrid } from './nav-grid';
 import { navigationLeaves, rootTransform } from './nav-leaves';
 import type { NavWorkerProtocol } from './nav-worker-protocol';
+import { type ScanWalkway, walkwayTriangles } from './walkway';
 
 /** 同时下载的文件数 */
 const DOWNLOADS = 4;
@@ -49,6 +50,8 @@ export interface ScanSource {
   readonly frame: NavFrame;
   /** 局部系里的一点（一般是出生点）；没有时从全部网格的中心读起 */
   readonly near: Point3 | null;
+  /** 补的地板（ADR 0172），局部系里；和碰撞网格一起构建 */
+  readonly walkways: readonly ScanWalkway[];
 }
 
 /** 扫描模型的导航网格；partial 是网格太多、只读了 near 附近的一部分，走到边上走不出去 */
@@ -181,11 +184,11 @@ export function keepMainRegion(data: NavGridData, near: Point3 | null): NavGridD
 }
 
 /**
- * 由碰撞网格构建扫描模型（LCC2）的导航网格（ADR 0156 第 2 节）：挑网格、主线程下载、Worker 里解析 PLY、构建、算区域，
- * 参数默认 SCAN_NAV_OPTIONS，只留出生点所在的区域（keepMainRegion）。中止的规则同 buildNavigation
+ * 由碰撞网格构建扫描模型（LCC2）的导航网格（ADR 0156 第 2 节）：挑网格、主线程下载、Worker 里解析 PLY、加上补的地板（ADR 0172）、
+ * 构建、算区域，参数默认 SCAN_NAV_OPTIONS，只留出生点所在的区域（keepMainRegion）。中止的规则同 buildNavigation
  */
 export async function buildScanNavigation(
-  { meshes, frame, near }: ScanSource,
+  { meshes, frame, near, walkways }: ScanSource,
   {
     signal,
     download = fetchFile,
@@ -207,11 +210,12 @@ export async function buildScanNavigation(
     onProgress
   );
   onProgress?.({ stage: 'build' });
+  const extra = walkwayTriangles(walkways);
   using host = new WorkerHost<NavWorkerProtocol>({ createWorker, maxRestarts: 0 });
   const data = await host.request(
     'buildScan',
-    { meshes: buffers, options: { ...SCAN_NAV_OPTIONS, ...options } },
-    { signal, transfer: buffers }
+    { meshes: buffers, extra, options: { ...SCAN_NAV_OPTIONS, ...options } },
+    { signal, transfer: [...buffers, extra.buffer] }
   );
   return { grid: new NavGrid(keepMainRegion(data, near)), frame, partial: selection.partial };
 }

@@ -57,7 +57,8 @@ const CATALOG = buildModelCatalog(
         lcc2: 'L/lcc2-sog-result/L.lcc2',
         placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 },
         spawn: { lng: 117.06, lat: 34.27, height: 59.2, heading: 20 },
-        routes: [{ id: 'tomb', name: '进墓室', path: [[117.06, 34.27, 59.2], [117.06, 34.2702, 56, 0.9]] }]
+        routes: [{ id: 'tomb', name: '进墓室', path: [[117.06, 34.27, 59.2], [117.06, 34.2702, 56, 0.9]] }],
+        walkways: [{ width: 1.2, path: [[117.06, 34.27, 59.2], [117.0601, 34.27, 59.1]] }]
       }
     ]
   }),
@@ -97,6 +98,7 @@ const NAVIGATION: Navigation = {
 interface PendingBuild {
   readonly url: string;
   readonly spawn?: unknown;
+  readonly walkways?: unknown;
   readonly signal: AbortSignal;
   readonly onProgress: (progress: NavBuildProgress) => void;
   readonly resolve: (navigation: Navigation) => void;
@@ -109,11 +111,12 @@ function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
   const builds: PendingBuild[] = [];
   const loadNavigation = (url: string, { signal, onProgress }: Pick<PendingBuild, 'signal' | 'onProgress'>) =>
     new Promise<Navigation>((resolve, reject) => builds.push({ url, signal, onProgress, resolve, reject }));
-  const loadSplatNavigation: LoadSplatNavigation = (splat, spawn, { signal, onProgress }) =>
+  const loadSplatNavigation: LoadSplatNavigation = (splat, { spawn, walkways }, { signal, onProgress }) =>
     new Promise<ScanNavigation>((resolve, reject) =>
       builds.push({
         url: splat.url,
         spawn,
+        walkways,
         signal,
         onProgress,
         resolve: navigation => resolve({ ...navigation, partial: false }),
@@ -945,7 +948,7 @@ describe('useSceneModels 步行时的地图（ADR 0087）', () => {
 describe('useSceneModels 高斯泼溅的漫游（ADR 0156）', () => {
   const INDEX_URL = 'https://maps.test/3dt/L/lcc2-sog-result/L.lcc2';
 
-  it('步行：用碰撞网格建导航网格（索引的地址、清单的出生点），不读瓦片集；建好后交给会话、有地图，泼溅照常显示', async () => {
+  it('步行：用碰撞网格建导航网格（索引的地址、清单的出生点和补的地板），不读瓦片集；建好后交给会话、有地图，泼溅照常显示', async () => {
     using ctx = setup();
     ctx.owner.add(['scan']);
     ctx.ready('scan');
@@ -955,6 +958,15 @@ describe('useSceneModels 高斯泼溅的漫游（ADR 0156）', () => {
     const build = required(ctx.builds[0], '没有建导航网格');
     expect(build.url).toBe(INDEX_URL);
     expect(build.spawn).toStrictEqual({ lng: 117.06, lat: 34.27, height: 59.2, heading: 20 });
+    expect(build.walkways).toStrictEqual([
+      {
+        width: 1.2,
+        path: [
+          [117.06, 34.27, 59.2],
+          [117.0601, 34.27, 59.1]
+        ]
+      }
+    ]);
     build.onProgress({ stage: 'download', done: 1, total: 4 });
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'preparing', progress: 0.2 });
 

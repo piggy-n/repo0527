@@ -9,11 +9,12 @@ import { type Placement, roundPlacement, trajectoryToMesh } from './placement.ts
 import { gridProjection } from './projection.ts';
 import { writePlan } from './plan-file.ts';
 import { type PlanInput, planSvg } from './plan-svg.ts';
-import { manifestPath, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
-import { cornerLine, cornerSummary, toleranceLabel } from './roam-report.ts';
+import { manifestPath, manifestSpawn, manifestWalkway, outline, type RoamFrame } from './roam-manifest.ts';
+import { cornerLine, cornerSummary, gapLine, toleranceLabel } from './roam-report.ts';
 import { routeWithCorners, spawnOf, STRAIGHT_HORIZONTAL, trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
+import { suggestedSpan, WALKWAY_WIDTH, walkwayFloors, walkwayGaps, walkwayOf } from './walkway.ts';
 
 // LCC2 的配准（ADR 0149 第 4 节）：在 apps/yzt 下运行 pnpm lcc2:register <索引> --datum <米>，用法见 docs/commands.md
 
@@ -58,11 +59,17 @@ function printRoam(
   const spawn = manifestSpawn(track, options.spawnAt, frame);
   console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
   // 路线先在局部系里算一遍，清单的写法和平面图都用它；拉直留下的拐点按原因计数，--diagnose 时逐个列出
+  // 补的地板经过的取样点，路线也走在补的地板上（ADR 0172），不落到玻璃下面的坑底；几段重叠时取写在后面的
+  const walkwayFloorsAt = new Map<number, number>();
+  options.walkways.forEach((span) =>
+    walkwayFloors(track, result.grid, span).forEach((floor, i) => walkwayFloorsAt.set(i, floor))
+  );
   const localRoutes = options.routes.map((span) => {
     const tolerance = span.tolerance ?? STRAIGHT_HORIZONTAL;
     const { points, corners } = routeWithCorners(track, span.from, span.to, result.grid, {
       tolerance,
-      stretches: options.stretches
+      stretches: options.stretches,
+      floors: walkwayFloorsAt
     });
     const label = toleranceLabel(span, tolerance, options.stretches);
     console.log(`路线 ${span.id}（${label}）：${cornerSummary(corners)}`);
@@ -82,6 +89,31 @@ function printRoam(
     const counts = routes.map(({ path }) => `${path.length} 个点`).join('、');
     console.log(`路线（${counts}）："routes": [\n${lines.join(',\n')}\n  ]`);
   }
+  // 补的地板（ADR 0172）：先列断口候选，给了 --walkway 再算
+  const gaps = walkwayGaps(track);
+  if (gaps.length === 0) {
+    console.log('断口候选：没有');
+  } else {
+    console.log(
+      '断口候选（脚下缺人走的那层表面：玻璃栈道、网格的洞、数据的边；在 /dev/nav-grid 上确认两边断成了两片，要补时照建议写 --walkway）：'
+    );
+    gaps.forEach((gap) => console.log(gapLine(gap, suggestedSpan(gap, track))));
+  }
+  const localWalkways = options.walkways.map((span) => {
+    const width = span.width ?? WALKWAY_WIDTH;
+    return { ...span, width, points: walkwayOf(track, result.grid, span) };
+  });
+  if (localWalkways.length > 0) {
+    const walkways = localWalkways.map(({ points, width }) => manifestWalkway(points, width, frame));
+    const lines = walkways.map(
+      ({ width, path }) =>
+        `    { "width": ${width}, "path": [\n` +
+        path.map((point) => `      ${JSON.stringify(point)}`).join(',\n') +
+        '\n    ] }'
+    );
+    const counts = walkways.map(({ path }) => `${path.length} 个点`).join('、');
+    console.log(`补的地板（${counts}）："walkways": [\n${lines.join(',\n')}\n  ]`);
+  }
   if (options.plan === null) {
     return null;
   }
@@ -91,7 +123,9 @@ function printRoam(
     grid: result.grid,
     track,
     spawn: spawnOf(track, options.spawnAt),
-    routes: localRoutes
+    routes: localRoutes,
+    walkways: localWalkways,
+    gaps
   };
 }
 
