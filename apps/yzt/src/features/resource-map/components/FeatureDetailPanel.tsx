@@ -12,7 +12,8 @@ import {
   featureLabel,
   type FeatureRow,
   featureRows,
-  type PickCandidate
+  type PickCandidate,
+  PICK_PAGE_SIZE
 } from '../feature-query';
 import { type CandidateList, type FeaturePick, hasMorePages, type MoreStatus } from '../composables/useFeaturePick';
 import styles from './FeatureDetailPanel.module.scss';
@@ -40,8 +41,13 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : '未知错误';
 }
 
-// 候选的数量：后端的有总数；框选用渲染要素的是松手时的快照，不说"共"（ADR 0049 第 2 节）
+// 候选的数量：后端的有总数；框选用渲染要素的是松手时的快照，不说"共"（ADR 0049 第 2 节）。过滤着时（ADR 0173）后端的总数是
+// 筛之前的：全部筛完了才写"共"，没筛完写筛出的和还没筛的（说明行一行放得下，320 宽的面板里不省略）
 function countOf({ mode, candidates, pages }: CandidateList): string {
+  if (pages?.filtered) {
+    const rest = pages.total - pages.loaded * PICK_PAGE_SIZE;
+    return rest > 0 ? `已筛出 ${candidates.length} 个，${rest} 个未筛` : `共 ${candidates.length} 个`;
+  }
   if (pages) {
     return `共 ${pages.total} 个，已列出 ${candidates.length} 个`;
   }

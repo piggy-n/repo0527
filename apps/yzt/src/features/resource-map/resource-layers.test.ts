@@ -4,6 +4,8 @@ import type { StyleGroup } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
+import { NO_FILTER } from './feature-filter';
+import { CLASS_FIELD } from './filter-fields';
 import {
   addedCodes,
   batchYearOptions,
@@ -127,14 +129,16 @@ describe('mergeDisplayState', () => {
       checked: true,
       opacity: 1,
       year: 2022,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({
       added: false,
       checked: false,
       opacity: 1,
       year: 2025,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
   });
 
@@ -158,7 +162,8 @@ describe('mergeDisplayState', () => {
       checked: true,
       opacity: 0.4,
       year: 2025,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(next.displays.get('bgdc_dltb')?.checked).toBe(false);
     expect(next.displays.has('bgdc_cjdcqjx')).toBe(false);
@@ -176,7 +181,8 @@ describe('mergeDisplayState', () => {
       checked: false,
       opacity: 1,
       year: 2024,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
   });
 
@@ -198,9 +204,10 @@ describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
 
   it('画在地图上要已加入并且显示', () => {
     expect(isDrawn(undefined)).toBe(false);
-    expect(isDrawn({ added: true, checked: true, opacity: 1, year: 2022, labeled: false })).toBe(true);
-    expect(isDrawn({ added: true, checked: false, opacity: 1, year: 2022, labeled: false })).toBe(false);
-    expect(isDrawn({ added: false, checked: true, opacity: 1, year: 2022, labeled: false })).toBe(false);
+    const display = { added: true, checked: true, opacity: 1, year: 2022, labeled: false, filter: NO_FILTER };
+    expect(isDrawn(display)).toBe(true);
+    expect(isDrawn({ ...display, checked: false })).toBe(false);
+    expect(isDrawn({ ...display, added: false })).toBe(false);
   });
 
   it('加入：放到最前面并显示；一次加多个时整批在最前，批内保持给出的先后；已加入的不动、不重复', () => {
@@ -239,7 +246,8 @@ describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
       checked: false,
       opacity: 0.5,
       year: 2022,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
 
     state = withAdded(state, ['bgdc_dltb']);
@@ -249,7 +257,8 @@ describe('当前地图：加入、移出、挪动（ADR 0157）', () => {
       checked: true,
       opacity: 0.5,
       year: 2022,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
   });
 
@@ -617,7 +626,7 @@ describe('resourceLabelsGroup（ADR 0160）', () => {
     if (!points || !lines) {
       throw new Error('目录里没有公用设施点或水域线');
     }
-    const display: ResourceDisplay = { added: true, checked: true, opacity: 1, year: 2025, labeled: true };
+    const display: ResourceDisplay = { added: true, checked: true, opacity: 1, year: 2025, labeled: true, filter: NO_FILTER };
     // 16 级（曲线的最后一个断点）往上让开多少
     const upAt16 = (override?: ResourceSymbolOverride) => labelTargetOf(points, display, override)?.reach?.at(-1)?.up;
 
@@ -674,14 +683,16 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
       checked: true,
       opacity: 0.4,
       year: 2023,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({
       added: false,
       checked: false,
       opacity: 1,
       year: 2023,
-      labeled: false
+      labeled: false,
+      filter: NO_FILTER
     });
     expect(next.displays.get('bgdc_dltb')).toBe(state.displays.get('bgdc_dltb'));
     expect(next.displays.get('csxhjctb_gyssp')).toBe(state.displays.get('csxhjctb_gyssp'));
@@ -699,5 +710,48 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
     expect(withYearForAll(initial, 2021)).toBe(initial);
     expect(withYearForAll(EMPTY_RESOURCE_LAYERS, 2024)).toBe(EMPTY_RESOURCE_LAYERS);
     expect(() => withYearForAll(initial, 2023.5)).toThrow('年份应是整数，收到 2023.5');
+  });
+});
+
+// 按 MapLibre 的语义：这个要素会被哪些图层画出
+function drawing(group: StyleGroup, type: 'Polygon' | 'LineString', properties: Record<string, unknown>): string[] {
+  return group.layers
+    .filter(item => 'filter' in item && featureFilter(item.filter, item.id).filter({ zoom: 12 }, { type, properties }))
+    .map(({ id }) => id);
+}
+
+describe('要素过滤（ADR 0173）', () => {
+  const initial = checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG));
+
+  it('资源的图层在几何过滤之外按条件过滤，样式合法；别的资源不受影响', () => {
+    const state = withDisplay(initial, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101'] } });
+    const group = derive(state);
+
+    expect(validateStyleMin({ version: 8, sources: group.sources, layers: [...group.layers] })).toStrictEqual([]);
+    expect(drawing(group, 'Polygon', { dlbm: '0101' })).toContain('resources-bgdc_dltb');
+    expect(drawing(group, 'Polygon', { dlbm: '0102' })).not.toContain('resources-bgdc_dltb');
+    // 线不因为条件画到面的图层上，别的资源照常
+    expect(drawing(group, 'LineString', { dlbm: '0101' })).not.toContain('resources-bgdc_dltb');
+    expect(drawing(group, 'Polygon', { dlbm: '0102' })).toContain('resources-bgdc_cjdcq');
+  });
+
+  it('标注图层按同一个条件：过滤掉的要素不写标注', () => {
+    const state = withDisplay(labelAll(initial), 'csxhjctb_hydl', { filter: { [CLASS_FIELD]: ['河流'] } });
+    const group = resourceLabelsGroup({ state, invalid: new Map() });
+    const labels = 'resource-labels-csxhjctb_hydl';
+
+    expect(drawing(group, 'LineString', { ccn: '河流' })).toContain(labels);
+    expect(drawing(group, 'LineString', { ccn: '水渠' })).not.toContain(labels);
+  });
+
+  it('目录到了以后按能过滤的字段整理存下的条件：去掉不认识的取值和字段，没有可过滤字段的资源不过滤', () => {
+    let restored = withDisplay(initial, 'bgdc_dltb', { filter: { [CLASS_FIELD]: ['0101', '没有的地类'], type: ['x'] } });
+    restored = withDisplay(restored, 'bgdc_cjdcq', { filter: { [CLASS_FIELD]: ['x'] } });
+    const merged = mergeDisplayState({ ...restored, catalog: null }, CATALOG);
+
+    expect(merged.displays.get('bgdc_dltb')?.filter).toStrictEqual({ [CLASS_FIELD]: ['0101'] });
+    expect(merged.displays.get('bgdc_cjdcq')?.filter).toBe(NO_FILTER);
+    // 不用整理的保留原来的对象
+    expect(merged.displays.get('csxhjctb_hydl')).toBe(restored.displays.get('csxhjctb_hydl'));
   });
 });

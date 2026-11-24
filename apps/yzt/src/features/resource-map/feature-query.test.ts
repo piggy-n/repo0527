@@ -37,6 +37,8 @@ import {
   serverCandidates,
   weightedEstimate
 } from './feature-query';
+import { NO_FILTER } from './feature-filter';
+import { CLASS_FIELD } from './filter-fields';
 import type { ResourceDisplay, ResourceLayersState } from './resource-layers';
 
 function layer(code: string, geoType: ResourceTreeLayer['geoType'], ...yearList: [number, ...number[]]) {
@@ -70,7 +72,8 @@ const display = (year: number, checked = true): ResourceDisplay => ({
   checked,
   opacity: 1,
   year,
-  labeled: false
+  labeled: false,
+  filter: NO_FILTER
 });
 
 // 从上到下：水域线、村级调查区、地类图斑、坑塘（没勾选）、公用设施点
@@ -91,7 +94,7 @@ function targetOf(code: string, year: number): PickResource {
   if (!resource) {
     throw new Error(`测试目录里没有 ${code}`);
   }
-  return { resource, year, sourceId: `resources-${code}`, layerCode: `${code}_${year}` };
+  return { resource, year, sourceId: `resources-${code}`, layerCode: `${code}_${year}`, filter: NO_FILTER };
 }
 
 const DLTB = targetOf('bgdc_dltb', 2022);
@@ -114,6 +117,41 @@ describe('queryCapabilityOf', () => {
     for (const code of ['szy_kt', 'lcsh_lcshfbtb', 'gtkjgh_czkfbj', 'xbgdc_dltb']) {
       expect(queryCapabilityOf(code)).toStrictEqual({ identify: false, detail: false });
     }
+  });
+});
+
+describe('要素过滤（ADR 0173）', () => {
+  it('识别目标带着资源当时的过滤条件', () => {
+    const filter = { [CLASS_FIELD]: ['0101'] };
+    const displays = new Map([...STATE.displays].map(([code, item]) => [code, code === 'bgdc_dltb' ? { ...item, filter } : item]));
+    const targets = pickResources({ ...STATE, displays }, new Map(), 9);
+    expect(targets.find(target => target.resource.code === 'bgdc_dltb')?.filter).toBe(filter);
+    expect(targets.find(target => target.resource.code === 'csxhjctb_hydl')?.filter).toBe(NO_FILTER);
+  });
+
+  it('后端的结果只留符合条件的：记录的字段和瓦片一样（地类先按编码、再按名称查历史地类）；没有过滤时都留', () => {
+    const filtered = { ...DLTB, filter: { [CLASS_FIELD]: ['0101', 'legacy:后备耕地'] } };
+    const records = [
+      { guid: guid('a'), bsm: '1', dlbm: '0101', dlmc: '水田' },
+      { guid: guid('b'), bsm: '2', dlbm: '0102', dlmc: '水浇地' },
+      { guid: guid('c'), bsm: '3', dlbm: '9999', dlmc: '后备耕地' }
+    ];
+
+    expect(serverCandidates(filtered, records).map(candidate => candidate.guid)).toStrictEqual([guid('a'), guid('c')]);
+    expect(serverCandidates(DLTB, records)).toHaveLength(3);
+  });
+
+  it('过滤着照样查后端：14 级以下地类图斑的瓦片不带 guid（ADR 0050），只靠渲染要素点不到、框不到', () => {
+    const filtered = { ...DLTB, filter: { [CLASS_FIELD]: ['0101'] } };
+    const guidless = [rendered(DLTB.sourceId, { bsm: '1', dlbm: '0101', dlmc: '水田' }, 0)];
+    const box = { from: { x: 0, y: 0 }, to: { x: 200, y: 100 } };
+    const origin = { x: 0, y: 0 };
+
+    expect(kindsOf(planIdentify([filtered], origin, 13.99, fakeView(guidless).view))).toStrictEqual([['bgdc_dltb', 'server']]);
+    expect(kindsOf(planBox([filtered], box, 12, fakeView(guidless).view))).toStrictEqual([['bgdc_dltb', 'server']]);
+    expect(kindsOf(planIdentify([filtered], origin, 16, fakeView([], { kind: '3d' }).view))).toStrictEqual([
+      ['bgdc_dltb', 'server']
+    ]);
   });
 });
 

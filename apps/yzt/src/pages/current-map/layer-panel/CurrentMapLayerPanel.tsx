@@ -3,6 +3,7 @@ import { useMap } from '@mx/map-vue';
 import { ElButton, ElInput } from 'element-plus';
 import { computed, defineComponent, nextTick, onScopeDispose, type PropType, ref, type VNode, watch } from 'vue';
 import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSelect';
+import { FeatureFilter } from '@/features/resource-map/components/FeatureFilter';
 import { LabelEditor } from '@/features/resource-map/components/LabelEditor';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
 import { LegendPreview } from '@/features/resource-map/components/LegendPreview';
@@ -16,6 +17,8 @@ import {
   resourceCodeOfKey,
   resourceKey
 } from '@/features/resource-map/layer-panel';
+import { isFiltering } from '@/features/resource-map/feature-filter';
+import { filterFieldsOf } from '@/features/resource-map/filter-fields';
 import { labelFieldsOf } from '@/features/resource-map/label-fields';
 import { fillOpacityOf, legendEntry } from '@/features/resource-map/legend';
 import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSelect';
@@ -58,6 +61,7 @@ import type { RequestStatus } from '@/shared/map/request-status/useRequestStatus
 import { LAYER_HINTS, type LayerHint } from '@/shared/config/layer-hints';
 import { COVER_OPACITY, type MoveAction, moveIndex, selectionAfterRemoval, steppedKey } from './current-list';
 import styles from './CurrentMapLayerPanel.module.scss';
+import { filterMenuEntry, type FilterRowState, filterToolItem } from './filter-entries';
 import { labelMenuEntries, type LabelRowState, labelToolItem } from './label-entries';
 import { resourceStatusKindsOf } from './layer-hints';
 import type { CurrentLayers } from './useCurrentLayers';
@@ -79,10 +83,15 @@ const CATALOG_VIEWS: readonly { readonly id: CatalogView; readonly label: string
 
 const catalogViewOf = (id: string): CatalogView | undefined => CATALOG_VIEWS.find(item => item.id === id)?.id;
 
-/** 浮层：透明度、图例或标注（用户 2026-11-14：分开，没有页签；标注是第三种，ADR 0160） */
-type PopoverKind = 'opacity' | 'legend' | 'label';
+/** 浮层：透明度、图例、标注或过滤（用户 2026-11-14：分开，没有页签；标注是第三种，ADR 0160；过滤是第四种，ADR 0173） */
+type PopoverKind = 'opacity' | 'legend' | 'label' | 'filter';
 
-const POPOVER_NAMES: Readonly<Record<PopoverKind, string>> = { opacity: '透明度', legend: '图例', label: '标注' };
+const POPOVER_NAMES: Readonly<Record<PopoverKind, string>> = {
+  opacity: '透明度',
+  legend: '图例',
+  label: '标注',
+  filter: '过滤'
+};
 
 /** 开着的右键菜单：在资源还是图层上，右键的是哪一项，在哪里打开 */
 interface PanelMenuState {
@@ -271,9 +280,10 @@ export const CurrentMapLayerPanel = defineComponent({
         selected.value = null;
       }
     });
-    // 浮层跟着换到选中的一项；模型没有透明度和图例，选中模型时关闭
+    // 浮层跟着换到选中的一项；模型没有透明度和图例，选中模型时关闭；过滤换到没有可过滤字段的资源时关闭
     watch(selected, () => {
-      if (selectedCode.value === null) {
+      const code = selectedCode.value;
+      if (code === null || (popover.value?.kind === 'filter' && filterFieldsOf(code).length === 0)) {
         popover.value = null;
       } else if (popover.value) {
         popover.value = { kind: popover.value.kind, configuring: false };
@@ -462,6 +472,17 @@ export const CurrentMapLayerPanel = defineComponent({
       };
     };
 
+    // 一行和过滤有关的状态（ADR 0173）：模型没有属性过滤，资源要有可过滤的字段
+    const filterRow = (key: string): FilterRowState => {
+      const code = resourceCodeOfKey(key);
+      const display = code === null ? undefined : state.value.displays.get(code);
+      return {
+        model: code === null,
+        filterable: code !== null && filterFieldsOf(code).length > 0,
+        filtering: display !== undefined && isFiltering(display.filter)
+      };
+    };
+
     const togglePopover = (kind: PopoverKind) => {
       popover.value = popover.value?.kind === kind ? null : { kind, configuring: false };
     };
@@ -499,7 +520,7 @@ export const CurrentMapLayerPanel = defineComponent({
       ) {
         return false;
       }
-      const entry = legendEntry(resource, display.year, props.symbols.overrideOf(code));
+      const entry = legendEntry(resource, display.year, props.symbols.overrideOf(code), display.filter);
       return display.opacity * fillOpacityOf(entry) >= COVER_OPACITY;
     };
 
@@ -584,10 +605,10 @@ export const CurrentMapLayerPanel = defineComponent({
           disabled: key === null || model,
           pressed: popover.value?.kind === 'legend'
         },
-        // 第 8 个按钮：标题改成两个字后放得下（ADR 0160）
+        // 第 7 个按钮：标题改成两个字后放得下（ADR 0160）
         labelToolItem(key === null ? null : labelRow(key), popover.value?.kind === 'label'),
-        'divider',
-        { key: 'remove-layer', icon: 'layer-remove', label: '移除图层', tip: '移除', disabled: key === null }
+        // 最右是过滤，取代原来竖线后面的移除（用户 2026-11-24：放不下可以去掉移除；行尾的叉、Delete、右键菜单的移除都在，ADR 0173）
+        filterToolItem(key === null ? null : filterRow(key), popover.value?.kind === 'filter')
       ];
     });
 
@@ -600,8 +621,8 @@ export const CurrentMapLayerPanel = defineComponent({
         togglePopover(action);
       } else if (action === 'label' && labelRow(key).labelable) {
         togglePopover('label');
-      } else if (action === 'remove-layer') {
-        removeKeys([key]);
+      } else if (action === 'filter' && filterRow(key).filterable) {
+        togglePopover('filter');
       } else if (action === 'move-up' || action === 'move-down' || action === 'move-top' || action === 'move-bottom') {
         move(key, action);
       }
@@ -659,6 +680,7 @@ export const CurrentMapLayerPanel = defineComponent({
               { key: 'opacity', label: '透明度', icon: 'layer-opacity' },
               { key: 'legend', label: '图例', icon: 'map-legend' },
               ...labelMenuEntries(labelRow(current.key)),
+              filterMenuEntry(filterRow(current.key)),
               'divider'
             ] satisfies PanelMenuEntry[])
           : []),
@@ -737,6 +759,9 @@ export const CurrentMapLayerPanel = defineComponent({
           choose(current.key);
           popover.value = { kind: 'label', configuring: false };
         }
+      } else if (action === 'filter' && filterRow(current.key).filterable) {
+        choose(current.key);
+        popover.value = { kind: 'filter', configuring: false };
       } else if (action === 'roam' && id !== null && roamable(id)) {
         props.models.startRoam(id);
       } else if (action === 'retry' && id !== null) {
@@ -793,6 +818,11 @@ export const CurrentMapLayerPanel = defineComponent({
                 const open = popover.value?.kind === 'legend' && selected.value === key;
                 choose(key);
                 popover.value = open ? null : { kind: 'legend', configuring: false };
+              }}
+              onFilter={() => {
+                const open = popover.value?.kind === 'filter' && selected.value === key;
+                choose(key);
+                popover.value = open ? null : { kind: 'filter', configuring: false };
               }}
               onRemove={() => removeKeys([key])}
             />
@@ -929,7 +959,7 @@ export const CurrentMapLayerPanel = defineComponent({
       if (!current || code === null || !resource || !display) {
         return null;
       }
-      const entry = legendEntry(resource, display.year, props.symbols.overrideOf(code));
+      const entry = legendEntry(resource, display.year, props.symbols.overrideOf(code), display.filter);
       const legend = current.kind === 'legend';
       const configurable = legend && hasLegendItems(entry);
       return (
@@ -978,6 +1008,9 @@ export const CurrentMapLayerPanel = defineComponent({
             default: () => {
               if (current.kind === 'label') {
                 return [<LabelEditor layers={props.resources} symbols={props.symbols} code={code} />];
+              }
+              if (current.kind === 'filter') {
+                return [<FeatureFilter layers={props.resources} symbols={props.symbols} code={code} />];
               }
               return legend
                 ? [

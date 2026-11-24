@@ -6,6 +6,8 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup, StyleImage, StyleImages } from '@mx/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
+import { type FeatureFilter, filterExpression, NO_FILTER, normalizedFilter } from './feature-filter';
+import { filterFieldsOf } from './filter-fields';
 import { type LabelEmphasis, labelsGroupOf, type LabelTarget, pointReach, resourceLabelLayer } from './labels';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
@@ -59,6 +61,8 @@ export interface ResourceDisplay {
   readonly year: number;
   /** 显示标注（ADR 0160）：只对画在地图上、登记了标注字段的资源起作用；默认都不开（用户 2026-11-16） */
   readonly labeled: boolean;
+  /** 要素过滤（ADR 0173）：按字段勾着的取值，NO_FILTER 是不过滤；和透明度一样按资源、按套记下 */
+  readonly filter: FeatureFilter;
 }
 
 /** 按 code 的显示状态；连同它所基于的目录放在一起，推导只读这一份，不会读到目录换了、状态还没合并的中间态 */
@@ -87,7 +91,7 @@ export function latestYear(resource: Resource): number {
 // 登记表里默认勾选的资源（地类图斑）默认加入并显示
 function defaultDisplay(resource: Resource): ResourceDisplay {
   const shown = resourceStyle(resource.code).checked ?? false;
-  return { added: shown, checked: shown, opacity: DEFAULT_OPACITY, year: latestYear(resource), labeled: false };
+  return { added: shown, checked: shown, opacity: DEFAULT_OPACITY, year: latestYear(resource), labeled: false, filter: NO_FILTER };
 }
 
 /** 画在地图上：已加入当前地图并且显示 */
@@ -183,9 +187,11 @@ export function withMoved(state: ResourceLayersState, code: string, to: number):
   return { ...state, order: [...reordered, ...rest] };
 }
 
-// 年份仍在资源的年份里就保留，否则改用最新的一年；加入、勾选和透明度保留
+// 年份仍在资源的年份里就保留，否则改用最新的一年；过滤条件按现在能过滤的字段整理（ADR 0173）；加入、勾选和透明度保留
 function keptDisplay(display: ResourceDisplay, resource: Resource): ResourceDisplay {
-  return resource.years.includes(display.year) ? display : { ...display, year: latestYear(resource) };
+  const year = resource.years.includes(display.year) ? display.year : latestYear(resource);
+  const filter = normalizedFilter(filterFieldsOf(resource.code), display.filter);
+  return year === display.year && filter === display.filter ? display : { ...display, year, filter };
 }
 
 // 已有的资源保持原来的顺序，新出现的按目录的顺序排在最后
@@ -267,22 +273,29 @@ interface ResourceEntry {
   readonly images: StyleImages;
 }
 
+// 要素的过滤：几何类型，加上要素过滤的条件（ADR 0173）；资源的图层和标注图层都用它
+function featureFilterOf(resource: Resource, filter: FeatureFilter): ExpressionSpecification {
+  const geometry = GEOMETRY_FILTERS[resource.geometry];
+  const condition = filterExpression(resource.code, filter);
+  return condition ? ['all', geometry, condition] : geometry;
+}
+
 // 共用的部分：数据源、瓦片图层名、最小级别
 type LayerCommon = Pick<LayerSpecification & { type: 'fill' }, 'source' | 'source-layer' | 'minzoom'>;
 
 // 一个图层的 ID：主图层同数据源，拆出的图层加后缀
 const partLayerId = (id: string, part: ResourceLayerPart) => (part.suffix ? `${id}-${part.suffix}` : id);
 
-// 一个图层：ID 按后缀区分，按线型拆开的图层在几何过滤之外再按要素的线型过滤，透明度乘在各几何类型的不透明度上
+// 一个图层：ID 按后缀区分，按线型拆开的图层在要素的过滤之外再按要素的线型过滤，透明度乘在各几何类型的不透明度上
 function layerOf(
   part: ResourceLayerPart,
   id: string,
   common: LayerCommon,
-  geometryFilter: ExpressionSpecification,
+  featureFilter: ExpressionSpecification,
   opacity: number
 ): LayerSpecification {
   const layerId = partLayerId(id, part);
-  const filter: ExpressionSpecification = part.filter ? ['all', geometryFilter, part.filter] : geometryFilter;
+  const filter: ExpressionSpecification = part.filter ? ['all', featureFilter, part.filter] : featureFilter;
   const shared = { ...common, id: layerId, filter };
   if (part.type === 'fill') {
     return { ...shared, type: 'fill', paint: { ...part.paint, 'fill-opacity': opacity } };
@@ -299,7 +312,7 @@ function layerOf(
 // 有最小显示级别的资源，数据源和图层用同一个最小级别：更低的级别不请求瓦片
 function resourceEntry(
   resource: Resource,
-  { opacity, year }: ResourceDisplay,
+  { opacity, year, filter }: ResourceDisplay,
   tileBase: string,
   style: ResourceStyle,
   override: ResourceSymbolOverride | undefined
@@ -316,18 +329,18 @@ function resourceEntry(
     ...(promoteId === undefined ? {} : { promoteId })
   };
   const common: LayerCommon = { source: id, 'source-layer': sourceLayerOf(resource.code, year), ...zoomRange };
-  const geometryFilter = GEOMETRY_FILTERS[resource.geometry];
+  const features = featureFilterOf(resource, filter);
   const { parts, images } = resourceStyleLayers(resource, style, override);
-  return { id, source, layers: parts.map(part => layerOf(part, id, common, geometryFilter, opacity)), images };
+  return { id, source, layers: parts.map(part => layerOf(part, id, common, features, opacity)), images };
 }
 
 /**
- * 资源的标注图层要用的（ADR 0160）：数据源、瓦片图层名、几何过滤、级别和透明度来自资源，样式是默认标注叠加覆盖；
+ * 资源的标注图层要用的（ADR 0160）：数据源、瓦片图层名、要素的过滤（ADR 0173）、级别和透明度来自资源，样式是默认标注叠加覆盖；
  * 点资源的文字按画出的点让开。没有登记标注字段的资源为 null
  */
 export function labelTargetOf(
   resource: Resource,
-  { opacity, year }: ResourceDisplay,
+  { opacity, year, filter }: ResourceDisplay,
   override: ResourceSymbolOverride | undefined,
   style: ResourceStyle = resourceStyle(resource.code)
 ): LabelTarget | null {
@@ -341,7 +354,7 @@ export function labelTargetOf(
     geometry,
     source: resourceSourceId(code),
     sourceLayer: sourceLayerOf(code, year),
-    filter: GEOMETRY_FILTERS[geometry],
+    filter: featureFilterOf(resource, filter),
     minzoom,
     label,
     reach: geometry === 'circle' ? pointReach(pointLooks(resource, override, style)) : null,
@@ -361,7 +374,7 @@ export function validateCatalog(
 ): ReadonlyMap<string, readonly string[]> {
   const invalid = new Map<string, readonly string[]>();
   for (const resource of catalog?.resources.values() ?? []) {
-    const display = { added: true, checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource), labeled: true };
+    const display = { added: true, checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource), labeled: true, filter: NO_FILTER };
     try {
       const style = styleOf(resource.code);
       const { id, source, layers } = resourceEntry(resource, display, tileBase, style, undefined);

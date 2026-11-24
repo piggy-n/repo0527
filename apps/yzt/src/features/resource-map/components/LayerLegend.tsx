@@ -2,6 +2,7 @@ import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntry } from '../legend';
+import { FilterNote } from './FilterNote';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
 import { LegendSettings } from './LegendSettings';
 import { ValueLegend } from './ValueLegend';
@@ -16,7 +17,8 @@ export function hasLegendItems(entry: LegendEntry): boolean {
  * 当前图层浮层里一个资源的可编辑图例（ADR 0157）：复用右侧"图例"页的浏览和编辑——地类、按取值的条目列表，
  * 点条目编辑这一类，configuring 时配置整个图层（浮层标题上的样式设置按钮，按下时离开正在编辑的一类）；
  * 统一符号、统一配色的直接是样式设置。
- * 浏览状态（搜索）按资源保管，换一个资源再换回来时照旧；正在编辑的类别换资源时回到浏览
+ * 浏览状态（搜索）按资源保管，换一个资源再换回来时照旧；正在编辑的类别换资源时回到浏览。
+ * 过滤着时（ADR 0173）只列勾着的类别，类别体现不了的条件写在最上面
  */
 export const LayerLegend = defineComponent({
   name: 'LayerLegend',
@@ -53,7 +55,9 @@ export const LayerLegend = defineComponent({
     const entry = computed(() => {
       const resource = props.layers.state.value.catalog?.resources.get(props.code);
       const display = props.layers.state.value.displays.get(props.code);
-      return resource && display ? legendEntry(resource, display.year, props.symbols.overrideOf(props.code)) : null;
+      return resource && display
+        ? legendEntry(resource, display.year, props.symbols.overrideOf(props.code), display.filter)
+        : null;
     });
 
     const back = () => {
@@ -79,8 +83,14 @@ export const LayerLegend = defineComponent({
       if (!current) {
         return null;
       }
+      const note = current.filterNote === null ? null : <FilterNote text={current.filterNote} />;
       if (!hasLegendItems(current)) {
-        return <div class={styles.legend}>{renderSettings(current, undefined, false)}</div>;
+        return (
+          <div class={styles.legend}>
+            {note}
+            {renderSettings(current, undefined, false)}
+          </div>
+        );
       }
       if (editing.value !== null) {
         return <div class={styles.legend}>{renderSettings(current, editing.value, true)}</div>;
@@ -90,6 +100,7 @@ export const LayerLegend = defineComponent({
       }
       return (
         <div class={styles.legend} data-layer-legend={current.code}>
+          {note}
           {current.kind === 'landuse' ? (
             <LanduseLegend
               symbols={props.symbols}

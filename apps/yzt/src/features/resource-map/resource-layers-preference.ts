@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NO_FILTER } from './feature-filter';
 import type { ResourceDisplay, ResourceLayersState } from './resource-layers';
 
 const displaySchema = z.object({
@@ -8,7 +9,10 @@ const displaySchema = z.object({
   opacity: z.number().min(0).max(1),
   year: z.number().int(),
   // 2026-11-16 之前存下的没有这一项，那时没有标注，按不显示算（ADR 0160）；格式只是多了一项，版本不变
-  labeled: z.boolean().optional()
+  labeled: z.boolean().optional(),
+  // 要素过滤（ADR 0173）：字段 → 勾着的取值；2026-11-24 之前存下的没有这一项，按不过滤算；格式只是多了一项，版本不变。
+  // 字段和取值不在这里校验，目录到了以后按能过滤的字段整理（mergeDisplayState）
+  filter: z.record(z.string(), z.array(z.string()).readonly()).optional()
 });
 
 // 一套已添加的资源：各资源的设置、叠放顺序和最后一次批量设置的年份
@@ -27,7 +31,7 @@ const consistent = ({ displays, order }: { readonly displays: object; readonly o
 
 const CONSISTENT_MESSAGE = { message: '面板顺序有重复，或者和各资源的设置对不上' };
 
-/** 存下的一套资源图层（ADR 0042、0169）：每个资源的加入、勾选、透明度、年份、标注的显隐和叠放顺序，以及批量设置的年份 */
+/** 存下的一套资源图层（ADR 0042、0169）：每个资源的加入、勾选、透明度、年份、标注的显隐、要素过滤和叠放顺序，以及批量设置的年份 */
 export const storedResourceLayerSetSchema = z.object(setShape).refine(consistent, CONSISTENT_MESSAGE);
 
 export type StoredResourceLayerSet = z.infer<typeof storedResourceLayerSetSchema>;
@@ -52,12 +56,15 @@ export function toStoredResourceLayers(
 
 /**
  * 存下的一套还原成不带目录的显示状态；目录到了以后按 ADR 0041 第 3 节合并，不直接使用。
- * 没有 added 的是改版前存的：勾选过的资源算已加入，叠放顺序不变（ADR 0157）；没有 labeled 的不显示标注（ADR 0160）
+ * 没有 added 的是改版前存的：勾选过的资源算已加入，叠放顺序不变（ADR 0157）；没有 labeled 的不显示标注（ADR 0160）；
+ * 没有 filter 的不过滤（ADR 0173）
  */
 export function fromStoredResourceLayers({ displays, order }: StoredResourceLayerSet): ResourceLayersState {
-  const restored = Object.entries(displays).map(([code, { added, labeled, ...display }]): [string, ResourceDisplay] => [
-    code,
-    { ...display, added: added ?? display.checked, labeled: labeled ?? false }
-  ]);
+  const restored = Object.entries(displays).map(
+    ([code, { added, labeled, filter, ...display }]): [string, ResourceDisplay] => [
+      code,
+      { ...display, added: added ?? display.checked, labeled: labeled ?? false, filter: filter ?? NO_FILTER }
+    ]
+  );
   return { catalog: null, displays: new Map(restored), order };
 }
