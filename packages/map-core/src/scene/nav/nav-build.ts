@@ -50,7 +50,7 @@ export interface ScanSource {
   readonly frame: NavFrame;
   /** 局部系里的一点（一般是出生点）；没有时从全部网格的中心读起 */
   readonly near: Point3 | null;
-  /** 补的地板（ADR 0170），局部系里；和碰撞网格一起构建 */
+  /** 补的地板（ADR 0172），局部系里；和碰撞网格一起构建 */
   readonly walkways: readonly ScanWalkway[];
 }
 
@@ -184,7 +184,7 @@ export function keepMainRegion(data: NavGridData, near: Point3 | null): NavGridD
 }
 
 /**
- * 由碰撞网格构建扫描模型（LCC2）的导航网格（ADR 0156 第 2 节）：挑网格、主线程下载、Worker 里解析 PLY、加上补的地板（ADR 0170）、
+ * 由碰撞网格构建扫描模型（LCC2）的导航网格（ADR 0156 第 2 节）：挑网格、主线程下载、Worker 里解析 PLY、加上补的地板（ADR 0172）、
  * 构建、算区域，参数默认 SCAN_NAV_OPTIONS，只留出生点所在的区域（keepMainRegion）。中止的规则同 buildNavigation
  */
 export async function buildScanNavigation(

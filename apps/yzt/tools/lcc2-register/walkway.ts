@@ -1,4 +1,4 @@
-// 补的地板（ADR 0170）：扫描采不到的步行表面（玻璃栈道这类）沿扫描轨迹补上，找断口候选、算地板都在网格的局部系里；
+// 补的地板（ADR 0172）：扫描采不到的步行表面（玻璃栈道这类）沿扫描轨迹补上，找断口候选、算地板都在网格的局部系里；
 // 规则和理由见 docs/commands.md 的 --walkway，换成经纬度在 roam-manifest.ts
 import { SCANNER_WINDOW } from './fit.ts';
 import { type FloorGrid, floorsAt } from './floor-grid.ts';
@@ -96,7 +96,7 @@ const count = (flags: readonly boolean[], first: number, last: number) =>
   flags.slice(first, last + 1).filter(Boolean).length;
 
 /**
- * 断口候选（ADR 0170）：扫描的人走过、碰撞网格里却没有连着的地板的地方，玻璃栈道、网格的洞、数据的边都会是。
+ * 断口候选（ADR 0172）：扫描的人走过、碰撞网格里却没有连着的地板的地方，玻璃栈道、网格的洞、数据的边都会是。
  * 是不是真的把导航网格断成了两片，要在 /dev/nav-grid 上看
  */
 export function walkwayGaps(track: readonly TrackSample[]): WalkwayGap[] {

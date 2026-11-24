@@ -81,7 +81,7 @@ describe('sceneManifestSchema', () => {
     expect(parse(withSplat({ spawn, routes: [{ id: 'tomb', name: '进墓室', path }] })).success).toBe(true);
   });
 
-  it('高斯泼溅可以写补的地板：宽度和沿线的点（ADR 0170）', () => {
+  it('高斯泼溅可以写补的地板：宽度和沿线的点（ADR 0172）', () => {
     const walkways = [{ width: 1.2, path: WALKWAY_PATH }];
     expect(parse(withSplat({ walkways })).success).toBe(true);
     expect(parse(withSplat({ walkways: [] })).success).toBe(true);
@@ -115,7 +115,7 @@ describe('sceneManifestSchema', () => {
       withSplat({ maximumScreenSpaceError: 8 }),
       // 有路线、没有出生点的泼溅：导航网格按出生点留区域，没有时会留下屋顶这类最大的一片（ADR 0156）
       withSplat({ spawn: undefined, routes: [{ id: 'r', name: 'R', path: [[117.06, 34.27, 58], [117.0601, 34.27, 58]] }] }),
-      // 补的地板（ADR 0170）：只有泼溅能写；宽度要大于 0、不超过 5 米；至少两个点，每个点三个数；不能有多余的字段
+      // 补的地板（ADR 0172）：只有泼溅能写；宽度要大于 0、不超过 5 米；至少两个点，每个点三个数；不能有多余的字段
       withModel({ walkways: [{ width: 1.2, path: WALKWAY_PATH }] }),
       withSplat({ walkways: [{ width: 0, path: WALKWAY_PATH }] }),
       withSplat({ walkways: [{ width: 120, path: WALKWAY_PATH }] }),
@@ -179,7 +179,7 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     // 星海广场站三条，彭城广场（泼溅）三条、驮篮山1号两条、土山墓三条、龟山汉墓四条、东洞山楚王墓一条
     // （泼溅的路线取自扫描轨迹、拉直过，ADR 0156 第 4 节；2026-11-16 除土山墓 tomb 外换成贪心拉直的路线；
-    // 2026-11-23 龟山汉墓加了展厅的两条，墓里的两条过玻璃栈道的一段改走补的地板，ADR 0170）
+    // 2026-11-23 龟山汉墓加了展厅的两条，墓里的两条过玻璃栈道的一段改走补的地板，ADR 0172）
     expect(lengths).toStrictEqual([125, 133, 58, 79, 183, 91, 191, 152, 37, 189, 147, 243, 154, 152, 236, 151]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
@@ -319,7 +319,7 @@ describe('buildModelCatalog', () => {
     expect(catalog.map(({ walkways }) => walkways)).toStrictEqual([[], [], [], []]);
   });
 
-  it('高斯泼溅的补的地板原样带上（ADR 0170）', () => {
+  it('高斯泼溅的补的地板原样带上（ADR 0172）', () => {
     const walkways = [{ width: 1.2, path: WALKWAY_PATH }];
     const [model] = buildModelCatalog(sceneManifestSchema.parse(withSplat({ walkways })), MANIFEST_URL);
     expect(model?.walkways).toStrictEqual(walkways);

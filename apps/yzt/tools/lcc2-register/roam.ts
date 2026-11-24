@@ -658,7 +658,7 @@ export interface RouteOptions {
   readonly tolerance?: number;
   /** 按轨迹米数分段的容差，比 tolerance 优先；几段重叠时取写在后面的 */
   readonly stretches?: readonly Stretch[];
-  /** 给定的地板（轨迹取样点的序号 → 高度）：补的地板经过的取样点（ADR 0170），这些点不按 steadyFloors 选 */
+  /** 给定的地板（轨迹取样点的序号 → 高度）：补的地板经过的取样点（ADR 0172），这些点不按 steadyFloors 选 */
   readonly floors?: ReadonlyMap<number, number>;
 }
 

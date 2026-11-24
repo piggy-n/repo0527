@@ -59,7 +59,7 @@ function printRoam(
   const spawn = manifestSpawn(track, options.spawnAt, frame);
   console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
   // 路线先在局部系里算一遍，清单的写法和平面图都用它；拉直留下的拐点按原因计数，--diagnose 时逐个列出
-  // 补的地板经过的取样点，路线也走在补的地板上（ADR 0170），不落到玻璃下面的坑底；几段重叠时取写在后面的
+  // 补的地板经过的取样点，路线也走在补的地板上（ADR 0172），不落到玻璃下面的坑底；几段重叠时取写在后面的
   const walkwayFloorsAt = new Map<number, number>();
   options.walkways.forEach((span) =>
     walkwayFloors(track, result.grid, span).forEach((floor, i) => walkwayFloorsAt.set(i, floor))
@@ -89,7 +89,7 @@ function printRoam(
     const counts = routes.map(({ path }) => `${path.length} 个点`).join('、');
     console.log(`路线（${counts}）："routes": [\n${lines.join(',\n')}\n  ]`);
   }
-  // 补的地板（ADR 0170）：先列断口候选，给了 --walkway 再算
+  // 补的地板（ADR 0172）：先列断口候选，给了 --walkway 再算
   const gaps = walkwayGaps(track);
   if (gaps.length === 0) {
     console.log('断口候选：没有');

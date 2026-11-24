@@ -36,7 +36,7 @@ describe('parseOptions', () => {
     expect(() => parseOptions(['a.lcc2', ...DATUM, '--straight', '15-50:0'])).toThrow('容差要大于 0');
   });
 
-  it('--walkway：补的地板（ADR 0170），起-止，可以再写宽，可以写多次，带上它就是 --roam；写错、止不大于起、宽不在 0～5 米都报错', () => {
+  it('--walkway：补的地板（ADR 0172），起-止，可以再写宽，可以写多次，带上它就是 --roam；写错、止不大于起、宽不在 0～5 米都报错', () => {
     const options = parseOptions(['a.lcc2', ...DATUM, '--walkway', '266-300', '--walkway=625.5-662:1.5']);
     expect(options.roam).toBe(true);
     expect(options.walkways).toStrictEqual([

@@ -76,7 +76,7 @@ export interface SceneModel {
   readonly defaultEffect: string;
   readonly spawn: ManifestModel['spawn'];
   readonly routes: readonly ModelRoute[];
-  /** 补的地板（ADR 0170），建导航网格时加进去；只有高斯泼溅有，其他模型为空 */
+  /** 补的地板（ADR 0172），建导航网格时加进去；只有高斯泼溅有，其他模型为空 */
   readonly walkways: readonly ManifestWalkway[];
   /** 高斯泼溅（ADR 0149）的索引地址和摆放；其他模型为 null */
   readonly splat: SplatSource | null;

@@ -160,7 +160,7 @@ describe('planSvg', () => {
     expect(drawn).not.toContain('眼高 1.60 米');
   });
 
-  it('补的地板按宽度画成带子，断口候选垫在轨迹的那一段下面（ADR 0170）；图例里有这两项', () => {
+  it('补的地板按宽度画成带子，断口候选垫在轨迹的那一段下面（ADR 0172）；图例里有这两项', () => {
     const points = [routePoint(10, 2, 0), routePoint(20, 2, 0)];
     const drawn = planSvg({
       ...INPUT,

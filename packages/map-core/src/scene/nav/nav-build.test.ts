@@ -154,7 +154,7 @@ const SCAN_MESHES: readonly ScanMesh[] = [
   { url: 'https://maps.test/west.ply', triangles: 2, min: [0, 0, 0], max: [6, 4, 0] },
   { url: 'https://maps.test/east.ply', triangles: 2, min: [6, 0, 0], max: [12, 4, 0] }
 ];
-// 两块 12 × 10 米的地面中间隔着 3 米宽、0.8 米深的坑，坑上只有两根 0.2 米宽的梁和地面一样高：人走的玻璃面没采到（ADR 0170）
+// 两块 12 × 10 米的地面中间隔着 3 米宽、0.8 米深的坑，坑上只有两根 0.2 米宽的梁和地面一样高：人走的玻璃面没采到（ADR 0172）
 const PIT_MESH: ScanMesh = { url: 'https://maps.test/pit.ply', triangles: 10, min: [0, 0, -0.8], max: [27, 10, 0] };
 const PLYS: Readonly<Record<string, ArrayBuffer>> = {
   'https://maps.test/west.ply': plyOf(triangles(floorQuad(0, 0, 6, 4, 0))),

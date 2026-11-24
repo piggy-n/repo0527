@@ -24,7 +24,7 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
   --straight <起-止:容差>  轨迹上起～止米这一段拉直的水平容差（米），比 --route 写的优先，可以写多次，几段重叠时取写在后面的：
                          一条路线里只有宽的坡道、走廊一段要调大时用，进小室又出来这类地方留默认值
   --diagnose             再逐个列出拉直以后留下的拐点和原因（每条路线的计数总会打印），带上它就是 --roam
-  --walkway <起-止[:宽]>  轨迹上起～止米这一段做成补的地板（清单的 walkways，ADR 0170）：扫描采不到的步行表面（玻璃栈道这类），
+  --walkway <起-止[:宽]>  轨迹上起～止米这一段做成补的地板（清单的 walkways，ADR 0172）：扫描采不到的步行表面（玻璃栈道这类），
                          地板按扫描仪离地的高度推出来；宽度默认 1.2 米，可以写多次，带上它就是 --roam。
                          --roam 会列出断口候选和建议的范围，在 /dev/nav-grid 上确认断开了两片再写
   --plan <文件.svg>      再画一张平面图：地板、轨迹和每 20 米的米数（同概要）、出生点、路线、补的地板和断口候选，挑路线段和核对用；
@@ -50,7 +50,7 @@ export interface Options {
   readonly stretches: readonly Stretch[];
   /** 逐个列出拉直以后留下的拐点和原因 */
   readonly diagnose: boolean;
-  /** 做成补的地板的轨迹段（ADR 0170） */
+  /** 做成补的地板的轨迹段（ADR 0172） */
   readonly walkways: readonly WalkwaySpan[];
   /** 平面图写到哪个文件，原样保留，由调用方决定相对路径放在哪；不画时为 null */
   readonly plan: string | null;

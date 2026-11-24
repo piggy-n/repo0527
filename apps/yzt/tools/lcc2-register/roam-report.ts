@@ -1,4 +1,4 @@
-// 打印的诊断：拉直（--route 时）每条路线留下的拐点按原因计数，--diagnose 时逐个列出；断口候选（--roam 时，ADR 0170）
+// 打印的诊断：拉直（--route 时）每条路线留下的拐点按原因计数，--diagnose 时逐个列出；断口候选（--roam 时，ADR 0172）
 import type { CornerReason, RouteCorner, Stretch } from './roam.ts';
 import type { WalkwayGap } from './walkway.ts';
 
@@ -50,7 +50,7 @@ export function cornerLine({ distance, x, y, offset, tolerance, reason, at }: Ro
   );
 }
 
-/** 断口候选的一行（ADR 0170）：起止、长度、各种"断"的个数、建议的 --walkway */
+/** 断口候选的一行（ADR 0172）：起止、长度、各种"断"的个数、建议的 --walkway */
 export function gapLine(gap: WalkwayGap, span: { readonly from: number; readonly to: number }): string {
   const counts = [
     gap.jumps > 0 ? `${gap.jumps} 处和前一个点差一级台阶以上` : '',

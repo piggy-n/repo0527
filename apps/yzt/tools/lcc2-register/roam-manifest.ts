@@ -64,7 +64,7 @@ export function manifestPath(points: readonly RoamPoint[], frame: RoamFrame): Ma
   });
 }
 
-/** 清单里的一条补的地板（ADR 0170）：宽度和沿线的点 [经度, 纬度, 地板的椭球高] */
+/** 清单里的一条补的地板（ADR 0172）：宽度和沿线的点 [经度, 纬度, 地板的椭球高] */
 export interface ManifestWalkway {
   readonly width: number;
   readonly path: readonly (readonly number[])[];

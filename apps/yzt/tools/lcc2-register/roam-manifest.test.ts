@@ -75,7 +75,7 @@ describe('manifestSpawn、manifestRoute、outline', () => {
     expect(path[2][3]).toBe(1.59);
   });
 
-  it('补的地板（ADR 0170）：宽度到厘米，点是 [经度, 纬度, 地板的椭球高]，矮的地方也不带眼高', () => {
+  it('补的地板（ADR 0172）：宽度到厘米，点是 [经度, 纬度, 地板的椭球高]，矮的地方也不带眼高', () => {
     const walkway = manifestWalkway([withEye(EYE_HEIGHT), withEye(1.2)], 1.234, FRAME);
     expect(walkway.width).toBe(1.23);
     expect(walkway.path.map(spot => spot.length)).toStrictEqual([3, 3]);

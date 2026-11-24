@@ -14,7 +14,7 @@ export interface PlanRoute {
   readonly points: readonly RoamPoint[];
 }
 
-/** 画在图上的一条补的地板（ADR 0170）：轨迹上的起止米数、宽度（米）和生成的点（局部系） */
+/** 画在图上的一条补的地板（ADR 0172）：轨迹上的起止米数、宽度（米）和生成的点（局部系） */
 export interface PlanWalkway {
   readonly from: number;
   readonly to: number;

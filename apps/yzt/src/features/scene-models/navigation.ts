@@ -54,7 +54,7 @@ export function scanMeshesOf(index: Lcc2Index, indexUrl: string): ScanMesh[] {
   return meshes;
 }
 
-/** 清单里建泼溅的导航网格要用的：出生点、补的地板（ADR 0170） */
+/** 清单里建泼溅的导航网格要用的：出生点、补的地板（ADR 0172） */
 export interface SplatWalkSetup {
   readonly spawn: SpawnSpot | undefined;
   readonly walkways: readonly ManifestWalkway[];
