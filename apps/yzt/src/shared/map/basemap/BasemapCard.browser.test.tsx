@@ -188,7 +188,7 @@ describe('底图卡和浮层（真实布局）', () => {
     expect([labelBox(required(card().lastElementChild, '底图卡的名称'), card())]).toStrictEqual(fitting([text]));
   });
 
-  // 展开加 68：标注行 24 + 8 + 透明度行 24 + 间距 12；印着地名的底图（L1）和别的一样高，说明放得下
+  // 展开加 68：标注行 24 + 8 + 透明度行 24 + 间距 12；印着地名的底图（L1）和无底图（透明度置灰）和别的一样高，说明放得下
   const BAKED_HINT = { height: 16, overflow: 0 };
   it.for(
     VIEWPORTS.flatMap(([viewport]) => [
@@ -197,8 +197,10 @@ describe('底图卡和浮层（真实布局）', () => {
       [viewport, 'static', 226, ALL_FOUR, null],
       [viewport, 'black', 226, ALL_FOUR, BAKED_HINT],
       [viewport, 'night-blue', 226, ALL_FOUR, BAKED_HINT],
+      [viewport, 'none', 226, ALL_FOUR, null],
       [viewport, 'imagery', 154, servers('imagery'), null],
-      [viewport, 'static', 154, servers('imagery'), null]
+      [viewport, 'static', 154, servers('imagery'), null],
+      [viewport, 'none', 154, servers(), null]
     ] as const)
   )('%s 宽的视口：选中 %s 展开后高 %s，地名印在底图上时说明不省略', async ([viewport, id, height, found, hint]) => {
     using ctx = await open(found, viewport, id);

@@ -186,3 +186,61 @@ test('静态底图的标注：默认关闭、不下载，打开后二三维都�
 
   expect(requested.filter(path => path.includes('/glyphs/')), '不请求字形').toEqual([]);
 });
+
+// 无底图叠静态底图同一份地名，跟着同一个标注开关（用户 2026-11-24）；无底图没有透明度，那一行置灰
+test('无底图的标注：打开后二三维都画出静态底图的地名，透明度置灰，不请求字形', async ({ page }) => {
+  test.setTimeout(180_000);
+  const requested: string[] = [];
+  page.on('request', request => requested.push(new URL(request.url()).pathname));
+  const labelsRequested = () => requested.some(path => path.includes('jiangsu-labels'));
+
+  await page.goto('/login');
+  await login(page);
+  await expect(page).toHaveURL(CURRENT_MAP_URL);
+  await measured(page, 'login-to-map:settled', 45_000);
+  const flat = page.locator('.maplibregl-canvas');
+  const card = page.locator('button[aria-label^="底图："]');
+
+  await card.click();
+  await page.getByRole('button', { name: '无底图', exact: true }).click();
+  await expect(card).toHaveAttribute('aria-label', '底图：无底图');
+  await expect.poll(() => landShare(page, flat), { message: '无底图时没有陆地的面' }).toBeLessThan(MIN_LAND_SHARE);
+  expect(labelsRequested(), '关着时不下载地名').toBe(false);
+  const withoutLabels = await textShare(page, flat);
+
+  await card.click();
+  await openAdjustments(page);
+  const labels = page.getByRole('switch', { name: '底图标注' });
+  const opacity = page.getByRole('slider', { name: '底图的透明度' });
+  await expect(labels).toHaveAttribute('aria-checked', 'false');
+  await expect(opacity, '无底图没有透明度').toHaveAttribute('aria-disabled', 'true');
+  await expect(opacity).toHaveAttribute('aria-valuenow', '100');
+  await labels.locator('..').click();
+  await expect.poll(() => labelsRequested(), { message: '打开后下载地名' }).toBe(true);
+  await expect(page.locator('[data-map-status]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(labels, 'Esc 关闭面板').toHaveCount(0);
+  await expect
+    .poll(async () => (await textShare(page, flat)) - withoutLabels, { message: '二维画出地名' })
+    .toBeGreaterThan(MIN_LABEL_SHARE);
+
+  // 这台没有影像（fixtures 让 /basemap/ 回 404），切三维时还是无底图
+  await page.getByRole('button', { name: '三维', exact: true }).click();
+  await measured(page, 'switch-to-3d:settled', 60_000);
+  await expect(page.locator('[data-map-status]')).toHaveCount(0);
+  await expect(card).toHaveAttribute('aria-label', '底图：无底图');
+  await expect(flat).toBeVisible();
+  await page.waitForTimeout(5000);
+  const withLabels = await textShare(page, flat);
+
+  await card.click();
+  await openAdjustments(page);
+  await labels.locator('..').click();
+  await page.keyboard.press('Escape');
+  await expect(labels).toHaveCount(0);
+  await expect
+    .poll(async () => withLabels - (await textShare(page, flat)), { message: '三维画过地名，关掉后没有了', timeout: 60_000 })
+    .toBeGreaterThan(MIN_LABEL_SHARE);
+
+  expect(requested.filter(path => path.includes('/glyphs/')), '不请求字形').toEqual([]);
+});

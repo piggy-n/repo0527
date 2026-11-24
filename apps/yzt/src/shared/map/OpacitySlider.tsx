@@ -9,7 +9,9 @@ export const OpacitySlider = defineComponent({
     /** 0～1 */
     value: { type: Number, required: true },
     /** 滑块的无障碍名称，如"底图的透明度" */
-    label: { type: String, required: true }
+    label: { type: String, required: true },
+    /** 没有透明度可调时置灰（如无底图），一行仍占位 */
+    disabled: { type: Boolean, default: false }
   },
   emits: {
     change: (value: number) => value >= 0 && value <= 1
@@ -25,7 +27,7 @@ export const OpacitySlider = defineComponent({
     return () => {
       const percent = Math.round(props.value * 100);
       return (
-        <div class={styles.row}>
+        <div class={[styles.row, props.disabled && styles.disabled]}>
           <span class={styles.name} aria-hidden="true">
             透明度
           </span>
@@ -33,6 +35,7 @@ export const OpacitySlider = defineComponent({
             class={styles.slider}
             size="small"
             showTooltip={false}
+            disabled={props.disabled}
             modelValue={percent}
             aria-label={props.label}
             onUpdate:modelValue={change}

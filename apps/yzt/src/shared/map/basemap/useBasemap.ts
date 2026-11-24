@@ -45,7 +45,7 @@ export interface Basemap {
   readonly selectForDimension: (kind: ViewKind) => void;
   /** 修改当前底图的透明度；不在 0～1 之间、或者无底图时直接抛错 */
   readonly setOpacity: (value: number) => void;
-  /** 标注是否显示：所有底图共用一个，切换底图、二三维时沿用（ADR 0146）；无底图时没有标注可画，值保留 */
+  /** 标注是否显示：所有底图共用一个，切换底图、二三维时沿用（ADR 0146）；无底图也叠静态底图的地名 */
   readonly labelsVisible: ComputedRef<boolean>;
   readonly setLabelsVisible: (visible: boolean) => void;
   /** 绑定到 basemap 分组 */

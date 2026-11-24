@@ -70,7 +70,7 @@ describe('BasemapPanel', () => {
     expect(wrapper.emitted('picked')).toHaveLength(2);
   });
 
-  it('入口只在当前缩略图上，跟着选择走；无底图没有入口', async () => {
+  it('入口只在当前缩略图上，跟着选择走；无底图也有入口', async () => {
     const { wrapper } = mountPanel();
     const itemOf = (label: string) => option(wrapper, label).element.parentElement;
 
@@ -81,7 +81,8 @@ describe('BasemapPanel', () => {
     expect(adjust(wrapper).element.parentElement).toBe(itemOf('影像底图'));
 
     await option(wrapper, '无底图').trigger('click');
-    expect(adjust(wrapper).exists()).toBe(false);
+    expect(wrapper.findAll('button[aria-label="调整标注和透明度"]')).toHaveLength(1);
+    expect(adjust(wrapper).element.parentElement).toBe(itemOf('无底图'));
   });
 
   it('入口不算选择底图：不告诉使用方，点开显示标注和透明度，再点收起', async () => {
@@ -112,14 +113,46 @@ describe('BasemapPanel', () => {
     expect(basemap.opacity.value).toBe(0.35);
   });
 
-  it('展开时切到无底图：标注和透明度都不显示', async () => {
-    const { wrapper } = mountPanel();
+  it('展开时切到无底图：标注照常，透明度一行置灰、写 100%；切回来又能调，还是原来的值', async () => {
+    const { wrapper, basemap } = mountPanel();
+    basemap.setOpacity(0.6);
     await adjust(wrapper).trigger('click');
 
     await option(wrapper, '无底图').trigger('click');
 
-    expect(wrapper.find('.el-slider').exists()).toBe(false);
-    expect(wrapper.find('[role="switch"]').exists()).toBe(false);
+    expect(labelsSwitch(wrapper).disabled).toBe(false);
+    expect(wrapper.findComponent(ElSlider).props()).toMatchObject({ modelValue: 100, disabled: true });
+    expect(wrapper.get('[role="slider"]').attributes('aria-disabled')).toBe('true');
+    expect(wrapper.get('[role="slider"]').attributes('aria-label')).toBe('底图的透明度');
+    expect(wrapper.text()).toContain('100%');
+    expect(basemap.opacity.value).toBeNull();
+
+    await option(wrapper, '矢量底图').trigger('click');
+    expect(wrapper.findComponent(ElSlider).props()).toMatchObject({ modelValue: 60, disabled: false });
+    expect(wrapper.get('[role="slider"]').attributes('aria-disabled')).toBe('false');
+  });
+
+  it('无底图的标注开关照常能用、没有说明：交给全局的标注，画出静态底图同一份地名', async () => {
+    const { wrapper, basemap } = mountPanel(null);
+    await option(wrapper, '无底图').trigger('click');
+    expect(adjust(wrapper).exists(), '无底图也有入口').toBe(true);
+    await adjust(wrapper).trigger('click');
+
+    expect(labelsSwitch(wrapper).getAttribute('aria-checked')).toBe('false');
+    expect(labelsSwitch(wrapper).getAttribute('aria-disabled')).toBe('false');
+    expect(hints(wrapper)).toHaveLength(0);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+
+    await clickLabelsSwitch(wrapper);
+    expect(basemap.labelsVisible.value).toBe(true);
+    expect(labelsSwitch(wrapper).getAttribute('aria-checked')).toBe('true');
+    expect(basemap.deriveLabelsGroup().layers.map(layer => layer.id)).toStrictEqual([
+      'basemap-labels-static-county',
+      'basemap-labels-static-city'
+    ]);
+
+    await option(wrapper, '静态底图').trigger('click');
+    expect(labelsSwitch(wrapper).getAttribute('aria-checked')).toBe('true');
   });
 
   it('标注开关显示拥有者的状态，切换时交给拥有者', async () => {
