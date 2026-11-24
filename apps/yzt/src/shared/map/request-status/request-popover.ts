@@ -21,15 +21,14 @@ export interface RequestPopoverInput {
   readonly area: ViewportBox;
   /** 状态栏的上边：浮层的底边在它上面 */
   readonly barTop: number;
-  readonly viewport: { readonly height: number };
 }
 
 export interface RequestPopoverPlacement {
   /** below：面板下方，和面板左对齐；beside：面板右边 */
   readonly side: 'below' | 'beside';
   readonly left: number;
-  /** 底边离视口底边的距离：浮层按内容向上长，底边不动 */
-  readonly bottom: number;
+  /** 底边的视口纵坐标：浮层按内容向上长，底边不动（按顶边加上移自身高度放，不用取整过的视口高度换算） */
+  readonly bottomEdge: number;
   readonly width: number;
   /** 超出时列表滚动 */
   readonly maxHeight: number;
@@ -42,7 +41,7 @@ export interface RequestPopoverPlacement {
  * 展开着面板）时向左移、盖住面板。按最高的浮层判断，内容多了少了不会换位置
  */
 export function requestPopoverPlacement(input: RequestPopoverInput): RequestPopoverPlacement {
-  const { panel, panelLimit, collapsed, area, barTop, viewport } = input;
+  const { panel, panelLimit, collapsed, area, barTop } = input;
   const panelWidth = panel === null || collapsed ? REQUEST_POPOVER_WIDTH : panel.right - panel.left;
   const width = Math.max(0, Math.min(panelWidth, area.right - area.left));
   const bottomEdge = Math.min(barTop - REQUEST_POPOVER_GAP, panelLimit ?? Number.POSITIVE_INFINITY);
@@ -54,7 +53,7 @@ export function requestPopoverPlacement(input: RequestPopoverInput): RequestPopo
   return {
     side: below ? 'below' : 'beside',
     left: Math.max(area.left, Math.min(wanted, area.right - width)),
-    bottom: viewport.height - bottomEdge,
+    bottomEdge,
     width,
     maxHeight: Math.max(0, Math.min(REQUEST_POPOVER_MAX_HEIGHT, bottomEdge - area.top))
   };

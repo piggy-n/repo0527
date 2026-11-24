@@ -226,12 +226,12 @@ describe('RequestStatusChip', () => {
     await wrapper.get('[data-request-chip]').trigger('click');
     const popover = () => wrapper.get<HTMLElement>('[data-request-popover]').element;
     const style = () => popover().style;
-    // jsdom 的视口高 768：底边和面板的底边齐平在 724，不是条目上边再往上 8 的 728
+    // 底边和面板的底边齐平在 724，不是条目上边再往上 8 的 728；按顶边放、上移自身高度，不用取整过的视口高度换算
     expect(popover().dataset.requestSide).toBe('beside');
-    expect([style().left, style().top, style().bottom, style().width, style().maxHeight]).toStrictEqual([
+    expect([style().left, style().top, style().transform, style().width, style().maxHeight]).toStrictEqual([
       '344px',
-      '',
-      '44px',
+      '724px',
+      'translateY(-100%)',
       '320px',
       '420px'
     ]);
@@ -259,22 +259,22 @@ describe('RequestStatusChip', () => {
     expect([FakeResizeObserver.watching(area), FakeResizeObserver.watching(panel)]).toStrictEqual([true, false]);
     const popover = () => wrapper.get<HTMLElement>('[data-request-popover]').element;
     const box = () => {
-      const { left, top, bottom, width } = popover().style;
-      return [popover().dataset.requestSide, left, top, bottom, width];
+      const { left, top, width } = popover().style;
+      return [popover().dataset.requestSide, left, top, width];
     };
     // 竖条下面放得下：和竖条左对齐，底边在面板最低能到的 724
-    expect(box()).toStrictEqual(['below', '16px', '', '44px', '320px']);
+    expect(box()).toStrictEqual(['below', '16px', '724px', '320px']);
 
     // 在明细里点了一行，页面把竖条展开：元素不变，尺寸变了；面板还矮，仍在下方，和面板同宽
     rect = new DOMRect(16, 72, 300, 200);
     await wrapper.setProps({ panelCollapsed: false });
-    expect(box()).toStrictEqual(['below', '16px', '', '44px', '300px']);
+    expect(box()).toStrictEqual(['below', '16px', '724px', '300px']);
 
     // 面板的内容多了、变高，下面放不下：外壳发出新的两段高度
     rect = new DOMRect(16, 72, 300, 652);
     layout.value = { tree: 400, checked: 160, adjustable: true };
     await nextTick();
-    expect(box()).toStrictEqual(['beside', '324px', '', '44px', '300px']);
+    expect(box()).toStrictEqual(['beside', '324px', '724px', '300px']);
 
     await wrapper.get('[data-request-chip]').trigger('click');
     expect(FakeResizeObserver.watching(area)).toBe(false);
@@ -290,14 +290,14 @@ describe('RequestStatusChip', () => {
     wrapper.get('[data-request-status]').element.getBoundingClientRect = () => new DOMRect(400, chipTop, 120, 24);
     await wrapper.get('[data-request-chip]').trigger('click');
     const popover = wrapper.get<HTMLElement>('[data-request-popover]').element;
-    expect(popover.style.bottom).toBe('44px');
+    expect(popover.style.top).toBe('724px');
 
     // 整页往上滚了 100：面板、所在的列和条目一起上移
     top = -28;
     chipTop = 636;
     document.dispatchEvent(new Event('scroll'));
     await nextTick();
-    expect(popover.style.bottom).toBe('144px');
+    expect(popover.style.top).toBe('624px');
   });
 
   it('关掉加载失败（ADR 0167）：按钮不说失败，明细没有有失败一组；都以失败结束时按钮回到空闲，明细里一组也没有', async () => {

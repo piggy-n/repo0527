@@ -45,19 +45,24 @@ function statusContent(summary: RequestSummary): VNode[] {
   return [<SvgIcon name="check" size={14} />];
 }
 
-// 面板最低能到的位置：所在列的内容底边（列的下内边距给状态栏留了位置），同 LayerPanelShell 按所在的列量最大高度
+// 面板最低能到的位置：所在列的内容顶边加上内容高度向下取整（列的下内边距给状态栏留了位置）。LayerPanelShell 按所在的列量
+// 最大高度，两段能用的高度向下取整、标题和分割线是整数，面板到了最大高度时底边正好在这里；屏幕缩放成小数时也不差这一点
 function columnBottom(column: Element | null): number | null {
   if (column === null) {
     return null;
   }
-  return column.getBoundingClientRect().bottom - Number.parseFloat(getComputedStyle(column).paddingBottom || '0');
+  const { top, height } = column.getBoundingClientRect();
+  const style = getComputedStyle(column);
+  const paddingTop = Number.parseFloat(style.paddingTop || '0');
+  const paddingBottom = Number.parseFloat(style.paddingBottom || '0');
+  return top + paddingTop + Math.floor(height - paddingTop - paddingBottom);
 }
 
 const samePlacement = (next: RequestPopoverPlacement, current: RequestPopoverPlacement | null) =>
   current !== null &&
   next.side === current.side &&
   next.left === current.left &&
-  next.bottom === current.bottom &&
+  next.bottomEdge === current.bottomEdge &&
   next.width === current.width &&
   next.maxHeight === current.maxHeight;
 
@@ -135,8 +140,7 @@ export const RequestStatusChip = defineComponent({
           right: window.innerWidth,
           bottom: window.innerHeight
         },
-        barTop: chip.getBoundingClientRect().top,
-        viewport: { height: window.innerHeight }
+        barTop: chip.getBoundingClientRect().top
       });
       // 位置没变时不换：滚动、布局的通知很多，明细不跟着重渲染
       if (!samePlacement(next, placement.value)) {
@@ -260,7 +264,13 @@ export const RequestStatusChip = defineComponent({
       const box = placement.value;
       // 量好之前先不显示：放好的位置在同一轮渲染里就到，看不到闪动
       const style = box
-        ? { left: `${box.left}px`, bottom: `${box.bottom}px`, width: `${box.width}px`, maxHeight: `${box.maxHeight}px` }
+        ? {
+            left: `${box.left}px`,
+            top: `${box.bottomEdge}px`,
+            transform: 'translateY(-100%)',
+            width: `${box.width}px`,
+            maxHeight: `${box.maxHeight}px`
+          }
         : { visibility: 'hidden' as const };
       return (
         <div

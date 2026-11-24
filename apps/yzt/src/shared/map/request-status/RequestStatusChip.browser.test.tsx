@@ -291,7 +291,7 @@ const rows = (n: number) => Array.from({ length: n }, (_, index) => h('div', { k
 
 // 明细和真实的资源图层面板（2026-11-23 审查发现）：面板按内容定高，外壳在自己的尺寸监听里改两段的高度；明细监听面板的尺寸时
 // 浏览器同一帧里不再通知比内容浅的面板，报 ResizeObserver loop。用面板发出的两段高度重新放
-function setupWithPanel() {
+function setupWithPanel(height = 880) {
   const host = document.body.appendChild(document.createElement('div'));
   const loopErrors: string[] = [];
   const onError = (event: ErrorEvent) => {
@@ -321,7 +321,7 @@ function setupWithPanel() {
     setup() {
       provideMap({ groups: [], camera: { center: POINT, zoom: 7, bearing: 0, pitch: 0 } });
       return () => (
-        <div style={{ ...SPACES, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) 24px', gap: '12px', height: '880px' }}>
+        <div style={{ ...SPACES, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) 24px', gap: '12px', height: `${height}px` }}>
           <div ref={column} style={{ display: 'flex', flexDirection: 'column', minHeight: '0', width: '320px' }}>
             <LayerPanelShell title="资源图层" ratio={0.4} onLayout={(value: ListSplit | null) => (split.value = value)}>
               {{
@@ -377,6 +377,19 @@ describe('明细和真实的资源图层面板', () => {
     expect(popover().getBoundingClientRect().left).toBeCloseTo(ctx.panel().right + 8, 0);
     // 面板到了最大高度：两个底边齐平（用户 2026-11-24）
     expect(popover().getBoundingClientRect().bottom).toBeCloseTo(ctx.panel().bottom, 0);
+    expect(ctx.loopErrors).toStrictEqual([]);
+  });
+
+  it('列的高度是小数时（屏幕缩放 125%）面板到了最大高度，两个底边仍然齐平：都按向下取整的可用高度（2026-11-24 审查发现）', async () => {
+    await page.viewport(1440, 900);
+    using ctx = setupWithPanel(860.4);
+    ctx.catalogRows.value = 40;
+    await settle();
+    await settle();
+    required(document.querySelector<HTMLElement>('[data-request-chip]'), '状态按钮').click();
+    await settle();
+    expect(popover().dataset.requestSide).toBe('beside');
+    expect(Math.abs(popover().getBoundingClientRect().bottom - ctx.panel().bottom)).toBeLessThan(0.1);
     expect(ctx.loopErrors).toStrictEqual([]);
   });
 });
