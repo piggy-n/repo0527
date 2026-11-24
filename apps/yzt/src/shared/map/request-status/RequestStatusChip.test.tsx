@@ -102,7 +102,7 @@ const visible = (wrapper: ReturnType<typeof mountChip>['wrapper']) =>
   wrapper.get('[data-request-chip]').element.firstElementChild?.textContent ?? null;
 
 describe('RequestStatusChip', () => {
-  it('按钮一直在（ADR 0170）：空闲时是勾；加载中只有转圈和百分比，上一轮有失败时转圈角上有红点；结束后是警告和失败的项数；全称在读屏名称里', async () => {
+  it('按钮一直在（ADR 0171）：空闲时是勾；加载中只有转圈和百分比，上一轮有失败时转圈角上有红点；结束后是警告和失败的项数；全称在读屏名称里', async () => {
     const { wrapper, items, clock, display } = mountChip([], 1000, ALL_REQUEST_KINDS, null);
     const chip = () => wrapper.get('[data-request-chip]');
     expect(chip().attributes('data-request-chip')).toBe('idle');

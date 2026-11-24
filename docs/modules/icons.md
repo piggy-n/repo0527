@@ -190,7 +190,7 @@ packages/icons/
 | `close` | `x` | 取消勾选、关闭 |
 | `info` | `info-circle` | 带提示的信息图标 |
 | `status-error` | 自制（ADR 0059） | 图层列表里的错误状态（资源、模型加载失败）：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
-| `status-warning` | 自制（ADR 0059） | 图层列表里的警告状态、状态栏前请求状态按钮的失败（ADR 0170）：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
+| `status-warning` | 自制（ADR 0059） | 图层列表里的警告状态、状态栏前请求状态按钮的失败（ADR 0171）：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
 | `status-zoom` | `zoom-in` | 图层列表里的说明状态（当前级别不显示） |
 | `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
@@ -211,9 +211,9 @@ packages/icons/
 | `eye` / `eye-off` | `eye` / `eye-off` | 图层右键菜单的显示、隐藏 |
 | `model-3d` / `roam-walk` | `box` / `walk` | 图层列表里三维模型的图标、行内的漫游按钮（ADR 0157） |
 | `model-covered` | 自绘：`model-3d` 加一道斜线，照 Tabler 的 `*-off` 图标在斜线一侧断开 | 图层里会把模型盖住的资源，名称后面的橙色图标（ADR 0161，2026-11-16 取代文字"盖住模型"） |
-| `readout-pointer` / `readout-center` | 自绘，仿 `pointer`（鼠标指针）/ `focus-2`（和 `focus` 同一个图形，按用途另起名字） | 状态栏经纬度前面的图标：鼠标所在位置、画布中心（ADR 0170，取代文字"中心"） |
-| `readout-eye-height` / `readout-eye-below` | 自绘：地面线加向上、向下的箭头 | 三维状态栏的视点高度、视点在地表以下（ADR 0170） |
-| `readout-bearing` / `readout-pitch` | 自绘：顺时针的圆弧加箭头 / 地面线和斜线夹一个角 | 状态栏的旋转、俯仰（ADR 0170） |
+| `readout-pointer` / `readout-center` | 自绘，仿 `pointer`（鼠标指针）/ `focus-2`（和 `focus` 同一个图形，按用途另起名字） | 状态栏经纬度前面的图标：鼠标所在位置、画布中心（ADR 0171，取代文字"中心"） |
+| `readout-eye-height` / `readout-eye-below` | 自绘：地面线加向上、向下的箭头 | 三维状态栏的视点高度、视点在地表以下（ADR 0171） |
+| `readout-bearing` / `readout-pitch` | 自绘：顺时针的圆弧加箭头 / 地面线和斜线夹一个角 | 状态栏的旋转、俯仰（ADR 0171） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

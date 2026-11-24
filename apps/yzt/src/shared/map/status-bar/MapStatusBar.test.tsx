@@ -42,7 +42,7 @@ const shown = (wrapper: Wrapper) => (shownBar(wrapper).exists() ? shownBar(wrapp
 const iconHints = (wrapper: Wrapper) => shownBar(wrapper).findAll('[role="img"]').map(icon => icon.attributes('aria-label'));
 
 describe('MapStatusBar', () => {
-  it('经纬度在前、比例尺在后（ADR 0170），经纬度按坐标定位面板的写法', async () => {
+  it('经纬度在前、比例尺在后（ADR 0171），经纬度按坐标定位面板的写法', async () => {
     const { wrapper } = mountBar();
 
     expect(shown(wrapper)).toBe('118°47′23.28″E, 32°03′41.04″N10 km');
@@ -182,7 +182,7 @@ describe('MapStatusBar 放不下时', () => {
     ]);
   });
 
-  it('插槽 before 排在状态栏左边，取舍前先让出它的宽度和 8 像素的间距（ADR 0170）', async () => {
+  it('插槽 before 排在状态栏左边，取舍前先让出它的宽度和 8 像素的间距（ADR 0171）', async () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     const fake = fakeReadout();
     fake.angles.value = { bearing: 15, pitch: 30 };

@@ -132,7 +132,7 @@ export interface RequestKinds {
 export const ALL_REQUEST_KINDS: RequestKinds = { loading: true, failed: true, done: true };
 
 /**
- * 状态栏前面的状态按钮（ADR 0170）：三类都关掉时不显示（hidden）；没有要说的时是空闲（idle，灰色的勾），按钮一直在，
+ * 状态栏前面的状态按钮（ADR 0171）：三类都关掉时不显示（hidden）；没有要说的时是空闲（idle，灰色的勾），按钮一直在，
  * 宽度固定，状态变了读数不动
  */
 export type RequestSummary =
@@ -223,7 +223,7 @@ export function nextRequestDisplay(
 const IDLE: RequestSummary = Object.freeze({ kind: 'idle' });
 
 /**
- * 状态按钮（ADR 0158、0170）：这一次显示着加载中（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、几项和完成的比例；
+ * 状态按钮（ADR 0158、0171）：这一次显示着加载中（nextRequestDisplay）、明细开着时，有在加载的就显示加载中、几项和完成的比例；
  * 没有在显示的加载、有失败（hasFailure）时显示几项失败，留到下一轮结束；这一次显示里加载都结束了显示"已加载完成"；
  * 其余时候空闲。关掉的一类不算（ADR 0167）：都关掉时不显示
  */
@@ -266,7 +266,7 @@ export function requestPercent(ratio: number): number {
   return Math.min(99, Math.floor(ratio * 100));
 }
 
-/** 状态按钮的读屏名称：按钮上只有图标和数字，全称写在这里（ADR 0170）；空闲时是按钮的名字 */
+/** 状态按钮的读屏名称：按钮上只有图标和数字，全称写在这里（ADR 0171）；空闲时是按钮的名字 */
 export function requestStatusText(summary: RequestSummary): string {
   if (summary.kind === 'loading') {
     const percent = summary.ratio === null ? '' : `，已完成 ${requestPercent(summary.ratio)}%`;

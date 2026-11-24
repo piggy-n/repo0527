@@ -666,7 +666,7 @@ function layerRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['g
   return wrapper.get(`[data-current-row="resource:${code}"]`);
 }
 
-// 状态栏前的数据加载按钮显示的是哪种状态（空闲、加载中、失败、完成，ADR 0170）
+// 状态栏前的数据加载按钮显示的是哪种状态（空闲、加载中、失败、完成，ADR 0171）
 function chipKind(wrapper: PageWrapper): string | undefined {
   return wrapper.get('[data-request-chip]').attributes('data-request-chip');
 }
@@ -1024,7 +1024,7 @@ describe('CurrentMapPage', () => {
     expect(map.flyToCalls.at(-1)).toStrictEqual({ bearing: 0, pitch: 0, duration: 300 });
   });
 
-  it('状态栏：前面是数据加载的按钮，后面是经纬度和比例尺，经纬度的写法跟着坐标定位面板；鼠标离开画布时经纬度前的图标换成画布中心；没有版权控件（ADR 0053 第 5 节、ADR 0170）', async () => {
+  it('状态栏：前面是数据加载的按钮，后面是经纬度和比例尺，经纬度的写法跟着坐标定位面板；鼠标离开画布时经纬度前的图标换成画布中心；没有版权控件（ADR 0053 第 5 节、ADR 0171）', async () => {
     const { wrapper, map } = await readyPage();
     const status = () => wrapper.get('[data-map-readout]').text();
     const coordinateIcon = () => wrapper.get('[data-map-readout] [role="img"]').attributes('aria-label');
@@ -1588,7 +1588,7 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'basemap-labels-vector']);
   });
 
-  it('请求状态（ADR 0158、0170）：瓦片加载超过 0.4 秒时行内转圈、0.8 秒时状态栏前的按钮转圈加百分比；点开明细、点一行在当前图层里选中；都到了以后是完成的勾', async () => {
+  it('请求状态（ADR 0158、0171）：瓦片加载超过 0.4 秒时行内转圈、0.8 秒时状态栏前的按钮转圈加百分比；点开明细、点一行在当前图层里选中；都到了以后是完成的勾', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
     map.fire('dataloading', parcelTile('1'));

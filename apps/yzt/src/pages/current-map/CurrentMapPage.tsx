@@ -511,7 +511,7 @@ export const CurrentMapPage = defineComponent({
                 />
               </div>
             )}
-            {/* 状态栏在左下角、左侧面板下面（ADR 0095）；请求状态是前面定宽的按钮，状态变了读数不动（ADR 0170） */}
+            {/* 状态栏在左下角、左侧面板下面（ADR 0095）；请求状态是前面定宽的按钮，状态变了读数不动（ADR 0171） */}
             {!underground && (
               <div key="bottom" class={styles.bottom}>
                 <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format}>

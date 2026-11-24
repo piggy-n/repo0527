@@ -13,7 +13,7 @@ import { RequestStatusChip } from './RequestStatusChip';
 import type { RequestStatus } from './useRequestStatus';
 
 // 真实的布局（ADR 0040）：状态按钮和状态栏是不是一样高、状态和读数变了谁挪、有没有留出来的空白，jsdom 里量不出来
-// （用户 2026-11-22、2026-11-23，ADR 0170）
+// （用户 2026-11-22、2026-11-23，ADR 0171）
 
 // 用到的令牌和页面的正文样式由 app 给出（tokens.scss、fonts.scss、base.scss），这里直接写出；字体文件在不入库的 public/fonts/，
 // 没有时回退到别的字体，断言不依赖字体
@@ -133,7 +133,7 @@ async function settle() {
 
 const readoutBar = () => required(document.querySelector('[data-map-readout]'), '状态栏');
 const chip = () => required(document.querySelector('[data-request-chip]'), '状态按钮').getBoundingClientRect();
-// 状态栏里的文字（经纬度在前，ADR 0170）、最后一段
+// 状态栏里的文字（经纬度在前，ADR 0171）、最后一段
 const firstText = () => required(readoutBar().querySelector('[role="img"]'), '经纬度前的图标').getBoundingClientRect();
 const lastSegment = () => required(readoutBar().lastElementChild, '最后一段').getBoundingClientRect();
 const scaleLeft = () =>

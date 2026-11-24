@@ -64,7 +64,7 @@ const step = (memory: FailureMemory, rounds: readonly RequestItem[]) => {
 };
 
 describe('requestSummary', () => {
-  it('这一次显示里、明细开着时，有在加载的显示加载中的项数和瓦片完成的比例；没在显示时是空闲（ADR 0170）', () => {
+  it('这一次显示里、明细开着时，有在加载的显示加载中的项数和瓦片完成的比例；没在显示时是空闲（ADR 0171）', () => {
     expect(requestSummary([], null)).toStrictEqual({ kind: 'idle' });
     const items = [tiles('a', { loaded: 3, failed: 1 }), tiles('b', { loaded: 6 }), model('m')];
     expect(requestSummary(items, null)).toStrictEqual({ kind: 'idle' });
@@ -111,7 +111,7 @@ describe('requestSummary', () => {
   });
 });
 
-describe('状态按钮的百分比和说明（ADR 0170）', () => {
+describe('状态按钮的百分比和说明（ADR 0171）', () => {
   it('百分比向下取整，还在加载时最多 99', () => {
     expect([0, 0.005, 0.629, 0.994, 1].map(requestPercent)).toStrictEqual([0, 0, 62, 99, 99]);
   });
