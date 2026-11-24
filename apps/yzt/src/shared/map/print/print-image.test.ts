@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { arrangePrint, CORNER_LIMITS } from './print-image';
+import { arrangePrint, CORNER_LIMITS, scaledPixels } from './print-image';
 import { printFileName } from './print-file-name';
 import type { LegendLayout } from './print-legend';
 
@@ -50,6 +50,20 @@ describe('arrangePrint', () => {
     expect(arrangePrint(MAP, 'none', true, layoutOf)).toStrictEqual({ placement: 'none', ...MAP, legend: null });
     expect(arrangePrint(MAP, 'side', false, layoutOf)).toStrictEqual({ placement: 'none', ...MAP, legend: null });
     expect(layoutOf).not.toHaveBeenCalled();
+  });
+});
+
+describe('scaledPixels', () => {
+  it('按给的像素比放大整张图（地图加图例）；地图超过 MapLibre 的画布上限 4096 时像素比跟着收小', () => {
+    expect(scaledPixels({ width: 1672, height: 800, map: MAP }, 2)).toStrictEqual([3344, 1600]);
+    // 4096 ÷ 2560 = 1.6
+    expect(scaledPixels({ width: 2792, height: 1200, map: { width: 2560, height: 1200 } }, 2)).toStrictEqual([
+      4467, 1920
+    ]);
+    // 竖着的地图按高度收：4096 ÷ 2200
+    expect(scaledPixels({ width: 1000, height: 2200, map: { width: 1000, height: 2200 } }, 2)).toStrictEqual([
+      1862, 4096
+    ]);
   });
 });
 

@@ -1,8 +1,9 @@
+import type { MapSnapshot } from '@mx/map-core';
 import type { MapContext, MapViewport } from '@mx/map-vue';
 import { onScopeDispose, type Ref, ref } from 'vue';
 import { canvasBlob } from '../../file-transfer';
 import { printFileName } from './print-file-name';
-import { composePrintImage, LEGEND_FONTS, type LegendPlacement, type PrintImage } from './print-image';
+import { composePrintImage, LEGEND_FONTS, type LegendPlacement } from './print-image';
 import type { PrintLegendBlock } from './print-legend';
 
 /** 导出的设置（ADR 0174） */
@@ -26,6 +27,12 @@ export interface MapPrintOptions {
   readonly legend: (view: MapViewport, size: { readonly width: number; readonly height: number }) => PrintLegendBlock[];
 }
 
+/** 截下的画面和这一刻的图例；不带图例时没有查，是空的 */
+export interface PrintCapture {
+  readonly snapshot: MapSnapshot;
+  readonly blocks: readonly PrintLegendBlock[];
+}
+
 /** 空闲、等地图加载完、截图和合成 */
 export type PrintPhase = 'idle' | 'waiting' | 'composing';
 
@@ -40,8 +47,11 @@ export interface MapPrint {
   readonly phase: Readonly<Ref<PrintPhase>>;
   /** 上一次导出失败的原因；开始新的导出时清空 */
   readonly error: Readonly<Ref<string>>;
-  /** 按当前画面合成（同屏幕的像素比，不等加载），给预览用；没有就绪的视图时为 null */
-  preview(settings: PrintSettings): PrintImage | null;
+  /**
+   * 给预览用：等画面完整后按屏幕的像素比截一帧，legend 为 true 时紧接着推导图例（整屏查要素）。signal 中止、
+   * 视图卸下、等完时正在导出都以 AbortError 结束；等完了没有就绪的视图时为 null
+   */
+  capture(legend: boolean, signal: AbortSignal): Promise<PrintCapture | null>;
   /** 等到画面完整，截图、合成、编码；正在导出时、作用域销毁后返回 null，取消、失败也返回 null（失败时记下原因） */
   run(settings: PrintSettings): Promise<PrintResult | null>;
   /** 不再等加载，按当前画面导出 */
@@ -80,9 +90,10 @@ export function useMapPrint(map: MapContext, options: MapPrintOptions): MapPrint
     current?.stop.abort();
   });
 
-  const compose = (view: MapViewport, settings: PrintSettings, pixelRatio?: number): PrintImage => {
+  // 截一帧，紧接着推导这一刻的图例；不带图例时不查
+  const captureOf = (view: MapViewport, legend: boolean, pixelRatio?: number): PrintCapture => {
     const snapshot = view.snapshot({ omitGroups: options.omitGroups, ...(pixelRatio ? { pixelRatio } : {}) });
-    return composePrintImage(snapshot, options.legend(view, snapshot), settings.legend);
+    return { snapshot, blocks: legend ? options.legend(view, snapshot) : [] };
   };
 
   // 等到画面完整；"不等了"时直接往下走。视图卸下、切换二三维时照常以 AbortError 结束
@@ -121,7 +132,9 @@ export function useMapPrint(map: MapContext, options: MapPrintOptions): MapPrint
         throw new Error('地图还没有就绪，请稍后再导出');
       }
       phase.value = 'composing';
-      const image = compose(view, settings, settings.double && view.kind === '2d' ? 2 : undefined);
+      const double = settings.double && view.kind === '2d';
+      const { snapshot, blocks } = captureOf(view, settings.legend !== 'none', double ? 2 : undefined);
+      const image = composePrintImage(snapshot, blocks, settings.legend);
       const blob = await canvasBlob(image.canvas);
       signal.throwIfAborted();
       return { blob, fileName: printFileName(options.name, new Date()), placement: image.placement };
@@ -141,9 +154,13 @@ export function useMapPrint(map: MapContext, options: MapPrintOptions): MapPrint
   return {
     phase,
     error,
-    preview: settings => {
+    capture: async (legend, signal) => {
+      await map.whenComplete(signal);
+      if (current) {
+        throw new DOMException('正在导出，不截预览', 'AbortError');
+      }
       const view = map.view.value;
-      return view ? compose(view, settings) : null;
+      return view ? captureOf(view, legend) : null;
     },
     run,
     skipWait: () => current?.skip.abort(),

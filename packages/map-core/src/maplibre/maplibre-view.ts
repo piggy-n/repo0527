@@ -805,8 +805,8 @@ export class MapLibreView<const G extends string> implements MapView {
   /**
    * 同步截一帧（ADR 0174）：omitGroups 的图层这一帧不透明度为 0，二维时按 pixelRatio 调整画布，redraw 之后立刻拷进新的画布，
    * 再全部还原。不改 visibility：它会让数据源重新解析瓦片（选中高亮画在资源的瓦片上），还原后要等解析完才画得出来；
-   * 不透明度只重新求值，过渡临时设成 0，还原以后再同步画一帧，屏幕上不会淡入。调整画布会清空它，最后请求重画下一帧；
-   * 都在同一个任务里，下一次合成之前已经按原样画好。漫游抬高期间二维图层本来就隐藏着，不再动它们
+   * 不透明度只重新求值，过渡临时设成 0，屏幕上不会淡入。还原以后同步再画一帧：调整画布会清空它，截图常在 MapLibre 的
+   * requestAnimationFrame 回调之后的微任务里执行，请求的重画赶不上这一次合成。漫游抬高期间二维图层本来就隐藏着，不再动它们
    */
   snapshot({ omitGroups = [], pixelRatio }: SnapshotOptions = {}): MapSnapshot {
     const map = this.#readyMap();
@@ -846,7 +846,7 @@ export class MapLibreView<const G extends string> implements MapView {
       if (ratio !== null) {
         this.#guard(() => map.setPixelRatio(this.#pixelRatio));
       }
-      if (faded.length > 0) {
+      if (faded.length > 0 || ratio !== null) {
         this.#guard(() => map.redraw());
         this.#guard(() => {
           for (const layer of faded) {

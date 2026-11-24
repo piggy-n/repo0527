@@ -1,10 +1,24 @@
 // @vitest-environment node
 import { bbox } from '@turf/bbox';
+import { booleanIntersects } from '@turf/boolean-intersects';
 import { intersect } from '@turf/intersect';
-import type { LineString, MultiPolygon, Polygon, Position } from 'geojson';
-import { describe, expect, it } from 'vitest';
+import type { Geometry, LineString, MultiPolygon, Polygon, Position } from 'geojson';
+import { describe, expect, it, vi } from 'vitest';
 import cityFile from '../boundary/data/jiangsu-city.json?raw';
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from './region-scope';
+
+// 每次逐段求交时范围有几个坐标：范围外的要素对着上万个坐标的区划直接求交，每个要 5～8 毫秒（ADR 0174 审查）
+const intersections = vi.hoisted((): number[] => []);
+vi.mock('@turf/boolean-intersects', async importOriginal => {
+  const actual = await importOriginal<typeof import('@turf/boolean-intersects')>();
+  return {
+    ...actual,
+    booleanIntersects: (...args: Parameters<typeof actual.booleanIntersects>) => {
+      intersections.push(JSON.stringify(args[1]).split('],[').length);
+      return actual.booleanIntersects(...args);
+    }
+  };
+});
 
 function square(x: number, y: number, size: number): Position[] {
   return [
@@ -110,5 +124,33 @@ describe('区划范围：求交前先裁掉远处的边', () => {
     ['离得很远', box(120.5, 33.5, 0.2)]
   ])('结果和直接求交一样：%s', (_name, area) => {
     expect(pointsOf(clipToScope(area, nanjing))).toStrictEqual(pointsOf(direct(area)));
+  });
+});
+
+describe('区划范围：要素先把范围裁到附近再逐段求交', () => {
+  const nanjing = cityGeometry('320100');
+  const ring = nanjing.type === 'Polygon' ? nanjing.coordinates[0] : nanjing.coordinates[0]?.[0];
+
+  it('紧贴边界里外的方块和点、跨过边界的短线，结果和直接求交一样；逐段求交时范围只剩要素附近的几个坐标', () => {
+    const vertices = ring ?? [];
+    const features = Array.from({ length: 300 }, (_, index): Geometry => {
+      const [lng = 0, lat = 0] = vertices[(index * 37) % (vertices.length - 1)] ?? [];
+      const offset = index % 2 === 0 ? 0.002 : -0.004;
+      if (index % 3 === 0) {
+        return box(lng + offset, lat + offset, 0.002);
+      }
+      if (index % 3 === 1) {
+        return { type: 'LineString', coordinates: [[lng - 0.003, lat - 0.002], [lng + 0.003, lat + 0.002]] };
+      }
+      return { type: 'Point', coordinates: [lng + offset, lat] };
+    });
+    const expected = features.map(geometry => booleanIntersects(geometry, nanjing));
+    intersections.length = 0;
+
+    expect(features.map(geometry => intersectsScope(geometry, nanjing))).toStrictEqual(expected);
+    expect(expected.filter(Boolean).length).toBeGreaterThan(60);
+    expect(expected.filter(value => !value).length).toBeGreaterThan(60);
+    expect(intersections.length).toBeGreaterThan(60);
+    expect(Math.max(...intersections)).toBeLessThan(100);
   });
 });

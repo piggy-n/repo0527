@@ -4,19 +4,33 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { MapPrintPanel } from './MapPrintPanel';
-import type { PrintImage } from './print-image';
-import { DEFAULT_PRINT_SETTINGS, type MapPrint, type PrintPhase, type PrintSettings } from './useMapPrint';
+import type { PrintLegendBlock } from './print-legend';
+import {
+  DEFAULT_PRINT_SETTINGS,
+  type MapPrint,
+  type PrintCapture,
+  type PrintPhase,
+  type PrintSettings
+} from './useMapPrint';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
-// 打印的拥有者：状态由用例改，操作只记下调用
-function fakePrint(preview: PrintImage | null = null) {
+const BLOCKS: PrintLegendBlock[] = [{ title: null, rows: [{ label: '学校点层（2025）', drawSwatch: () => undefined }] }];
+
+// 截下的画面：地图的 CSS 尺寸，屏幕的像素比是 1；图例是给的几组
+function captureOf(width: number, height: number, blocks: readonly PrintLegendBlock[] = BLOCKS): PrintCapture {
+  const image = Object.assign(document.createElement('canvas'), { width, height });
+  return { snapshot: { image, width, height }, blocks };
+}
+
+// 打印的拥有者：状态由用例改，截图给出 capture，操作只记下调用
+function fakePrint(capture: PrintCapture | null = null) {
   const phase = ref<PrintPhase>('idle');
   const error = ref('');
   const print = {
     phase,
     error,
-    preview: vi.fn<MapPrint['preview']>(() => preview),
+    capture: vi.fn<MapPrint['capture']>(async () => capture),
     run: vi.fn<MapPrint['run']>(async () => ({
       blob: new Blob(['png'], { type: 'image/png' }),
       fileName: '现状底图-20261124-014530.png',
@@ -28,7 +42,7 @@ function fakePrint(preview: PrintImage | null = null) {
   return print;
 }
 
-// 浮层内容放在提供地图的页面里（没有画布，视图一直没有）；设置由页面持有
+// 浮层内容放在提供地图的页面里（没有画布，相机不变）；设置由页面持有
 function mountPanel(print: MapPrint, dimension: ViewKind = '2d', initial: PrintSettings = DEFAULT_PRINT_SETTINGS) {
   const settings = ref(initial);
   const done = vi.fn<() => void>();
@@ -51,6 +65,13 @@ function mountPanel(print: MapPrint, dimension: ViewKind = '2d', initial: PrintS
 const radio = (wrapper: VueWrapper, label: string) =>
   wrapper.findAll('label.el-radio-button').find(item => item.text() === label);
 
+const choose = async (wrapper: VueWrapper, label: string) => {
+  await radio(wrapper, label)?.find('input').setValue(true);
+  await flushPromises();
+};
+
+const sizeText = (wrapper: VueWrapper) => wrapper.get('[data-print-size]').text();
+
 const exportButton = (wrapper: VueWrapper) => {
   const found = wrapper.findAll('button').find(item => item.text().includes('导出图片'));
   if (!found) {
@@ -59,9 +80,16 @@ const exportButton = (wrapper: VueWrapper) => {
   return found;
 };
 
-// jsdom 没有 Canvas 2D：预览画不出来（只看尺寸和说明），下载不真的跳转
+// jsdom 没有 Canvas 2D：合成和预览用什么也不画的假上下文，量文字按字数；下载不真的跳转
 beforeEach(() => {
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const context = new Proxy(
+    { measureText: (text: string) => ({ width: text.length * 12 }) },
+    {
+      get: (target, key) => (key in target ? target[key as keyof typeof target] : () => undefined),
+      set: () => true
+    }
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as unknown as RenderingContext);
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:print');
   vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
 });
@@ -73,31 +101,65 @@ afterEach(() => {
 });
 
 describe('MapPrintPanel', () => {
-  it('预览：没有就绪的视图时说明原因；有图片时写出导出的像素', async () => {
-    const empty = mountPanel(fakePrint());
-    await flushPromises();
-    expect(empty.wrapper.text()).toContain('地图还没有就绪');
-
-    const canvas = Object.assign(document.createElement('canvas'), { width: 1672, height: 800 });
-    const image = { canvas, placement: 'side' };
-    const print = fakePrint(image as PrintImage);
+  it('预览：打开时等画面完整截一次（带图例），写出导出的像素；等的时候、没有就绪的视图时说明', async () => {
+    let finish: ((capture: PrintCapture | null) => void) | undefined;
+    const print = fakePrint();
+    print.capture.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
     const { wrapper } = mountPanel(print);
     await flushPromises();
+    expect(wrapper.text()).toContain('等待地图加载完成');
+    expect(wrapper.find('[data-print-size]').exists()).toBe(false);
 
-    expect(wrapper.get('[data-print-size]').text()).toBe('1672 × 800 像素');
-    expect(print.preview).toHaveBeenCalledWith(DEFAULT_PRINT_SETTINGS);
+    finish?.(captureOf(1440, 800));
+    await flushPromises();
+    expect(sizeText(wrapper)).toBe('1672 × 800 像素');
+    expect(print.capture).toHaveBeenCalledTimes(1);
+    expect(print.capture).toHaveBeenCalledWith(true, expect.any(AbortSignal));
+
+    const empty = mountPanel(fakePrint(null));
+    await flushPromises();
+    expect(empty.wrapper.text()).toContain('地图还没有就绪');
   });
 
-  it('改图例的位置交给页面，预览跟着重画', async () => {
-    const print = fakePrint();
+  it('改图例的位置只重新合成、只改清晰度时预览不变，都不再截图、查要素', async () => {
+    const print = fakePrint(captureOf(1440, 800));
     const { wrapper, settings } = mountPanel(print);
     await flushPromises();
 
-    await radio(wrapper, '右下角')?.find('input').setValue(true);
+    await choose(wrapper, '右下角');
+    expect(settings.value).toStrictEqual({ legend: 'corner', double: false });
+    expect(sizeText(wrapper)).toBe('1440 × 800 像素');
+    await choose(wrapper, '不带');
+    await choose(wrapper, '右侧一栏');
+    expect(sizeText(wrapper)).toBe('1672 × 800 像素');
+    await choose(wrapper, '2 倍');
+
+    expect(settings.value).toStrictEqual({ legend: 'side', double: true });
+    expect(print.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('打开时不带图例就不查；换成带图例时重新截一次', async () => {
+    const print = fakePrint(captureOf(1440, 800));
+    const { wrapper } = mountPanel(print, '2d', { legend: 'none', double: false });
+    await flushPromises();
+    expect(print.capture).toHaveBeenLastCalledWith(false, expect.any(AbortSignal));
+    expect(sizeText(wrapper)).toBe('1440 × 800 像素');
+
+    await choose(wrapper, '右下角');
+
+    expect(print.capture).toHaveBeenCalledTimes(2);
+    expect(print.capture).toHaveBeenLastCalledWith(true, expect.any(AbortSignal));
+  });
+
+  it('选了 2 倍时写出按 2 倍像素比导出的尺寸，地图受画布上限 4096 约束', async () => {
+    const print = fakePrint(captureOf(2560, 1200, []));
+    const { wrapper } = mountPanel(print, '2d', { legend: 'side', double: true });
     await flushPromises();
 
-    expect(settings.value).toStrictEqual({ legend: 'corner', double: false });
-    expect(print.preview).toHaveBeenLastCalledWith({ legend: 'corner', double: false });
+    // 4096 ÷ 2560 = 1.6
+    expect(sizeText(wrapper)).toBe('4096 × 1920 像素');
+    await choose(wrapper, '同屏幕');
+    expect(sizeText(wrapper)).toBe('2560 × 1200 像素');
   });
 
   it('三维只有同屏幕的清晰度：2 倍不能选，导出时也不按 2 倍', async () => {

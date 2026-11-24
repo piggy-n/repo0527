@@ -1,5 +1,5 @@
 import { useEventListener } from '@vueuse/core';
-import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
+import { BROWSE_TOOL, type StyleGroup, type ViewKind } from '@mx/map-core';
 import { MapCanvas, type MapViewport, provideMap, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, KeepAlive, ref, shallowRef, watch } from 'vue';
@@ -88,8 +88,11 @@ const TOOLBAR_GROUPS = [
   ['clear']
 ] as const;
 
-// 打印时不画的分组：测量、选中高亮这些临时的标记（用户 2026-11-24）；测量的读数、位置点本来就是页面元素，不在画布里
-const PRINT_OMITTED_GROUPS = ['measure', 'selection', 'selection-labels'] as const;
+// 打印时不画的分组：测量、选中高亮这些临时的标记（用户 2026-11-24）；测量的读数、位置点本来就是页面元素，不在画布里。
+// 选中要素的加强标注不在这里：它要换回普通标注，样式变了要重新排版，打印浮层开着时就撤掉
+const PRINT_OMITTED_GROUPS = ['measure', 'selection'] as const;
+
+const EMPTY_GROUP: StyleGroup = { sources: {}, layers: [] };
 
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/archive/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
@@ -125,7 +128,7 @@ export const CurrentMapPage = defineComponent({
     // 业务组始终只显示图标，矮屏时分成两列；还量不到尺寸时按常规（ADR 0066）
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
-    const layout = computed(() => mapPageLayout(width.value, height.value));
+    const layout = computed(() => mapPageLayout(width.value, height.value, TOOLBAR_GROUPS));
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写；每一项是否生效看开关（ADR 0140）
     const preferences = usePreferenceScope();
     const basemap = useBasemap({ preferences });
@@ -265,9 +268,10 @@ export const CurrentMapPage = defineComponent({
       'basemap-labels': basemap.deriveLabelsGroup,
       resources: resources.deriveGroup,
       selection: pick.deriveGroup,
-      // 加强标注的要素原来的标注滤掉，两组读同一份状态、同一轮提交（ADR 0160）
-      'resource-labels': () => resources.deriveLabelsGroup(pick.labelEmphasis.value),
-      'selection-labels': pick.deriveLabelsGroup,
+      // 加强标注的要素原来的标注滤掉，两组读同一份状态、同一轮提交（ADR 0160）；打印浮层开着时撤掉加强，
+      // 这个要素显示普通标注，同没有选中时的地图（ADR 0174）
+      'resource-labels': () => resources.deriveLabelsGroup(printOpen.value ? null : pick.labelEmphasis.value),
+      'selection-labels': () => (printOpen.value ? EMPTY_GROUP : pick.deriveLabelsGroup()),
       // 选中市或区县、边界加载好后裁剪（ADR 0051 第 1 节）。遮罩一直画在模型上面，漫游时区划不适用、撤掉遮罩，
       // 不盖住漫游的画面；区划的选择不变，退出后原样回来（ADR 0161 第 7 节）
       'region-clip': () => regionClipGroup(roaming.value ? null : readyBoundary(region.state.value)),

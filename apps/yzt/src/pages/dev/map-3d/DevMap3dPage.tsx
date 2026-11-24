@@ -85,7 +85,7 @@ const MapPrototype = defineComponent({
     map.registerTools(PROTOTYPE_TOOLS);
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
-    const pageLayout = computed(() => mapPageLayout(width.value, height.value));
+    const pageLayout = computed(() => mapPageLayout(width.value, height.value, TOOLBAR_GROUPS));
 
     const dimension = ref<ViewKind>('2d');
     // 示意画面不请求天地图：公网时借用一个占位 key 得到矢量、影像两种选项

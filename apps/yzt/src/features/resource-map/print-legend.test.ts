@@ -1,6 +1,6 @@
-import type { RenderedFeature, RenderedQueryOptions, ScreenBox, ScreenPoint } from '@mx/map-core';
-import type { Polygon } from 'geojson';
-import { describe, expect, it } from 'vitest';
+import type { PickResult, RenderedFeature, RenderedQueryOptions, ScreenBox, ScreenPoint } from '@mx/map-core';
+import type { Geometry, Polygon } from 'geojson';
+import { describe, expect, it, vi } from 'vitest';
 import { buildCatalog } from './catalog';
 import { classItems, OTHER_ITEM } from './classification';
 import {
@@ -19,6 +19,30 @@ import {
 } from './resource-layers';
 import type { ResourceSymbolOverride, SymbolOverrideOf } from './resource-symbols';
 import { resourceStyle } from './style-registry';
+
+// 每次求交时区划有几个顶点、裁了几次区划：区划边界上万个坐标，每个要素都对着整个边界求交要几秒，
+// 精确裁剪整个区划也要近 200 毫秒（ADR 0174 审查）
+const calls = vi.hoisted(() => ({ intersections: [] as number[], clips: 0 }));
+vi.mock('@/shared/map/region/region-scope', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/shared/map/region/region-scope')>();
+  return {
+    ...actual,
+    intersectsScope: (geometry: Geometry, scope: Parameters<typeof actual.intersectsScope>[1]) => {
+      calls.intersections.push(JSON.stringify(scope.coordinates).split('],[').length);
+      return actual.intersectsScope(geometry, scope);
+    },
+    clipToScope: (...args: Parameters<typeof actual.clipToScope>) => {
+      calls.clips += 1;
+      return actual.clipToScope(...args);
+    }
+  };
+});
+
+// 记录从零开始
+function resetCalls(): void {
+  calls.intersections.length = 0;
+  calls.clips = 0;
+}
 
 // 地类按编码配色，学校点按学段配色，农田、道路、红线是统一符号；农田 13 级起显示
 const CATALOG = buildCatalog(
@@ -59,13 +83,18 @@ const codes = (items: readonly { readonly resource: { readonly code: string } }[
   items.map(({ resource }) => resource.code);
 
 // 整屏查询的假视图：按数据源给出要素，记下每次查询
-function fakeView(features: Readonly<Record<string, readonly RenderedFeature[]>>) {
+function fakeView(features: Readonly<Record<string, readonly RenderedFeature[]>>, sky = false) {
   const queries: { readonly area: ScreenPoint | ScreenBox; readonly options: RenderedQueryOptions }[] = [];
   const view = {
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => {
       queries.push({ area, options });
       return options.sources.flatMap(source => features[source] ?? []);
-    }
+    },
+    // 画面 1440 × 800 对着东经 117～122、北纬 30～35；sky 时上面两角是天空（三维）
+    pick: ({ x, y }: ScreenPoint): PickResult =>
+      sky && y === 0
+        ? { kind: 'miss' }
+        : { kind: 'hit', surface: 'map', lngLat: [117 + (x * 5) / 1440, 35 - (y * 5) / 800] }
   };
   return { view, queries };
 }
@@ -78,6 +107,27 @@ const feature = (sourceId: string, properties: Record<string, unknown>, geometry
 });
 
 const point = (lng: number, lat: number) => ({ type: 'Point' as const, coordinates: [lng, lat] });
+
+// 西南角在 (lng, lat)、边长 size 度的方块
+const square = (lng: number, lat: number, size: number): Polygon => ({
+  type: 'Polygon',
+  coordinates: [
+    [
+      [lng, lat],
+      [lng + size, lat],
+      [lng + size, lat + size],
+      [lng, lat + size],
+      [lng, lat]
+    ]
+  ]
+});
+
+// 东经 118～119、北纬 31～32 的区划，整个在画面里
+const SQUARE = square(118, 31, 1);
+
+// 地类图斑里 0.01 度见方的一块
+const parcel = (dlbm: string, lng: number, lat: number) =>
+  feature('resources-bgdc_dltb', { dlbm }, square(lng, lat, 0.01));
 
 const SIZE = { width: 1440, height: 800 };
 
@@ -99,6 +149,7 @@ describe('printedResources', () => {
 });
 
 describe('renderedClasses', () => {
+  const INPUT = { state: STATE, invalid: NONE, overrideOf: noOverride, size: SIZE };
   const FEATURES = {
     'resources-bgdc_dltb': [
       feature('resources-bgdc_dltb', { dlbm: '0101' }),
@@ -171,18 +222,6 @@ describe('renderedClasses', () => {
   });
 
   it('有区划范围时带几何查询，只算范围里的要素（同点选、框选）', () => {
-    const scope: Polygon = {
-      type: 'Polygon',
-      coordinates: [
-        [
-          [118, 31],
-          [119, 31],
-          [119, 32],
-          [118, 32],
-          [118, 31]
-        ]
-      ]
-    };
     const { view, queries } = fakeView({
       'resources-bgdc_dltb': [
         feature('resources-bgdc_dltb', { dlbm: '0101' }, point(118.5, 31.5)),
@@ -198,11 +237,79 @@ describe('renderedClasses', () => {
       overrideOf: noOverride,
       zoom: 12,
       size: SIZE,
-      scope
+      scope: SQUARE
     });
 
     expect(rendered).toStrictEqual(new Map([['bgdc_dltb', new Set(['0101'])]]));
     expect(queries.every(({ options }) => options.withGeometry)).toBe(true);
+  });
+
+  it('区划整个在画面里时不裁区划（精确裁剪整个区划要近 200 毫秒），要素直接和区划求交', () => {
+    const { view } = fakeView({
+      'resources-bgdc_dltb': [
+        feature('resources-bgdc_dltb', { dlbm: '0101' }, point(118.5, 31.5)),
+        feature('resources-bgdc_dltb', { dlbm: '1101' }, point(120, 33))
+      ]
+    });
+    resetCalls();
+
+    const rendered = renderedClasses({ ...INPUT, view, zoom: 12, scope: SQUARE });
+
+    expect(rendered).toStrictEqual(new Map([['bgdc_dltb', new Set(['0101'])]]));
+    expect(calls.clips).toBe(0);
+    expect(calls.intersections).toStrictEqual([5, 5]);
+  });
+
+  it('区划边界很长、画面里只有一段边界时，先把区划裁到画面里再求交，已有的取值不再求交', () => {
+    // 1 万个顶点的大圆：圆心 (108, 32.5)、半径 10 度，只有东边一小段边界在画面里（同放大到区划边缘附近）；
+    // 要素是 0.01 度的小方块，范围里的在东经 117.3，区划外的在东经 119.5 以东
+    const ring = Array.from({ length: 10_000 }, (_, index) => {
+      const angle = (index / 10_000) * Math.PI * 2;
+      return [108 + 10 * Math.cos(angle), 32.5 + 10 * Math.sin(angle)];
+    });
+    const scope: Polygon = { type: 'Polygon', coordinates: [[...ring, ring[0] ?? [0, 0]]] };
+    const inside = Array.from({ length: 50 }, (_, index) => parcel(index % 2 === 0 ? '0101' : '1101', 117.3, 32.5));
+    const outside = Array.from({ length: 400 }, (_, index) => parcel('0301', 119.5 + (index % 20) * 0.05, 32.2));
+    const { view } = fakeView({ 'resources-bgdc_dltb': [...inside, ...outside] });
+    resetCalls();
+
+    const rendered = renderedClasses({ ...INPUT, view, zoom: 12, scope });
+
+    expect(rendered).toStrictEqual(new Map([['bgdc_dltb', new Set(['0101', '1101'])]]));
+    // 范围里的两种取值各求交一次，区划外的每个都要求交，但对着的是裁过的区划，不是 1 万个顶点
+    expect(calls.clips).toBe(1);
+    expect(calls.intersections).toHaveLength(2 + outside.length);
+    expect(Math.max(...calls.intersections)).toBeLessThan(1000);
+  });
+
+  it('三维里画面有一角是天空时，按查到的要素的外包矩形裁区划；统一符号的资源找到一个范围里的就停', () => {
+    const { view } = fakeView(
+      {
+        'resources-test_farmland': [
+          feature('resources-test_farmland', { guid: 'a' }, point(118.5, 31.5)),
+          feature('resources-test_farmland', { guid: 'b' }, point(118.6, 31.6)),
+          feature('resources-test_farmland', { guid: 'c' }, point(120.5, 33))
+        ]
+      },
+      true
+    );
+    resetCalls();
+
+    const rendered = renderedClasses({ ...INPUT, view, zoom: 13, scope: SQUARE });
+
+    expect(rendered).toStrictEqual(new Map([['test_farmland', new Set()]]));
+    expect(calls.clips).toBe(1);
+    expect(calls.intersections).toHaveLength(1);
+  });
+
+  it('区划整个在画面外时没有资源', () => {
+    const { view } = fakeView({
+      'resources-bgdc_dltb': [feature('resources-bgdc_dltb', { dlbm: '0101' }, point(118.5, 31.5))]
+    });
+
+    const rendered = renderedClasses({ ...INPUT, view, zoom: 12, scope: square(125, 40, 1) });
+
+    expect(rendered.size).toBe(0);
   });
 });
 

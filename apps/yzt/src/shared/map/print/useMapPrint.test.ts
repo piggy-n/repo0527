@@ -181,14 +181,55 @@ describe('useMapPrint', () => {
     expect(print.error.value).toBe('');
   });
 
-  it('预览不等加载、按屏幕的像素比合成；没有就绪的视图时为 null', () => {
+  it('不带图例时不推导图例（不整屏查要素）', async () => {
+    const { viewport } = fakeViewport();
+    const { print, completions, legend } = setup(viewport);
+
+    const running = print.run({ legend: 'none', double: false });
+    await settle();
+    completions[0]?.resolve();
+
+    expect((await running)?.placement).toBe('none');
+    expect(legend).not.toHaveBeenCalled();
+  });
+
+  it('预览的截图：先等画面完整，再按屏幕的像素比截一帧；带图例时紧接着推导图例，不带时不查', async () => {
     const { viewport, snapshots } = fakeViewport();
-    const { print } = setup(viewport);
+    const { print, completions, legend } = setup(viewport);
+    const { signal } = new AbortController();
 
-    const preview = print.preview({ legend: 'none', double: true });
-
-    expect(preview?.placement).toBe('none');
+    const capturing = print.capture(true, signal);
+    await settle();
+    expect(snapshots).toStrictEqual([]);
+    expect(completions[0]?.signal).toBe(signal);
+    completions[0]?.resolve();
+    expect((await capturing)?.blocks).toStrictEqual(BLOCKS);
     expect(snapshots).toStrictEqual([{ omitGroups: ['measure', 'selection'] }]);
-    expect(setup(null).print.preview({ legend: 'side', double: false })).toBeNull();
+
+    const plain = print.capture(false, signal);
+    await settle();
+    completions[1]?.resolve();
+    expect((await plain)?.blocks).toStrictEqual([]);
+    expect(legend).toHaveBeenCalledTimes(1);
+  });
+
+  it('预览的截图等完时正在导出就不截；没有就绪的视图时为 null', async () => {
+    const { viewport, snapshots } = fakeViewport();
+    const { print, completions } = setup(viewport);
+
+    const capturing = print.capture(true, new AbortController().signal);
+    const running = print.run({ legend: 'side', double: false });
+    await settle();
+    completions[0]?.resolve();
+    await expect(capturing).rejects.toMatchObject({ name: 'AbortError' });
+    expect(snapshots).toStrictEqual([]);
+    print.cancel();
+    await running;
+
+    const missing = setup(null);
+    const empty = missing.print.capture(true, new AbortController().signal);
+    await settle();
+    missing.completions[0]?.resolve();
+    expect(await empty).toBeNull();
   });
 });

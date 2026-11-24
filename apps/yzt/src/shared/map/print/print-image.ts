@@ -140,6 +140,23 @@ function drawLegend(context: CanvasRenderingContext2D, x: number, y: number, lay
 export interface PrintImage {
   readonly canvas: HTMLCanvasElement;
   readonly placement: LegendPlacement;
+  /** 整张图的 CSS 尺寸（地图加上右侧一栏的图例），乘上像素比是图片的像素 */
+  readonly width: number;
+  readonly height: number;
+  /** 其中地图的 CSS 尺寸 */
+  readonly map: { readonly width: number; readonly height: number };
+}
+
+// MapLibre 默认的画布上限（maxCanvasSize），页面没有改：地图的像素比超出它时被收小
+const MAX_CANVAS_SIZE = 4096;
+
+/** 二维按这个像素比截图时导出的图片多大（ADR 0174）：地图的像素比和 MapLibre 一样受画布上限约束 */
+export function scaledPixels(
+  image: Pick<PrintImage, 'width' | 'height' | 'map'>,
+  pixelRatio: number
+): [number, number] {
+  const ratio = Math.min(pixelRatio, MAX_CANVAS_SIZE / image.map.width, MAX_CANVAS_SIZE / image.map.height);
+  return [Math.round(image.width * ratio), Math.round(image.height * ratio)];
 }
 
 /**
@@ -177,5 +194,11 @@ export function composePrintImage(
     }
     drawLegend(context, legend.x, legend.y, legend.layout, !side);
   }
-  return { canvas, placement: arrangement.placement };
+  return {
+    canvas,
+    placement: arrangement.placement,
+    width: arrangement.width,
+    height: arrangement.height,
+    map: { width, height }
+  };
 }

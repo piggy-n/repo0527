@@ -3753,7 +3753,7 @@ describe('MapLibreView 的截图（ADR 0174）', () => {
     expect(ctx.map.calls).toStrictEqual([['redraw'], ['drawImage']]);
   });
 
-  it('二维按给的像素比画这一帧，之后还原成页面指定的值；没指定时还原成跟随设备', async () => {
+  it('二维按给的像素比画这一帧，之后还原成页面指定的值（没指定时跟随设备），调整画布清空了它，同步再画一帧', async () => {
     using plain = await readySetup();
     stubCanvas2d(() => plain.map.calls.push(['drawImage', plain.map.pixelRatio]));
     plain.view.snapshot({ pixelRatio: 2 });
@@ -3761,7 +3761,8 @@ describe('MapLibreView 的截图（ADR 0174）', () => {
       ['setPixelRatio', 2],
       ['redraw'],
       ['drawImage', 2],
-      ['setPixelRatio', null]
+      ['setPixelRatio', null],
+      ['redraw']
     ]);
 
     using fixed = await readySetup({ mapOptions: { pixelRatio: 1.5 } });
