@@ -136,7 +136,10 @@ export interface PrintItem {
   readonly swatch: LegendSwatch;
 }
 
-/** 打印图例里的一个资源：统一符号是一行；按属性配色的是一组，只有画面里出现的取值，次序同右侧图例 */
+/**
+ * 打印图例里的一个资源：统一符号是一行；按属性配色的是一组，只有画面里出现的取值，次序同右侧图例。filterNote 是类别
+ * 列表体现不了的过滤条件（ADR 0173），同右侧图例
+ */
 export type PrintEntry =
   | {
       readonly kind: 'symbol';
@@ -144,6 +147,7 @@ export type PrintEntry =
       readonly title: string;
       readonly opacity: number;
       readonly swatch: LegendSwatch;
+      readonly filterNote: string | null;
     }
   | {
       readonly kind: 'classes';
@@ -153,14 +157,15 @@ export type PrintEntry =
       readonly continued: string;
       readonly opacity: number;
       readonly items: readonly PrintItem[];
+      readonly filterNote: string | null;
     };
 
-/** 打印图例里的资源（纯数据）：符号同右侧图例的推导（legendEntry），名称后面带年份 */
+/** 打印图例里的资源（纯数据）：符号和过滤条件同右侧图例的推导（legendEntry），名称后面带年份 */
 export function printEntries(
   { state, invalid, overrideOf, zoom }: PrintLegendInput,
   rendered: RenderedClasses
 ): PrintEntry[] {
-  return printedResources(state, invalid, zoom).flatMap(({ resource, year }): PrintEntry[] => {
+  return printedResources(state, invalid, zoom).flatMap(({ resource, year, filter }): PrintEntry[] => {
     const present = rendered.get(resource.code);
     if (!present) {
       return [];
@@ -168,9 +173,10 @@ export function printEntries(
     const { code, name } = resource;
     const opacity = state.displays.get(code)?.opacity ?? 1;
     const title = `${name}（${year}）`;
-    const entry = legendEntry(resource, year, overrideOf(code));
+    const entry = legendEntry(resource, year, overrideOf(code), filter);
+    const { filterNote } = entry;
     if (entry.kind === 'symbol' || entry.mode === 'uniform') {
-      return [{ kind: 'symbol', code, title, opacity, swatch: entry.swatch }];
+      return [{ kind: 'symbol', code, title, opacity, swatch: entry.swatch, filterNote }];
     }
     let items: PrintItem[];
     if (entry.kind === 'values') {
@@ -185,21 +191,22 @@ export function printEntries(
     if (items.length === 0) {
       return [];
     }
-    return [{ kind: 'classes', code, title, continued: `${name}（${year}，续）`, opacity, items }];
+    return [{ kind: 'classes', code, title, continued: `${name}（${year}，续）`, opacity, items, filterNote }];
   });
 }
 
-/** 打印图例里资源的几组（ADR 0174）：符号按图层的透明度变淡，同右侧图例 */
+/** 打印图例里资源的几组（ADR 0174）：符号按图层的透明度变淡，过滤条件写成"只显示 …"，同右侧图例 */
 export function resourcePrintBlocks(entries: readonly PrintEntry[]): PrintLegendBlock[] {
   return entries.map((entry): PrintLegendBlock => {
     const row = (label: string, swatch: LegendSwatch): PrintLegendRow => ({
       label,
       drawSwatch: (context, box) => drawLegendSwatch(context, swatch, box, entry.opacity)
     });
+    const note = entry.filterNote === null ? {} : { filterNote: `只显示 ${entry.filterNote}` };
     if (entry.kind === 'symbol') {
-      return { title: null, rows: [row(entry.title, entry.swatch)] };
+      return { title: null, rows: [row(entry.title, entry.swatch)], ...note };
     }
     const { title, continued, items } = entry;
-    return { title, continued, rows: items.map(item => row(item.label, item.swatch)) };
+    return { title, continued, rows: items.map(item => row(item.label, item.swatch)), ...note };
   });
 }

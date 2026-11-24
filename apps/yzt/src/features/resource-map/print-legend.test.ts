@@ -3,6 +3,8 @@ import type { Geometry, Polygon } from 'geojson';
 import { describe, expect, it, vi } from 'vitest';
 import { buildCatalog } from './catalog';
 import { classItems, OTHER_ITEM } from './classification';
+import type { FeatureFilter } from './feature-filter';
+import { CLASS_FIELD } from './filter-fields';
 import {
   type PrintEntry,
   printedResources,
@@ -77,6 +79,22 @@ function displayed(): ResourceLayersState {
 }
 
 const STATE = displayed();
+
+// 给几个资源加上过滤条件
+function withFilters(filters: Readonly<Record<string, FeatureFilter>>): ResourceLayersState {
+  const displays = new Map(
+    [...STATE.displays].map(([code, display]) => [code, { ...display, filter: filters[code] ?? display.filter }])
+  );
+  return { ...STATE, displays };
+}
+
+// 学校只显示两种类型，地类只显示水田（ADR 0173）
+const FILTERED = withFilters({
+  csxhjctb_xxp: { type: ['小学', '初级中学'] },
+  bgdc_dltb: { [CLASS_FIELD]: ['0101'] }
+});
+
+const UNIFORM: ResourceSymbolOverride = { mode: 'uniform', uniform: { fillColor: '#ff0000' } };
 const NONE: ReadonlyMap<string, unknown> = new Map();
 const noOverride: SymbolOverrideOf = () => undefined;
 const codes = (items: readonly { readonly resource: { readonly code: string } }[]) =>
@@ -339,15 +357,32 @@ describe('printEntries', () => {
   });
 
   it('没画出来的资源不列；统一样式的分类资源是一行', () => {
-    const uniform: ResourceSymbolOverride = { mode: 'uniform', uniform: { fillColor: '#ff0000' } };
     const entries = printEntries(
-      { ...INPUT, overrideOf: code => (code === 'bgdc_dltb' ? uniform : undefined) },
+      { ...INPUT, overrideOf: code => (code === 'bgdc_dltb' ? UNIFORM : undefined) },
       new Map([['bgdc_dltb', new Set()]])
     );
 
     expect(entries).toMatchObject([
       { kind: 'symbol', code: 'bgdc_dltb', swatch: { geometry: 'fill', fill: '#ff0000' } }
     ]);
+  });
+
+  it('过滤着的资源带上类别列表体现不了的条件，同右侧图例（ADR 0173）：别的字段的条件、统一样式时分类的条件', () => {
+    const classified = printEntries({ ...INPUT, state: FILTERED }, RENDERED);
+    const uniform = printEntries(
+      { ...INPUT, state: FILTERED, overrideOf: code => (code === 'bgdc_dltb' ? UNIFORM : undefined) },
+      RENDERED
+    );
+
+    // 按地类配色时类别列表就是条件，只列勾着的水田
+    expect(classified.map(({ code, filterNote }) => [code, filterNote])).toStrictEqual([
+      ['bgdc_dltb', null],
+      ['csxhjctb_xxp', '类型：小学、初级中学'],
+      ['test_farmland', null]
+    ]);
+    const [landuse] = classified;
+    expect(landuse?.kind === 'classes' && landuse.items.map(item => item.key)).toStrictEqual(['0101']);
+    expect(uniform[0]).toMatchObject({ kind: 'symbol', code: 'bgdc_dltb', filterNote: '地类：水田' });
   });
 });
 
@@ -369,6 +404,26 @@ describe('resourcePrintBlocks', () => {
       { title: '地类图斑（2022）', continued: '地类图斑（2022，续）', labels: ['0101 水田'] },
       { title: null, continued: undefined, labels: ['永久基本农田（2023）'] }
     ]);
+  });
+
+  it('过滤条件写成"只显示 …"：一组和单独一行的都带上，没有条件的不带', () => {
+    const blocks = resourcePrintBlocks(
+      printEntries(
+        { state: FILTERED, invalid: NONE, overrideOf: code => (code === 'bgdc_dltb' ? UNIFORM : undefined), zoom: 13 },
+        new Map([
+          ['bgdc_dltb', new Set()],
+          ['csxhjctb_xxp', new Set(['08H213'])],
+          ['test_farmland', new Set()]
+        ])
+      )
+    );
+
+    expect(blocks.map(block => [block.title, block.filterNote])).toStrictEqual([
+      [null, '只显示 地类：水田'],
+      ['学校点层（2025）', '只显示 类型：小学、初级中学'],
+      [null, undefined]
+    ]);
+    expect(blocks[2]).not.toHaveProperty('filterNote');
   });
 
   it('没有资源时没有组', () => {
