@@ -9,11 +9,12 @@ import { type Placement, roundPlacement, trajectoryToMesh } from './placement.ts
 import { gridProjection } from './projection.ts';
 import { writePlan } from './plan-file.ts';
 import { type PlanInput, planSvg } from './plan-svg.ts';
-import { manifestPath, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
-import { cornerLine, cornerSummary, toleranceLabel } from './roam-report.ts';
+import { manifestPath, manifestSpawn, manifestWalkway, outline, type RoamFrame } from './roam-manifest.ts';
+import { cornerLine, cornerSummary, gapLine, toleranceLabel } from './roam-report.ts';
 import { routeWithCorners, spawnOf, STRAIGHT_HORIZONTAL, trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
+import { suggestedSpan, WALKWAY_WIDTH, walkwayGaps, walkwayOf } from './walkway.ts';
 
 // LCC2 的配准（ADR 0149 第 4 节）：在 apps/yzt 下运行 pnpm lcc2:register <索引> --datum <米>，用法见 docs/commands.md
 
@@ -82,6 +83,31 @@ function printRoam(
     const counts = routes.map(({ path }) => `${path.length} 个点`).join('、');
     console.log(`路线（${counts}）："routes": [\n${lines.join(',\n')}\n  ]`);
   }
+  // 补的地板（ADR 0170）：先列断口候选，给了 --walkway 再算
+  const gaps = walkwayGaps(track);
+  if (gaps.length === 0) {
+    console.log('断口候选：没有');
+  } else {
+    console.log(
+      '断口候选（脚下缺人走的那层表面：玻璃栈道、网格的洞、数据的边；在 /dev/nav-grid 上确认两边断成了两片，要补时照建议写 --walkway）：'
+    );
+    gaps.forEach((gap) => console.log(gapLine(gap, suggestedSpan(gap, track))));
+  }
+  const localWalkways = options.walkways.map((span) => {
+    const width = span.width ?? WALKWAY_WIDTH;
+    return { ...span, width, points: walkwayOf(track, result.grid, span) };
+  });
+  if (localWalkways.length > 0) {
+    const walkways = localWalkways.map(({ points, width }) => manifestWalkway(points, width, frame));
+    const lines = walkways.map(
+      ({ width, path }) =>
+        `    { "width": ${width}, "path": [\n` +
+        path.map((point) => `      ${JSON.stringify(point)}`).join(',\n') +
+        '\n    ] }'
+    );
+    const counts = walkways.map(({ path }) => `${path.length} 个点`).join('、');
+    console.log(`补的地板（${counts}）："walkways": [\n${lines.join(',\n')}\n  ]`);
+  }
   if (options.plan === null) {
     return null;
   }
@@ -91,7 +117,9 @@ function printRoam(
     grid: result.grid,
     track,
     spawn: spawnOf(track, options.spawnAt),
-    routes: localRoutes
+    routes: localRoutes,
+    walkways: localWalkways,
+    gaps
   };
 }
 

@@ -64,6 +64,21 @@ export function manifestPath(points: readonly RoamPoint[], frame: RoamFrame): Ma
   });
 }
 
+/** 清单里的一条补的地板（ADR 0170）：宽度和沿线的点 [经度, 纬度, 地板的椭球高] */
+export interface ManifestWalkway {
+  readonly width: number;
+  readonly path: readonly (readonly number[])[];
+}
+
+/** 补的地板（局部系）换成清单的写法：点的经纬度、高度的位数同路线，不带眼高；宽度到厘米 */
+export function manifestWalkway(points: readonly RoamPoint[], width: number, frame: RoamFrame): ManifestWalkway {
+  const path = points.map(point => {
+    const [lng, lat, height] = lngLatHeight(frame, point);
+    return [round(lng, 7), round(lat, 7), round(height, 2)];
+  });
+  return { width: round(width, 2), path };
+}
+
 /** 一条路线；grid 是 trackOf 用的那份，stretches 是按轨迹米数分段的拉直容差 */
 export function manifestRoute(
   track: readonly TrackSample[],

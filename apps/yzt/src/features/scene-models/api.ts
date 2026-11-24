@@ -30,6 +30,17 @@ const routeSchema = z.strictObject({
     .min(2)
 });
 
+// 补的地板（ADR 0170）：扫描采不到的步行表面（玻璃栈道这类），由配准工具沿扫描轨迹算出，只有高斯泼溅写；
+// 宽度不超过 5 米，单位写错（厘米）时整份不通过
+const walkwaySchema = z.strictObject({
+  /** 宽度，米 */
+  width: z.number().positive().max(5),
+  /** 沿线的点 [经度, 纬度, 地板的椭球高] */
+  path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2)
+});
+
+export type ManifestWalkway = z.infer<typeof walkwaySchema>;
+
 const effectSchema = z.strictObject({ id: nonEmpty, label: nonEmpty, tileset: nonEmpty });
 
 // 市代码必须在区划目录里，市名取自目录（清单不写名称）
@@ -64,7 +75,7 @@ const common = {
 };
 
 // 白膜用 effects（第一种是默认），倾斜摄影、室内用 tileset，高斯泼溅（ADR 0149）用 lcc2 和 placement；
-// 严格对象，写错位置时整份清单不合法。泼溅不写屏幕误差；出生点、路线由配准工具从扫描轨迹生成（ADR 0156 第 4 节）
+// 严格对象，写错位置时整份清单不合法。泼溅不写屏幕误差；出生点、路线、补的地板由配准工具从扫描轨迹生成（ADR 0156 第 4 节、ADR 0170）
 const modelSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...common, kind: z.literal('white'), effects: z.array(effectSchema).nonempty() }),
   z.strictObject({ ...common, kind: z.enum(['oblique', 'indoor']), tileset: nonEmpty }),
@@ -74,7 +85,8 @@ const modelSchema = z.discriminatedUnion('kind', [
     lcc2: nonEmpty,
     placement: placementSchema,
     spawn: spawnSchema.optional(),
-    routes: z.array(routeSchema).optional()
+    routes: z.array(routeSchema).optional(),
+    walkways: z.array(walkwaySchema).optional()
   })
 ]);
 

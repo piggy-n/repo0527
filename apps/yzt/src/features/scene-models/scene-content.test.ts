@@ -14,6 +14,7 @@ const oblique = (id: string, extra: Partial<SceneModel> = {}): SceneModel => ({
   defaultEffect: '',
   spawn: undefined,
   routes: [],
+  walkways: [],
   splat: null,
   ...extra
 });

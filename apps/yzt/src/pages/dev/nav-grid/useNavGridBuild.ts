@@ -50,7 +50,7 @@ export function useNavGridBuild(): {
       let navigation: Navigation;
       let partial = false;
       if (model.splat) {
-        const scan = await loadSplatNavigation(model.splat, model.spawn, { signal, onProgress });
+        const scan = await loadSplatNavigation(model.splat, model, { signal, onProgress });
         navigation = scan;
         partial = scan.partial;
       } else if (effect) {

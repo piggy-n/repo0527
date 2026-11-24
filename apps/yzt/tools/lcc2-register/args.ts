@@ -2,6 +2,7 @@
 import type { Vec3 } from './lcc2-data.ts';
 import { ToolError } from './errors.ts';
 import type { Stretch } from './roam.ts';
+import type { WalkwaySpan } from './walkway.ts';
 
 export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement（ADR 0149 第 4 节，docs/config/3dt-manifest.md）
 
@@ -23,7 +24,10 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
   --straight <起-止:容差>  轨迹上起～止米这一段拉直的水平容差（米），比 --route 写的优先，可以写多次，几段重叠时取写在后面的：
                          一条路线里只有宽的坡道、走廊一段要调大时用，进小室又出来这类地方留默认值
   --diagnose             再逐个列出拉直以后留下的拐点和原因（每条路线的计数总会打印），带上它就是 --roam
-  --plan <文件.svg>      再画一张平面图：地板、轨迹和每 20 米的米数（同概要）、出生点、路线，挑路线段和核对用；
+  --walkway <起-止[:宽]>  轨迹上起～止米这一段做成补的地板（清单的 walkways，ADR 0170）：扫描采不到的步行表面（玻璃栈道这类），
+                         地板按扫描仪离地的高度推出来；宽度默认 1.2 米，可以写多次，带上它就是 --roam。
+                         --roam 会列出断口候选和建议的范围，在 /dev/nav-grid 上确认断开了两片再写
+  --plan <文件.svg>      再画一张平面图：地板、轨迹和每 20 米的米数（同概要）、出生点、路线、补的地板和断口候选，挑路线段和核对用；
                          相对路径放在 local/ 下（如 lcc2-plan/xz-gshm.svg），带上它就是 --roam
   --help、-h             显示这段说明
 
@@ -46,6 +50,8 @@ export interface Options {
   readonly stretches: readonly Stretch[];
   /** 逐个列出拉直以后留下的拐点和原因 */
   readonly diagnose: boolean;
+  /** 做成补的地板的轨迹段（ADR 0170） */
+  readonly walkways: readonly WalkwaySpan[];
   /** 平面图写到哪个文件，原样保留，由调用方决定相对路径放在哪；不画时为 null */
   readonly plan: string | null;
   readonly help: boolean;
@@ -109,6 +115,27 @@ function stretch(name: string, text: string): Stretch {
   return { from, to, tolerance };
 }
 
+function walkwaySpan(name: string, text: string): WalkwaySpan {
+  const match = /^([\d.]+)-([\d.]+)(?::([\d.]+))?$/u.exec(text.trim());
+  if (!match) {
+    throw new ToolError(`参数 ${name} 要写成 起-止（米），可以再加 :宽（米），如 268-300 或 268-300:1.5：${text}`);
+  }
+  const [, from, to, width] = match;
+  const span = { from: finite(name, from), to: finite(name, to) };
+  if (!(span.to > span.from)) {
+    throw new ToolError(`参数 ${name} 的止要大于起：${text}`);
+  }
+  if (width === undefined) {
+    return span;
+  }
+  // 清单只认大于 0、不超过 5 米的宽度
+  const value = finite(name, width);
+  if (!(value > 0 && value <= 5)) {
+    throw new ToolError(`参数 ${name} 的宽要大于 0、不超过 5 米：${text}`);
+  }
+  return { ...span, width: value };
+}
+
 function planFile(name: string, text: string): string {
   // 忘了写值时下一个参数会被当成文件名；只认 .svg，也免得写到别的文件上
   if (!/\.svg$/i.test(text)) {
@@ -129,6 +156,7 @@ export function parseOptions(argv: readonly string[]): Options {
     routes: [],
     stretches: [],
     diagnose: false,
+    walkways: [],
     plan: null,
     help: false
   };
@@ -193,6 +221,10 @@ export function parseOptions(argv: readonly string[]): Options {
       case '--diagnose':
         noValue();
         options.diagnose = true;
+        options.roam = true;
+        break;
+      case '--walkway':
+        options.walkways = [...options.walkways, walkwaySpan(name, value())];
         options.roam = true;
         break;
       case '--plan':

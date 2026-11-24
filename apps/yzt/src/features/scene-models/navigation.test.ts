@@ -1,8 +1,10 @@
+import { splatNavigationFrame } from '@mx/map-core';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { required } from '@/shared/testing/required';
 import { fetchLcc2Index } from './api';
-import { scanMeshesOf } from './navigation';
+import { scanMeshesOf, scanWalkwaysOf } from './navigation';
 
 const server = setupServer();
 
@@ -91,5 +93,29 @@ describe('fetchLcc2Index、scanMeshesOf', () => {
     await expect(fetchLcc2Index(INDEX_URL, new AbortController().signal)).rejects.toMatchObject({
       kind: 'invalid-response'
     });
+  });
+});
+
+describe('scanWalkwaysOf', () => {
+  it('补的地板换到导航网格的局部系：摆放的原点是 (0, 0, 0)，往东 1 米是局部 x 约 1，高度差就是局部 z；宽度不变', () => {
+    const frame = splatNavigationFrame({ lng: 117.13, lat: 34.31, height: 38, heading: 0 });
+    const eastOneMeter = 117.13 + 1 / (111_320 * Math.cos((34.31 * Math.PI) / 180));
+    const [walkway] = scanWalkwaysOf(
+      [
+        {
+          width: 1.2,
+          path: [
+            [117.13, 34.31, 38],
+            [eastOneMeter, 34.31, 37.5]
+          ]
+        }
+      ],
+      frame
+    );
+
+    expect(walkway?.width).toBe(1.2);
+    const [origin, east] = required(walkway, '没有换出补的地板').path;
+    expect(origin).toStrictEqual([expect.closeTo(0, 6), expect.closeTo(0, 6), expect.closeTo(0, 6)]);
+    expect(east).toStrictEqual([expect.closeTo(1, 2), expect.closeTo(0, 3), expect.closeTo(-0.5, 3)]);
   });
 });

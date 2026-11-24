@@ -4,7 +4,15 @@ import { buildFloorGrid } from './floor-grid.ts';
 import type { Vec3 } from './lcc2-data.ts';
 import { meshToLngLatHeight, placementFor, yawToManifestHeading } from './placement.ts';
 import { gridProjection } from './projection.ts';
-import { manifestEye, manifestPath, manifestRoute, manifestSpawn, outline, type RoamFrame } from './roam-manifest.ts';
+import {
+  manifestEye,
+  manifestPath,
+  manifestRoute,
+  manifestSpawn,
+  manifestWalkway,
+  outline,
+  type RoamFrame
+} from './roam-manifest.ts';
 import { EYE_HEIGHT, trackOf } from './roam.ts';
 import { rectangle, walk } from './test-meshes.ts';
 
@@ -65,6 +73,12 @@ describe('manifestSpawn、manifestRoute、outline', () => {
     const path = manifestPath([withEye(EYE_HEIGHT), withEye(1.597), withEye(1.594)], FRAME);
     expect(path.map(spot => spot.length)).toStrictEqual([3, 3, 4]);
     expect(path[2][3]).toBe(1.59);
+  });
+
+  it('补的地板（ADR 0170）：宽度到厘米，点是 [经度, 纬度, 地板的椭球高]，矮的地方也不带眼高', () => {
+    const walkway = manifestWalkway([withEye(EYE_HEIGHT), withEye(1.2)], 1.234, FRAME);
+    expect(walkway.width).toBe(1.23);
+    expect(walkway.path.map(spot => spot.length)).toStrictEqual([3, 3]);
   });
 
   it('概要每 20 米一行，写出地板、扫描仪离地和净空', () => {

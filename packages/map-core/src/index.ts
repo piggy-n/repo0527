@@ -137,6 +137,7 @@ export {
 } from './scene/nav/nav-frame';
 export { NavGrid, type NavGridSource, type NavPoint } from './scene/nav/nav-grid';
 export { findSpawn, type SpawnOptions } from './scene/nav/spawn';
+export type { ScanWalkway } from './scene/nav/walkway';
 export { seeThroughAvatar, startPitch, WalkCycle, WalkRig } from './scene/nav/third-person';
 export {
   chooseSpawn,

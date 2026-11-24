@@ -21,7 +21,16 @@ const ROUTES: readonly PlanRoute[] = [
   { id: 'upper', name: '上一层', from: 45, to: 55, points: routeOf(TRACK, 45, 55, GRID) }
 ];
 const routePoint = (x: number, y: number, floor: number) => ({ x, y, floor, eye: EYE_HEIGHT });
-const INPUT: PlanInput = { title: '样例.lcc2', heading: 0, grid: GRID, track: TRACK, spawn: SPAWN, routes: ROUTES };
+const INPUT: PlanInput = {
+  title: '样例.lcc2',
+  heading: 0,
+  grid: GRID,
+  track: TRACK,
+  spawn: SPAWN,
+  routes: ROUTES,
+  walkways: [],
+  gaps: []
+};
 
 const numbers = (text: string) => text.split(/[ ,]/).map(Number);
 // 某个属性的值，按出现的先后
@@ -149,6 +158,25 @@ describe('planSvg', () => {
     expect(drawn.split('data-low="route"').length - 1).toBe(1);
     expect(drawn).toContain('edge：眼高 1.59 米');
     expect(drawn).not.toContain('眼高 1.60 米');
+  });
+
+  it('补的地板按宽度画成带子，断口候选垫在轨迹的那一段下面（ADR 0170）；图例里有这两项', () => {
+    const points = [routePoint(10, 2, 0), routePoint(20, 2, 0)];
+    const drawn = planSvg({
+      ...INPUT,
+      walkways: [{ from: 10, to: 20, width: 1.2, points }],
+      gaps: [{ from: 12, to: 18 }]
+    });
+    const band = tagWith(drawn, 'data-walkway="10-20"');
+    expect(Number(attribute(band, 'stroke-width'))).toBeCloseTo(1.2 * projection.scale, 1);
+    expect(numbers(attribute(band, 'points'))).toHaveLength(4);
+    expect(drawn).toContain('补的地板：10～20 米，宽 1.2 米，2 个点');
+    // 断口候选：轨迹上 12～18 米的取样点（每 0.25 米一个）
+    const gapLine = numbers(attribute(tagWith(drawn, 'data-gap="12.0-18.0"'), 'points'));
+    const inGap = TRACK.filter(({ distance }) => distance >= 12 && distance <= 18);
+    expect(gapLine).toHaveLength(inGap.length * 2);
+    expect(drawn).toContain('补的地板（--walkway）');
+    expect(drawn).toContain('断口候选');
   });
 
   it('路线比颜色多时不循环：多出来的用同一种中性色', () => {
