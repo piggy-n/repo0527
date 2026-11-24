@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { CameraState } from '../camera/camera-model';
-import { NO_SCENE_STATUS, type SceneStatus, type SplatLayer, type TilesetStatus } from './scene-content-model';
+import {
+  type GroundPoint,
+  NO_SCENE_STATUS,
+  type SceneStatus,
+  type SplatLayer,
+  type TilesetStatus
+} from './scene-content-model';
 import { mergeSceneStatus, SceneSplatSync, type SplatHost, type SplatOptions, type SplatSource } from './splat-sync';
 
 const CAMERA: CameraState = { center: [117.06, 34.27], zoom: 17, bearing: 0, pitch: 55 };
@@ -12,8 +18,15 @@ class FakeHost implements SplatHost {
   readonly pending = new Map<string, { resolve: (camera: CameraState) => void; reject: (error: unknown) => void }>();
   ignoresAbort = false;
 
-  addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<CameraState> {
-    this.calls.push(`add ${id} ${source.placement.height} ${options.show ? 'show' : 'hide'}`);
+  addSplat(
+    id: string,
+    source: SplatSource,
+    options: SplatOptions,
+    signal: AbortSignal,
+    ground?: GroundPoint
+  ): Promise<CameraState> {
+    const grounded = ground ? ` ground ${ground.height}` : '';
+    this.calls.push(`add ${id} ${source.placement.height} ${options.show ? 'show' : 'hide'}${grounded}`);
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       if (!this.ignoresAbort) {
@@ -98,6 +111,20 @@ describe('SceneSplatSync', () => {
     stale?.resolve(CAMERA);
     await flush();
     expect(states()).toStrictEqual({ cws: 'loading' });
+  });
+
+  it('贴地参照（ADR 0170）交给引擎，变了就移除重新加载；相同的值不重新加载', async () => {
+    const { host, sync } = setup();
+    const ground = { lng: 117.06, lat: 34.27, height: 33.5 };
+
+    sync.apply([layer('cws', { ground })]);
+    host.pending.get('cws')?.resolve(CAMERA);
+    await flush();
+    sync.apply([layer('cws', { ground: { ...ground } })]);
+    expect(host.calls).toStrictEqual(['add cws 59.7 show ground 33.5']);
+
+    sync.apply([layer('cws')]);
+    expect(host.calls).toStrictEqual(['add cws 59.7 show ground 33.5', 'remove cws', 'add cws 59.7 show']);
   });
 
   it('加载中被替换的不报告结果：引擎在中止以后才交回成功或失败，也不改状态、不再通知', async () => {

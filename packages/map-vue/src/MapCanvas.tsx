@@ -17,7 +17,7 @@ import {
   watch
 } from 'vue';
 import styles from './MapCanvas.module.scss';
-import { MAP_MOUSE_SCHEMES, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE } from './runtime';
+import { MAP_MOUSE_SCHEMES, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAP_TERRAIN, MAPLIBRE_ENGINE } from './runtime';
 import { injectMapState } from './use-map';
 
 /** 创建地图时的选项；样式和相机来自会话，不在这里传 */
@@ -45,6 +45,8 @@ export const MapCanvas = defineComponent({
     const engine = inject(MAP_SCENE_ENGINE, MAPLIBRE_ENGINE);
     // 鼠标操作方式按部署（ADR 0168）：app 注入，不给时都用 MapLibre 自带的
     const mouseSchemes = inject(MAP_MOUSE_SCHEMES, undefined);
+    // 三维的地形按部署（ADR 0170）：app 注入，不给时没有地形
+    const terrain = inject(MAP_TERRAIN, null);
     const container = ref<HTMLElement>();
     let view: MapLibreView<string> | undefined;
 
@@ -63,7 +65,8 @@ export const MapCanvas = defineComponent({
         createMap: props.createMap,
         onError: state.onError,
         loadSceneRenderer: engine.loadRenderer,
-        mouseSchemes
+        mouseSchemes,
+        ...(terrain ? { terrain } : {})
       });
       // 挂不上（同一个上下文已经有画布）时先释放刚创建的视图，再把错误交给 Vue
       try {

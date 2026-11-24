@@ -34,5 +34,7 @@ declare global {
     readonly VITE_MAP_MOUSE_2D?: string;
     readonly VITE_MAP_MOUSE_3D?: string;
     readonly VITE_LAYERS_PER_DIMENSION?: string;
+    readonly VITE_SCENE_GROUND_CLAMP?: string;
+    readonly VITE_SCENE_TERRAIN?: string;
   }
 }

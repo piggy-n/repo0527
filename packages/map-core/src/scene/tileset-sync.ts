@@ -2,7 +2,9 @@ import type { CameraState } from '../camera/camera-model';
 import { createIndexLoader } from './index-loader';
 import { type LoadJson, type PreparedTileset, prepareTileset } from './prepare-tileset';
 import {
+  type GroundPoint,
   NO_SCENE_STATUS,
+  sameGround,
   type SceneStatus,
   type TilesetLayer,
   type TilesetLighting,
@@ -26,9 +28,15 @@ export interface TilesetOptions {
 export interface TilesetHost {
   /**
    * 把整理好的索引交给引擎，建好后加进场景（ADR 0081 第 3 节），给出让整个瓦片集进入画布的相机；
-   * signal 中止时销毁建好的瓦片集、以中止的原因结束
+   * 有贴地参照时整个瓦片集竖直平移到引擎表面上（ADR 0170）。signal 中止时销毁建好的瓦片集、以中止的原因结束
    */
-  addTileset(id: string, tileset: PreparedTileset, options: TilesetOptions, signal: AbortSignal): Promise<CameraState>;
+  addTileset(
+    id: string,
+    tileset: PreparedTileset,
+    options: TilesetOptions,
+    signal: AbortSignal,
+    ground?: GroundPoint
+  ): Promise<CameraState>;
   updateTileset(id: string, options: TilesetOptions): void;
   removeTileset(id: string): void;
 }
@@ -61,7 +69,7 @@ const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
 
 /**
  * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），引擎实现 TilesetHost（ADR 0147 第 3 节）：
- * 地址、重试次数变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的。
+ * 地址、重试次数、贴地参照变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的。
  * 整理索引的下载经 createIndexLoader：所有瓦片集共用名额，暂时的失败重试
  */
 export class SceneTilesetSync implements Disposable {
@@ -94,7 +102,12 @@ export class SceneTilesetSync implements Disposable {
     let changed = false;
     for (const [id, entry] of this.#entries) {
       const layer = wanted.get(id);
-      if (!layer || layer.url !== entry.layer.url || layer.attempt !== entry.layer.attempt) {
+      if (
+        !layer ||
+        layer.url !== entry.layer.url ||
+        layer.attempt !== entry.layer.attempt ||
+        !sameGround(layer.ground, entry.layer.ground)
+      ) {
         entry.controller.abort();
         if (entry.applied) {
           this.#host.removeTileset(id);
@@ -166,7 +179,7 @@ export class SceneTilesetSync implements Disposable {
       const prepared = await prepareTileset(entry.layer.url, this.#loadJson, signal);
       signal.throwIfAborted();
       const options = this.#optionsFor(entry);
-      const camera = await this.#host.addTileset(entry.layer.id, prepared, options, signal);
+      const camera = await this.#host.addTileset(entry.layer.id, prepared, options, signal, entry.layer.ground);
       signal.throwIfAborted();
       entry.applied = options;
       entry.status = { state: 'ready', camera };

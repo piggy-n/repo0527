@@ -110,6 +110,12 @@ describe('SceneContentModel', () => {
       [{ tilesets: [], splats: [splat({ attempt: -1 })], underground: null }, '重试次数'],
       [{ tilesets: [], splats: [splat({ placement: { ...placement, heading: Number.NaN } })], underground: null }, '摆放'],
       [{ tilesets: [], splats: [splat({ placement: { ...placement, lat: 91 } })], underground: null }, '纬度'],
+      // 贴地的参照（ADR 0170）
+      [
+        { tilesets: [], splats: [splat({ ground: { lng: 117, lat: 34, height: Number.NaN } })], underground: null },
+        '贴地'
+      ],
+      [{ tilesets: [tileset('a', { ground: { lng: 117, lat: 95, height: 30 } })], underground: null }, '瓦片集 a 的贴地'],
       [{ tilesets: [tileset('cws')], splats: [splat()], underground: null }, 'ID 重复'],
       [{ tilesets: [], splats: [splat(), splat()], underground: null }, 'ID 重复'],
       [{ tilesets: [], splats: [splat()], underground: { tilesetId: 'cws', surfaceOpacity: 0.25 } }, '钻地的瓦片集不存在'],

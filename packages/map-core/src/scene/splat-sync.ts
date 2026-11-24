@@ -1,6 +1,8 @@
 import type { CameraState } from '../camera/camera-model';
 import {
+  type GroundPoint,
   NO_SCENE_STATUS,
+  sameGround,
   type SceneStatus,
   type SplatLayer,
   type SplatPlacement,
@@ -24,8 +26,17 @@ export interface SplatOptions {
  * 数据块加载失败由引擎报告，视图转给 SceneSplatSync 的 failed
  */
 export interface SplatHost {
-  /** 读索引、加进场景，给出让整个模型进入画布的相机；signal 中止时释放建好的、以中止的原因结束 */
-  addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<CameraState>;
+  /**
+   * 读索引、加进场景，给出让整个模型进入画布的相机；有贴地参照时整份竖直平移到引擎表面上（ADR 0170）。
+   * signal 中止时释放建好的、以中止的原因结束
+   */
+  addSplat(
+    id: string,
+    source: SplatSource,
+    options: SplatOptions,
+    signal: AbortSignal,
+    ground?: GroundPoint
+  ): Promise<CameraState>;
   updateSplat(id: string, options: SplatOptions): void;
   removeSplat(id: string): void;
 }
@@ -47,14 +58,15 @@ interface SplatEntry {
 const samePlacement = (a: SplatPlacement, b: SplatPlacement) =>
   a.lng === b.lng && a.lat === b.lat && a.height === b.height && a.heading === b.heading;
 
-// 地址、摆放、重试次数变了要重新加载
+// 地址、摆放、贴地参照、重试次数变了要重新加载
 const reloads = (entry: SplatEntry, layer: SplatLayer) =>
   layer.url !== entry.layer.url ||
   layer.attempt !== entry.layer.attempt ||
-  !samePlacement(layer.placement, entry.layer.placement);
+  !samePlacement(layer.placement, entry.layer.placement) ||
+  !sameGround(layer.ground, entry.layer.ground);
 
 /**
- * 按会话的高斯泼溅增删改引擎里的泼溅（ADR 0149），做法同 SceneTilesetSync：地址、摆放、重试次数变了就重新加载，
+ * 按会话的高斯泼溅增删改引擎里的泼溅（ADR 0149），做法同 SceneTilesetSync：地址、摆放、贴地参照、重试次数变了就重新加载，
  * 其余的只改显示；状态和瓦片集的合在一起报告（ID 不重复，由会话校验）
  */
 export class SceneSplatSync implements Disposable {
@@ -137,9 +149,9 @@ export class SceneSplatSync implements Disposable {
   // 交给引擎；中止的不报告，失败记进状态。等待期间改过的显示在加进去以后补上
   async #add(entry: SplatEntry): Promise<void> {
     const { signal } = entry.controller;
-    const { id, url, placement, show } = entry.layer;
+    const { id, url, placement, show, ground } = entry.layer;
     try {
-      const camera = await this.#host.addSplat(id, { url, placement }, { show }, signal);
+      const camera = await this.#host.addSplat(id, { url, placement }, { show }, signal, ground);
       signal.throwIfAborted();
       entry.applied = { show };
       if (entry.layer.show !== show) {

@@ -96,28 +96,48 @@ export interface SceneRenderer extends Disposable {
   render(frame: SceneFrame): void;
   /** MapLibre 画完一帧（地图的 render 事件）：渲染器在回调外改过的 GL 状态要作废 */
   endFrame(): void;
-  /** 建好瓦片集并加进场景，给出包围球；signal 中止时销毁建好的瓦片集、以中止的原因结束 */
-  addTileset(id: string, tileset: PreparedTileset, options: TilesetOptions, signal: AbortSignal): Promise<TilesetSphere>;
+  /**
+   * 建好瓦片集并加进场景，给出包围球（真实高度）；signal 中止时销毁建好的瓦片集、以中止的原因结束。
+   * offset 是贴地的竖直平移（米，下沉为负，ADR 0170），整个瓦片集画在真实高度加上它的地方，加上以后不变
+   */
+  addTileset(
+    id: string,
+    tileset: PreparedTileset,
+    options: TilesetOptions,
+    signal: AbortSignal,
+    offset?: number
+  ): Promise<TilesetSphere>;
   updateTileset(id: string, options: TilesetOptions): void;
   removeTileset(id: string): void;
   /**
-   * 加一份 LCC2 高斯泼溅（ADR 0149）：读索引、按摆放放进场景，给出包围球；数据随相机流式加载。
-   * signal 中止时释放建好的、以中止的原因结束
+   * 加一份 LCC2 高斯泼溅（ADR 0149）：读索引、按摆放放进场景，给出包围球（真实高度）；数据随相机流式加载。
+   * signal 中止时释放建好的、以中止的原因结束；offset 同瓦片集
    */
-  addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<TilesetSphere>;
+  addSplat(
+    id: string,
+    source: SplatSource,
+    options: SplatOptions,
+    signal: AbortSignal,
+    offset?: number
+  ): Promise<TilesetSphere>;
   updateSplat(id: string, options: SplatOptions): void;
   removeSplat(id: string): void;
   /**
    * 按最近一帧的相机拾取画出的模型（瓦片集和高斯泼溅），跳过半透明的表面（隔着玻璃点到的是后面）；
-   * 结果是真实的高度（抬高时减回去）。没有打到、还没画过时为 null；悬停时不打高斯泼溅（ADR 0149）
+   * 结果是真实的高度（减回贴地的平移和抬高量）。没有打到、还没画过时为 null；悬停时不打高斯泼溅（ADR 0149）
    */
   pick(point: ScreenPoint, options?: PickOptions): ScenePick | null;
-  /** 按最近一帧的相机投影真实的位置（抬高时加上抬高量）；还没画过、在相机背后时为 null */
+  /**
+   * 按最近一帧的相机投影真实的位置；还没画过、在相机背后时为 null。抬高（含隔离）期间加上抬高的那个模型的抬高量
+   * 和贴地平移，其余时候不加（不知道这个位置属于哪个模型）
+   */
   project(lngLat: LngLat, height: number): ScreenPoint | null;
   /** 抬高一个瓦片集，null 时恢复；没有这个瓦片集时不抬高 */
   setLift(lift: SceneLift | null): void;
   /** 瓦片集根节点包围盒最低处的真实椭球高（米）；没有这个瓦片集、根索引还没读到时为 null */
   lowestHeight(id: string): number | null;
+  /** 瓦片集或高斯泼溅加上时给的贴地平移（米，ADR 0170）；没有这个模型时为 0 */
+  offsetOf(id: string): number;
   /** 头灯按距离压暗远处：步行时打开 */
   setInteriorFog(enabled: boolean): void;
   /** 点击移动的落点光环；null 撤掉 */

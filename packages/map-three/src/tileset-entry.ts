@@ -57,6 +57,8 @@ export interface TilesetEntryOptions {
   readonly requestCullWindow: CullWindow | null;
   /** 瓦片记完字节以后释放内存里的贴图（ADR 0155 第 5 节） */
   readonly releaseImages: boolean;
+  /** 贴地的竖直平移（米，ADR 0170）：整个瓦片集画在真实高度加上它的地方，不变 */
+  readonly offset?: number;
   readonly events: TilesetEntryEvents;
   /**
    * 一块瓦片真正排进了下载队列，或者因为相机动着暂缓请求（ADR 0162）：probe 按瓦片现在的状态给出结果（到了、失败、取消），
@@ -65,10 +67,14 @@ export interface TilesetEntryOptions {
   readonly onRequest?: (tile: object, probe: () => TileOutcome | null) => void;
 }
 
-/** 裁剪盒（ADR 0149）：盒子的局部系（原点在盒子中心，轴和盒子的边平行）到地心坐标，和三个方向的半边长（米） */
+/**
+ * 裁剪盒（ADR 0149）：盒子的局部系（原点在盒子中心，轴和盒子的边平行）到真实位置的地心坐标，三个方向的半边长（米），
+ * 和泼溅画在真实位置以上多少米（贴地的平移，ADR 0170）
+ */
 export interface ClipBox {
   readonly toEcef: Matrix4;
   readonly half: Vector3;
+  readonly shift: number;
 }
 
 // 盒子六个面的平面（盒子的局部系）：法线朝外，盒子里面在每个平面的负侧
@@ -205,8 +211,9 @@ export class TilesetEntry implements Disposable {
   #initial = false;
   // 最近一帧画了：拾取只看画出来的
   #drawn = false;
-  // 抬高量（米，ADR 0147 第 4 节）：局部系里沿 y 上移，拾取的命中点减回去
+  // 抬高量（米，ADR 0147 第 4 节）和贴地的平移（ADR 0170）：局部系里沿 y 移动两者之和，拾取的命中点减回去
   #lift = 0;
+  readonly offset: number;
   readonly #cache: LRUCache;
   // 最近一次更新以来还算着"在用"：共用的缓存淘汰不掉，不画的瓦片集要解除
   #pinned = false;
@@ -227,7 +234,7 @@ export class TilesetEntry implements Disposable {
   // 相机动着时请求的瓦片和请求的时刻：能画了以后算加载要多久
   readonly #requestedAt = new WeakMap<TileInternals, number>();
   readonly #sphere = new Sphere();
-  // 裁剪平面（这个瓦片集的场景坐标，抬高时跟着上移）：所有材质共用这个数组，原地改；空的时候不裁
+  // 裁剪平面（这个瓦片集的场景坐标，跟着泼溅贴地的平移）：所有材质共用这个数组，原地改；空的时候不裁
   readonly #clipPlanes: Plane[] = [];
   // 渲染器给的显示着的泼溅的范围：只用第一个和这个瓦片集重叠的
   #clipBoxes: readonly ClipBox[] = [];
@@ -243,9 +250,11 @@ export class TilesetEntry implements Disposable {
     uploader,
     requestCullWindow,
     releaseImages,
+    offset = 0,
     events,
     onRequest
   }: TilesetEntryOptions) {
+    this.offset = offset;
     this.#requestCull = requestCullWindow === null ? null : new RequestCull(requestCullWindow);
     this.#cache = cache;
     this.#uploader = uploader;
@@ -563,8 +572,8 @@ export class TilesetEntry implements Disposable {
     if (!hit) {
       return null;
     }
-    // 命中点在抬高后的局部系里：减回去才是真实的位置
-    const real = hit.point.clone().setY(hit.point.y - this.#lift);
+    // 命中点在抬高、贴地平移后的局部系里：减回去才是真实的位置
+    const real = hit.point.clone().setY(hit.point.y - this.#shift());
     return { distance: hit.distance, lngLatHeight: localFrame.toLngLatHeight(real) };
   }
 
@@ -574,7 +583,7 @@ export class TilesetEntry implements Disposable {
     this.#materials.dispose();
   }
 
-  // 按选项、重叠和抬高量重算裁剪平面：盒子的局部系 → 地心坐标 → 这个瓦片集的局部系，再整体上移抬高量
+  // 按选项、重叠重算裁剪平面：盒子的局部系 → 地心坐标 → 这个瓦片集的局部系，再按泼溅画在哪里竖直平移（ADR 0170）
   #placeClip(): void {
     const planes = this.#clipPlanes;
     const frame = this.#frame;
@@ -583,19 +592,20 @@ export class TilesetEntry implements Disposable {
     if (!box || !frame) {
       return;
     }
-    const matrix = new Matrix4().makeTranslation(0, this.#lift, 0).multiply(frame.fromEcef).multiply(box.toEcef);
+    const matrix = new Matrix4().makeTranslation(0, box.shift, 0).multiply(frame.fromEcef).multiply(box.toEcef);
     for (const [x, y, z, axis] of BOX_FACES) {
       planes.push(new Plane(new Vector3(x, y, z), -box.half[axis]).applyMatrix4(matrix));
     }
   }
 
-  // 根索引的包围球和盒子相交：球心换到盒子的局部系，离盒子最近的点不超过半径
-  #overlaps({ toEcef, half }: ClipBox): boolean {
+  // 画出来的包围球和盒子相交：球心换到盒子的局部系（z 向上），按两者贴地的平移之差挪动，离盒子最近的点不超过半径
+  #overlaps({ toEcef, half, shift }: ClipBox): boolean {
     const sphere = this.#ecefSphere;
     if (!sphere) {
       return false;
     }
     const center = sphere.center.clone().applyMatrix4(toEcef.clone().invert());
+    center.z += this.offset - shift;
     const nearest = center.clone().clamp(half.clone().negate(), half);
     return nearest.distanceTo(center) <= sphere.radius;
   }
@@ -711,13 +721,18 @@ export class TilesetEntry implements Disposable {
     return detail;
   }
 
-  // 地心坐标到局部系，抬高时再沿局部系的 y 上移
+  // 地心坐标到局部系，再沿局部系的 y 移动抬高量和贴地的平移
   #placeRoot(): void {
     const frame = this.#frame;
     if (!frame) {
       return;
     }
-    this.#root.matrix.makeTranslation(0, this.#lift, 0).multiply(frame.fromEcef);
+    this.#root.matrix.makeTranslation(0, this.#shift(), 0).multiply(frame.fromEcef);
     this.#root.matrixWorldNeedsUpdate = true;
+  }
+
+  // 画在真实高度以上多少米
+  #shift(): number {
+    return this.#lift + this.offset;
   }
 }

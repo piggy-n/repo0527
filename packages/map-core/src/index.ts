@@ -13,6 +13,14 @@ export {
   type CompactTileProtocol,
   createCompactTileProtocol
 } from './maplibre/compact-protocol';
+export {
+  createTiandituTerrain,
+  type MapTerrain,
+  TERRAIN_SOURCE_ID,
+  TIANDITU_TERRAIN_PROTOCOL,
+  type TerrainTileProtocol,
+  type TiandituTerrain
+} from './maplibre/terrain';
 export type {
   CameraEventData,
   GestureHandlerLike,
@@ -56,6 +64,7 @@ export { type SelectedFeature, SelectionModel } from './selection/selection-mode
 export { NO_SCENE_ACTIVITY, type SceneActivities, type SceneActivity } from './scene/scene-activity';
 export {
   EMPTY_SCENE_CONTENT,
+  type GroundPoint,
   NO_SCENE_STATUS,
   type RoamStatus,
   type RouteRoam,
@@ -203,6 +212,15 @@ export {
   tileImageType,
   type TileImageType
 } from './tiles/arcgis-compact';
+export {
+  decodeTiandituTerrain,
+  encodeTerrarium,
+  type FetchTerrainTile,
+  TIANDITU_TERRAIN_MAX_LEVEL,
+  TIANDITU_TERRAIN_MIN_LEVEL,
+  tiandituTerrainUrl,
+  TiandituTerrainReader
+} from './tiles/tianditu-terrain';
 export {
   BROWSE_TOOL,
   type Gestures,

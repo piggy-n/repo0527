@@ -59,6 +59,42 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_LAYERS_PER_DIMENSION');
   });
 
+  it('三维模型贴地跟随开关；开关只能是 true 或 false，不能漏写（ADR 0170）', async () => {
+    vi.stubEnv('VITE_SCENE_GROUND_CLAMP', 'true');
+    expect((await loadAppConfig()).sceneGroundClamp).toBe(true);
+
+    vi.stubEnv('VITE_SCENE_GROUND_CLAMP', 'false');
+    expect((await loadAppConfig()).sceneGroundClamp).toBe(false);
+
+    vi.stubEnv('VITE_SCENE_GROUND_CLAMP', '1');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_SCENE_GROUND_CLAMP 只能是 true 或 false');
+
+    vi.stubEnv('VITE_SCENE_GROUND_CLAMP', '');
+    await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_SCENE_GROUND_CLAMP');
+  });
+
+  it('三维的地形：none 或 tianditu，tianditu 要开着天地图，内网（关着天地图）写成 tianditu 时启动就报错（ADR 0170）', async () => {
+    vi.stubEnv('VITE_TIANDITU_ENABLED', 'true');
+    vi.stubEnv('VITE_TIANDITU_KEY', 'a'.repeat(32));
+    vi.stubEnv('VITE_SCENE_TERRAIN', 'tianditu');
+    expect((await loadAppConfig()).sceneTerrain).toBe('tianditu');
+
+    vi.stubEnv('VITE_SCENE_TERRAIN', 'none');
+    expect((await loadAppConfig()).sceneTerrain).toBe('none');
+
+    vi.stubEnv('VITE_SCENE_TERRAIN', 'cesium');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_SCENE_TERRAIN 只能是 none 或 tianditu');
+
+    vi.stubEnv('VITE_SCENE_TERRAIN', '');
+    await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_SCENE_TERRAIN');
+
+    vi.stubEnv('VITE_TIANDITU_ENABLED', 'false');
+    vi.stubEnv('VITE_SCENE_TERRAIN', 'tianditu');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_TIANDITU_ENABLED 关着天地图');
+    vi.stubEnv('VITE_SCENE_TERRAIN', 'none');
+    expect((await loadAppConfig()).sceneTerrain).toBe('none');
+  });
+
   it('资源的最小显示级别跟随开关；开关只能是 true 或 false（ADR 0132）', async () => {
     vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'true');
     expect((await loadAppConfig()).resourceMinZoomEnabled).toBe(true);

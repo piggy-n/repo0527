@@ -265,6 +265,45 @@ describe('清单里的屏幕误差上限', () => {
   });
 });
 
+describe('清单里贴地的参照（ADR 0170）', () => {
+  const ground = { lng: 117.18, lat: 34.266, height: 33.5 };
+
+  it('倾斜摄影、白膜、高斯泼溅可以写；室内、地下的模型不能写，写错格式也不通过', () => {
+    expect(parse(withModel({ ground })).success).toBe(true);
+    expect(parse({ models: [{ ...MANIFEST.models[1], ground }] }).success).toBe(true);
+    expect(parse(withSplat({ ground })).success).toBe(true);
+
+    const invalid: unknown[] = [
+      { models: [{ ...MANIFEST.models[0], ground }] },
+      withModel({ underground: true, ground }),
+      withModel({ ground: { lng: 117.18, lat: 34.266 } }),
+      withModel({ ground: { ...ground, lat: 95 } }),
+      withModel({ ground: [117.18, 34.266, 33.5] })
+    ];
+    expect(invalid.filter(value => parse(value).success)).toStrictEqual([]);
+  });
+
+  it('目录带上写了的参照，没写的是 null', () => {
+    const manifest = sceneManifestSchema.parse({
+      models: [{ ...MANIFEST.models[2], ground }, MANIFEST.models[1], MANIFEST.models[0]]
+    });
+    const catalog = buildModelCatalog(manifest, MANIFEST_URL);
+
+    expect(catalog.map(model => model.ground)).toStrictEqual([ground, null, null]);
+  });
+
+  it('入库的清单里同一处配准过的倾斜摄影和泼溅用同一个点（彭城广场）', () => {
+    const manifest = sceneManifestSchema.parse(JSON.parse(manifestText));
+    const groundOf = (id: string) => {
+      const model = manifest.models.find(item => item.id === id);
+      return model && model.kind !== 'indoor' ? model.ground : undefined;
+    };
+
+    expect(groundOf('xz-gc')).toBeDefined();
+    expect(groundOf('xz-pc-lcc2')).toStrictEqual(groundOf('xz-gc'));
+  });
+});
+
 describe('buildModelCatalog', () => {
   it('地址按清单的地址解析成绝对地址，市名取自区划目录，白膜默认第一种效果', () => {
     const catalog = buildModelCatalog(sceneManifestSchema.parse(MANIFEST) satisfies SceneManifest, MANIFEST_URL);

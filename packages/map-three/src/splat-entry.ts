@@ -11,6 +11,7 @@ import { abortReason } from '@mx/utils';
 import type { GaussianSplatRenderer, Lcc2StreamScheduler } from 'gaussian-splat-lite';
 import {
   type Box3,
+  Group,
   Matrix4,
   PerspectiveCamera,
   type Raycaster,
@@ -41,6 +42,8 @@ export interface SplatEntryOptions {
   readonly math: FrameMath;
   /** 这份泼溅的高斯个数预算（库的 splatBudget） */
   readonly budget: number;
+  /** 贴地的竖直平移（米，ADR 0170）：整份画在真实高度加上它的地方，不变 */
+  readonly offset?: number;
   readonly events: SplatEntryEvents;
 }
 
@@ -85,6 +88,8 @@ export function placementMatrix({ height, heading }: SplatPlacement): Matrix4 {
 export class SplatEntry implements Disposable {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera();
+  /** 贴地的平移（米） */
+  readonly offset: number;
   readonly #library: SplatLibrary;
   readonly #scheduler: Lcc2StreamScheduler;
   readonly #source: SplatSource;
@@ -102,7 +107,8 @@ export class SplatEntry implements Disposable {
   // 索引根节点的包围盒（LCC2 的局部系）：读到索引以后才有
   #box: Box3 | null = null;
 
-  constructor({ library, source, options, math, budget, events }: SplatEntryOptions) {
+  constructor({ library, source, options, math, budget, offset = 0, events }: SplatEntryOptions) {
+    this.offset = offset;
     this.#library = library;
     this.#source = source;
     this.#options = options;
@@ -129,7 +135,12 @@ export class SplatEntry implements Disposable {
     scheduler.setCamera(this.camera);
     this.#scheduler = scheduler;
     this.scene.matrixAutoUpdate = false;
-    this.scene.add(scheduler.group);
+    // 贴地的平移放在外面一层：调度器的组仍是真实的摆放（包围盒、裁剪盒按它算），库画的时候用世界矩阵
+    const shifted = new Group();
+    shifted.matrixAutoUpdate = false;
+    shifted.matrix.makeTranslation(0, offset, 0);
+    shifted.add(scheduler.group);
+    this.scene.add(shifted);
   }
 
   /** 读索引（环境层不读）：给出包围球；signal 中止时以它的原因结束 */
@@ -232,7 +243,12 @@ export class SplatEntry implements Disposable {
     origin.set(ndc[0], ndc[1], -1).unproject(this.camera);
     direction.set(ndc[0], ndc[1], 1).unproject(this.camera).sub(origin).normalize();
     const [hit] = raycaster.intersectObject(this.#scheduler.group, true);
-    return hit ? { distance: hit.distance, lngLatHeight: this.#frame.toLngLatHeight(hit.point) } : null;
+    if (!hit) {
+      return null;
+    }
+    // 命中点在贴地平移后的局部系里：减回去才是真实的位置
+    const real = hit.point.clone().setY(hit.point.y - this.offset);
+    return { distance: hit.distance, lngLatHeight: this.#frame.toLngLatHeight(real) };
   }
 
   /**
@@ -250,7 +266,7 @@ export class SplatEntry implements Disposable {
       .clone()
       .multiply(this.#scheduler.group.matrix)
       .multiply(new Matrix4().makeTranslation(center));
-    return { toEcef, half };
+    return { toEcef, half, shift: this.offset };
   }
 
   inspect(): SplatEntryInspection {

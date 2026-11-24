@@ -8,6 +8,7 @@ import type {
   MapMouseEventType,
   MapMoveEventLike,
   MapSession,
+  MapTerrain,
   MapTool,
   MouseSchemes,
   PickResult,
@@ -23,7 +24,14 @@ import { defineComponent, inject, KeepAlive, nextTick, provide, ref, type Shallo
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { MAP_MOUSE_SCHEMES, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
+import {
+  MAP_MOUSE_SCHEMES,
+  MAP_RUNTIME_PRELOAD,
+  MAP_SCENE_ENGINE,
+  MAP_TERRAIN,
+  MAPLIBRE_ENGINE,
+  type SceneEngine
+} from './runtime';
 import { useMap, useMapOverlay } from './use-map';
 
 type Projection = Parameters<MapLike['setProjection']>[0];
@@ -193,6 +201,16 @@ class FakeMap implements MapLike {
     return true;
   }
   setCenterClampedToGround(): void {}
+  getCenterElevation(): number {
+    return 0;
+  }
+  terrain: ReturnType<MapLike['getTerrain']> = null;
+  getTerrain(): ReturnType<MapLike['getTerrain']> {
+    return this.terrain;
+  }
+  setTerrain(terrain: ReturnType<MapLike['getTerrain']>): void {
+    this.terrain = terrain;
+  }
 
   getLayer(): unknown {
     return undefined;
@@ -331,6 +349,7 @@ function maplibrePage(
     preload?: (load: () => Promise<unknown>) => void;
     sceneMaxZoom?: number;
     mouse?: MouseSchemes;
+    terrain?: MapTerrain;
   } = {}
 ) {
   const maps: FakeMap[] = [];
@@ -356,6 +375,9 @@ function maplibrePage(
       }
       if (options.mouse) {
         provide(MAP_MOUSE_SCHEMES, options.mouse);
+      }
+      if (options.terrain) {
+        provide(MAP_TERRAIN, options.terrain);
       }
       return () => <Page />;
     })
@@ -949,6 +971,28 @@ describe('MapCanvas', () => {
       expect(maps[0]?.dragRotate.isEnabled()).toBe(false);
       map.setDimension('2d');
       expect(maps[0]?.dragRotate.isEnabled()).toBe(true);
+    });
+
+    it('地形按 app 注入的（ADR 0170）：切到三维时打开，切回二维关掉；没有注入时不开', async () => {
+      const terrain: MapTerrain = {
+        source: { type: 'raster-dem', tiles: ['test-terrain://{z}/{x}/{y}'], encoding: 'terrarium' },
+        heightAt: async () => 0
+      };
+      const { maps, map } = maplibrePage({ terrain });
+      maps[0]?.fire('style.load');
+      await nextTick();
+      expect(maps[0]?.terrain).toBeNull();
+
+      map.setDimension('3d');
+      expect(maps[0]?.terrain).toMatchObject({ exaggeration: 1 });
+      map.setDimension('2d');
+      expect(maps[0]?.terrain).toBeNull();
+
+      const plain = maplibrePage();
+      plain.maps[0]?.fire('style.load');
+      await nextTick();
+      plain.map.setDimension('3d');
+      expect(plain.maps[0]?.terrain).toBeNull();
     });
 
     it('没有注入时二三维都是 MapLibre 自带的', async () => {

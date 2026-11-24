@@ -25,7 +25,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `state.md` | `features/*/store.ts`、`shared/storage/` | Pinia、偏好的持久化与开关 |
 | `packages.md` | `packages/`、`tsconfig.package*`、`vitest.shared.ts` | 拆包规则、包之间的依赖方向、依赖声明、包的测试 |
 | `map.md` | 地图的包、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
-| `map-3d.md` | `map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、`shared/map/scene-tier`、现状底图页、`tools/site` | 三维、二三维切换、设备档位、漫游、导航网格、清单的部署站点 |
+| `map-3d.md` | `map-three`、`map-core/scene`、`map-core/maplibre/roam`、地形（`map-core/maplibre/terrain`、`tiles/tianditu-terrain`）、`scene-models`、`shared/map/scene-tier`、现状底图页、`tools/site`、`tools/3dt-ground` | 三维、二三维切换、设备档位、贴地与地形、漫游、导航网格、清单的部署站点 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes`、`symbol-defaults` | 年份、分类、最小显示级别、发布的默认符号、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
 | `city-dashboard.md` | 城市体检、综合分析两个驾驶舱，`shared/city-indicators`、`shared/dashboard` | 范围、入场、保存图片 |

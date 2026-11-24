@@ -4,6 +4,7 @@ import {
   MAP_MOUSE_SCHEMES,
   MAP_RUNTIME_PRELOAD,
   MAP_SCENE_ENGINE,
+  MAP_TERRAIN,
   MAPLIBRE_ENGINE,
   type MapRuntimePreloader,
   type SceneEngine
@@ -17,6 +18,7 @@ import {
   SCENE_TIER_NOTICE,
   type SceneTierSource
 } from '@/shared/map/scene-tier/scene-tier';
+import { pageTerrain } from './map-terrain';
 import { pageSceneTierSetting } from './scene-tier-setting';
 
 /** 三维引擎要的档位来源：预算、读配置、打开三维前的崩溃检查 */
@@ -64,7 +66,7 @@ const preloadScene = () => Promise.all([MAPLIBRE_ENGINE.loadRenderer(), pageScen
  * 地图错误的报告器也从这里提供：瓦片的 401 按登录过期处理，页面不用各写一遍。
  * 三维引擎和它的能力也在这里注入（ADR 0147 第 3 节），页面和拥有者只看能力；三维降档的提示从这里取（ADR 0155）；
  * 服务器底图的探测结果也从这里提供，底图的拥有者创建时就确定可选的底图（ADR 0165 第 4 节）；
- * 二维、三维各用哪种鼠标操作按部署的 .env（ADR 0168）
+ * 二维、三维各用哪种鼠标操作、三维的地形按部署的 .env（ADR 0168、0170）
  */
 export function withRuntimeLoader(page: Component, preload: MapRuntimePreloader, servers: ServerBasemaps): Component {
   return defineComponent({
@@ -76,6 +78,7 @@ export function withRuntimeLoader(page: Component, preload: MapRuntimePreloader,
       provide(SCENE_TIER_NOTICE, pageSceneTier());
       provide(SERVER_BASEMAPS, servers);
       provide(MAP_MOUSE_SCHEMES, appConfig.mapMouse);
+      provide(MAP_TERRAIN, pageTerrain());
       return () => h(page);
     }
   });

@@ -241,6 +241,7 @@ function emptyRenderer(): SceneRenderer {
     project: () => null,
     setLift: () => undefined,
     lowestHeight: () => null,
+    offsetOf: () => 0,
     setInteriorFog: () => undefined,
     setMarker: () => undefined,
     on: () => () => undefined,

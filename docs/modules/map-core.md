@@ -378,6 +378,31 @@ const tile = await reader.read('/basemap/imagery/', 10, 849, 415, signal);
 - 从哪里导入：app 从 `@mx/map-core` 的入口导入，只在动态加载的分块里用（`app/map-runtime.ts`、探测）。map-core 没有写 `sideEffects: false`，入口还导出了导入 maplibre-gl 的 `MapLibreView`，入口包里不要直接用这些值，构建产物检查会拦下进了入口包的 maplibre-gl；不另设子路径
 - 读取器只认第一代紧凑缓存、每个 bundle 128 × 128；缓存的切法（Web 墨卡托、256 像素、级别号就是 z）是使用方的前提，读取器不检查
 
+### 天地图地形（ADR 0170）
+
+三维的地形：浏览器直接读天地图的三维地形服务，换成 MapLibre 的 `raster-dem`，不经服务器转换。读取器在 `tiles/tianditu-terrain.ts`，协议和注入视图的 `MapTerrain` 在 `maplibre/terrain.ts`（都不导入 maplibre-gl）。
+
+```ts
+// app 的 pageTerrain()：按部署配置建一个，注册协议，注入视图
+const { protocol, terrain } = createTiandituTerrain(new TiandituTerrainReader({ key }));
+addProtocol(TIANDITU_TERRAIN_PROTOCOL, protocol);
+provide(MAP_TERRAIN, terrain); // MapCanvas 交给 MapLibreView 的 terrain
+```
+
+- **服务的格式**（2026-11-23 调研，来自天地图官方 Cesium 插件的解码代码，just-ads/tdt-cesium-plugin、mars3d-tdt、maptalks 三份开源实现一致；官方页面本机被 WAF 拦，只看到搜索摘要）：
+  - 地址 `https://t{0-7}.tianditu.gov.cn/mapservice/swdx?T=elv_c&x={x}&y={y}&l={l}&tk={key}`，要 key；子域按 `(x + y) % 8` 轮流。
+  - 经纬度分块（`_c`），原点在 (-180, 90)、y 向下；l 级每块 360/2^l 度，x 在 [0, 2^l)，y 在 [0, 2^(l-1))。Cesium 的级别是 l − 1。
+  - 官方插件 6 级以下不请求；数据大约到 12 级（每块 150 个点，12 级约 65 米一个点）。
+  - 一块是 zlib 流，解压后正好 150 × 150 个小端 int16（米），没有头，行优先、第 0 行在北；首末两行、两列在瓦片的边上，和相邻的瓦片共用。
+  - 三份实现都把超出 -2000～10000 的值当 0；高程基准没有文档，贴地按差值平移，不用知道。
+  - 没有数据、出错时返回一小段文字（推测），HTTP 状态没有确认。
+- **读取器**：按级别和瓦片号下载、用浏览器自带的 `DecompressionStream('deflate')` 解压，按 `getInt16` 读（负高程保留），超出 -2000～10000 的当 0；解不开、大小不对时抛错，错误里带上服务器给的文字（key 不对、超出配额这类）；404 当没有数据（0 米）。解压后的瓦片缓存 256 块（每块 45 KB），同一块同时有几处要时只下载一次；共用的下载不跟着某一个调用方中止，调用方自己的 `signal` 只结束它自己的等待；失败的不缓存。
+- **取一个点的高度**（`heightAt`，贴地用）：按 12 级的瓦片双线性插值。
+- **墨卡托瓦片**（`mercatorTile`，协议用）：z 级的墨卡托瓦片用天地图同一级（夹到 6～12 级）的瓦片，经度上两者的边界正好对齐，纬度上最多跨两块；第 i 个采样在瓦片的 i/size 处（左上角对齐，和 MapLibre 读 raster-dem 的方式一致），双线性插值。
+- **协议**：`tianditu-terrain://{z}/{x}/{y}`，重采样成 256 × 256、编码成 terrarium（`encodeTerrarium`：`(R × 256 + G + B / 256) − 32768` 米），直接返回 `ImageBitmap`（不预乘、不转色彩空间：编码在颜色里的高度要原样读回）。MapLibre 6.12 的协议可以返回位图，raster-dem 在 Worker 里读像素。数据源 `minzoom` 6、`maxzoom` 12、`tileSize` 256，更高级别 MapLibre 放大。
+- 浏览器测试（`terrain.browser.test.ts`）用合成的瓦片核对：MapLibre 读回的地形高度（`queryTerrainElevation`）和 `heightAt` 都等于数据的高度；把编码改成 `mapbox` 时测试失败。
+- 视图怎样打开地形、贴地怎样用它，见 [map-three.md](map-three.md)"贴地和地形"。
+
 ### 索引的下载
 
 - 加入瓦片集之前，`prepareTileset` 要把外部索引全部读完（ADR 0148），同一层的一起下载。倾斜摄影的外部索引很多：新吴区01、02、03、06 各 1240、1326、1529、1421 个，一共 5516 个、约 200 MB；单独整理一个时同时未完成的请求最多约 1000 个

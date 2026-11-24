@@ -61,7 +61,7 @@ describe('roam camera (ADR 0147 §4)', () => {
     ['looking up', 300, 35]
   ])('places the MapLibre camera at the lifted eye, %s', (_name, heading, pitch) => {
     const eye = eyeOf({ ...AT, height: -8.4, heading, pitch });
-    const camera = firstPersonCamera(eye, { lift: 16, viewportHeight: HEIGHT, fovy: FOVY });
+    const camera = firstPersonCamera(eye, { shift: 16, viewportHeight: HEIGHT, fovy: FOVY });
 
     const placed = cameraOf(camera, HEIGHT, FOVY);
     expect(metersBetween(placed, mercator(AT.lng, AT.lat, -8.4 + 16), AT.lat)).toBeLessThan(0.002);
@@ -73,8 +73,8 @@ describe('roam camera (ADR 0147 §4)', () => {
 
   it('moves the target farther away when the field of view is narrow, keeping the zoom under the limit', () => {
     const eye = eyeOf({ ...AT, height: 3, heading: 0, pitch: 0 });
-    const wide = firstPersonCamera(eye, { lift: 0, viewportHeight: 2160, fovy: FOVY });
-    const narrow = firstPersonCamera(eye, { lift: 0, viewportHeight: 2160, fovy: toRadians(20) });
+    const wide = firstPersonCamera(eye, { shift: 0, viewportHeight: 2160, fovy: FOVY });
+    const narrow = firstPersonCamera(eye, { shift: 0, viewportHeight: 2160, fovy: toRadians(20) });
 
     expect(wide.zoom).toBeLessThanOrEqual(23.5 + 1e-9);
     expect(narrow.zoom).toBeCloseTo(23.5, 1);

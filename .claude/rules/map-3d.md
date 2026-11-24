@@ -9,6 +9,9 @@ paths:
   - "apps/yzt/src/pages/dev/{map-3d,nav-grid,splat-watch}/**"
   - "apps/yzt/public/{3dt,roam}/**"
   - "apps/yzt/tools/site/**"
+  - "apps/yzt/tools/3dt-ground/**"
+  - "packages/map-core/src/maplibre/terrain*"
+  - "packages/map-core/src/tiles/tianditu-terrain*"
 ---
 
 # 三维（ADR 0078、0147、0153，设计见 `docs/modules/map-three.md`）
@@ -18,6 +21,7 @@ paths:
 - 页面和拥有者不判断引擎，按上下文的 `sceneCapabilities`（三维里显示样式图层、三维里识别、高斯泼溅）和 `dimension` 决定资源图层、图例、点/框选怎样显示；三维里照常显示资源图层、点/框选（ADR 0157）：app 注入的能力（`app/map-runtime-provider.ts`）原样，三项都是 true，没有开关。模型永远不是点/框选的结果：点到模型上时，画在模型下面的资源查模型脚下（命中点正下方的地面投影回屏幕，渲染要素和容差框围着它），画在模型上面的按鼠标下的地面（ADR 0161），框和容差框的四角用只打地面的拾取（`PickOptions.ground`）
 - 契约：三维实现会话的三维内容（`SceneContent`、`sceneStatus`、`sceneActivity`、`roamStatus`）、`MapView` 和 `ToolView`；契约测试是 map-vue 的 `scene-contract.browser.test.tsx`（真实的 MapLibre + Three），改契约时同步改它
 - 模型层的位置（ADR 0161）：`provideMap` 的 `sceneBelow` 是上限，这个分组及以上永远画在模型上面；页面用 `map.bindSceneSlot` 绑定运行时的插槽，模型层插在推导出的图层下面（不在样式里、在上限及以上时按上限放）。现状底图的上限是 `selection`，插槽是"图层"列表里排在最上面那个模型上面的资源里最下面的一层；改这套规则时同步契约测试
+- 贴地（ADR 0170，`.env` 的 `VITE_SCENE_GROUND_CLAMP`）：清单写了 `ground`（模型里一处地面）的倾斜摄影、白膜、高斯泼溅由视图整体竖直平移，地面点落到引擎表面（没有地形是 0 米，有地形取那里的地形高度）；平移和抬高一样只在渲染适配器里，拾取、漫游、导航网格、出生点和路线对外仍是真实高度。地面点用 `3dt:ground` 估、人看过再写，不按包围盒的底面；同一处配准过的模型写同一个点；室内、地下的不写（schema 检查）。三维的地形（`VITE_SCENE_TERRAIN`）只经 app 注入的 `MAP_TERRAIN` 进视图，只在三维、不在漫游接管时打开，天地图的地形要开着天地图，内网没有（map-three.md"贴地和地形"）
 - 地下的模型要抬高（MapLibre 把相机限制在 0 米以上，ADR 0147 第 4 节）：抬高只存在于渲染适配器内部，拾取、相机、漫游状态对外都是真实椭球高。漫游在 map-core 的 `maplibre/roam/`：路线、步行只用真实坐标，经 `RoamHost` 设相机、拾取，抬高只在 `MapLibreRoam` 的相机换算和渲染器里（[map-three.md](../../docs/modules/map-three.md)"漫游"）
 - 缓存放不下时放宽屏幕误差：一放宽就锁在这个姿态，相机离开之前收紧不到放不下的倍数以下，不能写成"低于收回线就收紧"（整级丢掉后又加载回来，来回折腾）；动着的时候离开那个姿态、需求低于上限的 80% 可以收紧，收紧过又放不下，这一路就不再试；新瓦片在算加载完之前按每帧字节数上传；相机在一块瓦片加载完之前走的路达到瓦片直径就不请求这块瓦片（加载时间按动着时请求的瓦片实测，不用固定的秒数：本机和服务器差几倍），相机停下的那一帧起全部放行，这些瓦片要算进需求，有它们时要再画一帧（map-three.md"缓存""上传""动着的时候不请求"）
 - 三维的预算按设备分档（ADR 0155，工作站档、按显存的 auto、本浏览器的设定见 ADR 0166）：数值和档位的顺序只在 `shared/config/scene-tier-options.ts`，降档按 `SCENE_TIERS` 的顺序一次一档，代码里不写死哪一档最高；auto 按 `shared/map/scene-tier/gpu-memory.ts` 的显存表定档，表里按整个名字比较、同名几种显存记最小的，认不出的给标准档；地址栏的 `?scene-tier=` 只在启动时读一次（`app/scene-tier-setting.ts`），现状底图的地址由路由守卫补上；map-three 不读配置、不判断显卡，只按 app 交给它的预算来源（map-core 的 `SceneBudgetSource`）做；档位、降档、崩溃标记在 `shared/map/scene-tier`，由 app 注入的三维引擎（`app/map-runtime-provider.ts`）交给渲染器（`docs/config/scene-tier.md`）

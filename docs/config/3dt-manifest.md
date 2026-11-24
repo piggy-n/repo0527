@@ -80,6 +80,7 @@
 | `maximumScreenSpaceError` | 可选，屏幕误差上限（正数）；不写用默认值 8，只给放不下的模型写，放不下的写 16（怎么判断见"新增一个模型"的瓦片集第 4 步；[map-three.md](../modules/map-three.md)"渲染"的瓦片） |
 | `spawn` | 可选，步行的出生点 `{ lng, lat, height, heading }`：脚下地板的椭球高，朝向是正北为 0、顺时针的度数。写了就能步行，瓦片集里只给 `indoor` 写（见"新增一个模型"） |
 | `routes` | 可选，预置的漫游路线 `[{ id, name, path }]`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`，至少两个点；头顶低的地方可以多一个值，是视点在地板以上的米数（大于 0、不超过 1.6，不写是 1.6，ADR 0156 第 3 节） |
+| `ground` | 可选，`oblique`、`white`：贴地的参照 `{ lng, lat, height }`，见下面"贴地的参照"；`indoor` 不能写 |
 
 ## 高斯泼溅（`splat`，ADR 0149）
 
@@ -89,6 +90,7 @@
 |---|---|
 | `lcc2` | `.lcc2` 索引的地址，相对清单；数据文件的路径由库按索引的地址解析。按段编码（见"目录层级"） |
 | `placement` | 配准后的摆放 `{ lng, lat, height, heading }`，不用索引里的 `epsg`、`offset`（ADR 0149 第 4 节） |
+| `ground` | 可选，贴地的参照，只写同一处倾斜摄影的那个点，见下面"贴地的参照" |
 
 **出生点和路线**（ADR 0156 第 4 节）：
 
@@ -144,6 +146,17 @@ LCC2 各行的数字都能重跑：`pnpm --filter yzt lcc2:register "<清单里 
 
 `xz-cws2`～`xz-szs` 的"影像"是把轨迹和网格叠在 ArcGIS 18 级影像（约 0.5 米/像素）上用肉眼比的（后三个只看了落在哪里，没有估差多少米），只看水平位置，没有在三维里俯视泼溅（backlog）。影像只能核对入口和露天的部分，隧道和墓室被山体挡着。高度用的 `--datum 5.47` 是在彭城广场测的，这些地点没有单独核对。
 
+## 贴地的参照（`ground`，ADR 0170）
+
+`.env` 的 `VITE_SCENE_GROUND_CLAMP` 打开时（默认），写了 `ground` 的模型整体竖直平移，让这一点落到地图的表面上：没有地形时是 0 米，有地形（`VITE_SCENE_TERRAIN=tianditu`）时是这个经纬度的地形高度。只改画面上的位置，`placement`、出生点、路线、导航网格都仍按真实高度。没写的模型按真实高度摆，和不贴地一样。
+
+- **是什么**：模型里一处地面的经纬度和椭球高，口径和 `placement`、路线相同。不是包围盒的底面：倾斜摄影的包围盒留了余量、包含坑和河道，彭城广场的底面比地面低约 12 米，宿豫区01 低约 32 米（ADR 0170 背景）。
+- **怎么得到**：`pnpm --filter yzt 3dt:ground <模型ID ...> --origin <服务器>`（[commands.md](../commands.md)）读最粗一级内容的顶点，取低的一半里按 1 米分档最多的那一档当地面，参照点是这一档顶点的平均位置；打印高度的分布（最低、5%、25%、中位、最高）和建议的 `ground`。看一眼分布和模型：地面明显不是最多的那一档（整片在山上、大片水面）时和用户商量。读不了 Draco、meshopt 压缩和量化过的网格，遇到时会说出来。
+- **同一处的模型写同一个点**：互相配准过的倾斜摄影和泼溅（彭城广场）、墓葬的泼溅和它周围的倾斜摄影，两者的平移要相同，泼溅裁倾斜摄影的盒子才对得上。工具对泼溅不自己估（墓葬的包围盒底是墓底）：泼溅在某个读到的倾斜摄影的范围里时建议用它的点，没有就不建议。
+- **不写的**：`indoor`、`underground: true` 的模型（schema 检查）：本来就在地面以下，漫游时另外抬高（ADR 0147 第 4 节）。
+- **已经写了的**（2026-11-23，测试服务器 192.168.1.180 上跑的）：彭城广场 `xz-gc` 和彭城广场（泼溅）`xz-pc-lcc2` 都是 33.59 米（泼溅的路线"入口下到中庭"起点 33.79 米，对得上）；宿豫区01 `sq-syq01` 20.55 米；星海广场站周边白模 `sz-white` 0 米（数据本来就在 0 米，没有地形时不动，有地形时随地形抬起来）。其余的在 15.111 上，见 [backlog](../backlog.md)。
+
+
 ## 新增一个模型
 
 已有的四种（`kind`）在下面写的形态以内，只改清单、不改代码：运行时代码里没有写死的模型 ID，也不要为一个模型加判断。超出的先停下和用户讨论。顺序是：先判断能不能接入，再按瓦片集或高斯泼溅的步骤做，最后过一遍检查清单。
@@ -178,12 +191,12 @@ LCC2 各行的数字都能重跑：`pnpm --filter yzt lcc2:register "<清单里 
 
 种类决定的行为都在这张表里，表头是决定它的函数，同一列里函数不一样的写在格子里。改这些函数里和种类有关的分支时同步这张表（`.claude/rules/map-3d.md`）。
 
-| 种类 | 光照（`deriveSceneContent`） | 泼溅的范围里（`deriveSceneContent`） | 白膜的效果（`buildModelCatalog`） | 漫游时的画面（`deriveSceneContent`） | 导航网格和参数（`useSceneModels` 的 `build`） | 地面口径（`NavFrame.ground`） | 出生点（`chooseSpawn`） | 路线漫游的小地图（`startRoute`） | 界面叫法（`roamPlaceOf`） | `spawn`、`routes` 从哪来 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `oblique` 倾斜摄影 | 太阳光；`underground` 为 true 时头灯 | 裁掉（`clippedBySplats`） | 没有 | `underground` 为 true 时抬高，否则不接管 | 不建：不写 `spawn` | 用不到 | 用不到 | 没有 | "站内"（`STATION_PLACE`） | 只写 `routes`，手工取点 |
-| `white` 白膜 | 太阳光；`underground` 为 true 时头灯 | 不裁 | `effects` 每种一套瓦片集，第一种是默认 | `underground` 为 true 时抬高，否则不接管 | 不建：不写 `spawn` | 用不到 | 用不到 | 没有 | "站内"（`STATION_PLACE`） | 只写 `routes`，手工取点 |
-| `indoor` 室内 | 头灯 | 不裁 | 没有 | `underground` 为 true 时抬高，否则不接管 | `loadNavigation`：`buildNavigation`，`NAV_DEFAULTS` | `navigationFrame`：根节点原点处椭球高 0 米 | 依次：相机已在地下，贴近地面时画布中心对着的地方，清单的 `spawn`，模型中心。只找有遮盖的地板，第二、四条往下找 | 有 | "站内"（`STATION_PLACE`） | 手工取点，没有工具 |
-| `splat` 高斯泼溅 | 没有这一项 | 它的包围盒就是范围 | 没有 | 隔离（`isolatedSplat`），不抬高 | `loadSplatNavigation`：`buildScanNavigation`，`SCAN_NAV_OPTIONS`，只留出生点所在的区域 | `splatNavigationFrame`：清单 `spawn` 的地板 | 同样的先后。露天的地板也算，第二、四条落到最近的地板，不往下找 | 有 | "平面图""小地图"（`SCAN_PLACE`） | `lcc2:register --roam` |
+| 种类 | 光照（`deriveSceneContent`） | 泼溅的范围里（`deriveSceneContent`） | 贴地（`deriveSceneContent`，清单的校验） | 白膜的效果（`buildModelCatalog`） | 漫游时的画面（`deriveSceneContent`） | 导航网格和参数（`useSceneModels` 的 `build`） | 地面口径（`NavFrame.ground`） | 出生点（`chooseSpawn`） | 路线漫游的小地图（`startRoute`） | 界面叫法（`roamPlaceOf`） | `spawn`、`routes` 从哪来 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `oblique` 倾斜摄影 | 太阳光；`underground` 为 true 时头灯 | 裁掉（`clippedBySplats`） | 写了 `ground` 时平移到表面；`underground` 为 true 时不能写 | 没有 | `underground` 为 true 时抬高，否则不接管 | 不建：不写 `spawn` | 用不到 | 用不到 | 没有 | "站内"（`STATION_PLACE`） | 只写 `routes`，手工取点 |
+| `white` 白膜 | 太阳光；`underground` 为 true 时头灯 | 不裁 | 同倾斜摄影 | `effects` 每种一套瓦片集，第一种是默认 | `underground` 为 true 时抬高，否则不接管 | 不建：不写 `spawn` | 用不到 | 用不到 | 没有 | "站内"（`STATION_PLACE`） | 只写 `routes`，手工取点 |
+| `indoor` 室内 | 头灯 | 不裁 | 不能写 `ground`，不贴地 | 没有 | `underground` 为 true 时抬高，否则不接管 | `loadNavigation`：`buildNavigation`，`NAV_DEFAULTS` | `navigationFrame`：根节点原点处椭球高 0 米 | 依次：相机已在地下，贴近地面时画布中心对着的地方，清单的 `spawn`，模型中心。只找有遮盖的地板，第二、四条往下找 | 有 | "站内"（`STATION_PLACE`） | 手工取点，没有工具 |
+| `splat` 高斯泼溅 | 没有这一项 | 它的包围盒就是范围 | 写了 `ground` 时平移，只写同一处倾斜摄影的那个点 | 没有 | 隔离（`isolatedSplat`），不抬高 | `loadSplatNavigation`：`buildScanNavigation`，`SCAN_NAV_OPTIONS`，只留出生点所在的区域 | `splatNavigationFrame`：清单 `spawn` 的地板 | 同样的先后。露天的地板也算，第二、四条落到最近的地板，不往下找 | 有 | "平面图""小地图"（`SCAN_PLACE`） | `lcc2:register --roam` |
 
 - "不接管"是不抬高、不隐藏二维图层和别的模型；相机和手势照样由漫游接管。抬高、隔离时画面怎样见 [map-three.md](../modules/map-three.md)"漫游"的"抬高"，头灯和太阳光见"光照"，裁掉见"高斯泼溅"的"和倾斜模型的重叠"；
 - 两套导航参数的取值和原因、`chooseSpawn` 的先后、楼层名的规则见 [map-core.md](../modules/map-core.md)"导航网格""第一人称步行"；
@@ -196,7 +209,7 @@ LCC2 各行的数字都能重跑：`pnpm --filter yzt lcc2:register "<清单里 
 | 步骤 | 命令或做法 | 产物 | 验收 | 谁 |
 |---|---|---|---|---|
 | 1 放数据 | 按"目录层级"放到 `local/3dt/<市>/3dtiles/<模型名>/`；只在服务器上的设 `YZT_3DT_PROXY`，同时设 `YZT_SITE` 选数据所在的服务器（只设代理时页面上是服务器部署的旧清单，看不到新加的模型，见上面"按站点发布"、[local-files.md](local-files.md)） | 模型目录 | 根 `tileset.json` 在，目录名等于清单的 `name` | 开发者；服务器上的目录由用户上传 |
-| 2 写清单 | 加一项：`kind`、`cityCode`、`underground`、`tileset`（白膜写 `effects`），路径按段编码 | 清单的一项 | `pnpm --filter yzt test:unit src/features/scene-models` 通过（断言先按"检查清单"改） | 开发者 |
+| 2 写清单 | 加一项：`kind`、`cityCode`、`underground`、`tileset`（白膜写 `effects`），路径按段编码；倾斜摄影、白膜跑 `3dt:ground <模型ID>` 写 `ground`（"贴地的参照"） | 清单的一项 | `pnpm --filter yzt test:unit src/features/scene-models` 通过（断言先按"检查清单"改） | 开发者 |
 | 3 在页面上看 | `pnpm --filter yzt dev`，现状底图切到三维，从面板的"资源"里加入、定位 | 无 | 能加载，定位落在模型上，高度和底图对得上，11～17 级俯视和倾斜都没有空洞 | 开发者看对不对；观感由用户在显卡机器上看 |
 | 4 屏幕误差 | 在 `tools/measure-3d/scenes.ts` 加场景，`pnpm --filter yzt measure:3d --only <场景>`（[commands.md](../commands.md)） | `local/measure-3d/<时间>/report.md` | 默认 8 下放得下、静止时不再加载和卸载；放不下的写 `maximumScreenSpaceError: 16` | 用户在显卡机器上跑；没跑之前记在 backlog |
 | 5 取出生点和路线 | 没有工具，见表下 | 清单的 `spawn`、`routes` | 高度是椭球高；出生点 30 米内有能站的地板 | 位置和路线段由用户定，开发者取点 |
@@ -218,7 +231,7 @@ LCC2 各行的数字都能重跑：`pnpm --filter yzt lcc2:register "<清单里 
 |---|---|---|---|---|
 | 1 确认数据 | 目录按"目录层级"：`.lcc2` 索引、`data/3dgs`、`data/mesh`、`info/poses.json`；只在服务器上的设 `YZT_3DT_PROXY`，工具只取索引、轨迹和碰撞网格；在页面上看时同时设 `YZT_SITE`（同瓦片集第 1 步） | 无 | 四样都在；缺轨迹或碰撞网格的配准不了，停下讨论 | 开发者；数据由用户上传 |
 | 2 配准 | `pnpm --filter yzt lcc2:register "<市>/lcc2/<目录>/lcc2-sog-result/<索引>.lcc2" --datum <米>` | 打印的 `"placement"` | 轨迹核对 80% 以上（命令成功退出）。不通过的按上面"轨迹核对"查原因，用户同意后才作为例外 | 开发者跑；例外由用户同意 |
-| 3 写清单 | 加一项：`kind: "splat"`、`lcc2`（按段编码）、`placement` 原样 | 清单的一项 | 同瓦片集第 2 步 | 开发者 |
+| 3 写清单 | 加一项：`kind: "splat"`、`lcc2`（按段编码）、`placement` 原样；在某个倾斜摄影的范围里时写它的 `ground`（"贴地的参照"） | 清单的一项 | 同瓦片集第 2 步 | 开发者 |
 | 4 和影像比 | 把轨迹、网格叠在影像上看水平位置；三维里俯视泼溅再比一遍 | "现有模型的说明"里的"影像"一句 | 入口、露天的部分和影像对得上（现有的差 1～4 米） | 开发者粗看；俯视泼溅在显卡机器上，记进 backlog |
 | 5 取出生点和路线 | 同样的参数加 `--roam --plan lcc2-plan/<模型ID>.svg`，看平面图和概要挑段；先把 `spawn` 写进清单、在 `/dev/nav-grid` 看它留下的区域（做法同第 6 步），到不了墓室的换 `--spawn-at`；挑好后加 `--route`、`--spawn-at` 再跑一遍，在图上看生成的路线（上面"出生点和路线"） | 平面图 `local/lcc2-plan/<模型ID>.svg`；打印的 `"spawn"`、`"routes"`，原样写进清单 | 这次打印的 `placement` 和清单里的一致，不一致就停下问用户；出生点和路线段由用户定，交给用户时说明出生点留下的区域连不连着墓室；眼高低于 1.6 的点逐处记进说明表，写面板上"已走"的米数：按清单里这条路线的点累计三维长度（`RoutePath`，和 `catalog.test.ts` 的长度同一个口径），平面图红圈的提示里只有眼高 | 开发者提议，用户定 |
 | 6 核对 | `/dev/nav-grid`：出生点所在的区域就是留下的那一片，路线叠在平面图上；再切到"步行地图预览" | 无 | 除了矮处、门口这类短段，路线在留下的区域里；预览里人落在出生点（读数的朝向等于清单的 `heading`），试走能进到里面。出生点所在的区域连不进墓室的、提示"只读了出生点附近"的，先告诉用户 | 开发者 |
@@ -250,4 +263,5 @@ LCC2 各行的数字都能重跑：`pnpm --filter yzt lcc2:register "<清单里 
 - **部署**：先上传模型目录，再按站点构建（`YZT_SITE`）、发布带新清单的前端，发布后用 `site:check` 核对。只有 LCC2 重新上传、而且转发上有缓存时才要清缓存（[deployment.md](../deployment.md)"重新上传以后"）。
 - **本地清单**：开发时 `local/3dt/manifest.json` 在的话会盖住入库的清单（[local-files.md](local-files.md)）。改了入库的清单、页面上没变化时先看有没有这个文件。
 - **说明表**：在"现有模型的说明"加一行（已有的模型改它那一行，"还没有出生点和路线"这类话跟着改），写能直接复制重跑的命令、核对的数字、例外和原因、显卡机器上看过的结论，不写过程。
+- **贴地的参照**：倾斜摄影、白膜写了 `ground`（`3dt:ground` 的建议、人看过）；同一处的泼溅和倾斜摄影是同一个点，`catalog.test.ts` 锁着彭城广场这一对；三维里定位过去，地面和底图（有地形时和地形）对得上。
 - **改格式时**：新加字段同步改 `api.ts` 的 schema、`catalog.ts` 和这篇文档；动了和种类有关的分支同步"各种类的行为"。
