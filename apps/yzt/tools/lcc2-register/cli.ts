@@ -14,7 +14,7 @@ import { cornerLine, cornerSummary, gapLine, toleranceLabel } from './roam-repor
 import { routeWithCorners, spawnOf, STRAIGHT_HORIZONTAL, trackOf } from './roam.ts';
 import { register, SAMPLE_SPACING } from './register.ts';
 import { readModel } from './source.ts';
-import { suggestedSpan, WALKWAY_WIDTH, walkwayGaps, walkwayOf } from './walkway.ts';
+import { suggestedSpan, WALKWAY_WIDTH, walkwayFloors, walkwayGaps, walkwayOf } from './walkway.ts';
 
 // LCC2 的配准（ADR 0149 第 4 节）：在 apps/yzt 下运行 pnpm lcc2:register <索引> --datum <米>，用法见 docs/commands.md
 
@@ -59,11 +59,17 @@ function printRoam(
   const spawn = manifestSpawn(track, options.spawnAt, frame);
   console.log(`出生点（轨迹 ${options.spawnAt} 米以后）："spawn": ${JSON.stringify(spawn)}`);
   // 路线先在局部系里算一遍，清单的写法和平面图都用它；拉直留下的拐点按原因计数，--diagnose 时逐个列出
+  // 补的地板经过的取样点，路线也走在补的地板上（ADR 0170），不落到玻璃下面的坑底；几段重叠时取写在后面的
+  const walkwayFloorsAt = new Map<number, number>();
+  options.walkways.forEach((span) =>
+    walkwayFloors(track, result.grid, span).forEach((floor, i) => walkwayFloorsAt.set(i, floor))
+  );
   const localRoutes = options.routes.map((span) => {
     const tolerance = span.tolerance ?? STRAIGHT_HORIZONTAL;
     const { points, corners } = routeWithCorners(track, span.from, span.to, result.grid, {
       tolerance,
-      stretches: options.stretches
+      stretches: options.stretches,
+      floors: walkwayFloorsAt
     });
     const label = toleranceLabel(span, tolerance, options.stretches);
     console.log(`路线 ${span.id}（${label}）：${cornerSummary(corners)}`);

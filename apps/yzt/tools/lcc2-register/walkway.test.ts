@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildFloorGrid } from './floor-grid.ts';
 import { ToolError } from './errors.ts';
-import { trackOf } from './roam.ts';
+import { routeOf, trackOf } from './roam.ts';
 import { rectangle, walk } from './test-meshes.ts';
-import { suggestedSpan, walkwayGaps, walkwayOf } from './walkway.ts';
+import { suggestedSpan, walkwayFloors, walkwayGaps, walkwayOf } from './walkway.ts';
 
 // 30 × 4 米：西边 x 0～10 的地板在 0 米，东边 x 20～30 在 -0.3 米；中间是玻璃栈道，从 0 米斜到 -0.3 米，
 // 玻璃没扫到，网格里只有每米一根 0.3 米宽的梁（和栈道一样高）和 1 米深的坑底
@@ -118,5 +118,23 @@ describe('walkwayOf', () => {
     const track = trackOf(walk([{ from: [0, 2], to: [30, 2] }], walkingSurface), pit);
     expect(() => walkwayOf(track, pit, { from: 12, to: 18 })).toThrow(ToolError);
     expect(() => walkwayOf(GLASS_TRACK, GLASS_GRID, { from: 12, to: 12.1 })).toThrow('不到两个取样点');
+  });
+});
+
+// 栈道上那一段路线的点
+const onGlass = (route: ReturnType<typeof routeOf>) => route.filter(({ x }) => x > 11 && x < 19);
+
+describe('路线经过补的地板', () => {
+  it('补的地板那几个取样点的地板给路线用：走在栈道上，不落到坑底', () => {
+    const span = { from: distanceAt(GLASS_TRACK, 8), to: distanceAt(GLASS_TRACK, 22) };
+    const floors = walkwayFloors(GLASS_TRACK, GLASS_GRID, span);
+    const to = distanceAt(GLASS_TRACK, 28);
+    const plain = onGlass(routeOf(GLASS_TRACK, 2, to, GLASS_GRID));
+    expect(Math.min(...plain.map(({ floor }) => floor))).toBeLessThan(-0.6);
+    const over = onGlass(routeOf(GLASS_TRACK, 2, to, GLASS_GRID, { floors }));
+    expect(over.length).toBeGreaterThan(0);
+    for (const { x, floor } of over) {
+      expect(Math.abs(floor - walkingSurface(x))).toBeLessThan(0.05);
+    }
   });
 });

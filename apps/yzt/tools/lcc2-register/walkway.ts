@@ -154,10 +154,14 @@ export function suggestedSpan({ from, to }: WalkwayGap, track: readonly TrackSam
 }
 
 /**
- * 一段补的地板（局部系）：地板取脚下实际的表面（断口两边的地板、栈道的梁），中间按米数插值，不跟着扫描仪晃；
- * 这一段一处这样的表面都没有时报错。按路线的规则抽稀
+ * 一段补的地板在轨迹每个取样点上的高度（取样点的序号 → 局部系的高度）：取脚下实际的表面（断口两边的地板、栈道的梁），
+ * 中间按米数插值，不跟着扫描仪晃；这一段一处这样的表面都没有时报错。路线经过这一段时也取这个高度
  */
-export function walkwayOf(track: readonly TrackSample[], grid: FloorGrid, { from, to }: WalkwaySpan): RoamPoint[] {
+export function walkwayFloors(
+  track: readonly TrackSample[],
+  grid: FloorGrid,
+  { from, to }: WalkwaySpan
+): Map<number, number> {
   const indices = track.flatMap((sample, i) => (sample.distance >= from && sample.distance <= to ? [i] : []));
   if (indices.length < 2) {
     throw new ToolError(`补的地板 ${from}-${to}：轨迹上这一段不到两个取样点`);
@@ -196,9 +200,14 @@ export function walkwayOf(track: readonly TrackSample[], grid: FloorGrid, { from
     const t = b > a ? (distance - a) / (b - a) : 0;
     return heights[after - 1] + (heights[after] - heights[after - 1]) * t;
   };
-  const points = indices.map(i => {
-    const { point, distance } = track[i];
-    return { x: point[0], y: point[1], floor: floorAt(distance), eye: EYE_HEIGHT };
+  return new Map(indices.map(i => [i, floorAt(track[i].distance)]));
+}
+
+/** 一段补的地板（局部系）：walkwayFloors 的点按路线的规则抽稀，眼高都是 EYE_HEIGHT（清单里不写） */
+export function walkwayOf(track: readonly TrackSample[], grid: FloorGrid, span: WalkwaySpan): RoamPoint[] {
+  const points = [...walkwayFloors(track, grid, span)].map(([i, floor]) => {
+    const [x, y] = track[i].point;
+    return { x, y, floor, eye: EYE_HEIGHT };
   });
   return simplify(points);
 }

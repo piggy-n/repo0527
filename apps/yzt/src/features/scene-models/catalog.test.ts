@@ -177,9 +177,10 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       `https://maps.test/yzt/3dt/xuzhou/lcc2/${chuwangshan}/lcc2-sog-result/${chuwangshan}.lcc2`
     );
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
-    // 星海广场站三条，彭城广场（泼溅）三条、驮篮山1号两条、土山墓三条、龟山汉墓两条、东洞山楚王墓一条
-    // （泼溅的路线取自扫描轨迹、拉直过，ADR 0156 第 4 节；2026-11-16 除土山墓 tomb 外换成贪心拉直的路线）
-    expect(lengths).toStrictEqual([125, 133, 58, 79, 183, 91, 191, 152, 37, 189, 147, 153, 151, 151]);
+    // 星海广场站三条，彭城广场（泼溅）三条、驮篮山1号两条、土山墓三条、龟山汉墓四条、东洞山楚王墓一条
+    // （泼溅的路线取自扫描轨迹、拉直过，ADR 0156 第 4 节；2026-11-16 除土山墓 tomb 外换成贪心拉直的路线；
+    // 2026-11-23 龟山汉墓加了展厅的两条，墓里的两条过玻璃栈道的一段改走补的地板，ADR 0170）
+    expect(lengths).toStrictEqual([125, 133, 58, 79, 183, 91, 191, 152, 37, 189, 147, 243, 154, 152, 236, 151]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
   });
