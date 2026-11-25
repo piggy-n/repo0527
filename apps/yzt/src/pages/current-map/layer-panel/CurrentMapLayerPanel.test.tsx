@@ -1255,6 +1255,28 @@ describe('CurrentMapLayerPanel', () => {
     expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
   });
 
+  it('图例浮层的标题栏在样式设置左边有显示方式的快捷切换：换成统一配色时内容直接是设置，再点换回浏览（用户 2026-11-24）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    const toggle = () => required(layerPopover().querySelector<HTMLButtonElement>('[data-legend-mode]'), '显示方式');
+    expect(toggle().getAttribute('data-legend-mode')).toBe('classified');
+    expect(toggle().nextElementSibling).toBe(settingsButton());
+
+    toggle().click();
+    await nextTick();
+    expect(toggle().getAttribute('data-legend-mode')).toBe('uniform');
+    expect(layerPopover().querySelector('button[aria-label="样式设置"]')).toBeNull();
+    expect(layerPopover().querySelector('[aria-label="图层配色方式"]')).not.toBeNull();
+
+    toggle().click();
+    await nextTick();
+    expect(toggle().getAttribute('data-legend-mode')).toBe('classified');
+    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
+  });
+
   it('选中的行上移、下移以后浮层重新放：箭头对着的元素读图层的顺序，元素不变也重新量（2026-11-14 审查发现）', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['bgdc_cjdcq']);

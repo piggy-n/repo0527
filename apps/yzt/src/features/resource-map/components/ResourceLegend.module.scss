@@ -70,10 +70,10 @@ button.summary {
   }
 }
 
-// 留出复杂图例设置入口的同等宽度，整行仍可点击，年份保持对齐
-.uniformSummary {
-  box-sizing: border-box;
-  padding-right: 28px;
+// 统一样式没有样式设置按钮，留出同等宽度，年份和显示方式的按钮保持对齐
+.configureSlot {
+  flex: none;
+  width: 24px;
 }
 
 // 编辑状态只改变颜色，鼠标点击留下的焦点不维持按钮显示
@@ -193,8 +193,10 @@ button.summary {
   min-width: 0;
 }
 
+// 返回图例在标题行最右（用户 2026-11-24）
 .back {
   flex: none;
+  margin-left: auto;
 }
 
 .modes {

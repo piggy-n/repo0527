@@ -6,6 +6,7 @@ import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSel
 import { FeatureFilter } from '@/features/resource-map/components/FeatureFilter';
 import { LabelEditor } from '@/features/resource-map/components/LabelEditor';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
+import { LegendModeToggle } from '@/features/resource-map/components/LegendModeToggle';
 import { LegendPreview } from '@/features/resource-map/components/LegendPreview';
 import { ResourceLayerRow } from '@/features/resource-map/components/ResourceLayerRow';
 import type { ResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
@@ -976,6 +977,9 @@ export const CurrentMapLayerPanel = defineComponent({
                 {resource.name}
               </span>,
               <span class={styles.popYear}>{display.year}</span>,
+              ...(legend && entry.kind !== 'symbol'
+                ? [<LegendModeToggle class={styles.popButton} symbols={props.symbols} entry={entry} />]
+                : []),
               ...(configurable
                 ? [
                     <button

@@ -8,6 +8,7 @@ import { type LegendEntry, legendEntries } from '../legend';
 import type { SymbolTarget } from '../resource-symbols';
 import { FilterNote } from './FilterNote';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
+import { LegendModeToggle } from './LegendModeToggle';
 import { LegendPreview } from './LegendPreview';
 import { LegendSettings } from './LegendSettings';
 import styles from './ResourceLegend.module.scss';
@@ -201,7 +202,7 @@ export const ResourceLegend = defineComponent({
             {uniform ? (
               <button
                 type="button"
-                class={[styles.summary, styles.uniformSummary]}
+                class={styles.summary}
                 aria-label={`编辑${entry.name}图例`}
                 onClick={() => openEditor({ code: entry.code })}
               >
@@ -218,7 +219,10 @@ export const ResourceLegend = defineComponent({
                 {summary}
               </button>
             )}
-            {!uniform && (
+            {entry.kind !== 'symbol' && <LegendModeToggle class={styles.configure} symbols={props.symbols} entry={entry} />}
+            {uniform ? (
+              <span class={styles.configureSlot} aria-hidden="true" />
+            ) : (
               <button
                 type="button"
                 class={styles.configure}

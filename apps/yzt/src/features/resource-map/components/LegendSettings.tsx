@@ -83,12 +83,12 @@ export const LegendSettings = defineComponent({
         >
           {(props.back || directItem !== undefined) && (
             <div class={styles.settingsHeading}>
+              <MxTitle>{name}</MxTitle>
               {props.back && (
                 <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={() => emit('back')}>
                   返回图例
                 </ElButton>
               )}
-              <MxTitle>{name}</MxTitle>
             </div>
           )}
           {directItem === undefined && entry.kind !== 'symbol' && (
