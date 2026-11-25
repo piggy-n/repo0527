@@ -95,6 +95,8 @@ describe('useMapPrint', () => {
     expect(result?.fileName).toMatch(/^现状底图-\d{8}-\d{6}\.png$/);
     expect(result?.blob.type).toBe('image/png');
     expect(result?.placement).toBe('side');
+    // 地图 1440 加右侧一栏 232，按 2 倍的像素
+    expect([result?.width, result?.height]).toStrictEqual([3344, 1600]);
     expect(print.phase.value).toBe('idle');
     expect(print.error.value).toBe('');
   });

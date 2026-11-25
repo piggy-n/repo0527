@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { type LegendFont, type LegendItem, layoutPrintLegend, type PrintLegendBlock, wrapText } from './print-legend';
 
-// 不用真的字体：各行的文字、过滤条件每个字 12 像素，其余 14
-const measure = (text: string, font: LegendFont) => text.length * (font === 'label' || font === 'note' ? 12 : 14);
+// 不用真的字体：各行的文字每个字 12 像素，其余 14
+const measure = (text: string, font: LegendFont) => text.length * (font === 'label' ? 12 : 14);
 
 const row = (label: string) => ({ label, drawSwatch: () => undefined });
 
@@ -104,57 +104,6 @@ describe('layoutPrintLegend', () => {
 
     expect(long?.lines).toStrictEqual(['1004 城镇村道路用地和其', '他很长的名称说明']);
     expect(long?.kind === 'row' && long.height).toBe(24 + 18);
-  });
-
-  it('过滤条件：有标题时写在标题下面、类别上面，只有一行时写在那一行下面、和文字对齐；在底色里按宽度分行', () => {
-    const layout = layoutPrintLegend(
-      [
-        { ...block('学校面层（2025）', ['中小学', '高等院校']), filterNote: '只显示 类型：小学、普通高等学校本科院校' },
-        { ...block(null, ['地类图斑（2022）']), filterNote: '只显示 地类：水田' }
-      ],
-      1000,
-      measure
-    );
-
-    // 底色上下留 2、4；底色里左右 6、漏斗 14、隔 4：一组的宽 200 放 14 个字，一行的缩进 30、宽 170 放 11 个字
-    expect(summary(layout.items)).toStrictEqual([
-      ['title', 0, 16, '图例'],
-      ['header', 0, 54, '学校面层（2025）'],
-      ['note', 0, 82, '只显示 类型：小学、普通高等|学校本科院校'],
-      ['row', 0, 130, '中小学'],
-      ['row', 0, 154, '高等院校'],
-      ['row', 0, 186, '地类图斑（2022）'],
-      ['note', 0, 212, '只显示 地类：水田']
-    ]);
-    const notes = layout.items.flatMap(item => (item.kind === 'note' ? [[item.indent, item.width, item.height]] : []));
-    expect(notes).toStrictEqual([
-      [0, 200, 4 * 2 + 18 * 2],
-      [30, 170, 4 * 2 + 18]
-    ]);
-    expect(layout.height).toBe(242 + 16);
-  });
-
-  it('过滤条件跟着标题和第一行换列：算上它整组放不下时整组换到新的一列；跨列时不重复', () => {
-    const filtered = [
-      block(null, ['学校点层（2025）']),
-      { ...block('学校面层（2025）', ['中小学', '高等院校']), filterNote: '只显示 类型：小学' }
-    ];
-    // 不算过滤条件时这一组放得下（86 + 26 + 48 = 160 ≤ 184），算上它（再加 32）放不下
-    const moved = layoutPrintLegend(filtered, 200, measure);
-    const long = layoutPrintLegend(
-      [{ ...block('地类图斑（2022）', ['0101 水田', '0102 水浇地', '0103 旱地', '0201 果园']), filterNote: '只显示 地类：水田' }],
-      150,
-      measure
-    );
-
-    expect(summary(moved.items).slice(2)).toStrictEqual([
-      ['header', 1, 16, '学校面层（2025）'],
-      ['note', 1, 44, '只显示 类型：小学'],
-      ['row', 1, 74, '中小学'],
-      ['row', 1, 98, '高等院校']
-    ]);
-    expect(long.columns).toBeGreaterThan(1);
-    expect(long.items.filter(item => item.kind === 'note')).toHaveLength(1);
   });
 
   it('没有条目时只有图例两字', () => {

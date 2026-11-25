@@ -29,7 +29,7 @@
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择、透明度和标注的显隐，提供操作和两个推导函数 |
 | `basemap/BasemapPanel.tsx` | 底图的切换：缩略图只写类型，三列（公网三张；内网两到六张，按探测结果，ADR 0165），点了告诉使用方；当前缩略图角上的入口点开标注和透明度（ADR 0146），地名印在底图上时标注开关置灰、旁边写 `BAKED_LABELS_HINT` |
 | `basemap/BasemapCard.tsx` | 底图入口：当前底图的缩略图卡片，点开是左侧的底图浮层，选了底图就关闭；开关由页面持有，现状底图、数据查询、指标、AI 对话、指标 AI 计算共用（ADR 0111） |
-| `popover/MapOptionsPopover.tsx` | 底图、行政区边界的左侧箭头 Popover：入口切换、关闭与定位避让，定位后报告顶部，开关由页面持有；内容通过插槽参数拿到 `close`（ADR 0070、0146） |
+| `popover/MapOptionsPopover.tsx` | 底图、行政区边界、地图打印的左侧箭头 Popover：入口切换、关闭与定位避让，定位后报告顶部，开关由页面持有；内容通过插槽参数拿到 `close`、`hold`（内容打开了盖住整页的一层时暂停点外部、Esc 关闭，如打印的大图）；`flush` 时外壳不留内边距，内容自己带 `MxPanel` 标题栏（ADR 0070、0146、0174） |
 | `popover/useLightDismiss.ts` | 浮层的轻量关闭：单击外部（拖动不算）、按 Esc（ADR 0146） |
 | `OpacityToggle.tsx` | 行政区边界的透明度展开图标，选中状态独立于 Tooltip |
 | `tooltip.ts` | 地图 Tooltip 的统一显隐参数，避免快速扫过图标时延迟关闭与淡出重叠 |
@@ -313,13 +313,13 @@ boundaries.setOpacity(0.6);
 
 | 文件 | 内容 |
 |---|---|
-| `print-legend.ts` | 图例的类型（`PrintLegendBlock`：一组的标题、跨列时续的标题、各行的文字和画符号的函数、过滤条件 `filterNote`）和排版 `layoutPrintLegend`（纯函数）：一列宽 232，按最高的高度分列，组的标题不和第一行分开，跨列时新的一列开头写"（续）"，文字按字形宽度分行 |
+| `print-legend.ts` | 图例的类型（`PrintLegendBlock`：一组的标题、跨列时续的标题、各行的文字和画符号的函数）和排版 `layoutPrintLegend`（纯函数）：一列宽 232，按最高的高度分列，组的标题不和第一行分开，跨列时新的一列开头写"（续）"，文字按字形宽度分行 |
 | `print-image.ts` | `arrangePrint`（纯函数）定图例放哪、整张图多大：右侧一栏（和地图一样高）、右下角（最高占地图 60%、最宽 45%，放不下改右侧）、不带；`composePrintImage` 在 canvas 上画，像素比同截图（图片 ÷ 地图的 CSS 尺寸）。图片里的颜色、字体是固定的数据（普惠体，取值同设计令牌） |
 | `print-file-name.ts` | 文件名"名称-年月日-时分秒.png"，按本地时间 |
-| `useMapPrint.ts` | 打印的拥有者：`run` 等画面完整（上下文的 `whenComplete`，`skipWait` 不等了）、截图（`omitGroups` 的分组这一帧不画，二维可 2 倍）、在截图之后同步推导图例、合成、编码（`shared/file-transfer` 的 `canvasBlob`），交出 Blob 和文件名（不带图例时不推导）；`capture` 给预览用，等画面完整后按屏幕的像素比截一帧、需要时推导图例，正在导出时不截。同一时间只有一次，作用域销毁、`cancel` 时作废；失败时 `error` 记下原因。不保存、不提示 |
-| `MapPrintPanel.tsx` | 浮层的内容：预览、导出的像素、图例的位置、清晰度、导出；等待时"等待地图加载完成"和"不等了"。预览在打开、相机变了以后等画面完整截一次，改图例的位置只按截下的重新合成，只改清晰度时不变（截图会请求重画但不改相机，不循环）；导出的像素在 2 倍时按 `scaledPixels` 算（地图受 MapLibre 的画布上限 4096 约束）；导出完交给浏览器保存（`saveFile`）、提示文件名，通知页面关掉浮层；卸载时放弃没完成的导出 |
+| `useMapPrint.ts` | 打印的拥有者：`run` 等画面完整（上下文的 `whenComplete`，`skipWait` 不等了）、截图（`omitGroups` 的分组这一帧不画，二维可 2 倍）、在截图之后同步推导图例、合成、编码（`shared/file-transfer` 的 `canvasBlob`），交出 Blob、文件名和像素（不带图例时不推导），导出和大图预览共用；`capture` 给预览用，等画面完整后按屏幕的像素比截一帧、需要时推导图例，正在导出时不截。同一时间只有一次，作用域销毁、`cancel` 时作废；失败时 `error` 记下原因。不保存、不提示 |
+| `MapPrintPanel.tsx` | 浮层的内容：`MxPanel` 的浅灰标题栏，右边链接样式的"导出"；预览、预览下面一行（导出的像素，进行中时"等待地图加载完成"和"不等了"、"正在生成图片"，失败时的原因）、图例的位置、清晰度。点预览用 `run` 生成导出的那张图，在 Element 的 `ElImageViewer` 里看（工具栏只留缩小、放大、原始大小与适应窗口，加"导出"：存的就是这张图）；大图开着时发 `viewer`，页面经 `MapOptionsPopover` 的 `hold` 让浮层不因点外部、Esc 关闭。预览在打开、相机变了以后等画面完整截一次，改图例的位置只按截下的重新合成，只改清晰度时不变（截图会请求重画但不改相机，不循环）；导出的像素在 2 倍时按 `scaledPixels` 算（地图受 MapLibre 的画布上限 4096 约束）；导出完交给浏览器保存（`saveFile`）、提示文件名，通知页面关掉浮层；卸载时放弃没完成的导出 |
 
-- 过滤条件（ADR 0173）同右侧图例的 `FilterNote`：浅蓝底、漏斗、12 号次要色（尺寸 `NOTE_METRICS`），有标题时写在标题下面、类别上面，只有一行时写在那一行下面、和文字对齐；和标题、第一行一起换列，跨列时不重复。资源由 `printEntries` 按显示状态的 `filter` 写出全部条件（`filterText`，写成"只显示 …"）：分类字段的也写，和右侧图例不同，打印的类别只列画面里出现的，看不出勾了哪些（用户 2026-11-24）
+- 图例不写要素过滤的条件（用户 2026-11-24 第 8 批）：画出来的要素已经按条件过滤，`printEntries` 按显示状态的 `filter` 推导（`legendEntry`），按分类过滤时类别只有勾着的
 - 图例的来源由页面拼起来（现状底图页的 `printLegend`）：资源是 `features/resource-map/print-legend.ts`（画面里画出来的资源，整屏查一次渲染要素，有区划范围时只算范围里的；按属性配色的只列出现的取值，`style-registry` 的 `classKeyOf` 和图层同一个 `match`；符号在 canvas 上画，`legend-canvas.ts`，几何和页面的 `LegendSwatchIcon` 共用 `legend-swatch-geometry.ts`），三维里显示着的模型是 `features/scene-models/print-legend.ts`，打开着的行政区边界是 `boundary/boundary-print.ts`
 - 现状底图截图时不画 `measure`、`selection`（用户 2026-11-24）；打印浮层开着时撤掉选中要素的加强标注（`selection-labels` 为空，`resource-labels` 不再滤掉它），导出的图里它是普通标注；漫游时工具栏隐藏，不提供打印
 - 测试：排版、排法、文件名、各来源的推导是普通测试；`useMapPrint`、`MapPrintPanel` 在 jsdom 里换掉 Canvas 2D；`app/map-print.browser.test.ts` 在真实 MapLibre 上截图、推导、合成，看图例里的颜色
@@ -797,6 +797,7 @@ sides.activate('right');
 | `basemap/BasemapCard.test.tsx` | 卡片的简称和全称；选了底图、单击外部、Esc、再点卡片关闭，焦点按规则回到卡片；入口和开关不关闭；不能显示时不算按下；内网的卡片是标准和探测到的缩略图，选了极夜蓝跟着换 | jsdom |
 | `basemap/BasemapCard.browser.test.tsx` | 真实布局（令牌和普惠体注入）：1280、390、360 宽的视口里浮层宽 320、278、248；收起时两三张高 86、四到六张高 158，每张的名称一行、不溢出、在缩略图里；底图卡的名称放得下；名称和卡片用页面的字体，选中的半粗；展开后两行时 226、一行时 154（无底图也是），印着地名的底图的说明一行、不溢出（ADR 0165 第 7 节） | Chromium |
 | `popover/useLightDismiss.test.ts` | 单击外部关闭且照常传给被点的元素；拖动、从里面拖出去不关闭；按键触发也算；Esc 不再往下传；没显示时和作用域结束后不管 | jsdom |
+| `popover/MapOptionsPopover.test.tsx` | 内容打开了盖住整页的一层（`hold`）时点外部、Esc 不关浮层，放开后照常关；浮层关上时一起放开 | jsdom |
 | `popover/MapOptionsPopover.browser.test.tsx` | 真实布局：内容变高后重新定位、不超出视口，上方的面板拿到新的顶部 | Chromium |
 | `card/MapCard.test.tsx` | 图在上、字在下（图标和铺满的图都一样）、点击通知、按下、只写简称时的无障碍名称 | jsdom |
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；标注全局一个、切换时沿用，切换标注不重新推导底图；相同的值不触发重新推导；不合法的调用抛错且状态不变；二三维切换按探测结果的 10 种组合（没有影像时不变，有影像时三维选影像、二维回到默认，不改用户选的）；公网不看探测结果；影像和印着地名的底图的标注；无底图叠静态地名（公网和内网、文字不透明、二三维切换沿用）；注入的探测结果（有上下文、没有上下文、显式传入） | Node |

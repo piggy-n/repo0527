@@ -1,11 +1,31 @@
+import { Download, Loading, ScaleToOriginal, ZoomIn, ZoomOut } from '@element-plus/icons-vue';
 import type { ViewKind } from '@mx/map-core';
 import { useMap } from '@mx/map-vue';
-import { MxTitle } from '@mx/ui';
-import { ElButton, ElMessage, ElRadioButton, ElRadioGroup } from 'element-plus';
-import { computed, defineComponent, onBeforeUnmount, onScopeDispose, type PropType, ref, shallowRef, watch } from 'vue';
+import { MxPanel } from '@mx/ui';
+import {
+  ElButton,
+  ElIcon,
+  ElImageViewer,
+  ElMessage,
+  ElRadioButton,
+  ElRadioGroup,
+  type ImageViewerAction
+} from 'element-plus';
+import {
+  computed,
+  defineComponent,
+  onBeforeUnmount,
+  onScopeDispose,
+  type PropType,
+  ref,
+  shallowRef,
+  type VNode,
+  watch
+} from 'vue';
 import { saveFile } from '../../file-transfer';
+import { SvgIcon } from '../../icons/SvgIcon';
 import { composePrintImage, type LegendPlacement, type PrintImage, scaledPixels } from './print-image';
-import type { MapPrint, PrintCapture, PrintSettings } from './useMapPrint';
+import type { MapPrint, PrintCapture, PrintResult, PrintSettings } from './useMapPrint';
 import styles from './MapPrintPanel.module.scss';
 
 const PLACEMENTS: readonly { readonly id: LegendPlacement; readonly label: string }[] = [
@@ -14,15 +34,32 @@ const PLACEMENTS: readonly { readonly id: LegendPlacement; readonly label: strin
   { id: 'none', label: '不带' }
 ];
 
-// 预览的宽度：浮层 320 减去两边 12 的内边距
-const PREVIEW_WIDTH = 296;
+// 预览的宽度：浮层 320 减去两边的边框 1、内边距 16、预览的边框 1
+const PREVIEW_WIDTH = 284;
 // 预览最高多高：右侧一栏的长图例让图片变宽，高度跟着变矮，不会超过
 const PREVIEW_MAX_HEIGHT = 200;
 
+// 大图预览的工具栏（ElImageViewer 的 toolbar 插槽）交给的操作
+interface ViewerToolbar {
+  readonly actions: (action: ImageViewerAction) => void;
+  readonly reset: () => void;
+}
+
+// 大图工具栏的一个按钮：只有图标，名称在提示和读屏里
+const viewerButton = (label: string, icon: VNode, onClick: () => void) => (
+  <button type="button" class={styles.viewerButton} aria-label={label} title={label} onClick={onClick}>
+    <ElIcon>{icon}</ElIcon>
+  </button>
+);
+
+// 右下角放不下、改到了右侧
+const movedText = (requested: LegendPlacement, result: PrintResult) =>
+  requested === 'corner' && result.placement === 'side' ? '，图例较长，放在了右侧' : '';
+
 /**
- * 地图打印的浮层内容（ADR 0174，用户 2026-11-24 确认的做法二）：预览、图例的位置、清晰度、导出。预览在打开时、
- * 相机变了以后等画面完整截一次，改图例的位置只重新合成；导出等地图加载完，可以不等。导出的图片交给浏览器保存并提示；
- * 浮层关掉（卸载）时放弃没完成的导出
+ * 地图打印的浮层内容（ADR 0174，用户 2026-11-24 确认的做法二和第 8 批的调整）：浅灰标题栏右边是"导出"，下面是预览、
+ * 图例的位置、清晰度。预览在打开时、相机变了以后等画面完整截一次，改图例的位置只重新合成；点预览按现在的设置生成导出的那张图，
+ * 用 Element 的图片预览看大图，大图里导出的就是这张。等加载、生成、失败都写在预览下面那一行。浮层关掉（卸载）时放弃没完成的导出
  */
 export const MapPrintPanel = defineComponent({
   name: 'MapPrintPanel',
@@ -36,11 +73,14 @@ export const MapPrintPanel = defineComponent({
   emits: {
     'update:settings': (settings: PrintSettings) => typeof settings === 'object',
     /** 导出完了：页面关掉浮层 */
-    done: () => true
+    done: () => true,
+    /** 大图预览开着：页面让浮层不因单击外部、Esc 关闭 */
+    viewer: (open: boolean) => typeof open === 'boolean'
   },
   setup(props, { emit }) {
     const map = useMap();
     const canvas = ref<HTMLCanvasElement>();
+    const thumbnail = ref<HTMLButtonElement>();
     // 上一次截下的画面和查没查图例：只改图例的位置时按它重新合成，不再截图、查要素
     let captured: { readonly capture: PrintCapture; readonly legend: boolean } | null = null;
     // 预览的图片（屏幕的像素比）；没有时说明原因
@@ -58,6 +98,14 @@ export const MapPrintPanel = defineComponent({
         ? scaledPixels(current, 2)
         : [current.canvas.width, current.canvas.height];
     });
+    // 这一次生成是要保存还是看大图：保存时"导出"转圈
+    const pending = ref<'save' | 'view' | null>(null);
+    // 大图预览的图片：生成的结果和它的地址，关掉时释放
+    const viewed = shallowRef<{ readonly result: PrintResult; readonly url: string; readonly moved: string } | null>(
+      null
+    );
+    let alive = true;
+    onScopeDispose(() => (alive = false));
 
     const show = (next: PrintImage | null) => {
       image.value = next;
@@ -144,101 +192,244 @@ export const MapPrintPanel = defineComponent({
       },
       { flush: 'post' }
     );
-    onScopeDispose(() => capturing?.abort());
-    onBeforeUnmount(() => props.print.cancel());
 
     const update = (patch: Partial<PrintSettings>) => emit('update:settings', { ...props.settings, ...patch });
 
-    const exportImage = async () => {
-      const double = props.settings.double && doubleUsable.value;
-      const result = await props.print.run({ ...props.settings, double });
-      if (!result) {
-        return;
+    // 按现在的设置生成导出的那张图：保存和看大图共用，大图显示的就是导出的图
+    const produce = async (kind: 'save' | 'view') => {
+      pending.value = kind;
+      try {
+        const double = props.settings.double && doubleUsable.value;
+        return await props.print.run({ ...props.settings, double });
+      } finally {
+        pending.value = null;
       }
+    };
+
+    const save = (result: PrintResult, moved: string) => {
       saveFile({ blob: result.blob, fileName: result.fileName });
-      const moved = props.settings.legend === 'corner' && result.placement === 'side';
-      ElMessage.success(moved ? `已导出 ${result.fileName}，图例较长，放在了右侧` : `已导出 ${result.fileName}`);
+      ElMessage.success(`已导出 ${result.fileName}${moved}`);
       emit('done');
     };
 
-    return () => {
+    const closeViewer = () => {
+      const current = viewed.value;
+      if (!current) {
+        return;
+      }
+      URL.revokeObjectURL(current.url);
+      viewed.value = null;
+      emit('viewer', false);
+    };
+
+    const exportImage = async () => {
+      const requested = props.settings.legend;
+      const result = await produce('save');
+      if (result) {
+        save(result, movedText(requested, result));
+      }
+    };
+
+    // 浮层在生成的时候关掉了：结果不再显示
+    const openViewer = async () => {
+      const requested = props.settings.legend;
+      const result = await produce('view');
+      if (!result || !alive) {
+        return;
+      }
+      viewed.value = { result, url: URL.createObjectURL(result.blob), moved: movedText(requested, result) };
+      emit('viewer', true);
+    };
+
+    const exportViewed = () => {
+      const current = viewed.value;
+      if (current) {
+        closeViewer();
+        save(current.result, current.moved);
+      }
+    };
+
+    onBeforeUnmount(() => {
+      closeViewer();
+      props.print.cancel();
+    });
+    onScopeDispose(() => capturing?.abort());
+
+    // 预览下面那一行：平时是导出的像素；导出、看大图时是等加载（可以不等了）和生成；失败时是原因
+    const renderStatus = () => {
       const phase = props.print.phase.value;
-      const busy = phase !== 'idle';
-      const note = previewError.value || (image.value ? '' : '等待地图加载完成');
-      return (
-        <div class={styles.panel} data-map-print>
-          <MxTitle>地图打印</MxTitle>
-          <div class={styles.preview}>
-            <canvas ref={canvas} class={[styles.image, note !== '' && styles.hidden]} aria-hidden="true" />
-            {note !== '' && <span class={styles.empty}>{note}</span>}
-          </div>
-          {exportSize.value && (
-            <div class={styles.meta} data-print-size>
-              {exportSize.value[0]} × {exportSize.value[1]} 像素
-            </div>
-          )}
-          <div class={styles.field}>
-            <span class={styles.label}>图例</span>
-            <ElRadioGroup
-              class="radio-group-block"
-              size="small"
-              aria-label="图例"
-              disabled={busy}
-              modelValue={props.settings.legend}
-              onUpdate:modelValue={value => {
-                const placement = PLACEMENTS.find(item => item.id === value);
-                if (placement) {
-                  update({ legend: placement.id });
-                }
-              }}
-            >
-              {PLACEMENTS.map(item => (
-                <ElRadioButton key={item.id} value={item.id}>
-                  {item.label}
-                </ElRadioButton>
-              ))}
-            </ElRadioGroup>
-          </div>
-          <div class={styles.field}>
-            <span class={styles.label}>清晰度</span>
-            <ElRadioGroup
-              class="radio-group-block"
-              size="small"
-              aria-label="清晰度"
-              disabled={busy}
-              modelValue={props.settings.double && doubleUsable.value ? 'double' : 'screen'}
-              onUpdate:modelValue={value => update({ double: value === 'double' })}
-            >
-              <ElRadioButton value="screen">同屏幕</ElRadioButton>
-              <ElRadioButton value="double" disabled={!doubleUsable.value}>
-                2 倍
-              </ElRadioButton>
-            </ElRadioGroup>
-          </div>
-          {!doubleUsable.value && (
-            <div class={styles.note}>
-              {props.dimension === '3d' ? '三维只能同屏幕的清晰度' : '屏幕已经是 2 倍的清晰度'}
-            </div>
-          )}
-          {props.print.error.value !== '' && (
-            <div class={styles.error} role="alert">
-              {props.print.error.value}
-            </div>
-          )}
-          <div class={styles.footer}>
-            {phase === 'waiting' && (
-              <span class={styles.waiting} data-print-waiting>
-                等待地图加载完成
-                <ElButton link type="primary" size="small" onClick={() => props.print.skipWait()}>
-                  不等了
-                </ElButton>
-              </span>
-            )}
-            <ElButton type="primary" loading={busy} onClick={() => void exportImage()}>
-              导出图片
+      if (phase === 'waiting') {
+        return (
+          <div class={styles.status} data-print-waiting>
+            <ElIcon class="is-loading">
+              <Loading />
+            </ElIcon>
+            等待地图加载完成
+            <ElButton link type="primary" size="small" onClick={() => props.print.skipWait()}>
+              不等了
             </ElButton>
           </div>
+        );
+      }
+      if (phase === 'composing') {
+        return (
+          <div class={styles.status}>
+            <ElIcon class="is-loading">
+              <Loading />
+            </ElIcon>
+            正在生成图片
+          </div>
+        );
+      }
+      const error = props.print.error.value;
+      if (error !== '') {
+        return (
+          <div class={[styles.status, styles.error]} role="alert">
+            <SvgIcon name="status-warning" size={14} />
+            <span>{error}</span>
+          </div>
+        );
+      }
+      const size = exportSize.value;
+      return (
+        <div class={styles.status}>
+          {size && (
+            <span data-print-size>
+              {size[0]} × {size[1]} 像素
+            </span>
+          )}
         </div>
+      );
+    };
+
+    // 大图预览：Element 的图片预览，工具栏只留缩放、原始大小和导出（转动对导出没有意义）
+    const renderViewer = () => {
+      const current = viewed.value;
+      if (!current) {
+        return null;
+      }
+      const { width, height } = current.result;
+      return (
+        <ElImageViewer
+          urlList={[current.url]}
+          hideOnClickModal
+          teleported
+          onClose={() => {
+            closeViewer();
+            thumbnail.value?.focus({ preventScroll: true });
+          }}
+        >
+          {{
+            progress: () => [
+              <span class={styles.viewerInfo} data-print-viewer-info>
+                打印预览：{width} × {height} 像素{current.moved}
+              </span>
+            ],
+            toolbar: ({ actions, reset }: ViewerToolbar) => [
+              viewerButton('缩小', <ZoomOut />, () => actions('zoomOut')),
+              viewerButton('放大', <ZoomIn />, () => actions('zoomIn')),
+              <span class={styles.viewerGap} />,
+              viewerButton('原始大小、适应窗口', <ScaleToOriginal />, reset),
+              <span class={styles.viewerGap} />,
+              <button type="button" class={[styles.viewerButton, styles.viewerExport]} onClick={exportViewed}>
+                <ElIcon size={18}>
+                  <Download />
+                </ElIcon>
+                导出
+              </button>
+            ]
+          }}
+        </ElImageViewer>
+      );
+    };
+
+    return () => {
+      const busy = props.print.phase.value !== 'idle';
+      const note = previewError.value || (image.value ? '' : '等待地图加载完成');
+      return (
+        <MxPanel floating headerTone="muted" title="地图打印" data-map-print>
+          {{
+            actions: () => [
+              <ElButton
+                link
+                type="primary"
+                icon={Download}
+                loading={pending.value === 'save'}
+                disabled={busy}
+                onClick={() => void exportImage()}
+              >
+                导出
+              </ElButton>
+            ],
+            default: () => [
+              <div class={styles.body}>
+                <button
+                  ref={thumbnail}
+                  type="button"
+                  class={styles.preview}
+                  disabled={note !== '' || busy}
+                  aria-label="查看打印预览的大图"
+                  onClick={() => void openViewer()}
+                >
+                  <canvas ref={canvas} class={[styles.image, note !== '' && styles.hidden]} aria-hidden="true" />
+                  {note !== '' && <span class={styles.empty}>{note}</span>}
+                  {note === '' && (
+                    <span class={styles.zoom} aria-hidden="true">
+                      <SvgIcon name="status-zoom" size={14} />
+                      查看大图
+                    </span>
+                  )}
+                </button>
+                {renderStatus()}
+                <div class={styles.field}>
+                  <span class={styles.label}>图例</span>
+                  <ElRadioGroup
+                    class="radio-group-block"
+                    size="small"
+                    aria-label="图例"
+                    disabled={busy}
+                    modelValue={props.settings.legend}
+                    onUpdate:modelValue={value => {
+                      const placement = PLACEMENTS.find(item => item.id === value);
+                      if (placement) {
+                        update({ legend: placement.id });
+                      }
+                    }}
+                  >
+                    {PLACEMENTS.map(item => (
+                      <ElRadioButton key={item.id} value={item.id}>
+                        {item.label}
+                      </ElRadioButton>
+                    ))}
+                  </ElRadioGroup>
+                </div>
+                <div class={styles.field}>
+                  <span class={styles.label}>清晰度</span>
+                  <ElRadioGroup
+                    class="radio-group-block"
+                    size="small"
+                    aria-label="清晰度"
+                    disabled={busy}
+                    modelValue={props.settings.double && doubleUsable.value ? 'double' : 'screen'}
+                    onUpdate:modelValue={value => update({ double: value === 'double' })}
+                  >
+                    <ElRadioButton value="screen">同屏幕</ElRadioButton>
+                    {/* 按钮自己的 disabled 会盖过组的，导出时也要禁用 */}
+                    <ElRadioButton value="double" disabled={busy || !doubleUsable.value}>
+                      2 倍
+                    </ElRadioButton>
+                  </ElRadioGroup>
+                </div>
+                {!doubleUsable.value && (
+                  <div class={styles.note}>
+                    {props.dimension === '3d' ? '三维只能同屏幕的清晰度' : '屏幕已经是 2 倍的清晰度'}
+                  </div>
+                )}
+                {renderViewer()}
+              </div>
+            ]
+          }}
+        </MxPanel>
       );
     };
   }

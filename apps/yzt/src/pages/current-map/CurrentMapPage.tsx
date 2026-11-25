@@ -627,13 +627,14 @@ export const CurrentMapPage = defineComponent({
                       print: ({ button }: ToolbarButtonSlotProps) => [
                         <MapOptionsPopover
                           name="print"
+                          flush
                           open={printOpen.value}
                           visible={sides.right.value}
                           onUpdate:open={changePrintOpen}
                         >
                           {{
                             reference: () => [button],
-                            default: ({ active, close }: MapOptionsContext) => [
+                            default: ({ active, close, hold }: MapOptionsContext) => [
                               <MapPrintPanel
                                 print={print}
                                 settings={printSettings.value}
@@ -641,6 +642,7 @@ export const CurrentMapPage = defineComponent({
                                 dimension={map.dimension.value}
                                 onUpdate:settings={(settings: PrintSettings) => (printSettings.value = settings)}
                                 onDone={close}
+                                onViewer={hold}
                               />
                             ]
                           }}

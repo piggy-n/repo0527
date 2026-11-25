@@ -5,7 +5,6 @@ import {
   type LegendItem,
   type LegendLayout,
   layoutPrintLegend,
-  NOTE_METRICS,
   type PrintLegendBlock
 } from './print-legend';
 
@@ -65,10 +64,7 @@ const COLORS = {
   label: '#4b5563',
   divider: '#e2e5ec',
   box: 'rgba(255, 255, 255, 0.94)',
-  boxBorder: '#e6ebf3',
-  // 过滤条件：同右侧图例，取值同设计令牌 primary-bg-light、primary
-  noteBackground: '#f3f6ff',
-  noteIcon: '#597ef7'
+  boxBorder: '#e6ebf3'
 } as const;
 
 const FAMILY = '"Alibaba PuHuiTi", sans-serif';
@@ -78,21 +74,18 @@ export const LEGEND_FONTS: Readonly<Record<LegendFont, string>> = {
   title: `600 16px ${FAMILY}`,
   header: `600 14px ${FAMILY}`,
   strong: `600 14px ${FAMILY}`,
-  label: `400 12px ${FAMILY}`,
-  note: `400 12px ${FAMILY}`
+  label: `400 12px ${FAMILY}`
 };
 
 const TEXT_COLORS: Readonly<Record<LegendFont, string>> = {
   title: COLORS.title,
   header: COLORS.header,
   strong: COLORS.header,
-  label: COLORS.label,
-  // 设计令牌 text-secondary
-  note: '#8a94a6'
+  label: COLORS.label
 };
 
 // 各项第一行的高度：文字在这一行里垂直居中，多出的行按行高往下排
-const FIRST_LINE: Readonly<Record<Exclude<LegendItem['kind'], 'note'>, number>> = {
+const FIRST_LINE: Readonly<Record<LegendItem['kind'], number>> = {
   title: LEGEND_METRICS.titleHeight,
   header: LEGEND_METRICS.headerHeight,
   row: LEGEND_METRICS.rowHeight
@@ -104,50 +97,6 @@ export function canvasMeasure(context: CanvasRenderingContext2D): (text: string,
     context.font = LEGEND_FONTS[font];
     return context.measureText(text).width;
   };
-}
-
-// 漏斗：图标 layer-filter 的轮廓（24 × 24 的描边，描边宽 1.5），省掉看不出来的圆角
-const FUNNEL: readonly (readonly [number, number])[] = [
-  [4, 4],
-  [20, 4],
-  [20, 6.2],
-  [15, 12],
-  [15, 19],
-  [9, 21],
-  [9, 12.5],
-  [4, 6.2]
-];
-
-type NoteItem = Extract<LegendItem, { kind: 'note' }>;
-
-// 过滤条件：浅蓝底，漏斗和第一行文字垂直居中，文字按行往下排
-function drawNote(context: CanvasRenderingContext2D, left: number, top: number, item: NoteItem) {
-  const { paddingX, paddingY, icon, iconGap } = NOTE_METRICS;
-  const { lineHeight } = LEGEND_METRICS;
-  context.save();
-  context.fillStyle = COLORS.noteBackground;
-  context.beginPath();
-  context.roundRect(left, top, item.width, item.height, 4);
-  context.fill();
-  const scale = icon / 24;
-  const iconLeft = left + paddingX;
-  const iconTop = top + paddingY + (lineHeight - icon) / 2;
-  context.strokeStyle = COLORS.noteIcon;
-  context.lineWidth = 1.5 * scale;
-  context.lineJoin = 'round';
-  context.beginPath();
-  for (const [x, y] of FUNNEL) {
-    context.lineTo(iconLeft + x * scale, iconTop + y * scale);
-  }
-  context.closePath();
-  context.stroke();
-  context.font = LEGEND_FONTS.note;
-  context.fillStyle = TEXT_COLORS.note;
-  const textLeft = iconLeft + icon + iconGap;
-  item.lines.forEach((line, index) =>
-    context.fillText(line, textLeft, top + paddingY + lineHeight / 2 + index * lineHeight)
-  );
-  context.restore();
 }
 
 function drawLegend(context: CanvasRenderingContext2D, x: number, y: number, layout: LegendLayout, boxed: boolean) {
@@ -166,10 +115,6 @@ function drawLegend(context: CanvasRenderingContext2D, x: number, y: number, lay
   for (const item of layout.items) {
     const left = x + item.column * columnWidth + padding;
     const top = y + item.y;
-    if (item.kind === 'note') {
-      drawNote(context, left + item.indent, top, item);
-      continue;
-    }
     if (item.kind === 'row') {
       context.save();
       item.row.drawSwatch(context, {

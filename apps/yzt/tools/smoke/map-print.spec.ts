@@ -41,7 +41,7 @@ const LAND_SHARE = `async ({ png, width, color, tolerance }) => {
 }`;
 
 // 地图打印（ADR 0174）：产物里的真实引擎截图、合成、下载；默认视角下只有静态底图和省界，图例在右侧一栏
-test('地图打印：浮层里有预览，导出的 PNG 是地图加右侧一栏的图例，文件名带时间', async ({ page }) => {
+test('地图打印：浮层里有预览，点开看大图；导出的 PNG 是地图加右侧一栏的图例，文件名带时间', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto('/login');
   await login(page);
@@ -62,12 +62,20 @@ test('地图打印：浮层里有预览，导出的 PNG 是地图加右侧一栏
   await entry.click();
   await expect(entry).toHaveAttribute('aria-pressed', 'true');
   const panel = page.locator('[data-map-print]');
-  await expect(panel.locator('[data-print-size]')).toHaveText(
-    `${Math.round(mapBox.width + LEGEND_COLUMN)} × ${Math.round(mapBox.height)} 像素`
-  );
+  const pixels = `${Math.round(mapBox.width + LEGEND_COLUMN)} × ${Math.round(mapBox.height)} 像素`;
+  await expect(panel.locator('[data-print-size]')).toHaveText(pixels);
+
+  // 大图是导出的那张图；在大图里点按钮、按 Esc 只关大图，浮层还开着
+  await panel.getByRole('button', { name: '查看打印预览的大图' }).click();
+  const viewer = page.locator('.el-image-viewer__wrapper');
+  await expect(viewer.locator('[data-print-viewer-info]')).toHaveText(`打印预览：${pixels}`);
+  await viewer.getByRole('button', { name: '放大' }).click();
+  await page.keyboard.press('Escape');
+  await expect(viewer).toHaveCount(0);
+  await expect(panel, '关掉大图后浮层还开着').toBeVisible();
 
   const waiting = page.waitForEvent('download');
-  await panel.getByRole('button', { name: '导出图片' }).click();
+  await panel.getByRole('button', { name: '导出', exact: true }).click();
   const download = await waiting;
   expect(download.suggestedFilename()).toMatch(/^现状底图-\d{8}-\d{6}\.png$/);
   const path = await download.path();

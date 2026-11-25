@@ -88,11 +88,8 @@ function withFilters(filters: Readonly<Record<string, FeatureFilter>>): Resource
   return { ...STATE, displays };
 }
 
-// 学校只显示两种类型，地类只显示水田（ADR 0173）
-const FILTERED = withFilters({
-  csxhjctb_xxp: { type: ['小学', '初级中学'] },
-  bgdc_dltb: { [CLASS_FIELD]: ['0101'] }
-});
+// 地类只显示水田（ADR 0173）
+const FILTERED = withFilters({ bgdc_dltb: { [CLASS_FIELD]: ['0101'] } });
 
 const UNIFORM: ResourceSymbolOverride = { mode: 'uniform', uniform: { fillColor: '#ff0000' } };
 const NONE: ReadonlyMap<string, unknown> = new Map();
@@ -367,30 +364,9 @@ describe('printEntries', () => {
     ]);
   });
 
-  it('过滤着的资源写出全部条件（ADR 0173、0174）：别的字段的、统一样式时分类的，按类别配色时分类的也写', () => {
-    const classified = printEntries({ ...INPUT, state: FILTERED }, RENDERED);
-    const uniform = printEntries(
-      { ...INPUT, state: FILTERED, overrideOf: code => (code === 'bgdc_dltb' ? UNIFORM : undefined) },
-      RENDERED
-    );
+  it('按分类过滤时类别只列勾着的、画面里出现的（同右侧图例，ADR 0173）', () => {
+    const [landuse] = printEntries({ ...INPUT, state: FILTERED }, RENDERED);
 
-    // 右侧图例按地类配色时类别列表就是条件，打印的类别只列画面里出现的、体现不了，也写（用户 2026-11-24）
-    expect(classified.map(({ code, filterNote }) => [code, filterNote])).toStrictEqual([
-      ['bgdc_dltb', '地类：水田'],
-      ['csxhjctb_xxp', '类型：小学、初级中学'],
-      ['test_farmland', null]
-    ]);
-    const [landuse] = classified;
-    expect(landuse?.kind === 'classes' && landuse.items.map(item => item.key)).toStrictEqual(['0101']);
-    expect(uniform[0]).toMatchObject({ kind: 'symbol', code: 'bgdc_dltb', filterNote: '地类：水田' });
-  });
-
-  it('勾着的类别画面里只出现一部分时，类别只列出现的，条件写全部勾着的', () => {
-    const state = withFilters({ bgdc_dltb: { [CLASS_FIELD]: ['0101', '0102'] } });
-
-    const [landuse] = printEntries({ ...INPUT, state }, new Map([['bgdc_dltb', new Set(['0101'])]]));
-
-    expect(landuse).toMatchObject({ kind: 'classes', code: 'bgdc_dltb', filterNote: '地类：水田、水浇地' });
     expect(landuse?.kind === 'classes' && landuse.items.map(item => item.key)).toStrictEqual(['0101']);
   });
 });
@@ -413,26 +389,6 @@ describe('resourcePrintBlocks', () => {
       { title: '地类图斑（2022）', continued: '地类图斑（2022，续）', labels: ['0101 水田'] },
       { title: null, continued: undefined, labels: ['永久基本农田（2023）'] }
     ]);
-  });
-
-  it('过滤条件写成"只显示 …"：一组和单独一行的都带上，没有条件的不带', () => {
-    const blocks = resourcePrintBlocks(
-      printEntries(
-        { state: FILTERED, invalid: NONE, overrideOf: code => (code === 'bgdc_dltb' ? UNIFORM : undefined), zoom: 13 },
-        new Map([
-          ['bgdc_dltb', new Set()],
-          ['csxhjctb_xxp', new Set(['08H213'])],
-          ['test_farmland', new Set()]
-        ])
-      )
-    );
-
-    expect(blocks.map(block => [block.title, block.filterNote])).toStrictEqual([
-      [null, '只显示 地类：水田'],
-      ['学校点层（2025）', '只显示 类型：小学、初级中学'],
-      [null, undefined]
-    ]);
-    expect(blocks[2]).not.toHaveProperty('filterNote');
   });
 
   it('没有资源时没有组', () => {

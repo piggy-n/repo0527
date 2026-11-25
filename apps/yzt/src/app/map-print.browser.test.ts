@@ -4,7 +4,6 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 import { buildCatalog } from '@/features/resource-map/catalog';
-import { CLASS_FIELD } from '@/features/resource-map/filter-fields';
 import { LANDUSE_GROUPS } from '@/features/resource-map/landuse';
 import { printEntries, renderedClasses, resourcePrintBlocks } from '@/features/resource-map/print-legend';
 import {
@@ -13,7 +12,6 @@ import {
   type ResourceLayersState,
   resourcesGroup
 } from '@/features/resource-map/resource-layers';
-import type { ResourceSymbolOverride, SymbolOverrideOf } from '@/features/resource-map/resource-symbols';
 import { boundaryPrintBlock } from '@/shared/map/boundary/boundary-print';
 import { composePrintImage } from '@/shared/map/print/print-image';
 import type { PrintLegendBlock } from '@/shared/map/print/print-legend';
@@ -94,14 +92,14 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function setup(state = STATE, overrideOf: SymbolOverrideOf = () => undefined) {
+function setup() {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.width = '800px';
   container.style.height = '600px';
   const session = new MapSession({ groups: ['basemap', 'resources'], camera: CAMERA });
   session.style.setGroups({
     basemap: BACKGROUND,
-    resources: inline(resourcesGroup({ state, invalid: new Map(), tileBase: 'http://localhost/', overrideOf }))
+    resources: inline(resourcesGroup({ state: STATE, invalid: new Map(), tileBase: 'http://localhost/' }))
   });
   const view = new MapLibreView({ session, container, createMap: options => new MapLibreMap(options) });
   return {
@@ -160,36 +158,6 @@ describe('地图打印（真实的 MapLibre，ADR 0174）', () => {
       expect(inLegend).toBeGreaterThan(50 * ratio * ratio);
     }
     expect(countColor(canvas, landuseRgb('0301'), 0, canvas.width)).toBe(0);
-  });
-
-  it('过滤着的资源在图例里写出条件（ADR 0173）：名称下面一块浅蓝底，地图上只画勾着的取值', async () => {
-    // 地类图斑统一样式、只显示水田：类别列表体现不了这个条件
-    const display = STATE.displays.get(DLTB);
-    if (!display) {
-      throw new Error('没有地类图斑的显示状态');
-    }
-    const state = { ...STATE, displays: new Map([[DLTB, { ...display, filter: { [CLASS_FIELD]: ['0101'] } }]]) };
-    const uniform: ResourceSymbolOverride = { mode: 'uniform', uniform: { fillColor: '#ff0000' } };
-    using ctx = setup(state, () => uniform);
-    await withTimeout(ctx.view.whenReady(), '视图就绪');
-    await withTimeout(ctx.view.whenComplete(), '画面完整');
-
-    const snapshot = ctx.view.snapshot();
-    const input = { state, invalid: new Map(), overrideOf: () => uniform, zoom: CAMERA.zoom };
-    const rendered = renderedClasses({ ...input, view: ctx.view, size: snapshot, scope: null });
-    const blocks = resourcePrintBlocks(printEntries(input, rendered));
-    expect(blocks.map(block => block.filterNote)).toStrictEqual(['只显示 地类：水田']);
-    const { canvas } = composePrintImage(snapshot, blocks, 'side');
-
-    const ratio = snapshot.image.width / snapshot.width;
-    const mapWidth = snapshot.image.width;
-    // 地图上只有水田那一块是红的（画面左下 400 × 300），河流水面滤掉了，露出底色
-    const red = countColor(canvas, [255, 0, 0], 0, mapWidth);
-    expect(red).toBeGreaterThan(10_000 * ratio * ratio);
-    expect(red).toBeLessThan(160_000 * ratio * ratio);
-    // 图例里名称下面的浅蓝底（设计令牌 primary-bg-light）：宽 170、高 26 左右，减去文字和漏斗
-    const note = countColor(canvas, [243, 246, 255], mapWidth, canvas.width - mapWidth);
-    expect(note).toBeGreaterThan(2000 * ratio * ratio);
   });
 
   it('右下角的图例叠在地图上，图片和地图一样大', async () => {

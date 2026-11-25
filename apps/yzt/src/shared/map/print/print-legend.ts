@@ -20,15 +20,10 @@ export interface PrintLegendBlock {
   /** 跨到下一列时那一列开头的标题；不给时是"标题（续）" */
   readonly continued?: string;
   readonly rows: readonly PrintLegendRow[];
-  /**
-   * 类别列表体现不了的过滤条件，整句（"只显示 类型：小学"，ADR 0173）：浅蓝底加漏斗，同右侧图例。有标题时写在标题下面，
-   * 只有一行时写在那一行下面、和文字对齐；跨列时不重复
-   */
-  readonly filterNote?: string;
 }
 
-/** 文字的几种样式：图例两字、组的标题、单独一行的资源名、各行的文字、过滤条件 */
-export type LegendFont = 'title' | 'header' | 'strong' | 'label' | 'note';
+/** 文字的几种样式：图例两字、组的标题、单独一行的资源名、各行的文字 */
+export type LegendFont = 'title' | 'header' | 'strong' | 'label';
 
 /** 排版的尺寸，CSS 像素：一列宽 232，符号同子图例 22 × 16 */
 export const LEGEND_METRICS = {
@@ -42,16 +37,6 @@ export const LEGEND_METRICS = {
   swatchWidth: 22,
   swatchHeight: 16,
   swatchGap: 8
-} as const;
-
-/** 过滤条件的尺寸，同右侧图例的 FilterNote：上 2 下 4 的外边距，4 × 6 的内边距，14 的漏斗离文字 4 */
-export const NOTE_METRICS = {
-  marginTop: 2,
-  marginBottom: 4,
-  paddingY: 4,
-  paddingX: 6,
-  icon: 14,
-  iconGap: 4
 } as const;
 
 /** 排好的一项：在第几列、离图例顶上多远、分好的行 */
@@ -70,17 +55,6 @@ export type LegendItem =
       readonly lines: readonly string[];
       readonly font: 'strong' | 'label';
       readonly row: PrintLegendRow;
-    }
-  | {
-      readonly kind: 'note';
-      readonly column: number;
-      /** 底色的上边 */
-      readonly y: number;
-      /** 底色离这一列文字左边多远：只有一行的组和那一行的文字对齐 */
-      readonly indent: number;
-      readonly width: number;
-      readonly height: number;
-      readonly lines: readonly string[];
     };
 
 export interface LegendLayout {
@@ -138,14 +112,6 @@ export function layoutPrintLegend(
     const lines = wrapText(text, TEXT_WIDTH, value => measure(value, 'header'));
     return { lines, height: heightOf(headerHeight, lines.length) };
   };
-  // 过滤条件：底色的宽高，占的高度还要加上下的外边距
-  const noteOf = (text: string, indent: number) => {
-    const { marginTop, marginBottom, paddingY, paddingX, icon, iconGap } = NOTE_METRICS;
-    const width = TEXT_WIDTH - indent;
-    const lines = wrapText(text, width - paddingX * 2 - icon - iconGap, value => measure(value, 'note'));
-    const height = paddingY * 2 + lines.length * lineHeight;
-    return { indent, width, lines, height, space: marginTop + height + marginBottom };
-  };
   const place = (item: LegendItem, height: number) => {
     items.push(item);
     y += height;
@@ -162,24 +128,14 @@ export function layoutPrintLegend(
       y += gap;
     }
     const title = block.title === null ? null : header(block.title);
-    const note =
-      block.filterNote === undefined ? null : noteOf(block.filterNote, title ? 0 : swatchWidth + swatchGap);
-    const placeNote = () => {
-      if (note) {
-        const { indent, width, lines, height, space } = note;
-        place({ kind: 'note', column, y: y + NOTE_METRICS.marginTop, indent, width, height, lines }, space);
-      }
-    };
-    // 标题、过滤条件至少带着第一行；整组放得进新的一列时不拆开，比一列还高的组才跨列
-    const head = (title?.height ?? 0) + (note?.space ?? 0);
-    const first = head + (rows[0]?.height ?? 0);
-    const whole = head + rows.reduce((sum, item) => sum + item.height, 0);
+    // 标题至少带着第一行；整组放得进新的一列时不拆开，比一列还高的组才跨列
+    const first = (title?.height ?? 0) + (rows[0]?.height ?? 0);
+    const whole = (title?.height ?? 0) + rows.reduce((sum, item) => sum + item.height, 0);
     if (filled && (y + first > bottom || (y + whole > bottom && padding + whole <= bottom))) {
       nextColumn();
     }
     if (title) {
       place({ kind: 'header', column, y, lines: title.lines }, title.height);
-      placeNote();
     }
     rows.forEach(({ row, lines, height }, index) => {
       if (index > 0 && y + height > bottom) {
@@ -190,9 +146,6 @@ export function layoutPrintLegend(
         }
       }
       place({ kind: 'row', column, y, height, lines, font, row }, height);
-      if (!title && index === 0) {
-        placeNote();
-      }
     });
   }
   const columns = column + 1;

@@ -41,6 +41,9 @@ export interface PrintResult {
   readonly fileName: string;
   /** 图例实际放在哪里：右下角放不下时改到右侧 */
   readonly placement: LegendPlacement;
+  /** 图片的像素 */
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface MapPrint {
@@ -52,7 +55,10 @@ export interface MapPrint {
    * 视图卸下、等完时正在导出都以 AbortError 结束；等完了没有就绪的视图时为 null
    */
   capture(legend: boolean, signal: AbortSignal): Promise<PrintCapture | null>;
-  /** 等到画面完整，截图、合成、编码；正在导出时、作用域销毁后返回 null，取消、失败也返回 null（失败时记下原因） */
+  /**
+   * 等到画面完整，截图、合成、编码：保存和大图预览共用，预览显示的就是导出的那张图。正在进行时、作用域销毁后返回 null，
+   * 取消、失败也返回 null（失败时记下原因）
+   */
   run(settings: PrintSettings): Promise<PrintResult | null>;
   /** 不再等加载，按当前画面导出 */
   skipWait(): void;
@@ -137,7 +143,8 @@ export function useMapPrint(map: MapContext, options: MapPrintOptions): MapPrint
       const image = composePrintImage(snapshot, blocks, settings.legend);
       const blob = await canvasBlob(image.canvas);
       signal.throwIfAborted();
-      return { blob, fileName: printFileName(options.name, new Date()), placement: image.placement };
+      const { width, height } = image.canvas;
+      return { blob, fileName: printFileName(options.name, new Date()), placement: image.placement, width, height };
     } catch (reason) {
       if (!signal.aborted) {
         error.value = failureMessage(reason);

@@ -1,20 +1,39 @@
-// 地图打印的浮层内容（ADR 0174）：外观和内边距由 Popover 外壳负责，这里只排上下几块
+// 地图打印的浮层内容（ADR 0174）：外壳是 MxPanel 的浅灰标题栏，内边距由它负责，这里只排上下几块
 
-.panel {
+.body {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
 }
 
-// 预览：图片按比例缩到浮层宽，浅灰底衬出图片的边界
+// 预览：图片按比例缩到浮层宽，浅灰底衬出图片的边界；点开看大图，右下角的"查看大图"在悬停、聚焦时出现
 .preview {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 80px;
+  padding: 0;
+  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-bg-page);
+  font: inherit;
+  cursor: zoom-in;
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &:not(:disabled):hover .zoom,
+  &:focus-visible .zoom {
+    display: inline-flex;
+  }
 }
 
 .image {
@@ -26,13 +45,51 @@
   display: none;
 }
 
+.zoom {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+}
+
 .empty,
-.meta,
-.note,
-.waiting {
+.status,
+.note {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tag);
+}
+
+// 预览下面那一行：没有内容时也占一行，换内容时浮层不跳
+.status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--line-height-tag);
+
+  :global(.is-loading) {
+    color: var(--color-primary);
+  }
+}
+
+// 失败的原因可能换行：图标和第一行对齐
+.error {
+  align-items: flex-start;
+  color: var(--color-danger);
+
+  > svg {
+    flex: none;
+    margin-top: 1px;
+  }
 }
 
 .field {
@@ -53,23 +110,38 @@
   font-size: var(--font-size-base);
 }
 
-.error {
-  color: var(--color-danger);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-tag);
-}
-
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-sm);
-  margin-top: var(--space-xs);
-}
-
-.waiting {
+// 大图预览（ElImageViewer）的工具栏和说明：颜色、字号跟着 Element 的工具栏（白色、图标 23）
+.viewerButton {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-text-inverse);
+    outline-offset: 2px;
+  }
+}
+
+.viewerExport {
+  font-size: var(--font-size-base);
+}
+
+// 两组按钮之间多空一点，同 Element 默认工具栏的分隔
+.viewerGap {
+  margin: 0 -6px;
+}
+
+// 图片下面的说明：同工具栏的深色圆角底，压在图上也看得清
+.viewerInfo {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: var(--color-text-regular);
+  font-size: var(--font-size-base);
+  white-space: nowrap;
 }

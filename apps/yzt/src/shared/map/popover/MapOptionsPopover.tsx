@@ -24,6 +24,8 @@ export interface MapOptionsContext {
   readonly active: boolean;
   /** 关闭浮层，焦点回到入口：内容里的操作做完时调用（如选了底图） */
   readonly close: () => void;
+  /** 内容打开了盖住整页的一层（如打印的大图预览）：开着时单击外部、Esc 不关浮层，交给那一层 */
+  readonly hold: (held: boolean) => void;
 }
 
 /**
@@ -37,7 +39,9 @@ export const MapOptionsPopover = defineComponent({
     open: { type: Boolean, default: false },
     visible: { type: Boolean, default: true },
     /** 默认和入口垂直居中；left-end 底边和入口对齐、向上展开，给下方的底图浮层让位 */
-    placement: { type: String as PropType<'left' | 'left-end'>, default: 'left' }
+    placement: { type: String as PropType<'left' | 'left-end'>, default: 'left' },
+    /** 内容自己带标题栏（MxPanel，如地图打印）：外壳不留内边距 */
+    flush: Boolean
   },
   emits: {
     'update:open': (open: boolean) => typeof open === 'boolean',
@@ -57,8 +61,12 @@ export const MapOptionsPopover = defineComponent({
     useResizeObserver(element, () => void popover.value?.popperRef?.popperInstanceRef?.update());
     const pageActive = usePageActive();
     const shown = computed(() => props.open && props.visible && pageActive.value);
+    // 内容打开的那一层开着；浮层关上时一起放开
+    const held = ref(false);
+    const hold = (value: boolean) => (held.value = value && shown.value);
     watch(shown, visible => {
       if (!visible) {
+        held.value = false;
         emit('topChange', null);
       }
     });
@@ -73,7 +81,7 @@ export const MapOptionsPopover = defineComponent({
       reference.value?.querySelector('button')?.focus({ preventScroll: true });
     };
     useLightDismiss({
-      active: () => shown.value,
+      active: () => shown.value && !held.value,
       // 箭头和边框也算浮层：它们在内容外面、在 Element 的弹出层里面
       contains: target =>
         reference.value?.contains(target) === true || element.value?.closest('.el-popper')?.contains(target) === true,
@@ -121,8 +129,8 @@ export const MapOptionsPopover = defineComponent({
         {{
           reference: () => <span ref={reference} class={styles.reference} onClick={toggle}>{slots.reference()}</span>,
           default: () => (
-            <div ref={element} class={styles.content} data-map-options={props.name}>
-              {slots.default({ active: shown.value, close })}
+            <div ref={element} class={[styles.content, props.flush && styles.flush]} data-map-options={props.name}>
+              {slots.default({ active: shown.value, close, hold })}
             </div>
           )
         }}
