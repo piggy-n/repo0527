@@ -145,7 +145,7 @@ export function conditionText({ field, labels }: FilterCondition): string {
   return `${field.label}：${names}`;
 }
 
-/** 条件连成一句（行上的提示、浮层的底部）；没有条件时为空字符串 */
+/** 条件连成一句（图层行上漏斗的提示和读屏名称）；没有条件时为空字符串 */
 export function filterText(code: string, filter: FeatureFilter): string {
   return filterConditions(code, filter).map(conditionText).join('；');
 }

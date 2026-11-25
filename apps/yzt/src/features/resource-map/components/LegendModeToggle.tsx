@@ -8,7 +8,8 @@ const MODE_NAMES: Readonly<Record<SymbolMode, string>> = { classified: '按类�
 
 /**
  * 图例的显示方式（按类别配色 / 统一配色）的快捷切换，放在样式设置按钮旁边（用户 2026-11-24）：
- * 图标是现在的方式，点一下换成另一种，同样式设置里的"显示方式"；单一符号没有显示方式，不画
+ * 图标是现在的方式，点一下换成另一种，同样式设置里的"显示方式"；单一符号没有显示方式，不画。
+ * 悬停是用户定的短句，读屏名称带上资源名（右侧图例里每个资源一个，要分得清）
  */
 export const LegendModeToggle = defineComponent({
   name: 'LegendModeToggle',
@@ -27,7 +28,7 @@ export const LegendModeToggle = defineComponent({
       return (
         <button
           type="button"
-          aria-label={tip}
+          aria-label={`${entry.name}的${tip}`}
           title={tip}
           data-legend-mode={entry.mode}
           onClick={() => props.symbols.setMode(entry.code, next)}

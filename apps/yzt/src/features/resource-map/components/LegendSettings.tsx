@@ -50,7 +50,7 @@ export const LegendSettings = defineComponent({
     item: { type: String as PropType<string | undefined>, default: undefined },
     /** 配置整个图层时下拉里选中的类别，由上层保管 */
     selected: { type: String as PropType<string | undefined>, default: undefined },
-    /** 标题前"返回图例"；单一符号的浮层里没有可以返回的，不显示 */
+    /** 标题行最右的"返回图例"；单一符号的浮层里没有可以返回的，不显示 */
     back: { type: Boolean, default: true }
   },
   emits: {

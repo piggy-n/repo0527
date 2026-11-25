@@ -167,6 +167,31 @@ export const ResourceLegend = defineComponent({
       />
     );
 
+    // 摘要右边的显示方式和样式设置（用户 2026-11-24）：统一配色没有样式设置，留出同等宽度；
+    // 单一符号两样都没有，宽度留在摘要按钮里（symbolSummary），整行可点、年份逐行对齐
+    const renderActions = (entry: LegendEntry): VNode[] => {
+      if (entry.kind === 'symbol') {
+        return [];
+      }
+      const mode = <LegendModeToggle key="mode" class={styles.configure} symbols={props.symbols} entry={entry} />;
+      if (entry.mode === 'uniform') {
+        return [mode, <span key="slot" class={styles.configureSlot} aria-hidden="true" />];
+      }
+      return [
+        mode,
+        <button
+          key="settings"
+          type="button"
+          class={styles.configure}
+          aria-label={`编辑${entry.name}样式`}
+          title="样式设置"
+          onClick={() => openEditor({ code: entry.code })}
+        >
+          <SvgIcon name="symbol-settings" size={16} />
+        </button>
+      ];
+    };
+
     // 名称前是和图例浮层标题同一个摘要（ADR 0159）；单一符号直接展示，配置按钮不承担展开图例的动作
     const renderEntry = (entry: LegendEntry): VNode => {
       const isOpen = !collapsed.value.has(entry.code);
@@ -202,7 +227,7 @@ export const ResourceLegend = defineComponent({
             {uniform ? (
               <button
                 type="button"
-                class={styles.summary}
+                class={[styles.summary, entry.kind === 'symbol' && styles.symbolSummary]}
                 aria-label={`编辑${entry.name}图例`}
                 onClick={() => openEditor({ code: entry.code })}
               >
@@ -219,20 +244,7 @@ export const ResourceLegend = defineComponent({
                 {summary}
               </button>
             )}
-            {entry.kind !== 'symbol' && <LegendModeToggle class={styles.configure} symbols={props.symbols} entry={entry} />}
-            {uniform ? (
-              <span class={styles.configureSlot} aria-hidden="true" />
-            ) : (
-              <button
-                type="button"
-                class={styles.configure}
-                aria-label={`编辑${entry.name}样式`}
-                title="样式设置"
-                onClick={() => openEditor({ code: entry.code })}
-              >
-                <SvgIcon name="symbol-settings" size={16} />
-              </button>
-            )}
+            {renderActions(entry)}
           </div>
           {entry.filterNote !== null && (
             <div class={styles.note}>
