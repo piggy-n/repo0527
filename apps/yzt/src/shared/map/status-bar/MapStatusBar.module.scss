@@ -45,15 +45,24 @@
   gap: 10px;
 }
 
-// 一段读数（图标和数值）：悬停时说明含义，只有它们接鼠标
-.readout {
-  pointer-events: auto;
-}
-
 // 读数前的图标
 .icon {
   display: inline-flex;
   color: var(--color-text-secondary);
+}
+
+// 一段读数（图标和数值）：悬停时说明含义，只有它们接鼠标
+@media (hover: hover) {
+  .readout {
+    pointer-events: auto;
+  }
+}
+
+// 触屏没有悬停：同 2026-11-24 以前只有图标接触摸、点开提示，数值和比例尺不挡地图的拖动和捏合
+@media (hover: none) {
+  .icon {
+    pointer-events: auto;
+  }
 }
 
 .divider {
