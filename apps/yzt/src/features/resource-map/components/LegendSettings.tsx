@@ -5,40 +5,51 @@ import { defineComponent, type PropType } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { classItems } from '../classification';
-import { type LegendEntry, landuseItemLabel, landuseLegendItems } from '../legend';
+import { type LegendEntry, landuseItemLabel, landuseLegendItems, swatchOf } from '../legend';
 import type { SymbolMode, SymbolTarget } from '../resource-symbols';
 import { resourceStyle } from '../style-registry';
+import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './ResourceLegend.module.scss';
 import { SymbolEditor } from './SymbolEditor';
+import editorStyles from './SymbolEditor.module.scss';
 
 const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] = [
   { value: 'classified', label: '按类别配色' },
   { value: 'uniform', label: '统一配色' }
 ];
 
-// 平铺目录供图层设置选择地类，不改变地图按编码或名称匹配符号的规则
+// 地类的平铺目录，按编码排好；下拉里只留资源实际有的
 const LANDUSE_ITEMS = landuseLegendItems();
 
-// 图层设置只保留可搜索的条目选择，分类分组不再占用浏览区。类别用不过滤的全部（ADR 0173）：图例只列勾着的，
-// 正在编辑的一类被过滤掉时编辑器仍对着它，过滤掉的类别也能从下拉里选来改
-const choicesOf = (entry: LegendEntry) => {
+interface Choice {
+  readonly key: string;
+  readonly name: string;
+  readonly label: string;
+}
+
+// 选类别的下拉：资源实际有的全部类别（地类按规则的 only），不跟着要素过滤（ADR 0173）：图例只列勾着的，过滤掉的类别
+// 也能从这里选来改。原来地类列全表，选到资源没有的一类时编辑器是空的（2026-11-24 审查）
+function choicesOf(entry: LegendEntry): Choice[] {
+  const rule = resourceStyle(entry.code).color;
+  if (!rule || entry.kind === 'symbol') {
+    return [];
+  }
+  const items = classItems(rule);
   if (entry.kind === 'landuse') {
-    return LANDUSE_ITEMS.map(item => ({
+    const keys = new Set(items.map(item => item.key));
+    return LANDUSE_ITEMS.filter(item => keys.has(item.key)).map(item => ({
       key: item.key,
       name: item.name,
       label: landuseItemLabel(item)
     }));
   }
-  const rule = resourceStyle(entry.code).color;
-  if (entry.kind === 'values' && rule) {
-    return classItems(rule).map(item => ({ key: item.key, name: item.label, label: item.label }));
-  }
-  return [];
-};
+  return items.map(item => ({ key: item.key, name: item.label, label: item.label }));
+}
 
 /**
- * 一个资源的样式设置（ADR 0044、0066）：没有 item 时配置整个图层（显示方式、按类别配色时选择要改的类别、符号编辑器、
- * 恢复本图层默认），有 item 时直接编辑这一类。右侧的全部图层图例和当前图层的图例浮层共用（ADR 0157）
+ * 一个资源的样式设置（ADR 0044、0175）：标题和"返回图例"、显示方式（单一符号没有）、符号编辑器（按类别配色时灰框的第一行
+ * 选类别）、恢复整个图层默认。显示方式只在这里切换（用户 2026-11-24 去掉了图例上的快捷切换）。
+ * 右侧的"图例"页和图层的图例浮层共用；要改的类别由上层保管，点了子图例的一类进来时就是它
  */
 export const LegendSettings = defineComponent({
   name: 'LegendSettings',
@@ -46,12 +57,10 @@ export const LegendSettings = defineComponent({
     layers: { type: Object as PropType<Pick<ResourceLayers, 'state'>>, required: true },
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     entry: { type: Object as PropType<LegendEntry>, required: true },
-    /** 直接编辑的一类；没有时配置整个图层 */
-    item: { type: String as PropType<string | undefined>, default: undefined },
-    /** 配置整个图层时下拉里选中的类别，由上层保管 */
+    /** 按类别配色时要改的类别；没有或已经不在类别里时是第一类 */
     selected: { type: String as PropType<string | undefined>, default: undefined },
-    /** 标题行最右的"返回图例"；单一符号的浮层里没有可以返回的，不显示 */
-    back: { type: Boolean, default: true }
+    /** 标题：右侧"图例"页写资源名（默认）；图层浮层的标题栏已经写着名称，写"样式设置" */
+    title: { type: String as PropType<string | undefined>, default: undefined }
   },
   emits: {
     back: () => true,
@@ -64,87 +73,93 @@ export const LegendSettings = defineComponent({
         props.symbols.setMode(props.entry.code, mode.value);
       }
     };
+    const swatchOfItem = (item: string) => {
+      const symbol = props.symbols.symbolOf({ code: props.entry.code, item });
+      return symbol && <LegendSwatchIcon swatch={swatchOf(symbol)} />;
+    };
+
+    // 灰框的第一行：选类别，可搜索，选项带符号
+    const renderPicker = (choices: readonly Choice[], current: Choice) => (
+      <div class={editorStyles.row}>
+        <span class={editorStyles.label}>类别</span>
+        <ElSelect
+          class={editorStyles.select}
+          size="small"
+          filterable
+          ariaLabel="选择要修改的类别"
+          modelValue={current.key}
+          onUpdate:modelValue={(value: unknown) => {
+            if (typeof value === 'string' && choices.some(choice => choice.key === value)) {
+              emit('update:selected', value);
+            }
+          }}
+        >
+          {{
+            prefix: () => swatchOfItem(current.key),
+            default: () =>
+              choices.map(choice => (
+                <ElOption key={choice.key} value={choice.key} label={choice.label}>
+                  <span class={editorStyles.option} data-class-option={choice.key}>
+                    {swatchOfItem(choice.key)}
+                    {choice.label}
+                  </span>
+                </ElOption>
+              ))
+          }}
+        </ElSelect>
+      </div>
+    );
 
     return () => {
       const { entry } = props;
-      const directItem = props.item;
       const classified = entry.kind !== 'symbol' && entry.mode === 'classified';
-      const choices = choicesOf(entry);
-      const selected = directItem ?? props.selected;
-      const item = choices.find(choice => choice.key === selected) ?? choices[0];
-      const target: SymbolTarget =
-        item && (directItem !== undefined || classified) ? { code: entry.code, item: item.key } : { code: entry.code };
-      const name = directItem !== undefined && item ? item.name : entry.name;
+      const choices = classified ? choicesOf(entry) : [];
+      const current = choices.find(choice => choice.key === props.selected) ?? choices[0];
+      const target: SymbolTarget = current ? { code: entry.code, item: current.key } : { code: entry.code };
       return (
         <div
           class={styles.configuration}
           data-legend-settings={entry.code}
           style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}
         >
-          {(props.back || directItem !== undefined) && (
-            <div class={styles.settingsHeading}>
-              <MxTitle>{name}</MxTitle>
-              {props.back && (
-                <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={() => emit('back')}>
-                  返回图例
-                </ElButton>
-              )}
-            </div>
-          )}
-          {directItem === undefined && entry.kind !== 'symbol' && (
-            <div class={styles.modes}>
-              <span class={styles.label}>显示方式</span>
-              <ElRadioGroup
-                size="small"
-                aria-label="图层配色方式"
-                modelValue={entry.mode}
-                onUpdate:modelValue={selectMode}
-              >
+          {/* 进来时焦点放在这一行（读屏报出换了视图），下一个 Tab 就是"返回图例" */}
+          <div class={styles.settingsHeading} tabindex={-1} data-settings-heading>
+            <MxTitle>{props.title ?? entry.name}</MxTitle>
+            <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={() => emit('back')}>
+              返回图例
+            </ElButton>
+          </div>
+          {entry.kind !== 'symbol' && (
+            <div class={styles.modeRow}>
+              <span class={styles.modeLabel}>显示方式</span>
+              <ElRadioGroup size="small" aria-label="图层配色方式" modelValue={entry.mode} onUpdate:modelValue={selectMode}>
                 {MODES.map(mode => (
                   <ElRadioButton key={mode.value} value={mode.value}>
                     {mode.label}
                   </ElRadioButton>
                 ))}
               </ElRadioGroup>
-              <p class={styles.description}>
-                {classified ? '各类别分别显示对应的颜色与样式' : '整个图层使用统一配色，不再按类别区分'}
-              </p>
             </div>
-          )}
-          {directItem === undefined && classified && (
-            <ElSelect
-              size="small"
-              filterable
-              aria-label="选择要修改的图例"
-              modelValue={item?.key}
-              onUpdate:modelValue={(value: unknown) => {
-                if (typeof value === 'string' && choices.some(choice => choice.key === value)) {
-                  emit('update:selected', value);
-                }
-              }}
-            >
-              {choices.map(choice => (
-                <ElOption key={choice.key} value={choice.key} label={choice.label} />
-              ))}
-            </ElSelect>
           )}
           <SymbolEditor
             symbols={props.symbols}
             target={target}
-            name={target.item !== undefined && item ? item.name : entry.name}
-            resetLabel={target.item !== undefined ? '恢复此图例默认' : '恢复当前样式'}
-          />
-          {directItem === undefined && entry.kind !== 'symbol' && (
+            name={current ? current.name : entry.name}
+            resetLabel={current ? `恢复${current.name}的默认` : '恢复默认'}
+          >
+            {{ lead: () => current && renderPicker(choices, current) }}
+          </SymbolEditor>
+          {entry.kind !== 'symbol' && (
             <ElButton
               class={styles.resetLayer}
               link
               type="primary"
               size="small"
               disabled={!props.symbols.isCustomized(entry.code)}
-              aria-label={`恢复${entry.name}的默认符号`}
+              aria-label={`恢复${entry.name}整个图层的默认符号`}
               onClick={() => props.symbols.resetResource(entry.code)}
             >
-              恢复本图层默认
+              恢复整个图层默认
             </ElButton>
           )}
         </div>

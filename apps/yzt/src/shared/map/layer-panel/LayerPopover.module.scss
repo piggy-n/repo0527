@@ -41,4 +41,9 @@
   min-height: 0;
   padding: 0 var(--space-lg) var(--space-lg);
   overflow-y: auto;
+
+  // 没有内容（单一符号的图例不在样式设置里）时不占地方，浮层只剩标题栏
+  &:empty {
+    display: none;
+  }
 }

@@ -5,21 +5,19 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries } from '../legend';
-import type { SymbolTarget } from '../resource-symbols';
-import { FilterNote } from './FilterNote';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
-import { LegendModeToggle } from './LegendModeToggle';
 import { LegendPreview } from './LegendPreview';
 import { LegendSettings } from './LegendSettings';
 import styles from './ResourceLegend.module.scss';
 import { ValueLegend } from './ValueLegend';
 
 /**
- * 资源图层的图例（ADR 0043、0044，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
- * 不读地图、不等视图就绪；复合图例默认展开、可以收起成按几何画的摘要（ADR 0159），配置由独立按钮打开（ADR 0066、0094）。
+ * 资源图层的图例（ADR 0043、0044、0175，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
+ * 不读地图、不等视图就绪。图例以看为主（用户 2026-11-24）：每一行是箭头、摘要（ADR 0159）、名称、年份，按类别配色的
+ * 单击展开、收起（默认展开，ADR 0094），单一符号、统一配色的单击不做什么；修改从行尾的"样式设置"进，三种图例一样，
+ * 点子图例的一类进这一类的样式设置。按分类过滤着的资源（ADR 0173）照样列出全部类别，过滤掉的淡显（用户 2026-11-24）。
  * 放在功能面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器、取色器和弹出层随之卸载，丢弃取色预览；
- * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置。
- * 过滤着的资源（ADR 0173）：只列勾着的类别，名称后面一个漏斗，类别体现不了的条件写在名称下面
+ * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置，焦点回到这一行
  */
 export const ResourceLegend = defineComponent({
   name: 'ResourceLegend',
@@ -34,26 +32,26 @@ export const ResourceLegend = defineComponent({
      */
     scene: { type: Boolean, default: false },
     /**
-     * 当前图层的图例浮层正在编辑的资源（ADR 0157）：这里正在编辑同一个资源时回到浏览，免得两个符号编辑器对着同一个目标、
-     * 一边卸载时清掉另一边正在拖的取色预览
+     * 当前图层的图例浮层正在样式设置里的资源（ADR 0157）：这里正在设置同一个资源时回到浏览，免得两个符号编辑器对着同一个
+     * 目标、一边卸载时清掉另一边正在拖的取色预览
      */
     yieldCode: { type: String as PropType<string | null>, default: null }
   },
   emits: {
     editingChange: (_editing: boolean) => true,
-    /** 正在显示的符号编辑器对着的资源（ADR 0157）：页面据此关掉对着同一个资源的图例浮层，后打开编辑的一方为准 */
+    /** 正在显示的符号编辑器对着的资源（ADR 0157）：页面据此让图例浮层回到浏览，后打开设置的一方为准 */
     editingCode: (code: string | null) => code === null || typeof code === 'string'
   },
   setup(props, { emit }) {
     // 条目的收起是图例自己的界面状态，不持久化：复合图例默认展开，记下用户收起的
     const collapsed = ref<ReadonlySet<string>>(new Set());
-    // 资源级配置与图例浏览分开，同时只配置一个资源：没有 item 时配置整个图层，有 item 时直接编辑单个图例
-    const editing = ref<SymbolTarget | null>(null);
+    // 正在样式设置里的资源，同时只设置一个
+    const editing = ref<string | null>(null);
     // 图例根节点用于查找真实滚动容器
     const element = ref<HTMLElement>();
-    // 每个图层设置中选中的分类项，与直接点击条目的编辑目标分开保存
+    // 按类别配色时样式设置里选中的类别，按资源记：点了子图例的一类时就是它
     const selectedItems = ref<ReadonlyMap<string, string>>(new Map());
-    // 进入编辑前的列表位置，返回时恢复
+    // 进入设置前的列表位置，返回时恢复
     let browseScroll = 0;
     // 条目里的浏览状态，按资源：隐藏时条目卸载，状态留在这里（2026-10-16 评审发现切走再切回时被重置）
     const landuseBrowse = ref<ReadonlyMap<string, LanduseBrowse>>(new Map());
@@ -63,7 +61,7 @@ export const ResourceLegend = defineComponent({
     const entries = computed(() =>
       legendEntries(props.layers.state.value, props.layers.configErrors.value, props.symbols.overrideOf)
     );
-    const editingEntry = computed(() => entries.value.find(entry => entry.code === editing.value?.code));
+    const editingEntry = computed(() => entries.value.find(entry => entry.code === editing.value));
 
     // 使用实际滚动祖先，不依赖外壳的类名或 DOM 层数
     const scrollContainer = () => {
@@ -73,20 +71,37 @@ export const ResourceLegend = defineComponent({
       }
       return parent;
     };
-    const openEditor = (target: SymbolTarget) => {
+    const openSettings = (code: string, item?: string) => {
+      if (item !== undefined) {
+        selectedItems.value = new Map([...selectedItems.value, [code, item]]);
+      }
       browseScroll = scrollContainer()?.scrollTop ?? 0;
-      editing.value = target;
+      editing.value = code;
     };
     const returnToLegend = () => {
       editing.value = null;
     };
+    // 进设置：滚到顶、焦点到标题行（读屏报出换了视图）；返回：恢复滚动、焦点回到这一行的样式设置。
+    // 焦点只在原本就在图例里（或随旧视图卸载掉到了 body）时移动，因为别处（图层浮层）让出来的不抢焦点
     watch(
       editing,
-      target => {
+      (code, previous) => {
+        const root = element.value;
         const scroller = scrollContainer();
-        if (scroller && props.active) {
-          scroller.scrollTop = target ? 0 : browseScroll;
+        if (!root || !props.active) {
+          return;
         }
+        if (scroller) {
+          scroller.scrollTop = code ? 0 : browseScroll;
+        }
+        const active = document.activeElement;
+        if (active !== null && active !== document.body && !root.contains(active)) {
+          return;
+        }
+        const target = code
+          ? root.querySelector<HTMLElement>('[data-settings-heading]')
+          : root.querySelector<HTMLElement>(`[data-legend="${CSS.escape(previous ?? '')}"] [data-legend-settings-button]`);
+        target?.focus({ preventScroll: true });
       },
       { flush: 'post' }
     );
@@ -99,7 +114,7 @@ export const ResourceLegend = defineComponent({
     watch(
       () => props.yieldCode,
       code => {
-        if (code !== null && editing.value?.code === code) {
+        if (code !== null && editing.value === code) {
           editing.value = null;
         }
       },
@@ -129,36 +144,28 @@ export const ResourceLegend = defineComponent({
       collapsed.value = next;
     };
 
-    // 展开只显示图例，样式方式和恢复默认由资源级配置入口单独显示
+    // 展开的子图例：点一类进这一类的样式设置（用户 2026-11-24）
     const renderClassified = (entry: Exclude<LegendEntry, { kind: 'symbol' }>): VNode => {
       if (entry.kind === 'landuse') {
         return (
           <LanduseLegend
-            symbols={props.symbols}
             code={entry.code}
             swatches={entry.swatches}
+            excluded={entry.excluded}
             browse={landuseBrowse.value.get(entry.code) ?? INITIAL_LANDUSE_BROWSE}
             onUpdate:browse={(browse: LanduseBrowse) => setLanduseBrowse(entry.code, browse)}
-            onEdit={(item: string) => openEditor({ code: entry.code, item })}
+            onEdit={(item: string) => openSettings(entry.code, item)}
           />
         );
       }
-      return (
-        <ValueLegend
-          symbols={props.symbols}
-          code={entry.code}
-          values={entry.values}
-          onEdit={(item: string) => openEditor({ code: entry.code, item })}
-        />
-      );
+      return <ValueLegend code={entry.code} values={entry.values} onEdit={(item: string) => openSettings(entry.code, item)} />;
     };
 
-    const renderConfiguration = (entry: LegendEntry) => (
+    const renderSettings = (entry: LegendEntry) => (
       <LegendSettings
         layers={props.layers}
         symbols={props.symbols}
         entry={entry}
-        item={editing.value?.item}
         selected={selectedItems.value.get(entry.code)}
         onBack={returnToLegend}
         onUpdate:selected={(key: string) => {
@@ -167,65 +174,22 @@ export const ResourceLegend = defineComponent({
       />
     );
 
-    // 摘要右边的显示方式和样式设置（用户 2026-11-24）：统一配色没有样式设置，留出同等宽度，点这段同摘要一样进编辑
-    // （键盘走摘要按钮）；单一符号两样都没有，宽度留在摘要按钮里（symbolSummary），整行可点、年份逐行对齐
-    const renderActions = (entry: LegendEntry): VNode[] => {
-      if (entry.kind === 'symbol') {
-        return [];
-      }
-      const mode = <LegendModeToggle key="mode" class={styles.configure} symbols={props.symbols} entry={entry} />;
-      if (entry.mode === 'uniform') {
-        const slot = (
-          <span
-            key="slot"
-            class={styles.configureSlot}
-            aria-hidden="true"
-            data-legend-slot
-            onClick={() => openEditor({ code: entry.code })}
-          />
-        );
-        return [mode, slot];
-      }
-      return [
-        mode,
-        <button
-          key="settings"
-          type="button"
-          class={styles.configure}
-          aria-label={`编辑${entry.name}样式`}
-          title="样式设置"
-          onClick={() => openEditor({ code: entry.code })}
-        >
-          <SvgIcon name="symbol-settings" size={16} />
-        </button>
-      ];
-    };
-
-    // 名称前是和图例浮层标题同一个摘要（ADR 0159）；单一符号直接展示，配置按钮不承担展开图例的动作
+    // 一行：箭头、摘要、名称、年份，行尾是样式设置；按类别配色的整行是展开、收起的按钮，单一符号、统一配色的不是按钮
     const renderEntry = (entry: LegendEntry): VNode => {
-      const isOpen = !collapsed.value.has(entry.code);
-      const uniform = entry.kind === 'symbol' || entry.mode === 'uniform';
+      const classified = entry.kind !== 'symbol' && entry.mode === 'classified';
+      const isOpen = classified && !collapsed.value.has(entry.code);
       const summary = (
         <>
           <span class={styles.arrow} aria-hidden="true">
-            {!uniform && <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>}
+            {classified && <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>}
           </span>
           <span class={styles.preview}>
             <LegendPreview entry={entry} />
           </span>
-          {/* 名称和过滤的漏斗共用一列：摘要的网格始终 5 项，年份和改过的点逐行对齐（2026-11-24 集成审查） */}
-          <span class={styles.nameCell}>
-            <span class={styles.name} title={entry.name}>{entry.name}</span>
-            {entry.filtered && (
-              <span class={styles.filtered} title="已过滤" data-legend-filtered>
-                <SvgIcon name="layer-filter" size={14} />
-              </span>
-            )}
+          <span class={styles.name} title={entry.name}>
+            {entry.name}
           </span>
           <span class={styles.year}>{entry.year}</span>
-          <span class={styles.editedSlot}>
-            {props.symbols.isCustomized(entry.code) && <span class={styles.edited} title="改过符号" data-edited />}
-          </span>
         </>
       );
       return (
@@ -236,43 +200,37 @@ export const ResourceLegend = defineComponent({
           data-legend={entry.code}
         >
           <div class={styles.row}>
-            {uniform ? (
-              <button
-                type="button"
-                class={[styles.summary, entry.kind === 'symbol' && styles.symbolSummary]}
-                aria-label={`编辑${entry.name}图例`}
-                onClick={() => openEditor({ code: entry.code })}
-              >
-                {summary}
-              </button>
-            ) : (
+            {classified ? (
               <button
                 type="button"
                 class={styles.summary}
-                aria-label={`${isOpen ? '收起' : '展开'}${entry.name}`}
                 aria-expanded={isOpen}
                 onClick={() => toggle(entry.code)}
               >
                 {summary}
               </button>
+            ) : (
+              <div class={styles.summary}>{summary}</div>
             )}
-            {renderActions(entry)}
+            <button
+              type="button"
+              class={styles.configure}
+              aria-label={`${entry.name}的样式设置`}
+              title="样式设置"
+              data-legend-settings-button
+              onClick={() => openSettings(entry.code)}
+            >
+              <SvgIcon name="symbol-settings" size={16} />
+            </button>
           </div>
-          {entry.filterNote !== null && (
-            <div class={styles.note}>
-              <FilterNote text={entry.filterNote} />
-            </div>
-          )}
-          {isOpen && !uniform && (
-            <div class={styles.content}>{renderClassified(entry)}</div>
-          )}
+          {isOpen && <div class={styles.content}>{renderClassified(entry)}</div>}
         </li>
       );
     };
 
     const renderBody = () => {
       if (editingEntry.value) {
-        return renderConfiguration(editingEntry.value);
+        return renderSettings(editingEntry.value);
       }
       if (entries.value.length === 0) {
         return <div class={styles.empty}>勾选资源后查看图例</div>;

@@ -39,11 +39,11 @@
   overflow-wrap: anywhere;
 }
 
-// 改过符号
-.edited {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
+// 按分类过滤掉的类别（ADR 0173）：照样列出，符号和文字淡显，地图上不画（用户 2026-11-24）
+.excluded {
+  color: var(--color-text-disabled);
+
+  [data-swatch] {
+    opacity: 0.35;
+  }
 }

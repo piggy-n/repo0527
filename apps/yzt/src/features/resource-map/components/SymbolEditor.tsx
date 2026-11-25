@@ -70,7 +70,7 @@ export const SymbolEditor = defineComponent({
     /** 由调用方区分当前图例与整个图层的恢复范围 */
     resetLabel: { type: String, default: '恢复默认' }
   },
-  setup(props) {
+  setup(props, { slots }) {
     const symbol = computed(() => props.symbols.symbolOf(props.target));
     const set = (patch: SymbolOverride) => props.symbols.setSymbol(props.target, patch);
 
@@ -474,6 +474,7 @@ export const SymbolEditor = defineComponent({
     return () =>
       symbol.value && (
         <div class={styles.editor} data-symbol-editor={props.target.item ?? props.target.code}>
+          {slots.lead?.()}
           {renderFields()}
           <div class={styles.footer}>
             <ElButton

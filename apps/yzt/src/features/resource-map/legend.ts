@@ -1,7 +1,7 @@
 import { Color } from '@maplibre/maplibre-gl-style-spec';
 import type { Resource, ResourceGeometry } from './catalog';
 import { type ClassItem, classItems, legacyItem, OTHER_ITEM } from './classification';
-import { conditionText, type FeatureFilter, filterConditions, isFiltering, NO_FILTER } from './feature-filter';
+import { type FeatureFilter, NO_FILTER } from './feature-filter';
 import { CLASS_FIELD } from './filter-fields';
 import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
 import { isDrawn, type ResourceLayersState } from './resource-layers';
@@ -74,27 +74,22 @@ export function summaryItems(
   return (registered.length > 0 ? registered : candidates).slice(0, SUMMARY_LIMITS[geometry]);
 }
 
-/** 按取值配色的一个取值；key 是分类样式里取值的键 */
+/**
+ * 按取值配色的一个取值；key 是分类样式里取值的键。excluded 是按分类过滤掉了（ADR 0173）：图例里照样列出、淡显，
+ * 地图上不画（用户 2026-11-24，取代"只列勾着的类别"和名称下面写条件）
+ */
 export interface LegendValue {
   readonly key: string;
   readonly label: string;
   readonly swatch: LegendSwatch;
-}
-
-/**
- * 图例条目的过滤（ADR 0173）：filtered 是有过滤条件；filterNote 是类别列表体现不了的条件，写在名称下面——别的字段的条件，
- * 统一样式时、一项都没勾时的分类条件；没有时为 null
- */
-export interface LegendFiltering {
-  readonly filtered: boolean;
-  readonly filterNote: string | null;
+  readonly excluded: boolean;
 }
 
 /**
  * 图例的一条：统一符号；按取值配色；地类（按编码或按名称配色，内容是完整的地类图例）。
- * 按属性配色的条目带样式方式，swatch 是统一样式的预览；按分类过滤时只有勾着的类别（ADR 0173）
+ * 按属性配色的条目带样式方式，swatch 是统一样式的预览；按分类过滤时列出全部类别、标出过滤掉的，摘要只用画的（ADR 0173）
  */
-export type LegendEntry = (
+export type LegendEntry =
   | {
       readonly kind: 'symbol';
       readonly code: string;
@@ -125,9 +120,9 @@ export type LegendEntry = (
       readonly match: 'code' | 'name';
       /** 各取值的预览，按取值的键 */
       readonly swatches: ReadonlyMap<string, LegendSwatch>;
-    }
-) &
-  LegendFiltering;
+      /** 按分类过滤掉的取值的键：照样列出、淡显 */
+      readonly excluded: ReadonlySet<string>;
+    };
 
 const dashOf = (dash: LineDash): readonly number[] | null => LINE_DASHES[dash].dasharray;
 
@@ -165,21 +160,17 @@ export function fillOpacityOf(entry: LegendEntry): number {
   if (entry.kind === 'symbol' || entry.mode === 'uniform') {
     return fillAlpha(entry.swatch);
   }
-  const swatches = entry.kind === 'values' ? entry.values.map(value => value.swatch) : [...entry.swatches.values()];
+  // 过滤掉的类别不画在地图上，不算（ADR 0173）
+  const swatches =
+    entry.kind === 'values'
+      ? entry.values.filter(value => !value.excluded).map(value => value.swatch)
+      : [...entry.swatches].filter(([key]) => !entry.excluded.has(key)).map(([, swatch]) => swatch);
   return Math.max(0, ...swatches.map(fillAlpha));
-}
-
-// 类别列表体现不了的条件连成一句：别的字段；分类字段在统一样式时、一项都没勾时也写
-function legendFiltering(code: string, filter: FeatureFilter, classesListed: boolean): LegendFiltering {
-  const notes = filterConditions(code, filter)
-    .filter(({ field }) => !(classesListed && field.id === CLASS_FIELD))
-    .map(conditionText);
-  return { filtered: isFiltering(filter), filterNote: notes.length > 0 ? notes.join('；') : null };
 }
 
 /**
  * 一个资源的图例条目，不管是否画在地图上（当前图层的行、浮层用）；年份只用来显示（ADR 0052 第 3 节），条目的身份、名称和符号仍按 code。
- * 按分类过滤时只留勾着的类别，摘要也只用它们（ADR 0173）
+ * 按分类过滤时列出全部类别、标出过滤掉的（图例里淡显），摘要只用画在地图上的（ADR 0173）
  */
 export function legendEntry(
   resource: Resource,
@@ -192,24 +183,28 @@ export function legendEntry(
   const rule = style.color;
   const swatch = swatchOf(uniformSymbol(resource, override, style));
   if (!rule) {
-    return { kind: 'symbol', code, name, year, swatch, ...legendFiltering(code, filter, false) };
+    return { kind: 'symbol', code, name, year, swatch };
   }
   const mode = symbolModeOf(style, override);
   const kept = filter[CLASS_FIELD];
-  const items = classItems(rule).filter(item => kept === undefined || kept.includes(item.key));
+  const items = classItems(rule);
+  const isKept = (item: ClassItem) => kept === undefined || kept.includes(item.key);
   const values = items.map(item => ({
     key: item.key,
     label: item.label,
-    swatch: swatchOf(classSymbol(resource, item, override, style))
+    swatch: swatchOf(classSymbol(resource, item, override, style)),
+    excluded: !isKept(item)
   }));
   const swatches = new Map(values.map(value => [value.key, value.swatch]));
-  const summary = summaryItems(items, style, resource.geometry).flatMap(item => swatches.get(item.key) ?? []);
-  const filtering = legendFiltering(code, filter, mode === 'classified' && items.length > 0);
+  const summary = summaryItems(items.filter(isKept), style, resource.geometry).flatMap(
+    item => swatches.get(item.key) ?? []
+  );
   if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {
     const match = rule.kind === 'landuse-code' ? 'code' : 'name';
-    return { kind: 'landuse', code, name, year, mode, swatch, summary, match, swatches, ...filtering };
+    const excluded = new Set(values.filter(value => value.excluded).map(value => value.key));
+    return { kind: 'landuse', code, name, year, mode, swatch, summary, match, swatches, excluded };
   }
-  return { kind: 'values', code, name, year, mode, swatch, summary, values, ...filtering };
+  return { kind: 'values', code, name, year, mode, swatch, summary, values };
 }
 
 /** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */

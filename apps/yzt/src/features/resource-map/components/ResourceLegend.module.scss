@@ -1,4 +1,5 @@
-// 图例以浏览为主，复杂条目默认展开、收起时显示按几何画的摘要，配置单独展开（ADR 0066、0159）
+// 图例以看为主（ADR 0175）：每一行是箭头、摘要、名称、年份，复合图例默认展开、收起时显示按几何画的摘要（ADR 0159），
+// 修改从行尾的样式设置进
 
 .legend {
   display: flex;
@@ -16,7 +17,11 @@
   margin-top: 4px;
 }
 
+// 展开的长图例（地类）往下滚时行头吸在顶上，名称和样式设置一直看得见；行的底色不透明，盖住滚过去的子图例
 .row {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -36,18 +41,13 @@
     opacity: 1;
     pointer-events: auto;
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-primary-border-hover);
-    outline-offset: -2px;
-  }
 }
 
+// 三种图例一样的四列：箭头（按类别配色才有）、摘要、名称、年份，年份逐行对齐
 .summary {
   display: grid;
   flex: 1;
-  // 普通图例也保留首列箭头占位，色块、名称、年份和修改标记逐行对齐
-  grid-template-columns: 16px 28px minmax(0, 1fr) 32px 6px;
+  grid-template-columns: 16px 28px minmax(0, 1fr) 32px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -70,21 +70,7 @@ button.summary {
   }
 }
 
-// 统一配色的行没有样式设置按钮，留出同等宽度，显示方式的按钮和按类别配色的行对齐；点这段同摘要一样进编辑
-.configureSlot {
-  flex: none;
-  align-self: stretch;
-  width: 24px;
-  cursor: pointer;
-}
-
-// 单一符号没有显示方式和样式设置，按钮里留出两个按钮和间距的宽度（4 + 24 + 4 + 24）：整行可点，年份和改过的点逐行对齐
-.symbolSummary {
-  box-sizing: border-box;
-  padding-right: 56px;
-}
-
-// 编辑状态只改变颜色，鼠标点击留下的焦点不维持按钮显示
+// 行尾的样式设置：三种图例都有，悬停或键盘焦点时显示，鼠标点击留下的焦点不维持显示
 .configure {
   display: inline-flex;
   flex: none;
@@ -101,8 +87,7 @@ button.summary {
   opacity: 0;
   pointer-events: none;
 
-  &:hover,
-  &[aria-expanded='true'] {
+  &:hover {
     color: var(--color-primary);
     background-color: var(--color-primary-bg);
   }
@@ -112,8 +97,11 @@ button.summary {
   }
 }
 
+// 触屏没有悬停：一直显示，点击区域和行一样高
 @media (hover: none) {
   .configure {
+    width: 32px;
+    height: 32px;
     opacity: 1;
     pointer-events: auto;
   }
@@ -137,16 +125,7 @@ button.summary {
   height: 20px;
 }
 
-// 名称和过滤的漏斗共用网格的第 3 列，摘要始终 5 项，年份和改过的点逐行对齐
-.nameCell {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
 .name {
-  flex: 1;
   min-width: 0;
   color: var(--color-text-strong);
   overflow-wrap: anywhere;
@@ -161,33 +140,6 @@ button.summary {
   color: var(--color-text-secondary);
 }
 
-// 过滤着（ADR 0173）：年份前面一个主色的漏斗
-.filtered {
-  display: inline-flex;
-  flex: none;
-  color: var(--color-primary);
-}
-
-// 类别体现不了的过滤条件，和展开的内容对齐
-.note {
-  padding-left: var(--space-xl);
-}
-
-.editedSlot {
-  display: flex;
-  align-items: center;
-  width: 6px;
-}
-
-// 改过符号
-.edited {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
-}
-
 // 搜索和子图例整体缩进，独立编辑视图仍占满内容宽度
 .content {
   padding: var(--space-xs) 0 var(--space-sm) var(--space-xl);
@@ -200,13 +152,17 @@ button.summary {
   min-width: 0;
 }
 
-// 返回入口与当前名称同行，名称沿用 MxTitle 的区块标题规范
+// 返回入口与当前名称同行，名称沿用 MxTitle 的区块标题规范；进设置时焦点在这一行，不画焦点框（它不能操作）
 .settingsHeading {
   display: flex;
   align-items: center;
   gap: var(--space-md);
   min-height: 28px;
   min-width: 0;
+
+  &:focus {
+    outline: none;
+  }
 }
 
 // 返回图例在标题行最右（用户 2026-11-24）
@@ -215,21 +171,17 @@ button.summary {
   margin-left: auto;
 }
 
-.modes {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-sm);
-  padding-block: var(--space-sm);
-  border-bottom: 1px solid var(--color-divider);
+// 显示方式一行：标签列和编辑器里的一样宽（56）
+.modeRow {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  min-height: 28px;
 }
 
-.label,
-.description {
-  margin: 0;
+.modeLabel {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
 }
 
 .resetLayer {

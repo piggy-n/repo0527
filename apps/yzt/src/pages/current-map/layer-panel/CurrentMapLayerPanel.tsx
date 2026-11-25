@@ -6,7 +6,6 @@ import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSel
 import { FeatureFilter } from '@/features/resource-map/components/FeatureFilter';
 import { LabelEditor } from '@/features/resource-map/components/LabelEditor';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
-import { LegendModeToggle } from '@/features/resource-map/components/LegendModeToggle';
 import { LegendPreview } from '@/features/resource-map/components/LegendPreview';
 import { ResourceLayerRow } from '@/features/resource-map/components/ResourceLayerRow';
 import type { ResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
@@ -148,14 +147,14 @@ export const CurrentMapLayerPanel = defineComponent({
     hints: { type: Object as PropType<ReadonlySet<LayerHint>>, default: () => new Set(LAYER_HINTS) },
     /** 在图层里选中、滚到、闪一下这一行（请求状态的明细里点了一行）；每次给一个新对象 */
     reveal: { type: Object as PropType<{ readonly key: string } | null>, default: null },
-    /** 右侧"图例"页正在编辑的资源：图例浮层开着同一个资源时关掉，后打开编辑的一方为准（ADR 0157） */
+    /** 右侧"图例"页正在样式设置里的资源：图例浮层在同一个资源的样式设置里时回到看图例，后打开设置的一方为准（ADR 0157） */
     legendYield: { type: String as PropType<string | null>, default: null }
   },
   emits: {
     retry: () => true,
     retryModels: () => true,
     'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean',
-    /** 图例浮层正在显示的资源，右侧图例在编辑同一个资源时回到浏览；关闭时为 null */
+    /** 图例浮层正在样式设置里的资源，右侧图例在设置同一个资源时回到浏览；不在设置里、关闭时为 null */
     legendCode: (code: string | null) => code === null || typeof code === 'string',
     /** 两段分到的高度变了（外壳的 layout）：页面上贴着面板放的浮层（数据加载的明细）读它重新放 */
     layout: (split: ListSplit | null) => split === null || typeof split === 'object'
@@ -291,12 +290,15 @@ export const CurrentMapLayerPanel = defineComponent({
       const code = selectedCode.value;
       if (code === null || (popover.value?.kind === 'filter' && filterFieldsOf(code).length === 0)) {
         popover.value = null;
+      } else if (popover.value?.kind === 'legend') {
+        popover.value = legendPopover(code);
       } else if (popover.value) {
         popover.value = { kind: popover.value.kind, configuring: false };
       }
     });
+    // 只有在样式设置里才算占着这个资源：只是看图例时不让右侧退出设置（2026-11-24 审查）
     watch(
-      () => (popover.value?.kind === 'legend' ? selectedCode.value : null),
+      () => (popover.value?.kind === 'legend' && popover.value.configuring ? selectedCode.value : null),
       code => emit('legendCode', code),
       { immediate: true }
     );
@@ -403,8 +405,8 @@ export const CurrentMapLayerPanel = defineComponent({
     watch(
       () => props.legendYield,
       code => {
-        if (code !== null && popover.value?.kind === 'legend' && selectedCode.value === code) {
-          popover.value = null;
+        if (code !== null && popover.value?.kind === 'legend' && popover.value.configuring && selectedCode.value === code) {
+          popover.value = { kind: 'legend', configuring: false };
         }
       }
     );
@@ -478,8 +480,21 @@ export const CurrentMapLayerPanel = defineComponent({
       };
     };
 
+    // 打开图例浮层：单一符号、统一配色没有子图例，一打开就是样式设置、按钮按下（用户 2026-11-24）；按类别配色先看子图例
+    const legendPopover = (code: string | null) => {
+      const resource = code === null ? undefined : state.value.catalog?.resources.get(code);
+      const display = code === null ? undefined : state.value.displays.get(code);
+      const entry =
+        resource && display ? legendEntry(resource, display.year, props.symbols.overrideOf(resource.code), display.filter) : null;
+      return { kind: 'legend', configuring: entry !== null && !hasLegendItems(entry) } as const;
+    };
+
     const togglePopover = (kind: PopoverKind) => {
-      popover.value = popover.value?.kind === kind ? null : { kind, configuring: false };
+      if (popover.value?.kind === kind) {
+        popover.value = null;
+      } else {
+        popover.value = kind === 'legend' ? legendPopover(selectedCode.value) : { kind, configuring: false };
+      }
     };
 
     const setVisible = (key: string, visible: boolean) => {
@@ -742,7 +757,8 @@ export const CurrentMapLayerPanel = defineComponent({
         setVisible(current.key, !visibleOf(current.key));
       } else if ((action === 'opacity' || action === 'legend') && id === null) {
         choose(current.key);
-        popover.value = { kind: action, configuring: false };
+        popover.value =
+          action === 'legend' ? legendPopover(resourceCodeOfKey(current.key)) : { kind: action, configuring: false };
       } else if (action === 'label-visible' || action === 'label') {
         const code = resourceCodeOfKey(current.key);
         const row = labelRow(current.key);
@@ -813,7 +829,7 @@ export const CurrentMapLayerPanel = defineComponent({
               onLegend={() => {
                 const open = popover.value?.kind === 'legend' && selected.value === key;
                 choose(key);
-                popover.value = open ? null : { kind: 'legend', configuring: false };
+                popover.value = open ? null : legendPopover(code);
               }}
               onFilter={() => {
                 const open = popover.value?.kind === 'filter' && selected.value === key;
@@ -957,7 +973,6 @@ export const CurrentMapLayerPanel = defineComponent({
       }
       const entry = legendEntry(resource, display.year, props.symbols.overrideOf(code), display.filter);
       const legend = current.kind === 'legend';
-      const configurable = legend && hasLegendItems(entry);
       return (
         <LayerPopover
           open
@@ -977,10 +992,8 @@ export const CurrentMapLayerPanel = defineComponent({
                 {resource.name}
               </span>,
               <span class={styles.popYear}>{display.year}</span>,
-              ...(legend && entry.kind !== 'symbol'
-                ? [<LegendModeToggle class={styles.popButton} symbols={props.symbols} entry={entry} />]
-                : []),
-              ...(configurable
+              // 样式设置：三种图例都有，显示方式只在设置里切换（用户 2026-11-24 去掉了快捷切换）
+              ...(legend
                 ? [
                     <button
                       type="button"

@@ -1,7 +1,6 @@
 import { Search } from '@element-plus/icons-vue';
 import { ElInput } from 'element-plus';
 import { computed, defineComponent, type PropType, type VNode } from 'vue';
-import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LanduseLegendItem, landuseItemLabel, landuseLegendItems, type LegendSwatch } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './LanduseLegend.module.scss';
@@ -16,16 +15,17 @@ export const INITIAL_LANDUSE_BROWSE: LanduseBrowse = Object.freeze({
 });
 
 /**
- * 地类图例平铺符号和名称，悬浮查看含义、点击交给上层打开单项编辑视图。
+ * 地类图例平铺符号和名称，悬浮查看编码和含义、点击交给上层打开这一类的样式设置（用户 2026-11-24）。
  * 搜索状态由上层保管，返回或切换标签时保留；预览仍由样式拥有者推导
  */
 export const LanduseLegend = defineComponent({
   name: 'LanduseLegend',
   props: {
-    symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     code: { type: String, required: true },
     /** 各地类的预览，按取值的键 */
     swatches: { type: Object as PropType<ReadonlyMap<string, LegendSwatch>>, required: true },
+    /** 按分类过滤掉的地类：照样列出、淡显（ADR 0173，用户 2026-11-24） */
+    excluded: { type: Object as PropType<ReadonlySet<string>>, default: () => new Set() },
     browse: { type: Object as PropType<LanduseBrowse>, required: true }
   },
   emits: {
@@ -39,19 +39,19 @@ export const LanduseLegend = defineComponent({
     // 整个条目可点击，编码和完整含义由原生提示展示，不额外占用名称宽度
     const renderItem = (item: LanduseLegendItem): VNode => {
       const swatch = props.swatches.get(item.key);
-      const target = { code: props.code, item: item.key };
+      const excluded = props.excluded.has(item.key);
       return (
         <li key={item.key} data-landuse={item.code ?? item.name}>
           <button
             type="button"
-            class={styles.item}
-            title={`${landuseItemLabel(item)}${item.adjustable ? '（可调整）' : ''}\n${item.meaning}`}
-            aria-label={`编辑${item.name}样式`}
+            class={[styles.item, excluded && styles.excluded]}
+            title={`${landuseItemLabel(item)}${item.adjustable ? '（可调整）' : ''}${excluded ? '（已过滤，地图上不显示）' : ''}\n${item.meaning}`}
+            aria-label={`编辑${item.name}样式${excluded ? '（已过滤）' : ''}`}
+            data-excluded={excluded || undefined}
             onClick={() => emit('edit', item.key)}
           >
             {swatch && <LegendSwatchIcon swatch={swatch} size="item" />}
             <span class={styles.name}>{item.name}</span>
-            {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
           </button>
         </li>
       );
