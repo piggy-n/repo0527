@@ -561,6 +561,19 @@ describe('面的图层（ADR 0045）', () => {
     expect(validate(layers)).toStrictEqual([]);
   });
 
+  it('无描边的取值的线型不拆层：归到画出来的取值的线型里，线宽为 0（2026-11-24 审查）', () => {
+    const dashed: ResourceSymbol = { ...FILL, outlineWidth: 'L', outlineDash: 'dashed' };
+    const layers = classifiedLayers(
+      CLASSES,
+      bySymbol({ 河流: { ...FILL, outlineWidth: 0, outlineDash: 'dotted' } }, dashed)
+    );
+
+    expect(layers.parts.map(part => part.suffix ?? 'main')).toStrictEqual(['main', 'outline']);
+    expect(dashLayersOf(layers)).toStrictEqual([['outline', [3, 2]]]);
+    expect(valueAt(partOf(layers, 'outline'), 'line-width', '河流')).toBe(0);
+    expect(validate(layers)).toStrictEqual([]);
+  });
+
   it('没有花纹、都是简单描边时只有主图层，不带图片（默认样式和原来一样是一个图层）', () => {
     const layers = classifiedLayers(CLASSES, bySymbol({ 河流: { ...FILL, outlineWidth: 0 } }, FILL));
 

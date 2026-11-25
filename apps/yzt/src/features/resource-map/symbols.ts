@@ -674,7 +674,11 @@ function fillLayers(
       'line-width': value(item => outlinePixels(fill(item))),
       'line-offset': value(item => outlinePixels(fill(item)) / 2)
     };
-    parts.push(...dashParts(item => fill(item).outlineDash, 'outline', {}, paint));
+    // 无描边（0 像素）的取值什么也不画，线型不算数：归到画出来的取值用的线型里，不为它多拆一层
+    const drawn = items.find(item => outlinePixels(fill(item)) > 0);
+    const fallback = drawn ? fill(drawn).outlineDash : 'solid';
+    const dashOf = (item: ClassItem) => (outlinePixels(fill(item)) > 0 ? fill(item).outlineDash : fallback);
+    parts.push(...dashParts(dashOf, 'outline', {}, paint));
   }
   return { parts, images };
 }

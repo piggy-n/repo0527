@@ -7,6 +7,7 @@ import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
 import { COLOR_PRESETS } from '../palette';
+import { required } from '@/shared/testing/required';
 import { SymbolEditor } from './SymbolEditor';
 
 function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {
@@ -103,6 +104,22 @@ function picker(wrapper: VueWrapper, label: string) {
 }
 
 const customInput = (wrapper: VueWrapper) => wrapper.find('input[aria-label^="自定义"]');
+
+// 面的两个下拉，按读屏名称找
+const selectNamed = (wrapper: VueWrapper, label: string) =>
+  required(
+    wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === label),
+    `下拉 ${label}`
+  );
+const outlineStyle = (wrapper: VueWrapper) => selectNamed(wrapper, '坑塘的描边方式');
+const fillStyleSelect = (wrapper: VueWrapper) => selectNamed(wrapper, '坑塘的填充方式');
+
+// 打开下拉，取某个选项所在的 li（Element 的选项项）
+async function optionOf(select: VueWrapper, selector: string) {
+  await select.find('.el-select__wrapper').trigger('click');
+  await nextTick();
+  return required(document.body.querySelector(selector)?.closest('li'), selector);
+}
 
 // 下拉框放在 body 下，不归组件管
 afterEach(() => {
@@ -311,7 +328,7 @@ describe('SymbolEditor', () => {
     expect(line.symbols.overrides.value.get('bgdc_cjdcqjx')).toStrictEqual({ uniform: { dash: 'dashDot' } });
   });
 
-  it('面（ADR 0045）：填充方式、颜色、描边宽度、描边线型；有花纹时才有纹理颜色，无填充时没有填充色', async () => {
+  it('面（ADR 0045）：填充方式、颜色、描边方式、描边宽度；有花纹时才有纹理颜色，无填充时没有填充色', async () => {
     const { wrapper, symbols } = mountEditor('szy_kt');
     const pickers = () => wrapper.findAllComponents(ElColorPicker).map(item => item.props('ariaLabel'));
     expect(pickers()).toStrictEqual(['坑塘的填充色', '坑塘的描边色']);
@@ -331,23 +348,70 @@ describe('SymbolEditor', () => {
     });
   });
 
-  it('面的描边宽度可以自定义 0～8 像素，0 是无描边；清空输入框不算 0', async () => {
+  it('面的描边宽度自定义 0.1～8 像素：0 不收，关掉描边在"描边方式"里选（用户 2026-11-24）；清空输入框不合法', async () => {
     const { wrapper, symbols } = mountEditor('szy_kt');
     await customize(wrapper);
-    const input = wrapper.get('input[aria-label="自定义描边宽度，0～8 像素"]');
+    const input = customInput(wrapper);
     const submit = async (text: string) => {
       await input.setValue(text);
       await input.trigger('keydown', { key: 'Enter' });
       return wrapper.find('[class*="invalid"]').exists();
     };
 
-    expect(await submit('0')).toBe(false);
-    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 0 });
+    expect(await submit('0.1')).toBe(false);
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 0.1 });
     // 每次不合法的输入之前先输一次合法的，提示要先消失
+    expect(await submit('0')).toBe(true);
+    expect(await submit('2')).toBe(false);
     expect(await submit('')).toBe(true);
-    expect(await submit('0')).toBe(false);
+    expect(await submit('2')).toBe(false);
     expect(await submit('8.5')).toBe(true);
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 2 });
+    expect(input.attributes('aria-label')).toBe('自定义描边宽度，0.1～8 像素');
+  });
+
+  it('描边方式的第一项是"无描边"（用户 2026-11-24）：写成宽度 0，描边色、描边宽度收起；同一次编辑里选回线型时宽度回到关掉前的', async () => {
+    const { wrapper, symbols } = mountEditor('szy_kt');
+    const pickers = () => wrapper.findAllComponents(ElColorPicker).map(item => item.props('ariaLabel'));
+    await choose(wrapper, 'XL');
+
+    outlineStyle(wrapper).vm.$emit('update:modelValue', 'none');
+    await nextTick();
     expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 0 });
+    expect(outlineStyle(wrapper).props('modelValue')).toBe('none');
+    expect(pickers()).toStrictEqual(['坑塘的填充色']);
+    expect(wrapper.find('[data-size-levels]').exists()).toBe(false);
+
+    outlineStyle(wrapper).vm.$emit('update:modelValue', 'dashed');
+    await nextTick();
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 'XL', outlineDash: 'dashed' });
+    expect(pickers()).toStrictEqual(['坑塘的填充色', '坑塘的描边色']);
+  });
+
+  it('存下的就是无描边（宽度 0）时显示"无描边"；选回线型时没有关掉前的宽度，回到 M', async () => {
+    const { wrapper, symbols } = mountEditor('szy_kt');
+    symbols.setSymbol({ code: 'szy_kt' }, { outlineWidth: 0 });
+    await nextTick();
+    expect(outlineStyle(wrapper).props('modelValue')).toBe('none');
+
+    outlineStyle(wrapper).vm.$emit('update:modelValue', 'solid');
+    await nextTick();
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 'M', outlineDash: 'solid' });
+  });
+
+  it('无填充和无描边不能同时选（用户 2026-11-24）：一样已经是"无"时，另一样的"无"不能选，写明需要什么', async () => {
+    const { wrapper, symbols } = mountEditor('szy_kt');
+    symbols.setSymbol({ code: 'szy_kt' }, { fillStyle: 'none' });
+    await nextTick();
+    const none = await optionOf(outlineStyle(wrapper), '[data-dash="none"]');
+    expect(none.classList.contains('is-disabled')).toBe(true);
+    expect(none.textContent).toContain('需要填充');
+
+    symbols.setSymbol({ code: 'szy_kt' }, { fillStyle: 'solid', outlineWidth: 0 });
+    await nextTick();
+    const fillNone = await optionOf(fillStyleSelect(wrapper), '[data-fill-style="none"]');
+    expect(fillNone.classList.contains('is-disabled')).toBe(true);
+    expect(fillNone.textContent).toContain('需要描边');
   });
 
   it('填充方式的选项带预览：按当前的颜色画出每种填充方式', async () => {

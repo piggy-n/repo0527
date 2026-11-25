@@ -14,12 +14,14 @@ import {
   type LineDash,
   LINE_DASH_NAMES,
   LINE_DASHES,
+  outlinePixels,
   parseSize,
   POINT_STROKE_WIDTHS,
   SIZE_LEVELS,
   SIZE_REFERENCES,
   sizePixels,
   type ResourceSymbol,
+  type SizeKind,
   type SymbolOverride,
   type SymbolSize
 } from '../symbols';
@@ -39,11 +41,13 @@ function sizePatch(key: SizeKey, size: SymbolSize): SymbolOverride {
   return key === 'width' ? { width: size } : { outlineWidth: size };
 }
 
-type DashKey = 'dash' | 'outlineDash';
+type FillValue = Extract<ResourceSymbol, { geometry: 'fill' }>;
 
-function dashPatch(key: DashKey, dash: LineDash): SymbolOverride {
-  return key === 'dash' ? { dash } : { outlineDash: dash };
-}
+// 描边方式里"无描边"的值：只在界面上，存的是宽度 0
+const NO_OUTLINE = 'none';
+
+// 自定义输入框接受的最小值：面的描边从一个步长起，0 是"无描边"，在描边方式里选
+const customMin = (kind: SizeKind) => (kind === 'outline' ? SIZE_REFERENCES.outline.step : SIZE_REFERENCES[kind].min);
 
 function colorPatch(field: ColorField, color: string): SymbolOverride {
   const patch: Partial<Record<ColorField, string>> = { [field]: color };
@@ -138,7 +142,9 @@ export const SymbolEditor = defineComponent({
       if (!field) {
         return;
       }
-      const size = parseSize(field.kind, draft.value);
+      const parsed = parseSize(field.kind, draft.value);
+      // 面的描边自定义不收 0：关掉描边只走"描边方式"的"无描边"一条路（存储里 0 仍合法）
+      const size = parsed !== null && parsed >= customMin(field.kind) ? parsed : null;
       invalid.value = size === null;
       if (size === null) {
         return;
@@ -161,7 +167,8 @@ export const SymbolEditor = defineComponent({
       if (!field) {
         return [];
       }
-      const { min, max } = SIZE_REFERENCES[field.kind];
+      const { max } = SIZE_REFERENCES[field.kind];
+      const min = customMin(field.kind);
       // "自定义"紧跟档位，是单选组外面的文字按钮（用户 2026-11-15）：放不下时整个换到下一行。
       // 自定义时档位一项都不选中，没有选中项的单选组由浏览器让第一项能用 Tab 到达
       const rows = [
@@ -262,17 +269,19 @@ export const SymbolEditor = defineComponent({
       return swatch && <LegendSwatchIcon swatch={swatch} />;
     };
 
-    const renderDash = (label: string, key: DashKey, value: LineDash) => (
-      <div key={key} class={styles.row}>
-        <span class={styles.label}>{label}</span>
+    // 线的线型（面的描边见 renderOutlineStyle）
+    const renderDash = (value: LineDash) => (
+      <div key="dash" class={styles.row}>
+        <span class={styles.label}>线型</span>
         <ElSelect
           class={styles.select}
           size="small"
           modelValue={value}
+          ariaLabel={`${props.name}的线型`}
           onUpdate:modelValue={(name: unknown) => {
             const dash = LINE_DASH_NAMES.find(item => item === name);
             if (dash) {
-              set(dashPatch(key, dash));
+              set({ dash });
             }
           }}>
           {{
@@ -322,14 +331,16 @@ export const SymbolEditor = defineComponent({
       </div>
     );
 
-    // 填充方式：选项带预览，按当前的颜色画出这种填充方式的样子
-    const renderFillStyle = (value: Extract<ResourceSymbol, { geometry: 'fill' }>) => (
+    // 填充方式：选项带预览，按当前的颜色画出这种填充方式的样子。无描边时不能再选无填充：两样都没有，地图上就看不见
+    // 这一类了（用户 2026-11-24）
+    const renderFillStyle = (value: FillValue, noOutline: boolean) => (
       <div key="fillStyle" class={styles.row}>
         <span class={styles.label}>填充方式</span>
         <ElSelect
           class={styles.select}
           size="small"
           modelValue={value.fillStyle}
+          ariaLabel={`${props.name}的填充方式`}
           onUpdate:modelValue={(name: unknown) => {
             const fillStyle = FILL_STYLE_NAMES.find(item => item === name);
             if (fillStyle) {
@@ -339,18 +350,76 @@ export const SymbolEditor = defineComponent({
           {{
             prefix: () => <LegendSwatchIcon swatch={swatchOf(value)} />,
             default: () =>
-              FILL_STYLE_NAMES.map(fillStyle => (
-                <ElOption key={fillStyle} value={fillStyle} label={FILL_STYLES[fillStyle]}>
-                  <span class={styles.option} data-fill-style={fillStyle}>
-                    <LegendSwatchIcon swatch={swatchOf({ ...value, fillStyle })} />
-                    {FILL_STYLES[fillStyle]}
-                  </span>
-                </ElOption>
-              ))
+              FILL_STYLE_NAMES.map(fillStyle => {
+                const blocked = fillStyle === 'none' && noOutline && value.fillStyle !== 'none';
+                return (
+                  <ElOption key={fillStyle} value={fillStyle} label={FILL_STYLES[fillStyle]} disabled={blocked}>
+                    <span class={styles.option} data-fill-style={fillStyle}>
+                      <LegendSwatchIcon swatch={swatchOf({ ...value, fillStyle })} />
+                      {FILL_STYLES[fillStyle]}
+                      {blocked && <span class={styles.blocked}>需要描边</span>}
+                    </span>
+                  </ElOption>
+                );
+              })
           }}
         </ElSelect>
       </div>
     );
+
+    // 关掉描边前的宽度：同一次编辑里再选回线型时恢复；没有就回到 M（发布的默认可能本来就是 0）。只是界面状态，不保存
+    const widthsBeforeNone = new Map<string, SymbolSize>();
+    const targetKey = () => `${props.target.code}|${props.target.item ?? ''}`;
+
+    // 描边方式（用户 2026-11-24）：同填充方式的"无填充"，第一项是"无描边"，写成宽度 0（ADR 0045，存储的格式不变）；
+    // 其余是线型。无填充时不能再选无描边
+    const renderOutlineStyle = (value: FillValue, noOutline: boolean) => {
+      const current = noOutline ? NO_OUTLINE : value.outlineDash;
+      const choose = (name: unknown) => {
+        if (name === NO_OUTLINE) {
+          widthsBeforeNone.set(targetKey(), value.outlineWidth);
+          set({ outlineWidth: 0 });
+          return;
+        }
+        const dash = LINE_DASH_NAMES.find(item => item === name);
+        if (dash) {
+          set(noOutline ? { outlineDash: dash, outlineWidth: widthsBeforeNone.get(targetKey()) ?? 'M' } : { outlineDash: dash });
+        }
+      };
+      const blocked = value.fillStyle === 'none' && !noOutline;
+      return (
+        <div key="outlineStyle" class={styles.row}>
+          <span class={styles.label}>描边方式</span>
+          <ElSelect
+            class={styles.select}
+            size="small"
+            modelValue={current}
+            ariaLabel={`${props.name}的描边方式`}
+            onUpdate:modelValue={choose}>
+            {{
+              prefix: () => (noOutline ? null : renderDashSwatch(value.outlineDash)),
+              default: () => [
+                <ElOption key={NO_OUTLINE} value={NO_OUTLINE} label="无描边" disabled={blocked}>
+                  <span class={styles.option} data-dash={NO_OUTLINE}>
+                    <span class={styles.optionBlank} />
+                    无描边
+                    {blocked && <span class={styles.blocked}>需要填充</span>}
+                  </span>
+                </ElOption>,
+                ...LINE_DASH_NAMES.map(dash => (
+                  <ElOption key={dash} value={dash} label={LINE_DASHES[dash].label}>
+                    <span class={styles.option} data-dash={dash}>
+                      {renderDashSwatch(dash)}
+                      {LINE_DASHES[dash].label}
+                    </span>
+                  </ElOption>
+                ))
+              ]
+            }}
+          </ElSelect>
+        </div>
+      );
+    };
 
     const renderFields = (): VNode[] => {
       const value = symbol.value;
@@ -384,18 +453,19 @@ export const SymbolEditor = defineComponent({
         return [
           renderColor('颜色', 'color', value.color),
           ...renderSize(),
-          renderDash('线型', 'dash', value.dash)
+          renderDash(value.dash)
         ];
       }
       if (value?.geometry === 'fill') {
-        // 无填充时填充色用不上（保留着，换回来时还是原来的颜色）；有花纹时才有纹理颜色
+        // 无填充时填充色用不上（保留着，换回来时还是原来的颜色）；有花纹时才有纹理颜色；
+        // 无描边时描边色、描边宽度用不上（描边色保留着）
+        const noOutline = outlinePixels(value) === 0;
         return [
-          renderFillStyle(value),
+          renderFillStyle(value, noOutline),
           ...(value.fillStyle === 'none' ? [] : [renderColor('填充色', 'fillColor', value.fillColor)]),
           ...(isFillPattern(value.fillStyle) ? [renderColor('纹理颜色', 'patternColor', value.patternColor)] : []),
-          renderColor('描边色', 'outlineColor', value.outlineColor),
-          ...renderSize(),
-          renderDash('描边线型', 'outlineDash', value.outlineDash)
+          renderOutlineStyle(value, noOutline),
+          ...(noOutline ? [] : [renderColor('描边色', 'outlineColor', value.outlineColor), ...renderSize()])
         ];
       }
       return [];

@@ -85,6 +85,19 @@
   gap: var(--space-sm);
 }
 
+// "无描边"没有示意：留出示意的宽度，文字和别的选项对齐
+.optionBlank {
+  flex: none;
+  width: 22px;
+}
+
+// 不能选的原因（无填充、无描边不能同时选），跟在选项文字后面
+.blocked {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
 .footer {
   display: flex;
   justify-content: flex-end;
