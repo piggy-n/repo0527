@@ -1,5 +1,5 @@
 // 资源目录的树（ADR 0157）：行高 32，每层缩进 18，下一层左边有引导线。单击项是添加或移除（用户 2026-11-22），
-// 行尾的复选框是状态（用户 2026-11-24），悬停时底色和光标预告这一下会做什么
+// 行尾的复选框是状态，也说明这一下是添加还是移除；悬停是淡蓝底、手形光标（用户 2026-11-24）
 
 .root {
   position: relative;
@@ -65,7 +65,7 @@
   }
 }
 
-// 光标统一是手形（用户 2026-11-24）：项单击是添加或移除（淡蓝、淡红底说明是哪一个），按住 Ctrl、⌘、Shift 时是选中；
+// 光标统一是手形（用户 2026-11-24）：项单击是添加或移除（看行尾的复选框），按住 Ctrl、⌘、Shift 时是选中；
 // 分类单击是展开、收起。只有搜索时不能收起的分类是普通箭头
 .leaf,
 .branch {
@@ -76,23 +76,15 @@
   cursor: default;
 }
 
-// 状态色：没添加的淡蓝，已添加的淡红。键盘焦点也显示；悬停的只给鼠标（触屏点过的行不留着颜色）。点完随即预告
-// 相反的操作，不用先离开（用户 2026-11-24）；准备多选时不预告，选中的行保持选中的底色
+// 悬停、键盘焦点的底色：添加、移除都是淡蓝（用户 2026-11-24 去掉了已添加的淡红），加入了没有看行尾的复选框。
+// 悬停的只给鼠标（触屏点过的行不留着颜色）；准备多选时不显示，选中的行保持选中的底色
 .root:not(.modifying) .leaf:not(.selected):focus-visible {
   background-color: var(--color-primary-bg);
-
-  &.added {
-    background-color: var(--color-danger-bg-solid);
-  }
 }
 
 @media (hover: hover) {
   .root:not(.modifying, .touch) .leaf:not(.selected):hover {
     background-color: var(--color-primary-bg);
-
-    &.added {
-      background-color: var(--color-danger-bg-solid);
-    }
   }
 }
 
@@ -303,16 +295,12 @@
   color: var(--color-primary);
   cursor: pointer;
 
+  // 移除平时是次要色，悬停和添加一样是淡蓝底（用户 2026-11-24 去掉了淡红）
   &:hover {
     background-color: var(--color-primary-alpha-12);
   }
 
   &.remove {
     color: var(--color-text-secondary);
-
-    &:hover {
-      background-color: var(--color-danger-bg-solid);
-      color: var(--color-danger);
-    }
   }
 }

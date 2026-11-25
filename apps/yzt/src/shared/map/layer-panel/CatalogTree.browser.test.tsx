@@ -46,6 +46,7 @@ function mountTree() {
 }
 
 const cursorOf = (element: Element) => getComputedStyle(element).cursor;
+const background = (element: Element) => getComputedStyle(element).backgroundColor;
 
 describe('CatalogTree（浏览器）', () => {
   it('每一层下面的引导线对着这一层分类箭头的中线：第二层的线不和第一层的叠在一起', () => {
@@ -139,6 +140,39 @@ describe('CatalogTree（浏览器）', () => {
       searching.value = true;
       await nextTick();
       expect(cursorOf(row('land'))).toBe('default');
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('悬停的底色不分添加、移除，都是淡蓝（用户 2026-11-24 去掉了淡红）；整类移除按钮同整类添加', async () => {
+    const host = document.body.appendChild(document.createElement('div'));
+    host.style.width = '320px';
+    // 测试不加载主题：令牌换成好认的颜色
+    host.style.setProperty('--color-primary-bg', 'rgb(1, 2, 3)');
+    host.style.setProperty('--color-primary-alpha-12', 'rgb(4, 5, 6)');
+    host.style.setProperty('--color-danger-bg-solid', 'rgb(200, 0, 0)');
+    const nodes: CatalogNode[] = [
+      { kind: 'branch', key: 'land', label: '国土变更', children: [leaf('a'), { ...leaf('b'), added: true }] },
+      { kind: 'branch', key: 'water', label: '水资源', children: [{ ...leaf('c'), added: true }] }
+    ];
+    mount(
+      defineComponent(() => () => (
+        <CatalogTree nodes={nodes} expanded={new Set(['land'])} selection={EMPTY_CATALOG_SELECTION} label="资源" />
+      )),
+      { attachTo: host }
+    );
+    try {
+      const row = (key: string) => required(host.querySelector<HTMLElement>(`[data-catalog-node="${key}"]`), key);
+      await userEvent.hover(row('a'));
+      expect(background(row('a'))).toBe('rgb(1, 2, 3)');
+      await userEvent.hover(row('b'));
+      expect(background(row('b'))).toBe('rgb(1, 2, 3)');
+
+      await userEvent.hover(row('water'));
+      const remove = required(row('water').querySelector('[data-node-action="remove"]'), '整类移除');
+      await userEvent.hover(remove);
+      expect(background(remove)).toBe('rgb(4, 5, 6)');
     } finally {
       host.remove();
     }

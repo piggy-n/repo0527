@@ -62,7 +62,7 @@ function mountTree({ accept = false } = {}) {
   const row = (key: string) => wrapper.get(`[data-catalog-node="${key}"]`);
   const checkboxOf = (key: string) => row(key).get('.el-checkbox');
   const checked = (key: string) => (checkboxOf(key).get('input').element as HTMLInputElement).checked;
-  // 项的下一次单击：勾着的是移除、空框是添加，底色照这个预告；点完不停留，随即换成相反的（用户 2026-11-24）
+  // 项的下一次单击：勾着的是移除、空框是添加；点完不停留，随即换成相反的（用户 2026-11-24）
   const endOf = (key: string) => (checked(key) ? 'remove' : 'add');
   const flashing = (key: string) => row(key).classes().some(name => name.includes('acted'));
   const announcement = () => wrapper.get('[data-catalog-announcement]').text();
