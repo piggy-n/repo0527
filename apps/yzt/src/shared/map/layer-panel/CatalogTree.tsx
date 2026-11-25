@@ -1,6 +1,6 @@
 import { ArrowRight } from '@element-plus/icons-vue';
 import { useKeyModifier } from '@vueuse/core';
-import { ElIcon, ElTooltip } from 'element-plus';
+import { ElCheckbox, ElIcon, ElTooltip } from 'element-plus';
 import {
   computed,
   defineComponent,
@@ -51,26 +51,17 @@ const MODIFIER_EVENTS: ['mousedown', 'mouseup', 'mousemove', 'keydown', 'keyup']
   'keyup'
 ];
 
-// 项的行尾（用户 2026-11-15：勾和项数在同一条竖线上）：平时是已添加的绿勾，悬停、键盘焦点时换成这一下会做的
-// （加号或叉）；只是图形，单击的是整行。点完停留时只显示结果
-const renderLeafEnd = (leaf: CatalogLeaf, isHeld: boolean) => (
+// 项的行尾（用户 2026-11-24 选的 B，取代绿勾和悬停时的加号、叉）：复选框表示加入了没有，只是图形，单击的是整行；
+// 没加入的框调淡，悬停、键盘焦点时边框加强，底色和光标照旧预告这一下是添加还是移除。和分类的项数在同一条竖线上
+const renderLeafEnd = (leaf: CatalogLeaf) => (
   <span class={styles.end} aria-hidden="true">
-    {leaf.added && (
-      <span class={styles.mark} data-added-mark>
-        <SvgIcon name="layer-added" size={14} />
-      </span>
-    )}
-    {!isHeld && (
-      <span class={[styles.hint, leaf.added && styles.remove]} data-node-hint={leaf.added ? 'remove' : 'add'}>
-        <SvgIcon name={leaf.added ? 'layer-remove' : 'layer-add'} size={16} />
-      </span>
-    )}
+    <ElCheckbox class={['checkbox-quiet', styles.check]} modelValue={leaf.added} tabindex={-1} />
   </span>
 );
 
 /**
- * 资源目录的树（ADR 0157，单击的含义用户 2026-11-22 改过）：单击项就是添加或移除，悬停时底色、行尾、光标一起
- * 预告这一下会做什么；点完停在结果上、闪一下、读屏播报，鼠标或焦点离开这一行才换成相反的操作。分类不能选中，
+ * 资源目录的树（ADR 0157，单击的含义用户 2026-11-22 改过）：单击项就是添加或移除，行尾的复选框表示加入了没有，
+ * 悬停时底色、光标一起预告这一下会做什么；点完停在结果上、闪一下、读屏播报，鼠标或焦点离开这一行才再预告。分类不能选中，
  * 单击是展开、收起，行尾悬停时是整类的添加或移除。Ctrl（Mac 上 ⌘）单击加选、Shift 单击连选，选中只用于批量
  * （右键菜单、Insert、Delete，页面在多选时显示标题的批量按钮）。定位是回车和右键菜单，不再用双击。
  * 节点由各 feature 推导、页面拼好交进来，选中和展开由页面持有，添加、移除、定位都只报告给页面
@@ -456,9 +447,9 @@ export const CatalogTree = defineComponent({
             {node.label}
           </span>
           {node.kind === 'leaf' && node.note && <span class={styles.note}>{node.note}</span>}
-          {/* 行尾的勾只是图形，"已添加"写成看不见的文字，悬停、焦点时勾换成加号或叉也读得到 */}
+          {/* 行尾的复选框只是图形，"已添加"写成看不见的文字 */}
           {node.kind === 'leaf' && node.added && <span class={styles.hiddenText}>已添加</span>}
-          {node.kind === 'leaf' ? renderLeafEnd(node, isHeld) : renderBranchEnd(node, isHeld)}
+          {node.kind === 'leaf' ? renderLeafEnd(node) : renderBranchEnd(node, isHeld)}
         </div>
       );
       return (

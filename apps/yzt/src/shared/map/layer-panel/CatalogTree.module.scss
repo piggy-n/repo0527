@@ -1,5 +1,5 @@
 // 资源目录的树（ADR 0157）：行高 32，每层缩进 18，下一层左边有引导线。单击项是添加或移除（用户 2026-11-22），
-// 悬停时底色、行尾、光标一起预告这一下会做什么；颜色只是加强，状态看勾、动作看加号和叉
+// 行尾的复选框是状态（用户 2026-11-24），悬停时底色和光标预告这一下会做什么
 
 .root {
   position: relative;
@@ -65,7 +65,7 @@
   }
 }
 
-// 光标：没添加的是带加号的箭头，已添加的是手形（没有表示"移除"的系统光标，由淡红底和叉说明）；分类单击是展开、收起。
+// 光标：没添加的是带加号的箭头，已添加的是手形（没有表示"移除"的系统光标，由淡红底说明）；分类单击是展开、收起。
 // 普通箭头只给单击无效或不是添加、移除的地方：项点完停留时、按住 Ctrl、⌘、Shift 准备多选时，分类点完停留时的行尾，
 // 搜索时不能收起的分类
 .leaf {
@@ -116,32 +116,39 @@
   background-color: transparent;
 }
 
-// 行尾一列：悬停、键盘焦点时项的勾换成加号或叉，分类的项数换成整类按钮；点完停留的行（held）显示结果，
-// 离开以后才换；准备多选时不换
-.root:not(.modifying) .row:not(.held) {
+// 项的复选框（用户 2026-11-24 选的 B）：没加入的框调淡（element-theme 的 checkbox-quiet），悬停、键盘焦点时
+// 边框加强成主色，同 Element 复选框的悬停；点完停留、准备多选时不加强，触屏点过的行不留着
+.root:not(.modifying) .leaf:not(.held):focus-visible {
+  --checkbox-quiet-border: var(--color-primary);
+}
+
+@media (hover: hover) {
+  .root:not(.modifying, .touch) .leaf:not(.held):hover {
+    --checkbox-quiet-border: var(--color-primary);
+  }
+}
+
+// 分类的行尾：悬停、键盘焦点时项数换成整类按钮；点完停留的行（held）显示项数，离开以后才换；准备多选时不换
+.root:not(.modifying) .branch:not(.held) {
   &:hover,
   &:focus-visible {
-    .hint,
     .action {
       display: inline-flex;
     }
 
-    .mark,
     .badge {
       display: none;
     }
   }
 }
 
-// 触屏没有悬停（用户 2026-11-22）：行尾常显操作，加号是还没添加、叉是已添加；分类显示整类按钮、不显示项数
+// 触屏没有悬停（用户 2026-11-22）：分类常显整类按钮、不显示项数；项的行尾本来就是复选框
 @media (hover: none) {
-  .row:not(.held) {
-    .hint,
+  .branch:not(.held) {
     .action {
       display: inline-flex;
     }
 
-    .mark,
     .badge {
       display: none;
     }
@@ -185,7 +192,7 @@
 }
 
 // 选中加强（用户 2026-11-14）：浅蓝底、左侧蓝条、名称加粗变蓝；2026-11-22 起只在 Ctrl、⌘、Shift 选中的行上出现
-// （选中两项以上标题才有批量按钮），悬停时保持选中的底色，只靠行尾和光标预告
+// （选中两项以上标题才有批量按钮），悬停时保持选中的底色，只靠光标预告
 .selected {
   background-color: var(--color-primary-bg);
 
@@ -278,7 +285,7 @@
   text-align: center;
 }
 
-// 行尾一列，固定 30 宽、内容居中：分类的项数、项的勾、悬停时的加号和叉在同一条竖线上，悬停时替换，名称不跳动
+// 行尾一列，固定 30 宽、内容居中：分类的项数、整类按钮和项的复选框在同一条竖线上，悬停时替换，名称不跳动
 .end {
   display: inline-flex;
   flex: none;
@@ -288,23 +295,13 @@
   height: 24px;
 }
 
-.mark {
-  display: inline-flex;
-  color: var(--color-success);
-}
-
-// 项的预告：只是图形，单击的是整行
-.hint {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  color: var(--color-primary);
-
-  &.remove {
-    color: var(--color-danger);
-  }
+// 项的复选框只是图形，不接指针：点在框上就是点在行上。接了的话点到它的 label，焦点会进 input（行收不到按键），
+// 浏览器还会再点一次 input，把刚由页面勾上的框翻回去
+.check {
+  flex: none;
+  height: auto;
+  margin-right: 0;
+  pointer-events: none;
 }
 
 // 分类的整类按钮：24 × 24，不小于最小的点击目标

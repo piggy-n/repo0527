@@ -304,6 +304,14 @@ $tree-node: '.el-tree > .el-tree-node';
   --el-badge-font-size: var(--font-size-xxs);
 }
 
+// 没勾时调淡的复选框（资源目录的行尾，用户 2026-11-24）：没勾的透明底、边框用 --color-border，勾着的照常；
+// 外层悬停、聚焦时把 --checkbox-quiet-border 设成主色来加强（框本身不接指针时自己的 :hover 不生效）；用法 <ElCheckbox class="checkbox-quiet">
+.el-checkbox.checkbox-quiet {
+  --el-checkbox-bg-color: transparent;
+  --el-checkbox-input-border: var(--el-border-width) var(--el-border-style)
+    var(--checkbox-quiet-border, var(--color-border));
+}
+
 // 不带下拉箭头的选择框，点击照常弹出选项（地图页"已选择图层"的年份）；用法 <ElSelect class="select-no-arrow">
 .el-select.select-no-arrow .el-select__suffix {
   display: none;

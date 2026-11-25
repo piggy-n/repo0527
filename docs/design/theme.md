@@ -236,6 +236,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `button-inline` | `<ElButton class="button-inline" link size="small">`；开关式的加 `aria-pressed` | 使用项目字体，与同一行状态文字按基线对齐；`aria-pressed="true"` 时半粗；其他外观由 `type` 和 `size` 决定 | 文件管理下载状态行，由文件管理分支维护；图例编辑里档位后面的"自定义"（按下表示在自定义，用户 2026-11-15） |
 | `tag-mini` | `<ElTag class="tag-mini">` | 18px 高、左右 4、12px 字；颜色沿用 `type` | 消息卡片标题后的类型（2026-10-28 用户要求缩小，ADR 0102） |
 | `badge-mini` | `<ElBadge class="badge-mini">` | 16px 高、左右 4、10px 字（改的是 Element 的 `--el-badge-*` 变量） | 顶栏消息按钮的未读数，少挡住铃铛（2026-10-28 用户要求，ADR 0102） |
+| `checkbox-quiet` | `<ElCheckbox class="checkbox-quiet">`；外层悬停、聚焦时设 `--checkbox-quiet-border: var(--color-primary)` | 没勾时透明底、边框 `--color-border`（比默认的 `primary-border` 淡），外层设了 `--checkbox-quiet-border` 时用它；勾着的照常（主色底、白勾） | 资源图层面板上段"资源"的行尾，只显示加入了没有，不接指针、单击由行处理（用户 2026-11-24 选的"没加入的调淡"） |
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页图层列表行尾的年份、白膜的效果（2026-10-16 用户要求） |
 | `select-compact` | 和 `select-no-arrow` 一起用：`<ElSelect class="select-no-arrow select-compact" size="small">` | 左右内边距 4，选中的文字居中，适合 56 宽的小框 | 地图页图层列表行尾的年份、白膜的效果，和只有一年时的文字框、"漫游"按钮同宽同高（ADR 0157，2026-11-14 用户要求三个统一） |
 | `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽；左右内边距 6，只决定最长一项的最小宽度 | 地图页坐标定位的写法切换、数据查询的查询方式（ADR 0112） |
