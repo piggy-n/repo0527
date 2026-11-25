@@ -3,14 +3,7 @@ import { ElButton, ElCheckbox, ElInput } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
-import {
-  type FeatureFilter as Filter,
-  filterText,
-  isFiltering,
-  keptKeys,
-  NO_FILTER,
-  withFieldKept
-} from '../feature-filter';
+import { type FeatureFilter as Filter, isFiltering, keptKeys, NO_FILTER, withFieldKept } from '../feature-filter';
 import { CLASS_FIELD, type FilterField, filterFieldsOf, type FilterGroup, type FilterValue } from '../filter-fields';
 import { legendEntry, type LegendSwatch } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
@@ -35,8 +28,8 @@ const matches = (value: FilterValue, keyword: string) =>
 
 /**
  * 一个资源的要素过滤（ADR 0173），放在图层的过滤浮层里：选字段（只有一个时只写名称），取值是复选框，勾着的显示、默认全勾，
- * "全选"三态，悬停一项"仅此项"；地类按一级类分组，取值多时可以搜索；勾了立即交给拥有者，底部写条件和"清空过滤"。
- * 分类字段的取值前面是图例的符号（统一样式时不画）
+ * "全选"三态，悬停一项"仅此项"；地类按一级类分组，取值多时可以搜索；勾了立即交给拥有者，底部只有"清空过滤"
+ * （不写条件和图例怎么跟，用户 2026-11-24）。分类字段的取值前面是图例的符号（统一样式时不画）
  */
 export const FeatureFilter = defineComponent({
   name: 'FeatureFilter',
@@ -215,34 +208,20 @@ export const FeatureFilter = defineComponent({
       );
     };
 
-    const renderFoot = () => {
-      const active = isFiltering(filter.value);
-      const empty = Object.values(filter.value).some(kept => kept.length === 0);
-      return (
-        <div class={styles.foot} data-filter-summary>
-          <span class={styles.summary}>
-            {empty && <span class={styles.warning}>有字段一项都没选，地图上不显示这一层。</span>}
-            {active ? (
-              <>
-                已过滤：<span class={styles.conditions}>{filterText(props.code, filter.value)}</span>
-              </>
-            ) : (
-              '没有过滤，显示全部要素'
-            )}
-          </span>
-          <ElButton
-            class="button-inline"
-            link
-            type="primary"
-            size="small"
-            disabled={!active}
-            onClick={() => props.layers.setFilter(props.code, NO_FILTER)}
-          >
-            清空过滤
-          </ElButton>
-        </div>
-      );
-    };
+    const renderFoot = () => (
+      <div class={styles.foot} data-filter-foot>
+        <ElButton
+          class="button-inline"
+          link
+          type="primary"
+          size="small"
+          disabled={!isFiltering(filter.value)}
+          onClick={() => props.layers.setFilter(props.code, NO_FILTER)}
+        >
+          清空过滤
+        </ElButton>
+      </div>
+    );
 
     return () => {
       const current = field.value;
@@ -250,14 +229,10 @@ export const FeatureFilter = defineComponent({
         return null;
       }
       const kept = keptKeys(current, filter.value);
-      const legendFollows = current.id === CLASS_FIELD && swatches.value.size > 0;
       return (
         <div class={styles.filter} data-feature-filter={props.code}>
           <div class={styles.head}>
             {renderTabs(current)}
-            <div class={styles.hint}>
-              {legendFollows ? '图例按它分类：没勾的类别图例里也不显示' : '图例里写明过滤条件'}
-            </div>
             {current.values.length > SEARCH_FROM && (
               <ElInput
                 class={styles.search}

@@ -213,7 +213,7 @@ packages/icons/
 | `eye` / `eye-off` | `eye` / `eye-off` | 图层右键菜单的显示、隐藏 |
 | `model-3d` / `roam-walk` | `box` / `walk` | 图层列表里三维模型的图标、行内的漫游按钮（ADR 0157） |
 | `model-covered` | 自绘：`model-3d` 加一道斜线，照 Tabler 的 `*-off` 图标在斜线一侧断开 | 图层里会把模型盖住的资源，名称后面的橙色图标（ADR 0161，2026-11-16 取代文字"盖住模型"） |
-| `layer-filter` | `filter` | 图层的要素过滤：工具栏最右、右键菜单的"过滤…"、过滤着的行和图例名称后面的主色漏斗（ADR 0173） |
+| `layer-filter` | `filter` | 图层的要素过滤：工具栏图例后面、右键菜单的"过滤…"、过滤着的行和图例名称后面的主色漏斗（ADR 0173） |
 | `readout-pointer` / `readout-center` | 自绘，仿 `pointer`（鼠标指针）/ `focus-2`（和 `focus` 同一个图形，按用途另起名字） | 状态栏经纬度前面的图标：鼠标所在位置、画布中心（ADR 0171，取代文字"中心"） |
 | `readout-eye-height` / `readout-eye-below` | 自绘：地面线加向上、向下的箭头 | 三维状态栏的视点高度、视点在地表以下（ADR 0171） |
 | `readout-bearing` / `readout-pitch` | 自绘：顺时针的圆弧加箭头 / 地面线和斜线夹一个角 | 状态栏的旋转、俯仰（ADR 0171） |

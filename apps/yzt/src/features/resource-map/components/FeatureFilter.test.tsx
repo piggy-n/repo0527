@@ -46,9 +46,8 @@ const value = (wrapper: VueWrapper, key: string) => wrapper.get(`[data-filter-va
 const checked = (wrapper: VueWrapper, key: string) =>
   value(wrapper, key).get<HTMLInputElement>('input').element.checked;
 const allBox = (wrapper: VueWrapper) => wrapper.get('[data-filter-all]');
-const summary = (wrapper: VueWrapper) => wrapper.get('[data-filter-summary]');
-const clearButton = (wrapper: VueWrapper) =>
-  wrapper.findAll('[data-filter-summary] button').find(item => item.text() === '清空过滤');
+const foot = (wrapper: VueWrapper) => wrapper.get('[data-filter-foot]');
+const clearButton = (wrapper: VueWrapper) => foot(wrapper).findAll('button').find(item => item.text() === '清空过滤');
 
 describe('FeatureFilter（ADR 0173）', () => {
   it('字段：分类在前、登记的类型在后；打开时先看有条件的字段；只有一个字段时只写名称', () => {
@@ -64,14 +63,13 @@ describe('FeatureFilter（ADR 0173）', () => {
     expect(single.text()).toContain('按地类');
   });
 
-  it('勾掉一项立即交给拥有者，底部写条件；"全选"半选，点了恢复全勾（不再过滤）', async () => {
+  it('勾掉一项立即交给拥有者；"全选"半选，点了恢复全勾（不再过滤）', async () => {
     const { wrapper, filterOf } = setup('csxhjctb_xxa');
-    expect(summary(wrapper).text()).toContain('没有过滤，显示全部要素');
     expect(clearButton(wrapper)?.attributes('disabled')).toBeDefined();
 
     await value(wrapper, '08H214').get('input').setValue(false);
     expect(filterOf()).toStrictEqual({ [CLASS_FIELD]: ['08H211', '08H212', '08H213', '08H215', '08H216', OTHER_ITEM] });
-    expect(summary(wrapper).text()).toContain('已过滤：分类：高等院校、中等职业学校、中小学等 6 项');
+    expect(clearButton(wrapper)?.attributes('disabled')).toBeUndefined();
     expect(allBox(wrapper).find('.is-indeterminate').exists()).toBe(true);
     expect(allBox(wrapper).text()).toContain('6/7');
 
@@ -84,7 +82,6 @@ describe('FeatureFilter（ADR 0173）', () => {
     await wrapper.findAll('[data-filter-field]')[1]?.trigger('click');
     await value(wrapper, '小学').get('[data-filter-only]').trigger('click');
     expect(filterOf()).toStrictEqual({ type: ['小学'] });
-    expect(summary(wrapper).text()).toContain('类型：小学');
     expect(wrapper.findAll('[data-filter-field]')[1]?.text()).toBe('类型1');
 
     await clearButton(wrapper)?.trigger('click');
@@ -128,9 +125,12 @@ describe('FeatureFilter（ADR 0173）', () => {
     expect(filterOf()).toBe(NO_FILTER);
   });
 
-  it('一项都没勾时提醒这一层不显示', async () => {
+  it('只有字段、取值和"清空过滤"：不写图例怎么跟，底部不写条件（用户 2026-11-24）；一项都没勾时"全选"写 0 项', () => {
     const { wrapper } = setup('csxhjctb_xxa', { [CLASS_FIELD]: [] });
-    expect(summary(wrapper).text()).toContain('有字段一项都没选，地图上不显示这一层');
-    expect(summary(wrapper).text()).toContain('分类：一项都没选');
+    expect(foot(wrapper).text()).toBe('清空过滤');
+    expect(wrapper.text()).not.toContain('图例');
+    expect(wrapper.text()).not.toContain('一项都没选');
+    expect(allBox(wrapper).text()).toContain('0/7');
+    expect(clearButton(wrapper)?.attributes('disabled')).toBeUndefined();
   });
 });

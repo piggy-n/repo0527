@@ -1,4 +1,4 @@
-// 要素过滤（ADR 0173）：放在图层浮层可滚动的内容区里，上面的字段、搜索、全选和下面的条件、清空过滤贴住上下边，取值在中间滚动。
+// 要素过滤（ADR 0173）：放在图层浮层可滚动的内容区里，上面的字段、搜索、全选和下面的清空过滤贴住上下边，取值在中间滚动。
 // 贴住的两块压在 2：Element 复选框的方框自带 z-index 1，滚动时会从下面透上来
 
 .filter {
@@ -81,12 +81,6 @@ span.field {
   font-weight: var(--font-weight-semibold);
   line-height: 16px;
   text-align: center;
-}
-
-.hint {
-  padding-bottom: 4px;
-  color: var(--color-text-placeholder);
-  font-size: var(--font-size-xs);
 }
 
 .search {
@@ -180,8 +174,10 @@ span.field {
   }
 }
 
+// 键盘焦点在这一行时也显示；鼠标点完"仅此项"、复选框后焦点还在行里，不能用 :focus-within，否则移开鼠标"仅此项"还挂着
+// （用户 2026-11-24）
 .value:hover .only,
-.value:focus-within .only {
+.value:has(:focus-visible) .only {
   opacity: 1;
 }
 
@@ -198,34 +194,15 @@ span.field {
   font-size: var(--font-size-xs);
 }
 
-// 条件和清空过滤：贴住内容区的下边，盖住内容区的下留白（浮层内容区下边留 16）
+// 清空过滤：靠右，贴住内容区的下边，盖住内容区的下留白（浮层内容区下边留 16）
 .foot {
   position: sticky;
   bottom: calc(-1 * var(--space-lg));
   z-index: 2;
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
+  justify-content: flex-end;
   margin-bottom: calc(-1 * var(--space-lg));
   padding: var(--space-sm) 0 var(--space-lg);
   border-top: 1px solid var(--color-border-light);
   background-color: var(--color-bg-container);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-}
-
-.summary {
-  flex: 1;
-  min-width: 0;
-}
-
-.conditions {
-  color: var(--color-text-regular);
-  font-weight: var(--font-weight-semibold);
-}
-
-.warning {
-  display: block;
-  color: var(--color-warning-text);
 }

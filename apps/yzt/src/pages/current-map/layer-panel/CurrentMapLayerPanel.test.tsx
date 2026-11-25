@@ -417,7 +417,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()?.getAttribute('aria-label')).toBe('水域线层的标注');
   });
 
-  it('过滤（ADR 0173）：工具栏最右的过滤打开第四种浮层，勾选立即生效；过滤着的行名称后面一个漏斗，点了也打开', async () => {
+  it('过滤（ADR 0173）：工具栏的过滤打开第四种浮层，勾选立即生效；过滤着的行名称后面一个漏斗，点了也打开', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
@@ -513,12 +513,12 @@ describe('CurrentMapLayerPanel', () => {
     expect(locateItem()?.disabled).toBe(true);
   });
 
-  it('工具栏最右是过滤，没有移除（用户 2026-11-24，ADR 0173）；移除选中的一行用 Delete，选中相邻的', async () => {
+  it('工具栏没有移除，过滤紧跟图例（用户 2026-11-24，ADR 0173）；移除选中的一行用 Delete，选中相邻的', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_lrdl']);
     await nextTick();
     const keys = wrapper.findAll('[aria-label="图层的操作"] [data-tool]').map(item => item.attributes('data-tool'));
-    expect(keys).toStrictEqual(['move-up', 'move-down', 'move-top', 'move-bottom', 'opacity', 'legend', 'label', 'filter']);
+    expect(keys).toStrictEqual(['move-up', 'move-down', 'move-top', 'move-bottom', 'opacity', 'legend', 'filter', 'label']);
 
     await row(wrapper, 'csxhjctb_lrdl').trigger('click');
     await row(wrapper, 'csxhjctb_lrdl').trigger('keydown', { key: 'Delete' });
@@ -538,9 +538,9 @@ describe('CurrentMapLayerPanel', () => {
       'visible',
       'opacity',
       'legend',
+      'filter',
       'label-visible',
       'label',
-      'filter',
       'locate',
       'move-up',
       'move-down',
