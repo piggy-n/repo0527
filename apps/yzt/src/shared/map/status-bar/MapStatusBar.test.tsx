@@ -68,7 +68,7 @@ describe('MapStatusBar', () => {
 
     position.value = { lngLat: POINT, center: true };
     await nextTick();
-    expect(iconHints(wrapper)).toStrictEqual(['画布中心的经纬度（鼠标不在地图上）']);
+    expect(iconHints(wrapper)).toStrictEqual(['画布中心的经纬度']);
     expect(shown(wrapper)).toBe('118.789800, 32.06140010 km');
   });
 

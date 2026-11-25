@@ -1,5 +1,5 @@
-// 图例以看为主（ADR 0175）：每一行是箭头、摘要、名称、年份，复合图例默认展开、收起时显示按几何画的摘要（ADR 0159），
-// 修改从行尾的样式设置进
+// 图例以看为主（ADR 0175）：每一行是箭头、符号、名称、年份，复合图例默认展开、收起时显示按几何画的摘要（ADR 0159），
+// 修改从行尾的样式设置进；只有箭头、符号、名称能点（用户 2026-11-25）
 
 .legend {
   display: flex;
@@ -44,11 +44,10 @@
   }
 }
 
-// 三种图例一样的四列：箭头（按类别配色才有）、摘要、名称、年份，年份逐行对齐
-.summary {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 16px 28px minmax(0, 1fr) 32px;
+// 箭头（按类别配色才有，别的留空位）、符号、名称按内容宽，后面的空白不能点；名称放不下时换行
+.lead {
+  display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -61,14 +60,33 @@
   text-align: left;
 }
 
-button.summary {
+// 能点的部分：按类别配色是整个 .lead（展开、收起的按钮），单一符号、统一配色是符号和名称（打开样式设置）
+.clickable {
   cursor: pointer;
 
-  &:focus-visible {
-    outline: 2px solid var(--color-primary-border-hover);
-    outline-offset: -2px;
-    border-radius: var(--radius-sm);
+  // 悬停时符号和图层列表行首的符号按钮一样加框
+  &:hover .symbol {
+    background-color: var(--color-bg-container);
+    box-shadow: inset 0 0 0 1px var(--color-primary-border-hover);
   }
+}
+
+span.clickable {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+button.clickable:focus-visible {
+  outline: 2px solid var(--color-primary-border-hover);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+// 符号的框和图层列表的行首共用（24 × 22，里面是 20 × 14 的预览）
+.symbol {
+  flex: none;
 }
 
 // 行尾的样式设置：三种图例都有，悬停或键盘焦点时显示，鼠标点击留下的焦点不维持显示
@@ -110,20 +128,12 @@ button.summary {
 
 .arrow {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
   width: 16px;
   height: 20px;
   color: var(--color-text-placeholder);
-}
-
-// 摘要和单一符号共用 28 × 20 的展示区域（ADR 0159）
-.preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 20px;
 }
 
 .name {
@@ -134,7 +144,11 @@ button.summary {
   font-weight: var(--font-weight-semibold);
 }
 
+// 年份在样式设置前面逐行对齐，不能点
 .year {
+  flex: none;
+  width: 32px;
+  margin-left: auto;
   text-align: right;
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
@@ -151,11 +165,16 @@ button.summary {
   scroll-margin-top: calc(32px + var(--space-sm));
 }
 
+// 图层浮层里没有标题行，进来时焦点在整块上，不画焦点框（它不能操作）
 .configuration {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
   min-width: 0;
+
+  &:focus {
+    outline: none;
+  }
 }
 
 // 返回入口与当前名称同行，名称沿用 MxTitle 的区块标题规范；进设置时焦点在这一行，不画焦点框（它不能操作）

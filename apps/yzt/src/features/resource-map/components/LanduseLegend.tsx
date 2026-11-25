@@ -40,12 +40,13 @@ export const LanduseLegend = defineComponent({
     const renderItem = (item: LanduseLegendItem): VNode => {
       const swatch = props.swatches.get(item.key);
       const excluded = props.excluded.has(item.key);
+      const marks = `${item.adjustable ? '（可调整）' : ''}${excluded ? '（已过滤）' : ''}`;
       return (
         <li key={item.key} data-landuse={item.code ?? item.name}>
           <button
             type="button"
             class={[styles.item, excluded && styles.excluded]}
-            title={`${landuseItemLabel(item)}${item.adjustable ? '（可调整）' : ''}${excluded ? '（已过滤，地图上不显示）' : ''}\n${item.meaning}`}
+            title={`${landuseItemLabel(item)}${marks}\n${item.meaning}`}
             aria-label={`编辑${item.name}样式${excluded ? '（已过滤）' : ''}`}
             data-excluded={excluded || undefined}
             onClick={() => emit('edit', item.key)}

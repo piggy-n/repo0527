@@ -47,8 +47,8 @@ function choicesOf(entry: LegendEntry): Choice[] {
 }
 
 /**
- * 一个资源的样式设置（ADR 0044、0175）：标题和"返回图例"、显示方式（单一符号没有）、符号编辑器（按类别配色时灰框的第一行
- * 选类别）、恢复整个图层默认。显示方式只在这里切换（用户 2026-11-24 去掉了图例上的快捷切换）。
+ * 一个资源的样式设置（ADR 0044、0175）：标题和"返回图例"（图层浮层没有这一行）、显示方式（单一符号没有）、符号编辑器
+ * （按类别配色时灰框的第一行选类别）、恢复整个图层默认。显示方式只在这里切换（用户 2026-11-24 去掉了图例上的快捷切换）。
  * 右侧的"图例"页和图层的图例浮层共用；要改的类别由上层保管，点了子图例的一类进来时就是它
  */
 export const LegendSettings = defineComponent({
@@ -59,8 +59,11 @@ export const LegendSettings = defineComponent({
     entry: { type: Object as PropType<LegendEntry>, required: true },
     /** 按类别配色时要改的类别；没有或已经不在类别里时是第一类 */
     selected: { type: String as PropType<string | undefined>, default: undefined },
-    /** 标题：右侧"图例"页写资源名（默认）；图层浮层的标题栏已经写着名称，写"样式设置" */
-    title: { type: String as PropType<string | undefined>, default: undefined }
+    /**
+     * 标题行（资源名和"返回图例"）：右侧"图例"页有；图层浮层的标题栏已经有名称和按下的"样式设置"，再点它就回到图例，
+     * 没有这一行（用户 2026-11-25）
+     */
+    heading: { type: Boolean, default: true }
   },
   emits: {
     back: () => true,
@@ -119,16 +122,22 @@ export const LegendSettings = defineComponent({
       return (
         <div
           class={styles.configuration}
+          // 没有标题行时（图层浮层）进来的焦点放在整块上，读屏报出"样式设置"，下一个 Tab 就是第一项
+          role={props.heading ? undefined : 'group'}
+          aria-label={props.heading ? undefined : `${entry.name}的样式设置`}
+          tabindex={props.heading ? undefined : -1}
           data-legend-settings={entry.code}
           style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}
         >
-          {/* 右侧图例、图层浮层进来时焦点放在这一行（读屏报出换了视图），下一个 Tab 就是"返回图例" */}
-          <div class={styles.settingsHeading} tabindex={-1} data-settings-heading>
-            <MxTitle>{props.title ?? entry.name}</MxTitle>
-            <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={() => emit('back')}>
-              返回图例
-            </ElButton>
-          </div>
+          {/* 右侧图例进来时焦点放在这一行（读屏报出换了视图），下一个 Tab 就是"返回图例" */}
+          {props.heading && (
+            <div class={styles.settingsHeading} tabindex={-1} data-settings-heading>
+              <MxTitle>{entry.name}</MxTitle>
+              <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={() => emit('back')}>
+                返回图例
+              </ElButton>
+            </div>
+          )}
           {entry.kind !== 'symbol' && (
             <div class={styles.modeRow}>
               <span class={styles.modeLabel}>显示方式</span>

@@ -25,7 +25,7 @@ const SCALE_SAMPLE: ScaleBar = { meters: 200_000, width: SCALE_MAX_WIDTH, label:
 const EYE_SAMPLE = 8_888_000;
 const ANGLE_SAMPLE = { bearing: -180, pitch: 85 };
 
-const CENTER_HINT = '画布中心的经纬度（鼠标不在地图上）';
+const CENTER_HINT = '画布中心的经纬度';
 const POINTER_HINT = '鼠标所在位置的经纬度';
 
 // 读数前的图标，读屏名称是这一段的说明

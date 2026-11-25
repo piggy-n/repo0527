@@ -25,7 +25,7 @@ export const ValueLegend = defineComponent({
               <button
                 type="button"
                 class={[styles.row, value.excluded && styles.excluded]}
-                title={value.excluded ? `${value.label}（已过滤，地图上不显示）` : value.label}
+                title={value.excluded ? `${value.label}（已过滤）` : value.label}
                 aria-label={`编辑${value.label}样式${value.excluded ? '（已过滤）' : ''}`}
                 data-excluded={value.excluded || undefined}
                 onClick={() => emit('edit', value.key)}

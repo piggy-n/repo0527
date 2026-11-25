@@ -4,6 +4,7 @@ import { type DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker, ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
+import rowStyles from '@/shared/map/layer-panel/layer-row.module.scss';
 import { required } from '@/shared/testing/required';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
@@ -83,7 +84,7 @@ function button(wrapper: VueWrapper, label: string) {
   return wrapper.get(`button[aria-label="${label}"]`);
 }
 
-// 一行：摘要和行尾的样式设置；按类别配色的摘要是展开、收起的按钮，名称和年份就是它的名称
+// 一行：箭头、符号、名称（按类别配色时是展开、收起的按钮，名称就是它的名称）、年份和行尾的样式设置
 const row = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-legend="${code}"] > div`);
 const summaryButton = (wrapper: VueWrapper, code: string) => row(wrapper, code).get('button[aria-expanded]');
 
@@ -177,7 +178,7 @@ describe('ResourceLegend', () => {
     expect(wrapper.findAll('[data-landuse]').map(item => item.attributes('data-landuse'))).toStrictEqual(['1105', '1106']);
   });
 
-  it('每一行是摘要和行尾的样式设置，三种图例都有设置；只有按类别配色的摘要是展开、收起的按钮（用户 2026-11-24）', async () => {
+  it('每一行是箭头、符号、名称、年份和行尾的样式设置；按类别配色的箭头、符号、名称是展开、收起的按钮，年份不在里面（用户 2026-11-25）', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     symbols.setMode('csxhjctb_hydl', 'uniform');
@@ -187,43 +188,65 @@ describe('ResourceLegend', () => {
         .findAll('button')
         .map(item => ({ label: item.attributes('aria-label'), expanded: item.attributes('aria-expanded') }));
 
-    // 按类别配色：摘要按钮没有 aria-label，名称和年份就是它的名称
+    // 按类别配色：展开按钮没有 aria-label，名称就是它的名称
     expect(buttons('bgdc_dltb')).toStrictEqual([
       { label: undefined, expanded: 'true' },
       { label: '地类图斑的样式设置', expanded: undefined }
     ]);
-    expect(summaryButton(wrapper, 'bgdc_dltb').text()).toBe('地类图斑2022');
-    // 统一配色、单一符号的摘要不是按钮
+    expect(summaryButton(wrapper, 'bgdc_dltb').text()).toBe('地类图斑');
+    // 统一配色、单一符号只有行尾的样式设置一个按钮；符号和名称点了也进设置，键盘用行尾的
     expect(buttons('csxhjctb_hydl')).toStrictEqual([{ label: '水域线层的样式设置', expanded: undefined }]);
     expect(buttons('bgdc_ccwjq')).toStrictEqual([{ label: '坑塘的样式设置', expanded: undefined }]);
-    for (const code of ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_ccwjq']) {
+    const years: Record<string, string> = { bgdc_dltb: '2022', csxhjctb_hydl: '2025', bgdc_ccwjq: '2022' };
+    for (const [code, year] of Object.entries(years)) {
       const children = [...row(wrapper, code).element.children];
-      expect(children.map(item => item.tagName)).toStrictEqual([code === 'bgdc_dltb' ? 'BUTTON' : 'DIV', 'BUTTON']);
-      expect(children[1]?.getAttribute('title')).toBe('样式设置');
-      expect(children[1]?.hasAttribute('data-legend-settings-button')).toBe(true);
+      const lead = code === 'bgdc_dltb' ? 'BUTTON' : 'SPAN';
+      expect(children.map(item => item.tagName)).toStrictEqual([lead, 'SPAN', 'BUTTON']);
+      expect(children[1]?.textContent).toBe(year);
+      expect(children[2]?.getAttribute('title')).toBe('样式设置');
+      expect(children[2]?.hasAttribute('data-legend-settings-button')).toBe(true);
+      // 符号和图层列表的行首同一个框，里面是小号（20 × 14）的预览
+      const symbol = row(wrapper, code).get('[data-swatch], [data-summary]');
+      expect(symbol.element.parentElement?.classList.contains(rowStyles.symbol)).toBe(true);
+      expect([symbol.attributes('width'), symbol.attributes('height')]).toStrictEqual(['20', '14']);
     }
     expect(row(wrapper, 'csxhjctb_hydl').text()).toBe('水域线层2025');
     expect(row(wrapper, 'bgdc_ccwjq').text()).toBe('坑塘2022');
   });
 
-  it('单一符号、统一配色的摘要单击不做任何事；按类别配色的单击展开、收起', async () => {
+  it('只有箭头、符号、名称能点：按类别配色的展开、收起，单一符号、统一配色的打开样式设置；年份和空白不做什么（用户 2026-11-25）', async () => {
     const { wrapper, owner, symbols, editingCodes } = mountLegend();
     owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     symbols.setMode('csxhjctb_hydl', 'uniform');
     await nextTick();
     const html = wrapper.html();
+    const year = (code: string) => required(row(wrapper, code).element.children[1], `${code}的年份`);
 
-    await row(wrapper, 'csxhjctb_hydl').get('div').trigger('click');
-    await row(wrapper, 'bgdc_ccwjq').get('div').trigger('click');
-    expect(wrapper.html()).toBe(html);
-    expect(wrapper.find('[data-legend-settings]').exists()).toBe(false);
+    // 年份、行里按钮以外的空白：每点一下就看一次，两下连着点时整行能点的展开、收起会互相抵消
+    const clickAndCheck = async (target: Element) => {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await nextTick();
+      expect(wrapper.html()).toBe(html);
+    };
+    const targets = ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_ccwjq'].flatMap(code => [year(code), row(wrapper, code).element]);
+    await targets.reduce((done, target) => done.then(() => clickAndCheck(target)), Promise.resolve());
     expect(editingCodes).toStrictEqual([null]);
 
-    await summaryButton(wrapper, 'bgdc_dltb').trigger('click');
+    // 按类别配色：点符号、名称都是这个按钮
+    await summaryButton(wrapper, 'bgdc_dltb').get('[data-summary]').trigger('click');
     expect(summaryButton(wrapper, 'bgdc_dltb').attributes('aria-expanded')).toBe('false');
     expect(landuseShown(wrapper)).toBe(false);
-    await summaryButton(wrapper, 'bgdc_dltb').trigger('click');
+    await summaryButton(wrapper, 'bgdc_dltb').get('span:last-child').trigger('click');
     expect(landuseShown(wrapper)).toBe(true);
+    expect(wrapper.find('[data-legend-settings]').exists()).toBe(false);
+
+    // 统一配色点名称、单一符号点符号：打开这个资源的样式设置
+    await row(wrapper, 'csxhjctb_hydl').get('[data-legend-open] span:last-child').trigger('click');
+    expect(wrapper.find('[data-legend-settings="csxhjctb_hydl"]').exists()).toBe(true);
+    await back(wrapper);
+    await row(wrapper, 'bgdc_ccwjq').get('[data-legend-open] [data-swatch]').trigger('click');
+    expect(wrapper.find('[data-legend-settings="bgdc_ccwjq"]').exists()).toBe(true);
+    expect(editingCodes).toStrictEqual([null, 'csxhjctb_hydl', null, 'bgdc_ccwjq']);
   });
 
   it('图例上没有显示方式的快捷切换、名称后面的漏斗、"改过符号"的点和过滤的文字（用户 2026-11-24）', async () => {
@@ -666,19 +689,20 @@ describe('ResourceLegend', () => {
       }));
     expect(values).toStrictEqual([
       { excluded: undefined, faded: false, title: '河流', label: '编辑河流样式' },
-      { excluded: 'true', faded: true, title: '水渠（已过滤，地图上不显示）', label: '编辑水渠样式（已过滤）' },
-      { excluded: 'true', faded: true, title: '其他（已过滤，地图上不显示）', label: '编辑其他样式（已过滤）' }
+      { excluded: 'true', faded: true, title: '水渠（已过滤）', label: '编辑水渠样式（已过滤）' },
+      { excluded: 'true', faded: true, title: '其他（已过滤）', label: '编辑其他样式（已过滤）' }
     ]);
 
     expect(wrapper.findAll('[data-landuse]')).toHaveLength(76);
     expect(wrapper.findAll('[data-landuse] button[data-excluded]')).toHaveLength(75);
     expect(wrapper.find('[data-landuse="0101"] button').attributes('data-excluded')).toBeUndefined();
     const irrigated = wrapper.get('[data-landuse="0102"] button');
-    expect(irrigated.attributes('title')).toContain('0102 水浇地（已过滤，地图上不显示）');
+    // 用户 2026-11-25：只写"（已过滤）"
+    expect(irrigated.attributes('title')).toContain('0102 水浇地（已过滤）\n');
     expect(irrigated.attributes('aria-label')).toBe('编辑水浇地样式（已过滤）');
 
     // 行头照旧，摘要只画勾着的河流
-    expect(summaryButton(wrapper, 'csxhjctb_hydl').text()).toBe('水域线层2025');
+    expect(row(wrapper, 'csxhjctb_hydl').text()).toBe('水域线层2025');
     expect(summaryColors(row(wrapper, 'csxhjctb_hydl').get('[data-summary]'))).toStrictEqual(['#1E88E5']);
 
     // 过滤掉的一类也能点进设置，类别下拉不跟着过滤
@@ -719,7 +743,7 @@ describe('ResourceLegend', () => {
     await nextTick();
     await button(wrapper, '编辑水渠样式').trigger('click');
     await back(wrapper);
-    const title = () => summaryButton(wrapper, 'csxhjctb_hydl').text();
+    const title = () => row(wrapper, 'csxhjctb_hydl').text();
     expect(title()).toContain('水域线层2025');
 
     owner.setYear('csxhjctb_hydl', 2023);

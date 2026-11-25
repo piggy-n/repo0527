@@ -4,7 +4,7 @@ import { withAlpha } from './symbols';
 
 // 图例符号的几何（ADR 0159）：页面上的 SVG（LegendSwatchIcon）和导出图片里的 canvas（legend-canvas，ADR 0174）按同一套数值画
 
-/** 三种尺寸：摘要 28 × 20（图例浮层的标题、右侧图例），子图例 22 × 16（也用在导出的图例里），当前图层的行首 20 × 14 */
+/** 三种尺寸：摘要 28 × 20（图例浮层的标题），子图例 22 × 16（也用在导出的图例里），图层列表的行首和右侧图例的行 20 × 14 */
 export type SwatchSize = 'summary' | 'item' | 'small';
 
 export const SWATCH_SIZES: Readonly<Record<SwatchSize, readonly [width: number, height: number]>> = {

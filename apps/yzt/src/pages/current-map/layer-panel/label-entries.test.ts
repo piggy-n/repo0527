@@ -19,15 +19,15 @@ describe('标注的入口（ADR 0160）', () => {
     expect(labelToolItem({ ...ROW, labelable: false }, false)).toMatchObject({ disabled: true, tip: '没有可标注的字段' });
   });
 
-  it('右键菜单：开着标注时写"隐藏标注"，否则"显示标注"，后面是"标注…"；不能用时两项都灰掉、写出原因', () => {
+  it('右键菜单：开着标注时写"隐藏标注"，否则"显示标注"，后面是"标注"（用户 2026-11-25 去掉省略号）；不能用时两项都灰掉、写出原因', () => {
     expect(labelMenuEntries(ROW).map(entry => (entry === 'divider' ? entry : [entry.key, entry.label]))).toStrictEqual([
       ['label-visible', '显示标注'],
-      ['label', '标注…']
+      ['label', '标注']
     ]);
     expect(labelMenuEntries({ ...ROW, labeled: true })[0]).toMatchObject({ label: '隐藏标注', icon: 'map-label-off' });
     expect(labelMenuEntries({ ...ROW, labelable: false })).toStrictEqual([
       { key: 'label-visible', label: '显示标注', icon: 'map-label', disabled: true, hint: '没有可标注的字段' },
-      { key: 'label', label: '标注…', icon: 'symbol-settings', disabled: true, hint: '没有可标注的字段' }
+      { key: 'label', label: '标注', icon: 'symbol-settings', disabled: true, hint: '没有可标注的字段' }
     ]);
   });
 });

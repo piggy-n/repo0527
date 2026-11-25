@@ -489,18 +489,14 @@ export const CurrentMapLayerPanel = defineComponent({
       return { kind: 'legend', configuring: entry !== null && !hasLegendItems(entry) } as const;
     };
 
-    // 图例浮层里返回图例、点子图例的一类：被按的按钮随旧视图卸载，焦点原来在浮层里的，进设置给标题行，返回给标题栏的
-    // 样式设置（2026-11-24 审查：焦点掉到 body，Esc 关闭时也还不回图层行）
+    // 图例浮层里点子图例的一类进设置：被按的那一类随子图例卸载，焦点原来在浮层里的给样式设置这一整块（浮层里没有标题行，
+    // 用户 2026-11-25；2026-11-24 审查：焦点掉到 body，Esc 关闭时也还不回图层行）。回到图例只有标题栏的样式设置，焦点
+    // 本来就在它上面
     const moveLegendFocus = (configuring: boolean) => {
       const root = document.activeElement?.closest<HTMLElement>('[data-layer-popover]') ?? null;
       popover.value = { kind: 'legend', configuring };
-      if (root) {
-        void nextTick(() => {
-          const target = configuring
-            ? root.querySelector<HTMLElement>('[data-settings-heading]')
-            : root.querySelector<HTMLElement>('button[aria-label="样式设置"]');
-          target?.focus({ preventScroll: true });
-        });
+      if (root && configuring) {
+        void nextTick(() => root.querySelector<HTMLElement>('[data-legend-settings]')?.focus({ preventScroll: true }));
       }
     };
 

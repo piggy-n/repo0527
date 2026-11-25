@@ -411,7 +411,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()).toBeNull();
   });
 
-  it('标注（ADR 0160）：工具栏第 8 个按钮、右键菜单的"标注…"打开第三种浮层；菜单直接显示、隐藏标注', async () => {
+  it('标注（ADR 0160）：工具栏第 8 个按钮、右键菜单的"标注"打开第三种浮层；菜单直接显示、隐藏标注', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
@@ -472,7 +472,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()).toBeNull();
   });
 
-  it('过滤：右键菜单的"过滤…"打开；没有可过滤字段的资源、三维模型不能过滤，选中它们时过滤浮层关闭', async () => {
+  it('过滤：右键菜单的"过滤"打开；没有可过滤字段的资源、三维模型不能过滤，选中它们时过滤浮层关闭', async () => {
     const { wrapper, owner, current } = await mountPanel();
     owner.add(['csxhjctb_hydl', 'bgdc_cjdcq']);
     current.add(['model:white']);
@@ -1277,7 +1277,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()).toBeNull();
   });
 
-  it('按类别配色的图例先看子图例：点一类进样式设置、类别选好这一类，标题上的样式设置按下；再点样式设置或"返回图例"回到子图例（用户 2026-11-24）', async () => {
+  it('按类别配色的图例先看子图例：点一类进样式设置、类别选好这一类，标题上的样式设置按下；再点样式设置回到子图例（用户 2026-11-24）', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
@@ -1299,16 +1299,31 @@ describe('CurrentMapLayerPanel', () => {
     await nextTick();
     expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
     expect(pickedClass(wrapper)).toBe('水渠');
-    const back = required(
-      [...popoverBody().querySelectorAll('button')].find(button => button.textContent?.includes('返回图例')),
-      '返回图例'
-    );
-    back.click();
-    await nextTick();
-    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
   });
 
-  it('图例浮层里点一类进设置时焦点到标题行，返回图例时到标题栏的样式设置；之后按 Esc 焦点回到图层行（2026-11-24 审查）', async () => {
+  it('图例浮层的样式设置没有标题和"返回图例"那一行：第一行就是显示方式，回到图例用标题栏的样式设置（用户 2026-11-25）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl', 'bgdc_cjdcq']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    settingsButton().click();
+    await nextTick();
+
+    const settings = required(popoverBody().querySelector('[data-legend-settings]'), '样式设置');
+    expect(settings.querySelector('[data-settings-heading]')).toBeNull();
+    expect([...settings.querySelectorAll('button')].some(button => button.textContent?.includes('返回图例'))).toBe(false);
+    expect(settings.firstElementChild?.textContent).toContain('显示方式');
+    expect(settings.getAttribute('aria-label')).toBe('水域线层的样式设置');
+
+    // 单一符号：第一行是编辑器
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    const symbol = required(popoverBody().querySelector('[data-legend-settings]'), '单一符号的样式设置');
+    expect(symbol.querySelector('[data-settings-heading]')).toBeNull();
+    expect(symbol.firstElementChild?.hasAttribute('data-symbol-editor')).toBe(true);
+  });
+
+  it('图例浮层里点一类进设置时焦点到样式设置这一整块；按标题栏的样式设置回到图例后按 Esc，焦点回到图层行（2026-11-24 审查）', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
@@ -1319,14 +1334,11 @@ describe('CurrentMapLayerPanel', () => {
     water.focus();
     await editClass('[data-value="水渠"]');
     await nextTick();
-    expect(document.activeElement).toBe(layerPopover().querySelector('[data-settings-heading]'));
+    expect(document.activeElement).toBe(layerPopover().querySelector('[data-legend-settings]'));
 
-    const back = required(
-      [...popoverBody().querySelectorAll('button')].find(button => button.textContent?.includes('返回图例')),
-      '返回图例'
-    );
-    back.focus();
-    back.click();
+    // 点标题栏的样式设置回到图例：真实浏览器里按下时焦点到它上面，jsdom 的 click 不移焦点，这里手动给
+    settingsButton().focus();
+    settingsButton().click();
     await nextTick();
     await nextTick();
     expect(legendShown()).toStrictEqual(LEGEND_BROWSING);

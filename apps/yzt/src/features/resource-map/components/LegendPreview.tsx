@@ -4,7 +4,7 @@ import { LegendSummaryIcon, LegendSwatchIcon } from './LegendSwatchIcon';
 
 /**
  * 一个资源的符号摘要（ADR 0159）：统一样式是它的符号，按属性配色是代表取值按几何画的摘要（面拼色块、线是折线、点排成三角）。
- * 图例浮层的标题、右侧图例收起时用 28 × 20；当前图层的行首用小号的 20 × 14，按小号的尺寸画，不整体缩放
+ * 图例浮层的标题用 28 × 20；图层列表的行首、右侧图例的行用小号的 20 × 14（用户 2026-11-25），按小号的尺寸画，不整体缩放
  */
 export const LegendPreview = defineComponent({
   name: 'LegendPreview',

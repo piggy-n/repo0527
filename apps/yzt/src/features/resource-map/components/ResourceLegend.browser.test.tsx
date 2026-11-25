@@ -36,7 +36,10 @@ const TOKENS = {
   '--font-size-xs': '12px',
   '--font-size-base': '14px',
   '--font-size-lg': '16px',
-  '--font-weight-semibold': '600'
+  '--font-weight-semibold': '600',
+  // 符号悬停时的框（同图层列表的行首）
+  '--color-bg-container': '#ffffff',
+  '--color-primary-border-hover': '#79bbff'
 };
 
 // 固定目录、不挂载地图引擎；外壳和页面的功能面板（MapPanelGroup）一样是浮层、浅灰标题栏，内容区上内边距 8，
@@ -94,18 +97,70 @@ function setup(width: number) {
   };
 }
 
-// 图例的一行：摘要四列（箭头、摘要、名称、年份）加行尾的样式设置
+// 图例的一行：前面是箭头、符号、名称（按类别配色是一个按钮），后面是年份和行尾的样式设置
 const rowOf = (code: string) =>
   required(document.querySelector<HTMLElement>(`[data-legend="${code}"] > div`), `${code}的行`);
 const summaryOf = (code: string) =>
   required(document.querySelector<HTMLElement>(`[data-legend="${code}"] > div > :first-child`), `${code}的摘要`);
+// 符号的框（同图层列表的行首）和名称
+const symbolOf = (code: string) =>
+  required(rowOf(code).querySelector('[data-swatch], [data-summary]')?.parentElement, `${code}的符号`);
+const nameOf = (code: string) =>
+  required(
+    rowOf(code).querySelector<HTMLElement>('[aria-expanded] > :last-child, [data-legend-open] > :last-child'),
+    `${code}的名称`
+  );
 const settingsOf = (code: string) =>
   required(
     document.querySelector<HTMLElement>(`[data-legend="${code}"] [data-legend-settings-button]`),
     `${code}的样式设置按钮`
   );
-// 年份是摘要的最后一列
-const yearOf = (code: string) => required(summaryOf(code).lastElementChild, `${code}的年份`);
+// 年份在摘要后面、样式设置前面
+const yearOf = (code: string) => required(rowOf(code).children[1], `${code}的年份`);
+// 正在显示样式设置的资源
+const settingsShown = () => document.querySelector('[data-legend-settings]')?.getAttribute('data-legend-settings');
+// 样式设置里点"返回图例"
+const clickBack = () =>
+  userEvent.click(
+    required(
+      [...document.querySelectorAll<HTMLElement>('[data-legend-settings] button')].find(button =>
+        button.textContent?.includes('返回图例')
+      ),
+      '返回图例'
+    )
+  );
+
+// 悬停能点的部分（名称）时符号加框（同图层列表的行首）、手形；悬停年份时不加框、不是手形
+async function checkHover(code: string) {
+  await userEvent.hover(nameOf(code));
+  expect(getComputedStyle(symbolOf(code)).boxShadow).not.toBe('none');
+  expect(getComputedStyle(nameOf(code)).cursor).toBe('pointer');
+  await userEvent.hover(yearOf(code));
+  expect(getComputedStyle(symbolOf(code)).boxShadow).toBe('none');
+  expect(getComputedStyle(yearOf(code)).cursor).not.toBe('pointer');
+}
+
+// 什么也没变：没进设置，按类别配色的仍展开
+function expectUnchanged(code: string) {
+  expect(settingsShown()).toBeUndefined();
+  const toggle = rowOf(code).querySelector('[aria-expanded]');
+  expect(toggle === null || toggle.getAttribute('aria-expanded') === 'true').toBe(true);
+}
+
+// 真实地点名称后面的空白和年份：点到的是行本身和年份，不是能点的部分；每点一下就看一次，两下连着点时整行能点的
+// 展开、收起会互相抵消（2026-11-25 审查）
+async function clickInert(code: string) {
+  const row = rowOf(code).getBoundingClientRect();
+  const lead = summaryOf(code).getBoundingClientRect();
+  const year = yearOf(code).getBoundingClientRect();
+  expect(year.left - lead.right).toBeGreaterThan(8);
+  const x = (lead.right + year.left) / 2;
+  expect(document.elementFromPoint(x, row.top + row.height / 2)).toBe(rowOf(code));
+  await userEvent.click(rowOf(code), { position: { x: x - row.left, y: row.height / 2 } });
+  expectUnchanged(code);
+  await userEvent.click(yearOf(code));
+  expectUnchanged(code);
+}
 // 量年份和行尾样式设置的右边
 const rights = (code: string) => [
   yearOf(code).getBoundingClientRect().right,
@@ -168,7 +223,7 @@ describe('ResourceLegend（真实布局）', () => {
     expect(editor.getBoundingClientRect().right).toBeLessThanOrEqual(settings.right);
   });
 
-  it('按类别配色、统一配色、单一符号、按分类过滤的行，年份和样式设置逐行右对齐、行高相同；没有可点的占位', async () => {
+  it('按类别配色、统一配色、单一符号、按分类过滤的行：符号同图层列表的行首，年份和样式设置逐行右对齐、行高相同', async () => {
     using ctx = setup(320);
     ctx.layers.add(['csxhjctb_hydl', 'bgdc_ccwjq', 'csxhjctb_lctl']);
     ctx.symbols.setMode('csxhjctb_lctl', 'uniform');
@@ -191,22 +246,49 @@ describe('ResourceLegend（真实布局）', () => {
     for (const code of codes) {
       expect(rights(code)).toStrictEqual(rights('bgdc_dltb'));
       expect(rowOf(code).getBoundingClientRect().height).toBe(height);
+      // 符号和图层列表的行首一样：24 × 22 的框，里面 20 × 14 的预览（用户 2026-11-25）
+      const box = symbolOf(code).getBoundingClientRect();
+      expect([box.width, box.height]).toStrictEqual([24, 22]);
+      const preview = required(symbolOf(code).querySelector('svg'), `${code}的预览`).getBoundingClientRect();
+      expect([preview.width, preview.height]).toStrictEqual([20, 14]);
     }
+  });
 
-    // 只有按类别配色的摘要是按钮；别的行里只有样式设置一个按钮，以前行尾可点的占位没有了
+  it('只有箭头、符号、名称能点：按类别配色的展开、收起，单一符号、统一配色的打开样式设置；年份和名称后面的空白不能点（用户 2026-11-25）', async () => {
+    using ctx = setup(320);
+    ctx.layers.add(['csxhjctb_hydl', 'bgdc_ccwjq', 'csxhjctb_lctl']);
+    ctx.symbols.setMode('csxhjctb_lctl', 'uniform');
+    await nextTick();
+    const codes = ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_ccwjq', 'csxhjctb_lctl'];
+
+    // 只有按类别配色的前半是按钮；别的行里按钮只有样式设置，以前行尾可点的占位没有了
     expect(summaryOf('csxhjctb_hydl').tagName).toBe('BUTTON');
     expect(document.querySelector('[data-legend-slot]')).toBeNull();
     for (const code of ['bgdc_ccwjq', 'csxhjctb_lctl']) {
-      expect(summaryOf(code).tagName).toBe('DIV');
+      expect(summaryOf(code).tagName).toBe('SPAN');
       expect(rowOf(code).querySelectorAll('button')).toHaveLength(1);
     }
-    // 单击单一符号、统一配色的行尾不做什么；按类别配色的只收起，都不进设置
-    await userEvent.click(yearOf('bgdc_ccwjq'));
-    await userEvent.click(yearOf('csxhjctb_lctl'));
-    expect(ctx.wrapper.find('[data-legend-settings]').exists()).toBe(false);
-    await userEvent.click(yearOf('csxhjctb_hydl'));
+
+    // 悬停能点的部分时符号加框、手形，年份和空白不是；点年份和空白什么也不做。真实的鼠标操作一个接一个
+    await codes.reduce((done, code) => done.then(() => checkHover(code)), Promise.resolve());
+    await codes.reduce((done, code) => done.then(() => clickInert(code)), Promise.resolve());
+    expect(settingsShown()).toBeUndefined();
+    expect(summaryOf('bgdc_dltb').getAttribute('aria-expanded')).toBe('true');
+    expect(summaryOf('csxhjctb_hydl').getAttribute('aria-expanded')).toBe('true');
+
+    // 按类别配色：点符号收起、点名称展开
+    await userEvent.click(symbolOf('csxhjctb_hydl'));
     expect(summaryOf('csxhjctb_hydl').getAttribute('aria-expanded')).toBe('false');
-    expect(ctx.wrapper.find('[data-legend-settings]').exists()).toBe(false);
+    await userEvent.click(nameOf('csxhjctb_hydl'));
+    expect(summaryOf('csxhjctb_hydl').getAttribute('aria-expanded')).toBe('true');
+    expect(settingsShown()).toBeUndefined();
+
+    // 单一符号点符号、统一配色点名称：打开这个资源的样式设置
+    await userEvent.click(symbolOf('bgdc_ccwjq'));
+    expect(settingsShown()).toBe('bgdc_ccwjq');
+    await clickBack();
+    await userEvent.click(nameOf('csxhjctb_lctl'));
+    expect(settingsShown()).toBe('csxhjctb_lctl');
   });
 
   it('从列表中间的子图例进样式设置时滚到顶、焦点在标题行，返回后回到原来的滚动位置、焦点回到这一行的样式设置', async () => {

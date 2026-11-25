@@ -22,11 +22,11 @@ describe('要素过滤的入口（ADR 0173）', () => {
     });
   });
 
-  it('右键菜单的"过滤…"：不能用时灰掉、写出原因', () => {
-    expect(filterMenuEntry(ROW)).toStrictEqual({ key: 'filter', label: '过滤…', icon: 'layer-filter', disabled: false });
+  it('右键菜单的"过滤"（用户 2026-11-25 去掉省略号）：不能用时灰掉、写出原因', () => {
+    expect(filterMenuEntry(ROW)).toStrictEqual({ key: 'filter', label: '过滤', icon: 'layer-filter', disabled: false });
     expect(filterMenuEntry({ ...ROW, filterable: false })).toStrictEqual({
       key: 'filter',
-      label: '过滤…',
+      label: '过滤',
       icon: 'layer-filter',
       disabled: true,
       hint: '没有可过滤的字段'

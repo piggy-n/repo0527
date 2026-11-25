@@ -2,6 +2,7 @@ import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
 import { ElIcon } from 'element-plus';
 import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
+import rowStyles from '@/shared/map/layer-panel/layer-row.module.scss';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries } from '../legend';
@@ -13,8 +14,9 @@ import { ValueLegend } from './ValueLegend';
 
 /**
  * 资源图层的图例（ADR 0043、0044、0175，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
- * 不读地图、不等视图就绪。图例以看为主（用户 2026-11-24）：每一行是箭头、摘要（ADR 0159）、名称、年份，按类别配色的
- * 单击展开、收起（默认展开，ADR 0094），单一符号、统一配色的单击不做什么；修改从行尾的"样式设置"进，三种图例一样，
+ * 不读地图、不等视图就绪。图例以看为主（用户 2026-11-24）：每一行是箭头、符号（ADR 0159，同图层列表的行首）、名称、年份，
+ * 只有箭头、符号、名称能点（用户 2026-11-25）：按类别配色的展开、收起（默认展开，ADR 0094），单一符号、统一配色的
+ * 打开样式设置；修改从行尾的"样式设置"进，三种图例一样，
  * 点子图例的一类进这一类的样式设置。按分类过滤着的资源（ADR 0173）照样列出全部类别，过滤掉的淡显（用户 2026-11-24）。
  * 放在功能面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器、取色器和弹出层随之卸载，丢弃取色预览；
  * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置，焦点回到这一行
@@ -185,24 +187,17 @@ export const ResourceLegend = defineComponent({
       />
     );
 
-    // 一行：箭头、摘要、名称、年份，行尾是样式设置；按类别配色的整行是展开、收起的按钮，单一符号、统一配色的不是按钮
+    // 一行：箭头、符号、名称、年份，行尾是样式设置；符号和图层列表的行首一样（用户 2026-11-25）。只有箭头、符号、名称
+    // 能点：按类别配色的是展开、收起的按钮，单一符号、统一配色的打开样式设置（键盘用行尾的样式设置）；空白和年份不能点
     const renderEntry = (entry: LegendEntry): VNode => {
       const classified = entry.kind !== 'symbol' && entry.mode === 'classified';
       const isOpen = classified && !collapsed.value.has(entry.code);
-      const summary = (
-        <>
-          <span class={styles.arrow} aria-hidden="true">
-            {classified && <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>}
-          </span>
-          <span class={styles.preview}>
-            <LegendPreview entry={entry} />
-          </span>
-          <span class={styles.name} title={entry.name}>
-            {entry.name}
-          </span>
-          <span class={styles.year}>{entry.year}</span>
-        </>
-      );
+      const symbolAndName = [
+        <span class={[rowStyles.symbol, styles.symbol]}>
+          <LegendPreview entry={entry} small />
+        </span>,
+        <span class={styles.name}>{entry.name}</span>
+      ];
       return (
         <li
           key={entry.code}
@@ -214,15 +209,24 @@ export const ResourceLegend = defineComponent({
             {classified ? (
               <button
                 type="button"
-                class={styles.summary}
+                class={[styles.lead, styles.clickable]}
                 aria-expanded={isOpen}
                 onClick={() => toggle(entry.code)}
               >
-                {summary}
+                <span class={styles.arrow} aria-hidden="true">
+                  <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>
+                </span>
+                {symbolAndName}
               </button>
             ) : (
-              <div class={styles.summary}>{summary}</div>
+              <span class={styles.lead}>
+                <span class={styles.arrow} aria-hidden="true" />
+                <span class={styles.clickable} data-legend-open onClick={() => openSettings(entry.code)}>
+                  {symbolAndName}
+                </span>
+              </span>
             )}
+            <span class={styles.year}>{entry.year}</span>
             <button
               type="button"
               class={styles.configure}

@@ -1086,7 +1086,7 @@ describe('CurrentMapPage', () => {
     map.moveTo([119, 32], 9, {});
     await nextTick();
     expect(status()).toBe(`${formatLngLat([119, 32], 'dms')}50 km`);
-    expect(coordinateIcon()).toBe('画布中心的经纬度（鼠标不在地图上）');
+    expect(coordinateIcon()).toBe('画布中心的经纬度');
 
     // 鼠标的位置在下一帧写入
     map.mouse('mousemove', 100, 50);
@@ -1103,7 +1103,7 @@ describe('CurrentMapPage', () => {
     await new Promise(resolve => requestAnimationFrame(resolve));
     await nextTick();
     expect(status()).toBe(`${formatLngLat([119, 32], 'decimal')}50 km`);
-    expect(coordinateIcon()).toBe('画布中心的经纬度（鼠标不在地图上）');
+    expect(coordinateIcon()).toBe('画布中心的经纬度');
   });
 
   it('点"默认视角"按江苏的范围再定位一次', async () => {
