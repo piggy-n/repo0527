@@ -17,11 +17,12 @@
   margin-top: 4px;
 }
 
-// 展开的长图例（地类）往下滚时行头吸在顶上，名称和样式设置一直看得见；行的底色不透明，盖住滚过去的子图例
+// 展开的长图例（地类）往下滚时行头吸在滚动区的可见上沿，名称和样式设置一直看得见；行的底色不透明，盖住滚过去的子图例。
+// 粘性定位按内容框算，功能面板（MapPanelGroup 的浮层）内容区的上内边距是 --space-sm，上移这段，上面不留缝
 .row {
   position: sticky;
   z-index: 1;
-  top: 0;
+  top: calc(-1 * var(--space-sm));
   display: flex;
   align-items: center;
   gap: 4px;
@@ -143,6 +144,11 @@ button.summary {
 // 搜索和子图例整体缩进；样式设置替换整张列表，不在这里
 .content {
   padding: var(--space-xs) 0 var(--space-sm) var(--space-xl);
+}
+
+// 子图例里获得焦点的项滚进可见区时让出吸顶的行头（32 高），Shift+Tab 往上走时不被盖住
+.content :is(button, input) {
+  scroll-margin-top: calc(32px + var(--space-sm));
 }
 
 .configuration {

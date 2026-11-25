@@ -364,10 +364,20 @@ describe('printEntries', () => {
     ]);
   });
 
-  it('按分类过滤时类别只列勾着的、画面里出现的（同右侧图例，ADR 0173）', () => {
+  // 右侧图例列出全部类别、过滤掉的淡显（ADR 0175），打印只列地图上画出来的
+  it('按分类过滤时地类只列勾着的、画面里出现的（ADR 0173、0175）', () => {
     const [landuse] = printEntries({ ...INPUT, state: FILTERED }, RENDERED);
 
     expect(landuse?.kind === 'classes' && landuse.items.map(item => item.key)).toStrictEqual(['0101']);
+  });
+
+  it('按取值配色的资源过滤时同样只列勾着的、画面里出现的', () => {
+    const state = withFilters({ csxhjctb_xxp: { [CLASS_FIELD]: ['08H214'] } });
+    const rendered: RenderedClasses = new Map([['csxhjctb_xxp', new Set(['08H213', '08H214'])]]);
+
+    const [schools] = printEntries({ ...INPUT, state }, rendered);
+
+    expect(schools?.kind === 'classes' && schools.items.map(item => item.key)).toStrictEqual(['08H214']);
   });
 });
 

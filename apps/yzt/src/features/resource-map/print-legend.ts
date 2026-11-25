@@ -177,10 +177,12 @@ export function printEntries(
     }
     let items: PrintItem[];
     if (entry.kind === 'values') {
-      items = entry.values.filter(({ key }) => present.has(key));
+      // 图例条目列出全部类别（过滤掉的在右侧图例里淡显，ADR 0175）；打印只列画在地图上的：没过滤掉、画面里出现的
+      items = entry.values.filter(({ key, excluded }) => !excluded && present.has(key));
     } else {
-      const { swatches } = entry;
-      items = landuseLegendItems('', new Map([...swatches].filter(([key]) => present.has(key)))).flatMap(item => {
+      const { swatches, excluded } = entry;
+      const shown = new Map([...swatches].filter(([key]) => !excluded.has(key) && present.has(key)));
+      items = landuseLegendItems('', shown).flatMap(item => {
         const swatch = swatches.get(item.key);
         return swatch ? [{ key: item.key, label: landuseItemLabel(item), swatch }] : [];
       });

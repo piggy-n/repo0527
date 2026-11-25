@@ -152,11 +152,24 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
 // 一个预览的填充有多不透明：只看面，花纹画在填充上面、不算
 const fillAlpha = (swatch: LegendSwatch) => (swatch.geometry === 'fill' ? (Color.parse(swatch.fill)?.a ?? 0) : 0);
 
+/** 按分类过滤到一类都不剩（ADR 0173、0175）：地图上这个资源什么也不画，统一配色时也一样 */
+export function allClassesExcluded(entry: LegendEntry): boolean {
+  if (entry.kind === 'symbol') {
+    return false;
+  }
+  return entry.kind === 'values'
+    ? entry.values.every(value => value.excluded)
+    : entry.swatches.size > 0 && entry.excluded.size === entry.swatches.size;
+}
+
 /**
  * 面画在地图上的填充色里最大的不透明度（0～1，不含图层透明度）：统一符号看统一的填充，按属性配色看各个取值；线、点为 0。
  * 当前图层判断不透明的面会不会把模型盖住（ADR 0161）
  */
 export function fillOpacityOf(entry: LegendEntry): number {
+  if (allClassesExcluded(entry)) {
+    return 0;
+  }
   if (entry.kind === 'symbol' || entry.mode === 'uniform') {
     return fillAlpha(entry.swatch);
   }

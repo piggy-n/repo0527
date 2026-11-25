@@ -39,7 +39,8 @@ const TOKENS = {
   '--font-weight-semibold': '600'
 };
 
-// 固定目录、不挂载地图引擎，真实外壳提供滚动与固定底栏
+// 固定目录、不挂载地图引擎；外壳和页面的功能面板（MapPanelGroup）一样是浮层、浅灰标题栏，内容区上内边距 8，
+// 提供滚动与固定底栏
 function setup(width: number) {
   const host = document.body.appendChild(document.createElement('div'));
   host.style.width = `${width}px`;
@@ -57,7 +58,7 @@ function setup(width: number) {
     const layers = useResourceLayers(map, { catalog, tileBase: 'http://localhost/tiles/', symbols });
     layersOwner = layers;
     return () => (
-      <MxPanel title="图例" style={{ height: '360px', flex: 'none', ...TOKENS }}>
+      <MxPanel floating headerTone="muted" title="图例" style={{ height: '360px', flex: 'none', ...TOKENS }}>
         {{
           default: () => [
             <ResourceLegend
@@ -176,6 +177,15 @@ describe('ResourceLegend（真实布局）', () => {
     // 过滤着的行照样按类别展开，过滤掉的类别淡显
     expect(valueOf('csxhjctb_hydl', '河流').hasAttribute('data-excluded')).toBe(false);
     expect(valueOf('csxhjctb_hydl', '水渠').hasAttribute('data-excluded')).toBe(true);
+    // 淡显叠在图层透明度上：图层调淡后过滤掉的仍比勾着的淡（2026-11-24 审查）
+    const swatchOpacity = (key: string) =>
+      Number(getComputedStyle(required(valueOf('csxhjctb_hydl', key).querySelector('[data-swatch]'), key)).opacity);
+    expect(swatchOpacity('河流')).toBe(1);
+    expect(swatchOpacity('水渠')).toBeCloseTo(0.35);
+    ctx.layers.setOpacity('csxhjctb_hydl', 0.5);
+    await nextTick();
+    expect(swatchOpacity('河流')).toBe(0.5);
+    expect(swatchOpacity('水渠')).toBeCloseTo(0.175);
     const codes = ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_ccwjq', 'csxhjctb_lctl'];
     const height = rowOf('bgdc_dltb').getBoundingClientRect().height;
     for (const code of codes) {
@@ -254,21 +264,44 @@ describe('ResourceLegend（真实布局）', () => {
     expect(getComputedStyle(settings).opacity).toBe('0');
   });
 
-  it('展开的长地类图例往下滚时，行头吸在滚动容器顶上并盖住滚过去的子图例', async () => {
+  it('展开的长地类图例往下滚时，行头吸在滚动容器的可见上沿、上面不留缝，并盖住滚过去的子图例', async () => {
     using ctx = setup(320);
     const row = rowOf('bgdc_dltb');
     expect(getComputedStyle(row).position).toBe('sticky');
     const top = ctx.scroller.getBoundingClientRect().top;
-    expect(row.getBoundingClientRect().top).toBe(top);
+    // 没滚动时在内容区的上内边距下面
+    expect(row.getBoundingClientRect().top).toBe(top + 8);
     ctx.scroller.scrollTop = 400;
     expect(ctx.scroller.scrollTop).toBe(400);
     const rect = row.getBoundingClientRect();
     expect(rect.top).toBe(top);
-    // 前面的子图例已经滚过行头；行头叠在子图例上面
+    // 前面的子图例已经滚过行头；行头叠在子图例上面，贴着上沿的地方也是行头（2026-11-24 审查：原来上面露出 8 像素）
     const first = ctx.wrapper.get('[data-landuse] button').element.getBoundingClientRect();
     expect(first.bottom).toBeLessThan(top);
     const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
     expect(hit !== null && row.contains(hit)).toBe(true);
+    const edge = document.elementFromPoint(rect.left + rect.width / 2, top + 2);
+    expect(edge !== null && row.contains(edge)).toBe(true);
+  });
+
+  it('子图例里获得焦点的一类在吸顶的行头下面时滚出来，不被行头盖住（Shift+Tab 往上走）', async () => {
+    using ctx = setup(320);
+    const row = rowOf('bgdc_dltb');
+    ctx.scroller.scrollTop = 400;
+    const header = row.getBoundingClientRect();
+    // 挑一个被行头盖住的地类
+    const covered = ctx.wrapper
+      .findAll<HTMLButtonElement>('[data-landuse] button')
+      .map(item => item.element)
+      .find(item => {
+        const rect = item.getBoundingClientRect();
+        return rect.top >= header.top && rect.top < header.bottom;
+      });
+    const target = required(covered, '被行头盖住的地类');
+
+    target.focus();
+    expect(document.activeElement).toBe(target);
+    expect(target.getBoundingClientRect().top).toBeGreaterThanOrEqual(row.getBoundingClientRect().bottom);
   });
 
   it('恢复入口上方留出间距，滚动不移动底栏，确认提示可取消且编辑时隐藏', async () => {

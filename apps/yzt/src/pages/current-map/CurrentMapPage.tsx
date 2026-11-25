@@ -137,9 +137,9 @@ export const CurrentMapPage = defineComponent({
     const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });
     // 编辑时隐藏图例的全局恢复入口，保留当前图例和图层级操作
     const legendEditing = ref(false);
-    // 当前图层的图例浮层正在显示的资源：右侧图例在编辑同一个资源时回到浏览（ADR 0157）
+    // 图层面板的图例浮层正在样式设置的资源：右侧图例在设置同一个资源时回到图例（ADR 0157、0175）
     const legendCode = ref<string | null>(null);
-    // 右侧图例正在编辑的资源：图例浮层开着同一个资源时关掉（ADR 0157）
+    // 右侧图例正在样式设置的资源：图例浮层在设置同一个资源时回到看图例，不关浮层（ADR 0157、0175）
     const legendEditingCode = ref<string | null>(null);
     // 二维、三维各自一套已添加的资源（ADR 0169），部署时在 .env 里配
     const resources = useResourceLayers(map, {

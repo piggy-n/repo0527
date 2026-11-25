@@ -468,9 +468,12 @@ describe('fillOpacityOf（ADR 0161 的"盖住模型"）', () => {
     expect(opacityOf('bgdc_czcdyd', undefined, { [CLASS_FIELD]: [] })).toBe(0);
   });
 
-  it('统一符号只看统一的填充，不管按分类过滤掉了哪些', () => {
+  it('统一符号只看统一的填充，不管按分类过滤掉了哪些；一类都不剩时什么都不画', () => {
     const override: ResourceSymbolOverride = { mode: 'uniform', uniform: { fillColor: 'rgba(255, 0, 0, 0.5)' } };
     expect(opacityOf('bgdc_dltb', override, { [CLASS_FIELD]: ['0101'] })).toBe(0.5);
+    // 分类条件在统一样式时照样筛要素（2026-11-24 审查）
+    expect(opacityOf('bgdc_dltb', override, { [CLASS_FIELD]: [] })).toBe(0);
+    expect(opacityOf('bgdc_czcdyd', override, { [CLASS_FIELD]: [] })).toBe(0);
   });
 });
 

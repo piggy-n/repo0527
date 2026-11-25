@@ -489,6 +489,21 @@ export const CurrentMapLayerPanel = defineComponent({
       return { kind: 'legend', configuring: entry !== null && !hasLegendItems(entry) } as const;
     };
 
+    // 图例浮层里返回图例、点子图例的一类：被按的按钮随旧视图卸载，焦点原来在浮层里的，进设置给标题行，返回给标题栏的
+    // 样式设置（2026-11-24 审查：焦点掉到 body，Esc 关闭时也还不回图层行）
+    const moveLegendFocus = (configuring: boolean) => {
+      const root = document.activeElement?.closest<HTMLElement>('[data-layer-popover]') ?? null;
+      popover.value = { kind: 'legend', configuring };
+      if (root) {
+        void nextTick(() => {
+          const target = configuring
+            ? root.querySelector<HTMLElement>('[data-settings-heading]')
+            : root.querySelector<HTMLElement>('button[aria-label="样式设置"]');
+          target?.focus({ preventScroll: true });
+        });
+      }
+    };
+
     const togglePopover = (kind: PopoverKind) => {
       if (popover.value?.kind === kind) {
         popover.value = null;
@@ -1031,9 +1046,7 @@ export const CurrentMapLayerPanel = defineComponent({
                       symbols={props.symbols}
                       code={code}
                       configuring={current.configuring}
-                      onUpdate:configuring={(configuring: boolean) =>
-                        (popover.value = { kind: 'legend', configuring })
-                      }
+                      onUpdate:configuring={(configuring: boolean) => moveLegendFocus(configuring)}
                     />
                   ]
                 : [

@@ -1,12 +1,6 @@
 import { defineComponent, type PropType } from 'vue';
-import type { LegendEntry } from '../legend';
+import { allClassesExcluded, type LegendEntry } from '../legend';
 import { LegendSummaryIcon, LegendSwatchIcon } from './LegendSwatchIcon';
-
-// 按分类过滤到一类都不剩：地图上这个资源什么也不画，摘要也空着（不退回去画统一的符号，ADR 0175）
-const allExcluded = (entry: Exclude<LegendEntry, { kind: 'symbol' }>) =>
-  entry.kind === 'values'
-    ? entry.values.every(value => value.excluded)
-    : entry.swatches.size > 0 && entry.excluded.size === entry.swatches.size;
 
 /**
  * 一个资源的符号摘要（ADR 0159）：统一样式是它的符号，按属性配色是代表取值按几何画的摘要（面拼色块、线是折线、点排成三角）。
@@ -22,7 +16,8 @@ export const LegendPreview = defineComponent({
     return () => {
       const { entry } = props;
       const size = props.small ? 'small' : 'summary';
-      if (entry.kind !== 'symbol' && entry.mode === 'classified' && allExcluded(entry)) {
+      // 按分类过滤到一类都不剩：地图上这个资源什么也不画，摘要也空着，不退回去画统一的符号（ADR 0175）
+      if (allClassesExcluded(entry)) {
         return null;
       }
       if (entry.kind === 'symbol' || entry.mode === 'uniform' || entry.summary.length === 0) {

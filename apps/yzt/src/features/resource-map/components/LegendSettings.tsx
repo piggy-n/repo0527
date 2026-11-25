@@ -27,7 +27,7 @@ interface Choice {
   readonly label: string;
 }
 
-// 选类别的下拉：资源实际有的全部类别（地类按规则的 only），不跟着要素过滤（ADR 0173）：图例只列勾着的，过滤掉的类别
+// 选类别的下拉：资源实际有的全部类别（地类按规则的 only），不跟着要素过滤（ADR 0173）：过滤掉的类别在图例里淡显，
 // 也能从这里选来改。原来地类列全表，选到资源没有的一类时编辑器是空的（2026-11-24 审查）
 function choicesOf(entry: LegendEntry): Choice[] {
   const rule = resourceStyle(entry.code).color;
@@ -122,7 +122,7 @@ export const LegendSettings = defineComponent({
           data-legend-settings={entry.code}
           style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}
         >
-          {/* 进来时焦点放在这一行（读屏报出换了视图），下一个 Tab 就是"返回图例" */}
+          {/* 右侧图例、图层浮层进来时焦点放在这一行（读屏报出换了视图），下一个 Tab 就是"返回图例" */}
           <div class={styles.settingsHeading} tabindex={-1} data-settings-heading>
             <MxTitle>{props.title ?? entry.name}</MxTitle>
             <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={() => emit('back')}>

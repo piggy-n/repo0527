@@ -1,5 +1,5 @@
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElColorPicker, ElSelect } from 'element-plus';
+import { ElColorPicker, ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { SymbolTarget } from '../resource-symbols';
@@ -374,6 +374,16 @@ describe('SymbolEditor', () => {
     const { wrapper, symbols } = mountEditor('szy_kt');
     const pickers = () => wrapper.findAllComponents(ElColorPicker).map(item => item.props('ariaLabel'));
     await choose(wrapper, 'XL');
+    await outlineStyle(wrapper).find('.el-select__wrapper').trigger('click');
+    await nextTick();
+    const options = outlineStyle(wrapper).findAllComponents(ElOption);
+    expect(options.map(option => [option.props('value'), option.props('label')])).toStrictEqual([
+      ['none', '无描边'],
+      ['solid', '实线'],
+      ['dashed', '虚线'],
+      ['dotted', '点线'],
+      ['dashDot', '点划线']
+    ]);
 
     outlineStyle(wrapper).vm.$emit('update:modelValue', 'none');
     await nextTick();

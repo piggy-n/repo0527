@@ -635,6 +635,17 @@ describe('ResourceLegend', () => {
     await nextTick();
     expect(wrapper.find('[data-legend-settings]').exists()).toBe(false);
     expect(document.activeElement).toBe(outside);
+
+    // 浮层里被按的按钮随视图卸载、焦点掉在 body 上时，这边让出也不抢焦点（2026-11-24 审查）
+    yieldCode.value = null;
+    await button(wrapper, '水域线层的样式设置').trigger('click');
+    outside.focus();
+    outside.remove();
+    expect(document.activeElement).toBe(document.body);
+    yieldCode.value = 'csxhjctb_hydl';
+    await nextTick();
+    expect(wrapper.find('[data-legend-settings]').exists()).toBe(false);
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('按分类过滤时子图例照样列出全部类别，过滤掉的淡显、写明已过滤，仍能点进设置；摘要只画地图上的类别（ADR 0173，用户 2026-11-24）', async () => {
@@ -687,6 +698,18 @@ describe('ResourceLegend', () => {
 
     const values = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('[data-value] button');
     expect(values.map(value => value.attributes('data-excluded'))).toStrictEqual(['true', 'true', 'true']);
+    expect(row(wrapper, 'csxhjctb_hydl').find('[data-swatch], [data-summary]').exists()).toBe(false);
+  });
+
+  it('统一配色时按分类过滤到一类都不剩：地图上同样什么也不画，摘要空着（2026-11-24 审查）', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.add(['csxhjctb_hydl']);
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    await nextTick();
+    expect(row(wrapper, 'csxhjctb_hydl').find('[data-swatch], [data-summary]').exists()).toBe(true);
+
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: [] });
+    await nextTick();
     expect(row(wrapper, 'csxhjctb_hydl').find('[data-swatch], [data-summary]').exists()).toBe(false);
   });
 

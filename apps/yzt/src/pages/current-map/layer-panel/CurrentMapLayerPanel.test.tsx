@@ -203,6 +203,9 @@ async function editClass(selector: string) {
   required(layerPopover().querySelector<HTMLButtonElement>(`${selector} button`), selector).click();
   await nextTick();
 }
+// 图例浮层子图例里一类的过滤标记
+const excludedOf = (selector: string) =>
+  required(layerPopover().querySelector(`${selector} button`), selector).getAttribute('data-excluded');
 // 样式设置里"类别"选着的一类
 const pickedClass = (wrapper: VueWrapper) =>
   required(
@@ -1303,6 +1306,71 @@ describe('CurrentMapLayerPanel', () => {
     back.click();
     await nextTick();
     expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+  });
+
+  it('图例浮层里点一类进设置时焦点到标题行，返回图例时到标题栏的样式设置；之后按 Esc 焦点回到图层行（2026-11-24 审查）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+
+    const water = required(layerPopover().querySelector<HTMLButtonElement>('[data-value="水渠"] button'), '水渠');
+    water.focus();
+    await editClass('[data-value="水渠"]');
+    await nextTick();
+    expect(document.activeElement).toBe(layerPopover().querySelector('[data-settings-heading]'));
+
+    const back = required(
+      [...popoverBody().querySelectorAll('button')].find(button => button.textContent?.includes('返回图例')),
+      '返回图例'
+    );
+    back.focus();
+    back.click();
+    await nextTick();
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+    expect(document.activeElement).toBe(settingsButton());
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    await nextTick();
+    expect(popover()).toBeNull();
+    expect(document.activeElement).toBe(row(wrapper, 'csxhjctb_hydl').element);
+  });
+
+  it('图例浮层里焦点不在浮层时进出设置不移动焦点', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    const outside = document.body.appendChild(document.createElement('input'));
+    outside.focus();
+
+    await editClass('[data-value="水渠"]');
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it('图例浮层的子图例按分类过滤时照样列出全部类别，过滤掉的淡显（ADR 0175）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
+    owner.setFilter('bgdc_dltb', { [CLASS_FIELD]: ['0101'] });
+    await nextTick();
+
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+    expect(excludedOf('[data-value="河流"]')).toBeNull();
+    expect(excludedOf('[data-value="水渠"]')).toBe('true');
+
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    expect(excludedOf('[data-landuse="0101"]')).toBeNull();
+    expect(excludedOf('[data-landuse="0103"]')).toBe('true');
   });
 
   it('图例浮层的标题栏是符号、名称、年份、样式设置、关闭：三种图例都有样式设置，没有显示方式的快捷切换（用户 2026-11-24）', async () => {

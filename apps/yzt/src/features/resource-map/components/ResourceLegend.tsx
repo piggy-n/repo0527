@@ -71,21 +71,27 @@ export const ResourceLegend = defineComponent({
       }
       return parent;
     };
+    // 本组件自己进出设置时才移动焦点
+    let focusAfterSwitch = false;
     const openSettings = (code: string, item?: string) => {
       if (item !== undefined) {
         selectedItems.value = new Map([...selectedItems.value, [code, item]]);
       }
       browseScroll = scrollContainer()?.scrollTop ?? 0;
+      focusAfterSwitch = editing.value !== code;
       editing.value = code;
     };
     const returnToLegend = () => {
+      focusAfterSwitch = editing.value !== null;
       editing.value = null;
     };
     // 进设置：滚到顶、焦点到标题行（读屏报出换了视图）；返回：恢复滚动、焦点回到这一行的样式设置。
-    // 焦点只在原本就在图例里（或随旧视图卸载掉到了 body）时移动，因为别处（图层浮层）让出来的不抢焦点
+    // 只在自己进出设置时移动焦点：图层浮层让出（yieldCode）、目标失效引起的切换不动焦点
     watch(
       editing,
       (code, previous) => {
+        const move = focusAfterSwitch;
+        focusAfterSwitch = false;
         const root = element.value;
         const scroller = scrollContainer();
         if (!root || !props.active) {
@@ -94,8 +100,7 @@ export const ResourceLegend = defineComponent({
         if (scroller) {
           scroller.scrollTop = code ? 0 : browseScroll;
         }
-        const active = document.activeElement;
-        if (active !== null && active !== document.body && !root.contains(active)) {
+        if (!move) {
           return;
         }
         const target = code
@@ -158,7 +163,13 @@ export const ResourceLegend = defineComponent({
           />
         );
       }
-      return <ValueLegend code={entry.code} values={entry.values} onEdit={(item: string) => openSettings(entry.code, item)} />;
+      return (
+        <ValueLegend
+          code={entry.code}
+          values={entry.values}
+          onEdit={(item: string) => openSettings(entry.code, item)}
+        />
+      );
     };
 
     const renderSettings = (entry: LegendEntry) => (

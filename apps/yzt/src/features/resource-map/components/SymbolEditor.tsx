@@ -383,7 +383,8 @@ export const SymbolEditor = defineComponent({
         }
         const dash = LINE_DASH_NAMES.find(item => item === name);
         if (dash) {
-          set(noOutline ? { outlineDash: dash, outlineWidth: widthsBeforeNone.get(targetKey()) ?? 'M' } : { outlineDash: dash });
+          const width = widthsBeforeNone.get(targetKey()) ?? 'M';
+          set(noOutline ? { outlineDash: dash, outlineWidth: width } : { outlineDash: dash });
         }
       };
       const blocked = value.fillStyle === 'none' && !noOutline;
