@@ -312,6 +312,12 @@ $tree-node: '.el-tree > .el-tree-node';
     var(--checkbox-quiet-border, var(--color-border));
 }
 
+// 没有过渡：边框、勾和外层的底色同时变，不慢一步（用户 2026-11-24）
+.el-checkbox.checkbox-quiet .el-checkbox__inner,
+.el-checkbox.checkbox-quiet .el-checkbox__inner::after {
+  transition: none;
+}
+
 // 不带下拉箭头的选择框，点击照常弹出选项（地图页"已选择图层"的年份）；用法 <ElSelect class="select-no-arrow">
 .el-select.select-no-arrow .el-select__suffix {
   display: none;

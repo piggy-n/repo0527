@@ -5,13 +5,11 @@ import {
   computed,
   defineComponent,
   nextTick,
-  onDeactivated,
   onScopeDispose,
   type PropType,
   ref,
   shallowRef,
-  type VNode,
-  watch
+  type VNode
 } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '../tooltip';
@@ -39,7 +37,7 @@ export interface MenuPoint {
 
 type NodeAction = 'add' | 'remove';
 
-// 操作过的行闪一下的时长，和图层里新加入的行一样；触屏的停留也到这时为止
+// 操作过的行闪一下的时长，和图层里新加入的行一样
 const ACTED_MS = 900;
 
 // 修饰键的状态在这些事件里更新：加上 mousemove，切回窗口后不按键、只移动鼠标也能更正
@@ -52,7 +50,7 @@ const MODIFIER_EVENTS: ['mousedown', 'mouseup', 'mousemove', 'keydown', 'keyup']
 ];
 
 // 项的行尾（用户 2026-11-24 选的 B，取代绿勾和悬停时的加号、叉）：复选框表示加入了没有，只是图形，单击的是整行；
-// 没加入的框调淡，悬停、键盘焦点时边框加强，底色和光标照旧预告这一下是添加还是移除。和分类的项数在同一条竖线上
+// 没加入的框调淡，悬停、键盘焦点时边框加强，底色照旧预告这一下是添加还是移除。和分类的项数在同一条竖线上
 const renderLeafEnd = (leaf: CatalogLeaf) => (
   <span class={styles.end} aria-hidden="true">
     <ElCheckbox class={['checkbox-quiet', styles.check]} modelValue={leaf.added} tabindex={-1} />
@@ -61,8 +59,8 @@ const renderLeafEnd = (leaf: CatalogLeaf) => (
 
 /**
  * 资源目录的树（ADR 0157，单击的含义用户 2026-11-22 改过）：单击项就是添加或移除，行尾的复选框表示加入了没有，
- * 悬停时底色、光标一起预告这一下会做什么；点完停在结果上、闪一下、读屏播报，鼠标或焦点离开这一行才再预告。分类不能选中，
- * 单击是展开、收起，行尾悬停时是整类的添加或移除。Ctrl（Mac 上 ⌘）单击加选、Shift 单击连选，选中只用于批量
+ * 悬停时底色预告这一下会做什么；点完闪一下、读屏播报，指针不用离开就能接着点，预告随即换成相反的操作
+ * （用户 2026-11-24）。分类不能选中， * 单击是展开、收起，行尾悬停时是整类的添加或移除。Ctrl（Mac 上 ⌘）单击加选、Shift 单击连选，选中只用于批量
  * （右键菜单、Insert、Delete，页面在多选时显示标题的批量按钮）。定位是回车和右键菜单，不再用双击。
  * 节点由各 feature 推导、页面拼好交进来，选中和展开由页面持有，添加、移除、定位都只报告给页面
  */
@@ -128,35 +126,6 @@ export const CatalogTree = defineComponent({
       timers.forEach(timer => clearTimeout(timer));
     });
 
-    // 点完停留：操作过的那一行显示结果，不预告相反的操作，鼠标单击无效（双击不会加了又删），鼠标或焦点离开这一行
-    // 才放开；触屏没有离开，闪完为止。每次停留是一个新对象，旧的计时到了不放开新的
-    const held = shallowRef<{ readonly key: string } | null>(null);
-    const hold = (key: string, pointerType: string) => {
-      const next = { key };
-      held.value = next;
-      if (pointerType === 'touch') {
-        later(ACTED_MS, () => {
-          if (held.value === next) {
-            held.value = null;
-          }
-        });
-      }
-    };
-    const release = (key: string) => {
-      if (held.value?.key === key) {
-        held.value = null;
-      }
-    };
-    // 行不见了（搜索、收起）或页面被缓存时收不到离开，直接放开
-    watch(visible, keys => {
-      if (held.value && !keys.includes(held.value.key)) {
-        held.value = null;
-      }
-    });
-    onDeactivated(() => (held.value = null));
-    // 行最后一次是用什么按下的：触屏的停留按时间放开
-    let pressType = 'mouse';
-
     // 闪一下的行：每一行记最后一次操作，较早的计时到了不提前去掉。还在闪时又变了，换成另一个同样的动画（again），
     // 动画名变了才会从头再闪一次
     const actedBy = new Map<string, { readonly batch: object; readonly again: boolean }>();
@@ -189,9 +158,8 @@ export const CatalogTree = defineComponent({
       }
     };
 
-    // 报告给页面，等页面改完再看哪些项真的变了：操作的那一行停在结果上，变了的行闪一下（操作的是分类时分类也闪）、
-    // 读屏播报；页面没接受的不停留、不提示
-    const act = async (action: NodeAction, keys: readonly string[], source: CatalogNode, pointerType: string) => {
+    // 报告给页面，等页面改完再看哪些项真的变了：变了的行闪一下（操作的是分类时分类也闪）、读屏播报；页面没接受的不提示
+    const act = async (action: NodeAction, keys: readonly string[], source: CatalogNode) => {
       if (action === 'add') {
         emit('add', keys);
       } else {
@@ -209,16 +177,15 @@ export const CatalogTree = defineComponent({
       if (first === undefined) {
         return;
       }
-      hold(source.key, pointerType);
       flashRows(source.kind === 'branch' ? [source.key, ...done.map(node => node.key)] : done.map(node => node.key));
       const what = done.length === 1 ? first.label : `${done.length} 项`;
       await announce(`${action === 'add' ? '已添加' : '已移除'} ${what}`);
     };
 
     // 单击、空格：切换这一项，多选随之清空（单击作用的永远是这一行）
-    const toggleLeaf = (leaf: CatalogLeaf, pointerType: string) => {
+    const toggleLeaf = (leaf: CatalogLeaf) => {
       emit('update:selection', clearedAt(props.selection, leaf.key));
-      void act(leaf.added ? 'remove' : 'add', [leaf.key], leaf, pointerType);
+      void act(leaf.added ? 'remove' : 'add', [leaf.key], leaf);
     };
 
     const select = (key: string, mode: SelectMode = {}) =>
@@ -248,7 +215,8 @@ export const CatalogTree = defineComponent({
     };
 
     // 行上的单击：项是添加或移除（Ctrl / ⌘ 加选、Shift 连选，只改选中），分类是展开、收起。
-    // 双击、三击的后几下（detail 按系统的双击间隔）和停在结果上的行不再切换
+    // 双击、三击的后几下（detail 按系统的双击间隔）不再切换，双击不会加了又删；
+    // 隔开的两下照常是两次操作，不用先离开这一行（用户 2026-11-24）
     const onRowClick = (event: MouseEvent, node: CatalogNode) => {
       if (node.kind === 'branch') {
         focusOnly(node.key);
@@ -262,10 +230,10 @@ export const CatalogTree = defineComponent({
         select(node.key, { toggle, range: event.shiftKey });
         return;
       }
-      if (event.detail > 1 || held.value?.key === node.key) {
+      if (event.detail > 1) {
         return;
       }
-      toggleLeaf(node, pressType);
+      toggleLeaf(node);
     };
 
     // 右键：多选里的项保留多选，菜单作用于整个选中；别的项清空多选，菜单只作用于它；分类不改选中，菜单作用于它下面的项
@@ -317,13 +285,13 @@ export const CatalogTree = defineComponent({
         } else if (toggle || event.shiftKey) {
           select(node.key, { toggle, range: event.shiftKey });
         } else if (!event.repeat) {
-          toggleLeaf(node, 'keyboard');
+          toggleLeaf(node);
         }
       } else if (event.key === 'Insert' || event.key === 'Delete') {
         const cover = keyboardCover(node);
         const keys = event.key === 'Insert' ? cover.add : cover.remove;
         if (keys.length > 0) {
-          void act(event.key === 'Insert' ? 'add' : 'remove', keys, node, 'keyboard');
+          void act(event.key === 'Insert' ? 'add' : 'remove', keys, node);
         }
       } else if (event.key === 'Escape' && props.selection.keys.size > 0) {
         emit('update:selection', clearedSelection(props.selection));
@@ -337,8 +305,8 @@ export const CatalogTree = defineComponent({
     };
 
     // 分类的行尾：平时是项数，悬停、键盘焦点时换成整类的添加（还有没添加的）或移除；整类操作量大，只在这个按钮、
-    // 右键菜单和 Insert、Delete 上，分类单击仍是展开、收起。点完停留时没有按钮，双击的第二下落在这一列上不展开
-    const renderBranchEnd = (node: CatalogNode, isHeld: boolean) => {
+    // 右键菜单和 Insert、Delete 上，分类单击仍是展开、收起。点完按钮随即换成相反的操作
+    const renderBranchEnd = (node: CatalogNode) => {
       const leaves = leavesOf(node);
       const added = leaves.filter(leaf => leaf.added).length;
       const canAdd = added < leaves.length;
@@ -346,16 +314,9 @@ export const CatalogTree = defineComponent({
       const tip = `${canAdd ? '添加' : '移除'} ${count} 项`;
       const keys = leaves.filter(leaf => leaf.added !== canAdd).map(leaf => leaf.key);
       return (
-        <span
-          class={styles.end}
-          onClick={(event: MouseEvent) => {
-            if (isHeld) {
-              event.stopPropagation();
-            }
-          }}
-        >
+        <span class={styles.end}>
           <span class={styles.badge}>{leaves.length}</span>
-          {leaves.length > 0 && !isHeld && (
+          {leaves.length > 0 && (
             <ElTooltip {...MAP_TOOLTIP_PROPS} content={tip} placement="top">
               <button
                 type="button"
@@ -363,15 +324,15 @@ export const CatalogTree = defineComponent({
                 tabindex={-1}
                 aria-label={`${tip}：${node.label}`}
                 data-node-action={canAdd ? 'add' : 'remove'}
-                // 焦点不进按钮：按钮点完就不显示了，焦点跟着丢掉会放开停留
+                // 焦点不进按钮，留在行上：键盘接着用上下、空格
                 onMousedown={(event: MouseEvent) => event.preventDefault()}
                 onClick={(event: MouseEvent) => {
                   event.stopPropagation();
-                  // 同项的单击：两下之间指针出了这一行、停留已经放开时，双击的第二下也不再操作
+                  // 双击的第二下落在换过的按钮上，不再操作：不会加了又删
                   if (event.detail > 1) {
                     return;
                   }
-                  void act(canAdd ? 'add' : 'remove', keys, node, pressType);
+                  void act(canAdd ? 'add' : 'remove', keys, node);
                 }}
               >
                 <SvgIcon name={canAdd ? 'layer-add' : 'layer-remove'} size={16} />
@@ -385,7 +346,6 @@ export const CatalogTree = defineComponent({
     const renderNode = (node: CatalogNode, depth: number): VNode => {
       const selected = props.selection.keys.has(node.key);
       const open = node.kind === 'branch' && (props.searching || props.expanded.has(node.key));
-      const isHeld = held.value?.key === node.key;
       const row = (
         <div
           class={[
@@ -393,7 +353,6 @@ export const CatalogTree = defineComponent({
             node.kind === 'branch' ? styles.branch : styles.leaf,
             node.kind === 'leaf' && node.added && styles.added,
             selected && styles.selected,
-            isHeld && styles.held,
             acted.value.has(node.key) && (acted.value.get(node.key) ? styles.actedAgain : styles.acted)
           ]}
           role="treeitem"
@@ -403,24 +362,12 @@ export const CatalogTree = defineComponent({
           tabindex={node.key === roving.value ? 0 : -1}
           data-catalog-node={node.key}
           style={{ paddingLeft: `${depth * 18}px` }}
-          onPointerdown={(event: PointerEvent) => (pressType = event.pointerType)}
           onClick={(event: MouseEvent) => onRowClick(event, node)}
           onContextmenu={(event: MouseEvent) => {
             event.preventDefault();
             openMenu(node, { x: event.clientX, y: event.clientY });
           }}
           onKeydown={(event: KeyboardEvent) => onRowKeydown(event, node)}
-          onPointerleave={(event: PointerEvent) => {
-            if (event.pointerType !== 'touch') {
-              release(node.key);
-            }
-          }}
-          onFocusout={(event: FocusEvent) => {
-            const next = event.relatedTarget;
-            if (!(next instanceof Node && (event.currentTarget as HTMLElement).contains(next))) {
-              release(node.key);
-            }
-          }}
         >
           {node.kind === 'branch' ? (
             <button
@@ -449,7 +396,7 @@ export const CatalogTree = defineComponent({
           {node.kind === 'leaf' && node.note && <span class={styles.note}>{node.note}</span>}
           {/* 行尾的复选框只是图形，"已添加"写成看不见的文字 */}
           {node.kind === 'leaf' && node.added && <span class={styles.hiddenText}>已添加</span>}
-          {node.kind === 'leaf' ? renderLeafEnd(node) : renderBranchEnd(node, isHeld)}
+          {node.kind === 'leaf' ? renderLeafEnd(node) : renderBranchEnd(node)}
         </div>
       );
       return (

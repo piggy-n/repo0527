@@ -65,31 +65,20 @@
   }
 }
 
-// 光标：没添加的是带加号的箭头，已添加的是手形（没有表示"移除"的系统光标，由淡红底说明）；分类单击是展开、收起。
-// 普通箭头只给单击无效或不是添加、移除的地方：项点完停留时、按住 Ctrl、⌘、Shift 准备多选时，分类点完停留时的行尾，
-// 搜索时不能收起的分类
-.leaf {
-  cursor: copy;
-}
-
-.added {
-  cursor: pointer;
-}
-
+// 光标统一是手形（用户 2026-11-24）：项单击是添加或移除（淡蓝、淡红底说明是哪一个），按住 Ctrl、⌘、Shift 时是选中；
+// 分类单击是展开、收起。只有搜索时不能收起的分类是普通箭头
+.leaf,
 .branch {
   cursor: pointer;
 }
 
-.leaf.held,
-.held .end,
-.modifying .leaf,
 .searching .branch {
   cursor: default;
 }
 
-// 状态色：没添加的淡蓝，已添加的淡红。键盘焦点也显示；悬停的只给鼠标（触屏点过的行不留着颜色）。
-// 点完停留、准备多选时不预告，选中的行保持选中的底色
-.root:not(.modifying) .leaf:not(.held, .selected):focus-visible {
+// 状态色：没添加的淡蓝，已添加的淡红。键盘焦点也显示；悬停的只给鼠标（触屏点过的行不留着颜色）。点完随即预告
+// 相反的操作，不用先离开（用户 2026-11-24）；准备多选时不预告，选中的行保持选中的底色
+.root:not(.modifying) .leaf:not(.selected):focus-visible {
   background-color: var(--color-primary-bg);
 
   &.added {
@@ -98,7 +87,7 @@
 }
 
 @media (hover: hover) {
-  .root:not(.modifying, .touch) .leaf:not(.held, .selected):hover {
+  .root:not(.modifying, .touch) .leaf:not(.selected):hover {
     background-color: var(--color-primary-bg);
 
     &.added {
@@ -107,29 +96,25 @@
   }
 }
 
-.held:hover,
-.held:focus-visible {
-  background-color: var(--color-neutral-bg-light);
-}
-
 .touch .row:not(.selected):hover {
   background-color: transparent;
 }
 
 // 项的复选框（用户 2026-11-24 选的 B）：没加入的框调淡（element-theme 的 checkbox-quiet），悬停、键盘焦点时
-// 边框加强成主色，同 Element 复选框的悬停；点完停留、准备多选时不加强，触屏点过的行不留着
-.root:not(.modifying) .leaf:not(.held):focus-visible {
+// 边框加强成主色，同 Element 复选框的悬停，和行的底色同时变（checkbox-quiet 没有过渡）；准备多选时不加强，
+// 触屏点过的行不留着
+.root:not(.modifying) .leaf:focus-visible {
   --checkbox-quiet-border: var(--color-primary);
 }
 
 @media (hover: hover) {
-  .root:not(.modifying, .touch) .leaf:not(.held):hover {
+  .root:not(.modifying, .touch) .leaf:hover {
     --checkbox-quiet-border: var(--color-primary);
   }
 }
 
-// 分类的行尾：悬停、键盘焦点时项数换成整类按钮；点完停留的行（held）显示项数，离开以后才换；准备多选时不换
-.root:not(.modifying) .branch:not(.held) {
+// 分类的行尾：悬停、键盘焦点时项数换成整类按钮，点完随即换成相反的操作；准备多选时不换
+.root:not(.modifying) .branch {
   &:hover,
   &:focus-visible {
     .action {
@@ -144,7 +129,7 @@
 
 // 触屏没有悬停（用户 2026-11-22）：分类常显整类按钮、不显示项数；项的行尾本来就是复选框
 @media (hover: none) {
-  .branch:not(.held) {
+  .branch {
     .action {
       display: inline-flex;
     }
@@ -316,7 +301,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-primary);
-  cursor: copy;
+  cursor: pointer;
 
   &:hover {
     background-color: var(--color-primary-alpha-12);
@@ -324,7 +309,6 @@
 
   &.remove {
     color: var(--color-text-secondary);
-    cursor: pointer;
 
     &:hover {
       background-color: var(--color-danger-bg-solid);

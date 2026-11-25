@@ -62,14 +62,8 @@ function mountTree({ accept = false } = {}) {
   const row = (key: string) => wrapper.get(`[data-catalog-node="${key}"]`);
   const checkboxOf = (key: string) => row(key).get('.el-checkbox');
   const checked = (key: string) => (checkboxOf(key).get('input').element as HTMLInputElement).checked;
-  const held = (key: string) => row(key).classes().some(name => name.includes('held'));
-  // 项的行尾：没有停留时底色和光标预告这一下（add、remove）；点完停留时不预告，只有结果（added 勾着、empty 空框）
-  const endOf = (key: string) => {
-    if (held(key)) {
-      return checked(key) ? 'added' : 'empty';
-    }
-    return checked(key) ? 'remove' : 'add';
-  };
+  // 项的下一次单击：勾着的是移除、空框是添加，底色照这个预告；点完不停留，随即换成相反的（用户 2026-11-24）
+  const endOf = (key: string) => (checked(key) ? 'remove' : 'add');
   const flashing = (key: string) => row(key).classes().some(name => name.includes('acted'));
   const announcement = () => wrapper.get('[data-catalog-announcement]').text();
   return { wrapper, selection, expanded, events, row, checkboxOf, checked, endOf, flashing, announcement };
@@ -152,33 +146,26 @@ describe('CatalogTree', () => {
     expect(events).toStrictEqual([['add', 'b']]);
   });
 
-  it('点完停在结果上（用户 2026-11-22）：离开这一行以前显示结果、再点无效，双击、三击的后几下也不切换；离开以后才预告相反的操作', async () => {
+  it('点完不用离开这一行就能接着点（用户 2026-11-24）：随即预告相反的操作，再点就是相反的；双击、三击的后几下不切换', async () => {
     const { events, row, endOf } = mountTree({ accept: true });
 
     await row('b').trigger('click');
     await flushPromises();
-    expect(endOf('b')).toBe('added');
-    await doubleClickSecond(row('b').element);
-    await row('b').trigger('click');
-    // 触屏的离开不算：手指抬起就有，等到闪完
-    await row('b').trigger('pointerleave', { pointerType: 'touch' });
-    await row('b').trigger('click');
-    await flushPromises();
-    expect(events).toStrictEqual([['add', 'b']]);
-    expect(endOf('b')).toBe('added');
-
-    await row('b').trigger('pointerleave', { pointerType: 'mouse' });
     expect(endOf('b')).toBe('remove');
-    // 两下之间越过了行的边界、停留已经放开时，按系统双击间隔算的第二下照样不切换
+    // 按系统双击间隔算的第二下不切换：双击不会加了又删
     await doubleClickSecond(row('b').element);
     expect(events).toStrictEqual([['add', 'b']]);
+
     await row('b').trigger('click');
     await flushPromises();
-    expect(endOf('b')).toBe('empty');
     expect(events).toStrictEqual([['add', 'b'], ['remove', 'b']]);
+    expect(endOf('b')).toBe('add');
+    await row('b').trigger('click');
+    await flushPromises();
+    expect(events).toStrictEqual([['add', 'b'], ['remove', 'b'], ['add', 'b']]);
   });
 
-  it('页面没有接受的切换不停留、不闪、不播报，仍预告原来的操作，再点照样报告', async () => {
+  it('页面没有接受的切换不闪、不播报，仍预告原来的操作，再点照样报告', async () => {
     const { events, row, endOf, flashing, announcement } = mountTree();
 
     await row('b').trigger('click');
@@ -191,19 +178,16 @@ describe('CatalogTree', () => {
     expect(events).toStrictEqual([['add', 'b'], ['add', 'b']]);
   });
 
-  it('触屏点完停到闪完（0.9 秒），之后换成相反的操作', async () => {
-    vi.useFakeTimers();
-    const { row, endOf } = mountTree({ accept: true });
+  it('触屏点完同样不用等闪完，再点就是相反的操作', async () => {
+    const { events, row } = mountTree({ accept: true });
 
     await row('b').trigger('pointerdown', { pointerType: 'touch' });
     await row('b').trigger('click');
     await flushPromises();
-    expect(endOf('b')).toBe('added');
-
-    await vi.advanceTimersByTimeAsync(899);
-    expect(endOf('b')).toBe('added');
-    await vi.advanceTimersByTimeAsync(1);
-    expect(endOf('b')).toBe('remove');
+    await row('b').trigger('pointerdown', { pointerType: 'touch' });
+    await row('b').trigger('click');
+    await flushPromises();
+    expect(events).toStrictEqual([['add', 'b'], ['remove', 'b']]);
   });
 
   it('操作过的行闪 0.9 秒、读屏播报；操作分类时分类和变了的项一起闪，播报项数', async () => {
@@ -224,21 +208,16 @@ describe('CatalogTree', () => {
     expect(announcement()).toBe('已移除 2 项');
   });
 
-  it('分类的按钮点完停在结果上：按钮不见了，双击的第二下落在这一列上不展开、不收起；停留放开以后第二下落在新按钮上也不操作', async () => {
+  it('分类的按钮点完随即换成相反的操作（用户 2026-11-24）：双击的第二下落在新按钮上不操作、也不展开收起，再点才移除整类', async () => {
     const { events, expanded, row } = mountTree({ accept: true });
 
     await row('land').get('[data-node-action="add"]').trigger('click');
     await flushPromises();
-    expect(row('land').find('[data-node-action]').exists()).toBe(false);
-    await row('land').get('[class*="end"]').trigger('click');
+    const remove = row('land').get('[data-node-action="remove"]');
+    await doubleClickSecond(remove.element);
     expect(expanded.value.has('land')).toBe(true);
     expect(events).toStrictEqual([['add', 'b']]);
 
-    // 两下之间指针出了这一行：按钮回来、换成移除，按系统双击间隔的第二下不移除整类
-    await row('land').trigger('pointerleave', { pointerType: 'mouse' });
-    const remove = row('land').get('[data-node-action="remove"]');
-    await doubleClickSecond(remove.element);
-    expect(events).toStrictEqual([['add', 'b']]);
     await remove.trigger('click');
     expect(events).toStrictEqual([['add', 'b'], ['remove', 'a', 'b']]);
   });
@@ -357,18 +336,13 @@ describe('CatalogTree', () => {
     expect(hasClass('touch')).toBe(false);
   });
 
-  it('Insert、Delete 也停在结果上，焦点离开这一行才换回预告；每次播报先清空再写，同一句话也能再读一遍', async () => {
+  it('Insert、Delete 点完随即预告相反的操作，焦点不用离开；每次播报先清空再写，同一句话也能再读一遍', async () => {
     const { wrapper, row, endOf, announcement } = mountTree({ accept: true });
 
     await row('b').trigger('keydown', { key: 'Insert' });
     await flushPromises();
-    expect(endOf('b')).toBe('added');
-    expect(announcement()).toBe('已添加 b');
-    // 焦点在行里移动不算离开
-    await row('b').trigger('focusout', { relatedTarget: row('b').get('span').element });
-    expect(endOf('b')).toBe('added');
-    await row('b').trigger('focusout', { relatedTarget: null });
     expect(endOf('b')).toBe('remove');
+    expect(announcement()).toBe('已添加 b');
 
     const live = wrapper.get('[data-catalog-announcement]').element;
     const texts: string[] = [];

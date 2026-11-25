@@ -45,6 +45,8 @@ function mountTree() {
   return host;
 }
 
+const cursorOf = (element: Element) => getComputedStyle(element).cursor;
+
 describe('CatalogTree（浏览器）', () => {
   it('每一层下面的引导线对着这一层分类箭头的中线：第二层的线不和第一层的叠在一起', () => {
     const host = mountTree();
@@ -103,6 +105,40 @@ describe('CatalogTree（浏览器）', () => {
       expect(required(row.querySelector('input'), 'a 的复选框').checked).toBe(true);
       // 焦点在行上，上下键、空格照常
       expect(document.activeElement).toBe(row);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('光标统一是手形（用户 2026-11-24）：没添加的项、已添加的项、分类和整类按钮都是，只有搜索时的分类是箭头', async () => {
+    const host = document.body.appendChild(document.createElement('div'));
+    host.style.width = '320px';
+    const nodes: CatalogNode[] = [
+      { kind: 'branch', key: 'land', label: '国土变更', children: [leaf('a'), { ...leaf('b'), added: true }] }
+    ];
+    const searching = ref(false);
+    mount(
+      defineComponent(() => () => (
+        <CatalogTree
+          nodes={nodes}
+          expanded={new Set(['land'])}
+          selection={EMPTY_CATALOG_SELECTION}
+          searching={searching.value}
+          label="资源"
+        />
+      )),
+      { attachTo: host }
+    );
+    try {
+      const row = (key: string) => required(host.querySelector<HTMLElement>(`[data-catalog-node="${key}"]`), key);
+      expect(['a', 'b', 'land'].map(key => cursorOf(row(key)))).toStrictEqual(['pointer', 'pointer', 'pointer']);
+      await userEvent.hover(row('land'));
+      const action = required(row('land').querySelector('[data-node-action]'), '整类按钮');
+      expect(cursorOf(action)).toBe('pointer');
+
+      searching.value = true;
+      await nextTick();
+      expect(cursorOf(row('land'))).toBe('default');
     } finally {
       host.remove();
     }
