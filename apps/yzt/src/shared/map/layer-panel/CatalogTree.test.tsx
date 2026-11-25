@@ -60,17 +60,19 @@ function mountTree({ accept = false } = {}) {
     { attachTo: document.body }
   );
   const row = (key: string) => wrapper.get(`[data-catalog-node="${key}"]`);
-  // 项的行尾：悬停时预告的（add、remove）；点完停留时没有预告，是结果（added 是勾、empty 是空）
+  const checkboxOf = (key: string) => row(key).get('.el-checkbox');
+  const checked = (key: string) => (checkboxOf(key).get('input').element as HTMLInputElement).checked;
+  const held = (key: string) => row(key).classes().some(name => name.includes('held'));
+  // 项的行尾：没有停留时底色和光标预告这一下（add、remove）；点完停留时不预告，只有结果（added 勾着、empty 空框）
   const endOf = (key: string) => {
-    const hint = row(key).find('[data-node-hint]');
-    if (hint.exists()) {
-      return hint.attributes('data-node-hint');
+    if (held(key)) {
+      return checked(key) ? 'added' : 'empty';
     }
-    return row(key).find('[data-added-mark]').exists() ? 'added' : 'empty';
+    return checked(key) ? 'remove' : 'add';
   };
   const flashing = (key: string) => row(key).classes().some(name => name.includes('acted'));
   const announcement = () => wrapper.get('[data-catalog-announcement]').text();
-  return { wrapper, selection, expanded, events, row, endOf, flashing, announcement };
+  return { wrapper, selection, expanded, events, row, checkboxOf, checked, endOf, flashing, announcement };
 }
 
 const selectedKeys = (selection: CatalogSelection) => [...selection.keys];
@@ -123,24 +125,25 @@ describe('CatalogTree', () => {
     expect(events).toStrictEqual([]);
   });
 
-  it('行尾一列（用户 2026-11-15）：分类是项数，已添加的项是勾，两者在同一列', () => {
-    const { row } = mountTree();
-    const mark = row('a').get('[data-added-mark]').element.parentElement;
+  it('行尾一列（用户 2026-11-15）：分类是项数，项是复选框，两者在同一列', () => {
+    const { row, checkboxOf } = mountTree();
+    const box = checkboxOf('a').element.parentElement;
     const count = row('land')
       .findAll('span')
       .find(item => item.text() === '2' && item.element.children.length === 0)?.element.parentElement;
-    expect(mark?.className).toBeTruthy();
-    expect(count?.className).toBe(mark?.className);
-    expect(row('b').find('[data-added-mark]').exists()).toBe(false);
+    expect(box?.className).toBeTruthy();
+    expect(count?.className).toBe(box?.className);
+    expect(checkboxOf('b').element.parentElement?.className).toBe(box?.className);
   });
 
-  it('项的行尾只是图形：已添加的是勾、预告叉，没添加的预告加号，"已添加"写成文字；分类的按钮添加下面还没加的', async () => {
-    const { events, row, endOf } = mountTree();
+  it('项的行尾是只显示的复选框（用户 2026-11-24）：勾着是已添加，没加入的调淡；读屏不读框、读"已添加"，框不进 Tab 顺序；分类的按钮添加下面还没加的', async () => {
+    const { events, row, checkboxOf, checked } = mountTree();
 
-    expect(row('a').find('[data-added-mark]').exists()).toBe(true);
-    expect(endOf('a')).toBe('remove');
-    expect(endOf('b')).toBe('add');
-    expect(row('a').find('[data-node-hint]').element.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(checked('a')).toBe(true);
+    expect(checked('b')).toBe(false);
+    expect(checkboxOf('b').classes()).toContain('checkbox-quiet');
+    expect(checkboxOf('a').element.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(checkboxOf('a').get('input').attributes('tabindex')).toBe('-1');
     expect(row('a').find('button').exists()).toBe(false);
     expect(row('a').text()).toContain('已添加');
     expect(row('b').text()).not.toContain('已添加');
@@ -155,7 +158,6 @@ describe('CatalogTree', () => {
     await row('b').trigger('click');
     await flushPromises();
     expect(endOf('b')).toBe('added');
-    expect(row('b').classes().some(name => name.includes('held'))).toBe(true);
     await doubleClickSecond(row('b').element);
     await row('b').trigger('click');
     // 触屏的离开不算：手指抬起就有，等到闪完
@@ -176,7 +178,7 @@ describe('CatalogTree', () => {
     expect(events).toStrictEqual([['add', 'b'], ['remove', 'b']]);
   });
 
-  it('页面没有接受的切换不停留、不闪、不播报，行尾仍预告原来的操作，再点照样报告', async () => {
+  it('页面没有接受的切换不停留、不闪、不播报，仍预告原来的操作，再点照样报告', async () => {
     const { events, row, endOf, flashing, announcement } = mountTree();
 
     await row('b').trigger('click');
