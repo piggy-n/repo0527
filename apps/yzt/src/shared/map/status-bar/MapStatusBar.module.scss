@@ -1,6 +1,6 @@
 // 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3；排法 ADR 0171）：高 24，左右内边距 8；分隔线 1 × 12、左右各 8；比例尺线段最长 80
 
-// 宽度由页面决定；状态栏贴在底边，只显示，不拦截地图的鼠标操作（读数前的图标除外）
+// 宽度由页面决定；状态栏贴在底边，只显示，不拦截地图的鼠标操作（每段读数除外）
 .root {
   position: relative;
   display: flex;
@@ -45,11 +45,24 @@
   gap: 10px;
 }
 
-// 读数前的图标：悬停时说明含义
+// 读数前的图标
 .icon {
   display: inline-flex;
   color: var(--color-text-secondary);
-  pointer-events: auto;
+}
+
+// 一段读数（图标和数值）：悬停时说明含义，只有它们接鼠标
+@media (hover: hover) {
+  .readout {
+    pointer-events: auto;
+  }
+}
+
+// 触屏没有悬停：同 2026-11-24 以前只有图标接触摸、点开提示，数值和比例尺不挡地图的拖动和捏合
+@media (hover: none) {
+  .icon {
+    pointer-events: auto;
+  }
 }
 
 .divider {

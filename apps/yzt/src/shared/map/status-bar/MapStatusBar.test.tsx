@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import type { LngLat } from '@mx/map-core';
+import { ElTooltip } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, h, nextTick, shallowRef } from 'vue';
 import { required } from '../../testing/required';
@@ -38,10 +39,19 @@ const rootOf = (wrapper: Wrapper) => wrapper.get('[data-map-status-bar]').elemen
 // 看得见的那一条（量尺里的不算）
 const shownBar = (wrapper: Wrapper) => wrapper.find('[data-map-readout]');
 const shown = (wrapper: Wrapper) => (shownBar(wrapper).exists() ? shownBar(wrapper).text() : null);
-// 读数前图标的说明（悬停的提示、读屏名称）
+// 读数前图标的读屏名称
 const iconHints = (wrapper: Wrapper) => shownBar(wrapper).findAll('[role="img"]').map(icon => icon.attributes('aria-label'));
+// 每个悬停提示的说明和它包住的读数（量尺里的不带提示）
+const tips = (wrapper: Wrapper) => wrapper.findAllComponents(ElTooltip).map(tip => [tip.props('content'), tip.text()]);
+// 接鼠标的读数：只有它们拦截地图的鼠标操作，样式里是 pointer-events: auto
+const hoverTargets = (wrapper: Wrapper) => shownBar(wrapper).findAll('[class*="_readout_"]').map(target => target.text());
 
 describe('MapStatusBar', () => {
+  // 悬停提示放在 body 下，不归组件管
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
   it('经纬度在前、比例尺在后（ADR 0171），经纬度按坐标定位面板的写法', async () => {
     const { wrapper } = mountBar();
 
@@ -89,6 +99,40 @@ describe('MapStatusBar', () => {
     await nextTick();
     expect(shown(wrapper)).toBe('118.789800, 32.06140010 km-15°30°');
     expect(iconHints(wrapper).slice(1)).toStrictEqual(['旋转 -15°', '俯仰 30°']);
+  });
+
+  it('每段读数整段（图标和数值）悬停，各出自己的说明：名称和数值（用户 2026-11-24）', async () => {
+    const { wrapper, angles, scale, eye } = mountBar('decimal');
+    angles.value = { bearing: -15, pitch: 30 };
+    await nextTick();
+    expect(tips(wrapper)).toStrictEqual([
+      ['鼠标所在位置的经纬度', '118.789800, 32.061400'],
+      ['比例尺 10 km', '10 km'],
+      ['旋转 -15°', '-15°'],
+      ['俯仰 30°', '30°']
+    ]);
+    // 分隔线、旋转和俯仰之间的间隔不接鼠标
+    expect(hoverTargets(wrapper)).toStrictEqual(['118.789800, 32.061400', '10 km', '-15°', '30°']);
+
+    scale.value = null;
+    eye.value = 420_300;
+    angles.value = { bearing: null, pitch: 30 };
+    await nextTick();
+    expect(tips(wrapper)).toStrictEqual([
+      ['鼠标所在位置的经纬度', '118.789800, 32.061400'],
+      ['视点高度 420 km', '420 km'],
+      ['俯仰 30°', '30°']
+    ]);
+    expect(hoverTargets(wrapper)).toStrictEqual(['118.789800, 32.061400', '420 km', '30°']);
+  });
+
+  it('悬停数值（不在图标上）也出说明，只出这一段的', async () => {
+    const { wrapper } = mountBar('decimal');
+    const scaleBar = required(shownBar(wrapper).find('[style*="width: 77px"]').element.parentElement, '比例尺这一段');
+
+    scaleBar.dispatchEvent(new MouseEvent('mouseenter'));
+    await vi.waitFor(() => expect(document.body.textContent).toContain('比例尺 10 km'));
+    expect(document.body.textContent).not.toContain('鼠标所在位置的经纬度');
   });
 
   it('没有读数（视图不在就绪）时不显示', async () => {
