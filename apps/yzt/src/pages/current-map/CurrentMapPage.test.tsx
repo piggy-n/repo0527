@@ -1005,7 +1005,7 @@ describe('CurrentMapPage', () => {
     await trigger.trigger('click');
     await vi.waitFor(() => expect(optionsPopoverVisible(name)).toBe(true));
     expect(trigger.attributes('aria-pressed')).toBe('true');
-    expect(optionsPopover(name).text()).toContain('导出图片');
+    expect(optionsPopover(name).get('header').text()).toBe('地图打印导出');
     // 预览等画面完整（MapLibre 空闲）才截
     await vi.waitFor(() => {
       map.fire('idle');

@@ -8,6 +8,7 @@ import {
   onScopeDispose,
   type PropType,
   ref,
+  shallowRef,
   type SlotsType,
   type VNode,
   watch
@@ -24,6 +25,11 @@ export interface MapOptionsContext {
   readonly active: boolean;
   /** 关闭浮层，焦点回到入口：内容里的操作做完时调用（如选了底图） */
   readonly close: () => void;
+  /**
+   * 内容打开了盖住整页的一层（如打印的大图预览）时交给它的关闭函数，关上时交 null：开着时单击哪里都不关浮层，
+   * Esc 只关那一层（照样在捕获阶段截住，页面上别的 Esc 监听收不到）
+   */
+  readonly hold: (closeLayer: (() => void) | null) => void;
 }
 
 /**
@@ -37,7 +43,9 @@ export const MapOptionsPopover = defineComponent({
     open: { type: Boolean, default: false },
     visible: { type: Boolean, default: true },
     /** 默认和入口垂直居中；left-end 底边和入口对齐、向上展开，给下方的底图浮层让位 */
-    placement: { type: String as PropType<'left' | 'left-end'>, default: 'left' }
+    placement: { type: String as PropType<'left' | 'left-end'>, default: 'left' },
+    /** 内容自己带标题栏（MxPanel，如地图打印）：外壳不留内边距 */
+    flush: Boolean
   },
   emits: {
     'update:open': (open: boolean) => typeof open === 'boolean',
@@ -57,8 +65,12 @@ export const MapOptionsPopover = defineComponent({
     useResizeObserver(element, () => void popover.value?.popperRef?.popperInstanceRef?.update());
     const pageActive = usePageActive();
     const shown = computed(() => props.open && props.visible && pageActive.value);
+    // 内容打开的那一层的关闭函数；浮层关上时一起放开
+    const held = shallowRef<(() => void) | null>(null);
+    const hold = (closeLayer: (() => void) | null) => (held.value = shown.value ? closeLayer : null);
     watch(shown, visible => {
       if (!visible) {
+        held.value = null;
         emit('topChange', null);
       }
     });
@@ -74,11 +86,13 @@ export const MapOptionsPopover = defineComponent({
     };
     useLightDismiss({
       active: () => shown.value,
-      // 箭头和边框也算浮层：它们在内容外面、在 Element 的弹出层里面
+      // 箭头和边框也算浮层：它们在内容外面、在 Element 的弹出层里面；内容打开的那一层开着时点哪里都算里面
       contains: target =>
-        reference.value?.contains(target) === true || element.value?.closest('.el-popper')?.contains(target) === true,
+        held.value !== null ||
+        reference.value?.contains(target) === true ||
+        element.value?.closest('.el-popper')?.contains(target) === true,
       onOutside: () => emit('update:open', false),
-      onEscape: close
+      onEscape: () => (held.value ? held.value() : close())
     });
     // Popper 算完位置后报告顶部：Element 的位置要等 Vue 渲染才写进 DOM，这时量到的还是旧的，等这一轮之后再量；选项保持同一对象避免更新循环
     const popperOptions = {
@@ -121,8 +135,8 @@ export const MapOptionsPopover = defineComponent({
         {{
           reference: () => <span ref={reference} class={styles.reference} onClick={toggle}>{slots.reference()}</span>,
           default: () => (
-            <div ref={element} class={styles.content} data-map-options={props.name}>
-              {slots.default({ active: shown.value, close })}
+            <div ref={element} class={[styles.content, props.flush && styles.flush]} data-map-options={props.name}>
+              {slots.default({ active: shown.value, close, hold })}
             </div>
           )
         }}

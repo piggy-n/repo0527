@@ -41,7 +41,7 @@ const LAND_SHARE = `async ({ png, width, color, tolerance }) => {
 }`;
 
 // 地图打印（ADR 0174）：产物里的真实引擎截图、合成、下载；默认视角下只有静态底图和省界，图例在右侧一栏
-test('地图打印：浮层里有预览，导出的 PNG 是地图加右侧一栏的图例，文件名带时间', async ({ page }) => {
+test('地图打印：浮层里有预览，点开看大图；导出的 PNG 是地图加右侧一栏的图例，文件名带时间', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto('/login');
   await login(page);
@@ -62,12 +62,35 @@ test('地图打印：浮层里有预览，导出的 PNG 是地图加右侧一栏
   await entry.click();
   await expect(entry).toHaveAttribute('aria-pressed', 'true');
   const panel = page.locator('[data-map-print]');
-  await expect(panel.locator('[data-print-size]')).toHaveText(
-    `${Math.round(mapBox.width + LEGEND_COLUMN)} × ${Math.round(mapBox.height)} 像素`
-  );
+  const pixels = `${Math.round(mapBox.width + LEGEND_COLUMN)} × ${Math.round(mapBox.height)} 像素`;
+  await expect(panel.locator('[data-print-size]')).toHaveText(pixels);
 
+  // 大图是导出的那张图；在大图里点按钮、按 Esc 只关大图，浮层还开着，焦点回到预览。先用 Tab 在大图里走一步：
+  // 键盘操作过，大图的 FocusTrap 卸载时会把焦点放回打开前的元素（Chromium 清掉了生成时不能点的预览的焦点，是 body）
+  const preview = panel.getByRole('button', { name: '查看打印预览的大图' });
+  await preview.click();
+  const viewer = page.locator('.el-image-viewer__wrapper');
+  await expect(viewer.locator('[data-print-viewer-info]')).toHaveText(`打印预览：${pixels}`);
+  await viewer.getByRole('button', { name: '放大' }).click();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Escape');
+  await expect(viewer).toHaveCount(0);
+  await expect(panel, '关掉大图后浮层还开着').toBeVisible();
+  await expect(preview, '关掉大图后焦点回到预览').toBeFocused();
+
+  // 在大图里用键盘导出：存的就是这张图，浮层关掉，焦点回到入口
+  await preview.click();
+  const viewerSaved = page.waitForEvent('download');
+  await viewer.getByRole('button', { name: '导出' }).focus();
+  await page.keyboard.press('Enter');
+  expect((await viewerSaved).suggestedFilename()).toMatch(/^现状底图-\d{8}-\d{6}\.png$/);
+  await expect(panel, '大图里导出完关掉浮层').toHaveCount(0);
+  await expect(entry, '导出后焦点回到入口').toBeFocused();
+
+  await entry.click();
+  await expect(panel.locator('[data-print-size]')).toHaveText(pixels);
   const waiting = page.waitForEvent('download');
-  await panel.getByRole('button', { name: '导出图片' }).click();
+  await panel.getByRole('button', { name: '导出', exact: true }).click();
   const download = await waiting;
   expect(download.suggestedFilename()).toMatch(/^现状底图-\d{8}-\d{6}\.png$/);
   const path = await download.path();
@@ -83,6 +106,6 @@ test('地图打印：浮层里有预览，导出的 PNG 是地图加右侧一栏
   const share = await page.evaluate<number>(`(${LAND_SHARE})(${input})`);
   expect(share, '地图部分是静态底图的陆地').toBeGreaterThan(MIN_LAND_SHARE);
   await expect(panel, '导出完关掉浮层').toHaveCount(0);
-  // 登录成功的提示可能还在，按文字找
-  await expect(page.locator('.el-message', { hasText: '已导出 现状底图-' })).toBeVisible();
+  // 登录成功的提示可能还在，按文字找；大图里导出的那一条可能也还在，看最后一条
+  await expect(page.locator('.el-message', { hasText: '已导出 现状底图-' }).last()).toBeVisible();
 });

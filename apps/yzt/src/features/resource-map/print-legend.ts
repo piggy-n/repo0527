@@ -5,7 +5,6 @@ import type { RenderedFeature, ScreenBox, ToolView } from '@mx/map-core';
 import { screenBoxPolygon } from '@mx/map-tools';
 import type { PrintLegendBlock, PrintLegendRow } from '@/shared/map/print/print-legend';
 import { clipToScope, intersectsScope, type RegionScope } from '@/shared/map/region/region-scope';
-import { filterText } from './feature-filter';
 import { type PickResource, pickResources } from './feature-query';
 import { landuseItemLabel, landuseLegendItems, legendEntry, type LegendSwatch } from './legend';
 import { drawLegendSwatch } from './legend-canvas';
@@ -138,8 +137,8 @@ export interface PrintItem {
 }
 
 /**
- * 打印图例里的一个资源：统一符号是一行；按属性配色的是一组，只有画面里出现的取值，次序同右侧图例。filterNote 是全部的
- * 过滤条件（ADR 0173）：类别只列画面里出现的，看不出勾了哪些，分类字段的条件也写
+ * 打印图例里的一个资源：统一符号是一行；按属性配色的是一组，只有画面里出现的取值，次序同右侧图例。不写过滤条件
+ * （用户 2026-11-24）：画出来的要素已经按条件过滤，类别只列画面里出现的
  */
 export type PrintEntry =
   | {
@@ -148,7 +147,6 @@ export type PrintEntry =
       readonly title: string;
       readonly opacity: number;
       readonly swatch: LegendSwatch;
-      readonly filterNote: string | null;
     }
   | {
       readonly kind: 'classes';
@@ -158,10 +156,9 @@ export type PrintEntry =
       readonly continued: string;
       readonly opacity: number;
       readonly items: readonly PrintItem[];
-      readonly filterNote: string | null;
     };
 
-/** 打印图例里的资源（纯数据）：符号同右侧图例的推导（legendEntry），名称后面带年份，过滤着的写出全部条件 */
+/** 打印图例里的资源（纯数据）：符号同右侧图例的推导（legendEntry），按分类过滤时只有勾着的类别；名称后面带年份 */
 export function printEntries(
   { state, invalid, overrideOf, zoom }: PrintLegendInput,
   rendered: RenderedClasses
@@ -175,10 +172,8 @@ export function printEntries(
     const opacity = state.displays.get(code)?.opacity ?? 1;
     const title = `${name}（${year}）`;
     const entry = legendEntry(resource, year, overrideOf(code), filter);
-    // 右侧图例的 filterNote 不写分类字段（类别列表就是条件），打印的类别只列画面里出现的，体现不了（用户 2026-11-24）
-    const filterNote = filterText(code, filter) || null;
     if (entry.kind === 'symbol' || entry.mode === 'uniform') {
-      return [{ kind: 'symbol', code, title, opacity, swatch: entry.swatch, filterNote }];
+      return [{ kind: 'symbol', code, title, opacity, swatch: entry.swatch }];
     }
     let items: PrintItem[];
     if (entry.kind === 'values') {
@@ -193,22 +188,21 @@ export function printEntries(
     if (items.length === 0) {
       return [];
     }
-    return [{ kind: 'classes', code, title, continued: `${name}（${year}，续）`, opacity, items, filterNote }];
+    return [{ kind: 'classes', code, title, continued: `${name}（${year}，续）`, opacity, items }];
   });
 }
 
-/** 打印图例里资源的几组（ADR 0174）：符号按图层的透明度变淡，过滤条件写成"只显示 …"，同右侧图例 */
+/** 打印图例里资源的几组（ADR 0174）：符号按图层的透明度变淡，同右侧图例 */
 export function resourcePrintBlocks(entries: readonly PrintEntry[]): PrintLegendBlock[] {
   return entries.map((entry): PrintLegendBlock => {
     const row = (label: string, swatch: LegendSwatch): PrintLegendRow => ({
       label,
       drawSwatch: (context, box) => drawLegendSwatch(context, swatch, box, entry.opacity)
     });
-    const note = entry.filterNote === null ? {} : { filterNote: `只显示 ${entry.filterNote}` };
     if (entry.kind === 'symbol') {
-      return { title: null, rows: [row(entry.title, entry.swatch)], ...note };
+      return { title: null, rows: [row(entry.title, entry.swatch)] };
     }
     const { title, continued, items } = entry;
-    return { title, continued, rows: items.map(item => row(item.label, item.swatch)), ...note };
+    return { title, continued, rows: items.map(item => row(item.label, item.swatch)) };
   });
 }

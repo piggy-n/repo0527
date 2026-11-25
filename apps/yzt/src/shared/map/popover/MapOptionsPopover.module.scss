@@ -15,3 +15,13 @@
   overflow: hidden;
   border-radius: inherit;
 }
+
+// 内容自己带标题栏（MxPanel）：铺满外壳，面板的圆角跟着外壳、不要自己的阴影
+.content.flush {
+  padding: 0;
+
+  > * {
+    border-radius: inherit;
+    box-shadow: none;
+  }
+}
