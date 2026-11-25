@@ -70,10 +70,12 @@ button.summary {
   }
 }
 
-// 统一配色的行没有样式设置按钮，留出同等宽度，显示方式的按钮和按类别配色的行对齐
+// 统一配色的行没有样式设置按钮，留出同等宽度，显示方式的按钮和按类别配色的行对齐；点这段同摘要一样进编辑
 .configureSlot {
   flex: none;
+  align-self: stretch;
   width: 24px;
+  cursor: pointer;
 }
 
 // 单一符号没有显示方式和样式设置，按钮里留出两个按钮和间距的宽度（4 + 24 + 4 + 24）：整行可点，年份和改过的点逐行对齐
@@ -133,6 +135,14 @@ button.summary {
   justify-content: center;
   width: 28px;
   height: 20px;
+}
+
+// 名称和过滤的漏斗共用网格的第 3 列，摘要始终 5 项，年份和改过的点逐行对齐
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .name {

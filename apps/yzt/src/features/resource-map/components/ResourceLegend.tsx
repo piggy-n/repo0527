@@ -167,15 +167,24 @@ export const ResourceLegend = defineComponent({
       />
     );
 
-    // 摘要右边的显示方式和样式设置（用户 2026-11-24）：统一配色没有样式设置，留出同等宽度；
-    // 单一符号两样都没有，宽度留在摘要按钮里（symbolSummary），整行可点、年份逐行对齐
+    // 摘要右边的显示方式和样式设置（用户 2026-11-24）：统一配色没有样式设置，留出同等宽度，点这段同摘要一样进编辑
+    // （键盘走摘要按钮）；单一符号两样都没有，宽度留在摘要按钮里（symbolSummary），整行可点、年份逐行对齐
     const renderActions = (entry: LegendEntry): VNode[] => {
       if (entry.kind === 'symbol') {
         return [];
       }
       const mode = <LegendModeToggle key="mode" class={styles.configure} symbols={props.symbols} entry={entry} />;
       if (entry.mode === 'uniform') {
-        return [mode, <span key="slot" class={styles.configureSlot} aria-hidden="true" />];
+        const slot = (
+          <span
+            key="slot"
+            class={styles.configureSlot}
+            aria-hidden="true"
+            data-legend-slot
+            onClick={() => openEditor({ code: entry.code })}
+          />
+        );
+        return [mode, slot];
       }
       return [
         mode,
@@ -204,12 +213,15 @@ export const ResourceLegend = defineComponent({
           <span class={styles.preview}>
             <LegendPreview entry={entry} />
           </span>
-          <span class={styles.name} title={entry.name}>{entry.name}</span>
-          {entry.filtered && (
-            <span class={styles.filtered} title="已过滤" data-legend-filtered>
-              <SvgIcon name="layer-filter" size={14} />
-            </span>
-          )}
+          {/* 名称和过滤的漏斗共用一列：摘要的网格始终 5 项，年份和改过的点逐行对齐（2026-11-24 集成审查） */}
+          <span class={styles.nameCell}>
+            <span class={styles.name} title={entry.name}>{entry.name}</span>
+            {entry.filtered && (
+              <span class={styles.filtered} title="已过滤" data-legend-filtered>
+                <SvgIcon name="layer-filter" size={14} />
+              </span>
+            )}
+          </span>
           <span class={styles.year}>{entry.year}</span>
           <span class={styles.editedSlot}>
             {props.symbols.isCustomized(entry.code) && <span class={styles.edited} title="改过符号" data-edited />}

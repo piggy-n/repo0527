@@ -10,6 +10,7 @@ import { required } from '@/shared/testing/required';
 import { buildCatalog } from '../catalog';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
+import { CLASS_FIELD } from '../filter-fields';
 import { ResourceLegend } from './ResourceLegend';
 import { ResourceLegendReset } from './ResourceLegendReset';
 
@@ -130,13 +131,19 @@ describe('ResourceLegend（真实布局）', () => {
     expect(Math.abs((backRect?.top ?? 0) + (backRect?.height ?? 0) / 2 - title.top - title.height / 2)).toBeLessThan(1);
   });
 
-  it('按类别配色、统一配色、单一符号的行混在一起时，年份和改过的点逐行对齐；单一符号行最右一段也能进编辑（2026-11-24 审查）', async () => {
+  it('按类别配色、统一配色、单一符号、过滤着的行混在一起时，年份和改过的点逐行对齐；单一符号行最右一段也能进编辑（2026-11-24 审查）', async () => {
     using ctx = setup(320);
     ctx.layers.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     ctx.symbols.setMode('bgdc_dltb', 'uniform');
+    // 过滤着的行名称后面多一个漏斗，和名称共用一列，不挤占年份（2026-11-24 集成审查）
+    ctx.layers.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
     await nextTick();
+    expect(document.querySelector('[data-legend="csxhjctb_hydl"] [data-legend-filtered]')).not.toBeNull();
     expect(rights('bgdc_dltb')).toStrictEqual(rights('csxhjctb_hydl'));
     expect(rights('bgdc_ccwjq')).toStrictEqual(rights('csxhjctb_hydl'));
+    expect(summaryOf('csxhjctb_hydl').getBoundingClientRect().height).toBe(
+      summaryOf('bgdc_ccwjq').getBoundingClientRect().height
+    );
 
     const row = required(summaryOf('bgdc_ccwjq').parentElement, '坑塘的行');
     const rect = row.getBoundingClientRect();
@@ -144,6 +151,19 @@ describe('ResourceLegend（真实布局）', () => {
     expect(hit?.closest('button')?.getAttribute('aria-label')).toBe('编辑坑塘图例');
     await userEvent.click(row, { position: { x: rect.width - 10, y: rect.height / 2 } });
     expect(ctx.wrapper.find('[data-symbol-editor="bgdc_ccwjq"]').exists()).toBe(true);
+  });
+
+  it('统一配色的行尾留出的一段也能进编辑（2026-11-24 集成审查）', async () => {
+    using ctx = setup(320);
+    ctx.symbols.setMode('bgdc_dltb', 'uniform');
+    await nextTick();
+
+    const row = required(summaryOf('bgdc_dltb').parentElement, '地类图斑的行');
+    const rect = row.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.right - 10, rect.top + rect.height / 2);
+    expect(hit?.closest('[data-legend-slot]')).not.toBeNull();
+    await userEvent.click(row, { position: { x: rect.width - 10, y: rect.height / 2 } });
+    expect(ctx.wrapper.find('[data-symbol-editor="bgdc_dltb"]').exists()).toBe(true);
   });
 
   it('点击可见条目进入编辑后回到列表原滚动位置，鼠标移出时设置入口隐藏', async () => {

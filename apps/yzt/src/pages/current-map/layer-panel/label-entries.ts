@@ -22,7 +22,7 @@ function unavailable({ model, labelable }: LabelRowState): string | undefined {
   return labelable ? undefined : '没有可标注的字段';
 }
 
-/** 工具栏的"标注"按钮：放在图例后面；没有选中的行时灰掉 */
+/** 工具栏的"标注"按钮：在过滤后面（过滤紧跟图例，用户 2026-11-24）；没有选中的行时灰掉 */
 export function labelToolItem(row: LabelRowState | null, pressed: boolean): PanelToolItem {
   const reason = row ? unavailable(row) : undefined;
   return {
@@ -35,7 +35,7 @@ export function labelToolItem(row: LabelRowState | null, pressed: boolean): Pane
   };
 }
 
-/** 右键菜单在透明度、图例后面的两项：显示或隐藏标注，打开标注浮层 */
+/** 右键菜单在透明度、图例、过滤…后面的两项：显示或隐藏标注，打开标注浮层 */
 export function labelMenuEntries(row: LabelRowState): PanelMenuEntry[] {
   const reason = unavailable(row);
   const disabled = reason !== undefined;
