@@ -1,9 +1,10 @@
 import type { CameraState } from '@mx/map-core';
 import { provideMap } from '@mx/map-vue';
 import { type DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
-import { ElColorPicker, ElSelect } from 'element-plus';
+import { ElColorPicker, ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
+import { required } from '@/shared/testing/required';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
@@ -37,8 +38,8 @@ const CATALOG = buildCatalog([
   }
 ]);
 
-/** active 模拟外壳切到别的 Tab、让给另一边 */
-function mountLegend() {
+/** active 模拟外壳切到别的 Tab、让给另一边；attach 时挂到 body 上，焦点才能移动 */
+function mountLegend({ attach = false } = {}) {
   let owner: ResourceLayers | undefined;
   let symbolsOwner: ResourceSymbols | undefined;
   const active = ref(true);
@@ -71,7 +72,7 @@ function mountLegend() {
       </>
     );
   });
-  const wrapper = mount(Page);
+  const wrapper = mount(Page, attach ? { attachTo: document.body } : {});
   if (!owner || !symbolsOwner) {
     throw new Error('页面没有创建资源图层和符号的拥有者');
   }
@@ -81,6 +82,10 @@ function mountLegend() {
 function button(wrapper: VueWrapper, label: string) {
   return wrapper.get(`button[aria-label="${label}"]`);
 }
+
+// 一行：摘要和行尾的样式设置；按类别配色的摘要是展开、收起的按钮，名称和年份就是它的名称
+const row = (wrapper: VueWrapper, code: string) => wrapper.get(`[data-legend="${code}"] > div`);
+const summaryButton = (wrapper: VueWrapper, code: string) => row(wrapper, code).get('button[aria-expanded]');
 
 // jsdom 里点 label 不会切换单选按钮，直接设置里面的 input（同底图面板的测试）；在一个条目里找，几个条目会有同名的选项
 async function choose(entry: Pick<DOMWrapper<Element>, 'findAll'>, text: string) {
@@ -100,6 +105,23 @@ async function back(wrapper: VueWrapper) {
   await trigger.trigger('click');
 }
 
+// 编辑器灰框第一行的类别下拉
+const picker = (wrapper: VueWrapper) =>
+  wrapper.findAllComponents(ElSelect).find(item => item.props('ariaLabel') === '选择要修改的类别');
+
+// 样式设置的标题行：能接住焦点，各部分的文字
+function headingOf(settings: Omit<DOMWrapper<Element>, 'exists'>) {
+  const heading = settings.get('[data-settings-heading]');
+  expect(heading.attributes('tabindex')).toBe('-1');
+  return [...heading.element.children].map(item => item.textContent?.trim());
+}
+
+// 样式设置里选中的类别和编辑器对着的目标
+const selected = (wrapper: VueWrapper) => ({
+  picked: required(picker(wrapper), '类别下拉').props('modelValue'),
+  target: wrapper.get('[data-symbol-editor]').attributes('data-symbol-editor')
+});
+
 // 预览里用到的颜色：SVG 各图形的填充和描边
 const swatchColors = (swatch: Omit<DOMWrapper<Element>, 'exists'>) =>
   swatch
@@ -116,7 +138,7 @@ const summaryColors = (summary: Omit<DOMWrapper<Element>, 'exists'>) =>
 const entries = (wrapper: VueWrapper) => wrapper.findAll('[data-legend]').map(item => item.attributes('data-legend'));
 const landuseShown = (wrapper: VueWrapper) => wrapper.find('[data-landuse-section]').exists();
 
-// 确认框放在 body 下，不归组件管
+// 确认框、下拉放在 body 下，不归组件管
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -155,11 +177,83 @@ describe('ResourceLegend', () => {
     expect(wrapper.findAll('[data-landuse]').map(item => item.attributes('data-landuse'))).toStrictEqual(['1105', '1106']);
   });
 
+  it('每一行是摘要和行尾的样式设置，三种图例都有设置；只有按类别配色的摘要是展开、收起的按钮（用户 2026-11-24）', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    await nextTick();
+    const buttons = (code: string) =>
+      row(wrapper, code)
+        .findAll('button')
+        .map(item => ({ label: item.attributes('aria-label'), expanded: item.attributes('aria-expanded') }));
+
+    // 按类别配色：摘要按钮没有 aria-label，名称和年份就是它的名称
+    expect(buttons('bgdc_dltb')).toStrictEqual([
+      { label: undefined, expanded: 'true' },
+      { label: '地类图斑的样式设置', expanded: undefined }
+    ]);
+    expect(summaryButton(wrapper, 'bgdc_dltb').text()).toBe('地类图斑2022');
+    // 统一配色、单一符号的摘要不是按钮
+    expect(buttons('csxhjctb_hydl')).toStrictEqual([{ label: '水域线层的样式设置', expanded: undefined }]);
+    expect(buttons('bgdc_ccwjq')).toStrictEqual([{ label: '坑塘的样式设置', expanded: undefined }]);
+    for (const code of ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_ccwjq']) {
+      const children = [...row(wrapper, code).element.children];
+      expect(children.map(item => item.tagName)).toStrictEqual([code === 'bgdc_dltb' ? 'BUTTON' : 'DIV', 'BUTTON']);
+      expect(children[1]?.getAttribute('title')).toBe('样式设置');
+      expect(children[1]?.hasAttribute('data-legend-settings-button')).toBe(true);
+    }
+    expect(row(wrapper, 'csxhjctb_hydl').text()).toBe('水域线层2025');
+    expect(row(wrapper, 'bgdc_ccwjq').text()).toBe('坑塘2022');
+  });
+
+  it('单一符号、统一配色的摘要单击不做任何事；按类别配色的单击展开、收起', async () => {
+    const { wrapper, owner, symbols, editingCodes } = mountLegend();
+    owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    await nextTick();
+    const html = wrapper.html();
+
+    await row(wrapper, 'csxhjctb_hydl').get('div').trigger('click');
+    await row(wrapper, 'bgdc_ccwjq').get('div').trigger('click');
+    expect(wrapper.html()).toBe(html);
+    expect(wrapper.find('[data-legend-settings]').exists()).toBe(false);
+    expect(editingCodes).toStrictEqual([null]);
+
+    await summaryButton(wrapper, 'bgdc_dltb').trigger('click');
+    expect(summaryButton(wrapper, 'bgdc_dltb').attributes('aria-expanded')).toBe('false');
+    expect(landuseShown(wrapper)).toBe(false);
+    await summaryButton(wrapper, 'bgdc_dltb').trigger('click');
+    expect(landuseShown(wrapper)).toBe(true);
+  });
+
+  it('图例上没有显示方式的快捷切换、名称后面的漏斗、"改过符号"的点和过滤的文字（用户 2026-11-24）', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
+    symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: '#000' });
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { width: 'XL' });
+    symbols.setSymbol({ code: 'bgdc_dltb', item: '0101' }, { fillColor: '#000' });
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
+    owner.setFilter('bgdc_dltb', { [CLASS_FIELD]: ['0101'] });
+    await nextTick();
+
+    const legend = wrapper.get('[data-resource-legend]');
+    // 显示方式的切换、漏斗、改过符号的点、过滤的文字、行尾的占位
+    const removed = [
+      '[data-legend-mode]',
+      '[data-legend-filtered]',
+      '[data-edited]',
+      '[data-filter-note]',
+      '[data-legend-slot]'
+    ];
+    expect(removed.filter(selector => legend.find(selector).exists())).toStrictEqual([]);
+    expect(legend.findAll('button').some(item => item.attributes('aria-label')?.includes('显示方式'))).toBe(false);
+  });
+
   it('隐藏时不渲染条目，编辑器卸载、丢弃取色预览；再显示时展开状态保留（ADR 0053 第 4 节）', async () => {
     const { wrapper, owner, symbols, active } = mountLegend();
     owner.add(['bgdc_ccwjq']);
     await nextTick();
-    await button(wrapper, '编辑坑塘图例').trigger('click');
+    await button(wrapper, '坑塘的样式设置').trigger('click');
     symbols.previewColor({ code: 'bgdc_ccwjq' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
     expect(symbols.preview.value).not.toBeNull();
 
@@ -177,7 +271,7 @@ describe('ResourceLegend', () => {
     const { wrapper, owner, symbols, scene } = mountLegend();
     owner.add(['bgdc_ccwjq']);
     await nextTick();
-    await button(wrapper, '编辑坑塘图例').trigger('click');
+    await button(wrapper, '坑塘的样式设置').trigger('click');
     symbols.previewColor({ code: 'bgdc_ccwjq' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
 
     scene.value = true;
@@ -197,7 +291,7 @@ describe('ResourceLegend', () => {
     owner.add(['csxhjctb_hydl']);
     await nextTick();
     // 两个图层默认都展开，收起水域线层；编辑时替换浏览视图，返回后展开、收起照旧
-    await button(wrapper, '收起水域线层').trigger('click');
+    await summaryButton(wrapper, 'csxhjctb_hydl').trigger('click');
     await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('水田');
     await wrapper.get('[data-landuse="0101"] button').trigger('click');
 
@@ -211,8 +305,9 @@ describe('ResourceLegend', () => {
     await back(wrapper);
     expect((wrapper.get('input[placeholder="搜索编码或名称"]').element as HTMLInputElement).value).toBe('水田');
     expect(wrapper.find('[data-legend="csxhjctb_hydl"] [data-value]').exists()).toBe(false);
+    expect(summaryButton(wrapper, 'csxhjctb_hydl').attributes('aria-expanded')).toBe('false');
     await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('');
-    expect(button(wrapper, '收起地类图斑').attributes('aria-expanded')).toBe('true');
+    expect(summaryButton(wrapper, 'bgdc_dltb').attributes('aria-expanded')).toBe('true');
   });
 
   it('复合图例默认展开（ADR 0094），名称前是按几何画的摘要（ADR 0159）；浏览与配置分开，状态变化不改收起', async () => {
@@ -222,7 +317,7 @@ describe('ResourceLegend', () => {
     expect(wrapper.get('[data-legend="bgdc_dltb"] [data-summary]').attributes('data-summary')).toBe('fill');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
 
-    await button(wrapper, '收起地类图斑').trigger('click');
+    await summaryButton(wrapper, 'bgdc_dltb').trigger('click');
     expect(landuseShown(wrapper)).toBe(false);
     owner.setOpacity('bgdc_dltb', 0.5);
     await nextTick();
@@ -232,7 +327,7 @@ describe('ResourceLegend', () => {
     await nextTick();
     // 新勾选的复合图例展开，收起过的仍收起
     expect(landuseShown(wrapper)).toBe(false);
-    expect(wrapper.find('button[aria-label="收起水域线层"]').exists()).toBe(true);
+    expect(summaryButton(wrapper, 'csxhjctb_hydl').attributes('aria-expanded')).toBe('true');
     owner.remove(['csxhjctb_hydl']);
     await nextTick();
     expect(landuseShown(wrapper)).toBe(false);
@@ -276,7 +371,7 @@ describe('ResourceLegend', () => {
     expect(resetAll()).toBeUndefined();
   });
 
-  it('普通图例只有整行编辑入口；按取值配色展开后列出取值和"其他"', async () => {
+  it('单一符号的行只有样式设置一个按钮；按取值配色展开后列出取值和"其他"', async () => {
     const { wrapper, owner } = mountLegend();
     owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     await nextTick();
@@ -285,7 +380,7 @@ describe('ResourceLegend', () => {
     expect(swatchColors(wrapper.get('[data-legend="bgdc_ccwjq"] [data-swatch]'))).toContain('rgba(199,79,155,0.35)');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
     expect(wrapper.get('[data-legend="bgdc_ccwjq"]').findAll('button')).toHaveLength(1);
-    await button(wrapper, '编辑坑塘图例').trigger('click');
+    await button(wrapper, '坑塘的样式设置').trigger('click');
     expect(wrapper.find('[data-symbol-editor="bgdc_ccwjq"]').exists()).toBe(true);
     await back(wrapper);
     expect(wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').map(item => item.text())).toStrictEqual([
@@ -303,11 +398,11 @@ describe('ResourceLegend', () => {
     const resetAll = () => wrapper.findAll('button').some(item => item.text() === '全部恢复默认');
     expect(resetAll()).toBe(true);
 
-    await button(wrapper, '编辑坑塘图例').trigger('click');
+    await button(wrapper, '坑塘的样式设置').trigger('click');
     expect(resetAll()).toBe(false);
     await back(wrapper);
     expect(resetAll()).toBe(true);
-    await button(wrapper, '编辑地类图斑样式').trigger('click');
+    await button(wrapper, '地类图斑的样式设置').trigger('click');
     expect(resetAll()).toBe(false);
     await back(wrapper);
     expect(resetAll()).toBe(true);
@@ -318,27 +413,17 @@ describe('ResourceLegend', () => {
     expect(resetAll()).toBe(true);
   });
 
-  it('按属性配色的条目名称前是代表取值按几何画的摘要（ADR 0159）；改过符号的条目、取值名称后有小圆点（设计稿 5D.5）', async () => {
-    const { wrapper, owner, symbols } = mountLegend();
+  it('按属性配色的条目名称前是代表取值按几何画的摘要（ADR 0159），单一符号是它自己的符号', async () => {
+    const { wrapper, owner } = mountLegend();
     owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     await nextTick();
-    const row = (code: string) => wrapper.get(`[data-legend="${code}"] > div`);
-    const edited = (code: string) => row(code).find('[data-edited]').exists();
 
     // 水域线层只有河流、水渠两个取值（兜底不算）：三段折线依次是河流、水渠、河流
-    const hydl = row('csxhjctb_hydl').get('[data-summary]');
+    const hydl = row(wrapper, 'csxhjctb_hydl').get('[data-summary]');
     expect(hydl.attributes('data-summary')).toBe('line');
     expect(summaryColors(hydl)).toStrictEqual(['#1E88E5', '#4FC3F7', '#1E88E5']);
-    expect(row('bgdc_ccwjq').find('[data-summary]').exists()).toBe(false);
-    expect([edited('bgdc_ccwjq'), edited('csxhjctb_hydl')]).toStrictEqual([false, false]);
-
-    symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
-    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { color: 'rgba(255, 0, 0, 1)' });
-    await nextTick();
-    expect([edited('bgdc_ccwjq'), edited('csxhjctb_hydl')]).toStrictEqual([true, true]);
-
-    const valueEdited = (key: string) => wrapper.get(`[data-value="${key}"]`).find('[data-edited]').exists();
-    expect([valueEdited('河流'), valueEdited('水渠')]).toStrictEqual([false, true]);
+    expect(row(wrapper, 'bgdc_ccwjq').find('[data-summary]').exists()).toBe(false);
+    expect(row(wrapper, 'bgdc_ccwjq').find('[data-swatch]').exists()).toBe(true);
   });
 
   it('预览和确认的符号都反映在图例上，丢弃预览后回到确认的颜色', async () => {
@@ -387,78 +472,222 @@ describe('ResourceLegend', () => {
     expect(rowSwatch().exists()).toBe(false);
     expect(entry().find('[data-value="河流"]').exists()).toBe(true);
 
-    await button(wrapper, '编辑水域线层样式').trigger('click');
+    await button(wrapper, '水域线层的样式设置').trigger('click');
     await choose(wrapper, '统一配色');
     expect(symbols.modeOf('csxhjctb_hydl')).toBe('uniform');
     expect(wrapper.find('[data-symbol-editor="csxhjctb_hydl"]').exists()).toBe(true);
     await back(wrapper);
     expect(entry().find('[data-value="河流"]').exists()).toBe(false);
+    expect(entry().find('button[aria-expanded]').exists()).toBe(false);
     expect(rowSwatch().exists()).toBe(true);
-    await button(wrapper, '编辑水域线层图例').trigger('click');
-    await button(wrapper, '恢复水域线层的默认符号').trigger('click');
+    await button(wrapper, '水域线层的样式设置').trigger('click');
+    await button(wrapper, '恢复水域线层整个图层的默认符号').trigger('click');
     expect(symbols.isCustomized('csxhjctb_hydl')).toBe(false);
-    expect(button(wrapper, '恢复水域线层的默认符号').attributes('disabled')).toBeDefined();
+    expect(button(wrapper, '恢复水域线层整个图层的默认符号').attributes('disabled')).toBeDefined();
     expect(symbols.hasOverride({ code: 'bgdc_dltb', item: '0101' })).toBe(true);
     await back(wrapper);
     expect(entry().find('[data-value="河流"]').exists()).toBe(true);
   });
 
-  it('显示方式的快捷切换在样式设置左边（用户 2026-11-24）：点一下换成另一种，统一配色时留出样式设置的位置；单一符号没有', async () => {
-    const { wrapper, owner, symbols } = mountLegend();
+  it('样式设置替换整张列表：标题行是资源名和最右的"返回图例"，下面一行显示方式；单一符号没有显示方式（用户 2026-11-24）', async () => {
+    const { wrapper, owner, editingCodes } = mountLegend();
     owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
     await nextTick();
-    const entry = () => wrapper.get('[data-legend="csxhjctb_hydl"]');
-    const toggle = () => entry().get('[data-legend-mode]');
-    expect(toggle().attributes()).toMatchObject({
-      'data-legend-mode': 'classified',
-      title: '显示方式：按类别配色，点击换成统一配色',
-      'aria-label': '水域线层的显示方式：按类别配色，点击换成统一配色'
-    });
-    expect(toggle().element.nextElementSibling).toBe(button(wrapper, '编辑水域线层样式').element);
-    expect(wrapper.get('[data-legend="bgdc_dltb"] [data-legend-mode]').attributes('data-legend-mode')).toBe('classified');
-    // 单一符号没有切换和设置，也没有行尾的占位：宽度留在摘要按钮里，整行可点
-    const symbolRow = wrapper.get('[data-legend="bgdc_ccwjq"]');
-    expect(symbolRow.find('[data-legend-mode]').exists()).toBe(false);
-    expect([...(symbolRow.element.firstElementChild?.children ?? [])].map(item => item.tagName)).toStrictEqual(['BUTTON']);
-    expect(button(wrapper, '编辑坑塘图例').classes().some(name => name.includes('symbolSummary'))).toBe(true);
 
-    await toggle().trigger('click');
-    expect(symbols.modeOf('csxhjctb_hydl')).toBe('uniform');
-    expect(toggle().attributes('title')).toBe('显示方式：统一配色，点击换成按类别配色');
-    expect(toggle().attributes('aria-label')).toBe('水域线层的显示方式：统一配色，点击换成按类别配色');
-    expect(entry().find('[data-value="河流"]').exists()).toBe(false);
-    expect(entry().find('button[aria-label="编辑水域线层样式"]').exists()).toBe(false);
-    expect(toggle().element.nextElementSibling?.getAttribute('aria-hidden')).toBe('true');
+    await button(wrapper, '水域线层的样式设置').trigger('click');
+    expect(wrapper.find('[data-legend]').exists()).toBe(false);
+    expect(editingCodes.at(-1)).toBe('csxhjctb_hydl');
+    const settings = wrapper.get('[data-legend-settings="csxhjctb_hydl"]');
+    expect(settings.element.firstElementChild).toBe(settings.get('[data-settings-heading]').element);
+    expect(headingOf(settings)).toStrictEqual(['水域线层', '返回图例']);
+    const modes = settings.get('[role="radiogroup"][aria-label="图层配色方式"]');
+    expect(modes.findAll('label').map(item => item.text())).toStrictEqual(['按类别配色', '统一配色']);
+    expect(modes.get('label.is-active').text()).toBe('按类别配色');
 
-    await toggle().trigger('click');
-    expect(symbols.modeOf('csxhjctb_hydl')).toBe('classified');
-    expect(entry().find('[data-value="河流"]').exists()).toBe(true);
+    await back(wrapper);
+    await button(wrapper, '坑塘的样式设置').trigger('click');
+    const symbolSettings = wrapper.get('[data-legend-settings="bgdc_ccwjq"]');
+    expect(headingOf(symbolSettings)).toStrictEqual(['坑塘', '返回图例']);
+    expect(symbolSettings.find('[aria-label="图层配色方式"]').exists()).toBe(false);
+    expect(picker(wrapper)).toBeUndefined();
+    expect(symbolSettings.get('[data-symbol-editor]').attributes('data-symbol-editor')).toBe('bgdc_ccwjq');
   });
 
-  it('样式设置里"返回图例"在名称后面（标题行最右，用户 2026-11-24）', async () => {
+  it('按类别配色时编辑器灰框第一行选类别：只列资源实际有的类别、带符号，不收别的；从行尾进时是第一类（用户 2026-11-24）', async () => {
     const { wrapper, owner } = mountLegend();
-    owner.add(['csxhjctb_hydl']);
+    owner.remove(['bgdc_dltb']);
+    owner.add(['lcsh_sdtb']);
     await nextTick();
-    await button(wrapper, '编辑水域线层样式').trigger('click');
-    const heading = wrapper.get('[data-legend-settings="csxhjctb_hydl"]').element.firstElementChild;
-    expect([...(heading?.children ?? [])].map(item => item.textContent?.trim())).toStrictEqual(['水域线层', '返回图例']);
+    // 图例列的地类：编码加名称，历史地类和未匹配的只有名称
+    const listed = wrapper.findAll('[data-landuse]').map(item => {
+      const code = item.attributes('data-landuse');
+      return code === item.text() ? item.text() : `${code} ${item.text()}`;
+    });
+    await button(wrapper, '湿地分布图斑的样式设置').trigger('click');
+
+    // 第一类是资源有的：选到资源没有的地类时编辑器整块是空的（原来列全部 76 项的问题）
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(true);
+    const select = required(picker(wrapper), '类别下拉');
+    const editor = wrapper.get('[data-symbol-editor]');
+    const lead = required(editor.element.firstElementChild, '编辑器的第一行');
+    expect(lead.firstElementChild?.textContent).toBe('类别');
+    expect(lead.querySelector('input[aria-label="选择要修改的类别"]')).not.toBeNull();
+    // 湿地的 49 类，和图例一样按地类图例的顺序；没有的地类（1002 轨道交通用地）不列
+    const options = select.findAllComponents(ElOption);
+    expect(options.map(option => option.props('label'))).toStrictEqual(listed);
+    const keys = options.map(option => option.props('value'));
+    expect(keys).toHaveLength(49);
+    expect(keys).toContain('1106');
+    expect(keys).not.toContain('1002');
+    expect(selected(wrapper)).toStrictEqual({ picked: keys[0], target: keys[0] });
+
+    // 选项带符号
+    await select.find('.el-select__wrapper').trigger('click');
+    await nextTick();
+    expect(document.body.querySelector('[data-class-option="1106"] [data-swatch]')).not.toBeNull();
+    expect(document.body.querySelector('[data-class-option="1002"]')).toBeNull();
+
+    select.vm.$emit('update:modelValue', '1002');
+    await nextTick();
+    expect(selected(wrapper)).toStrictEqual({ picked: keys[0], target: keys[0] });
+    select.vm.$emit('update:modelValue', '1106');
+    await nextTick();
+    expect(selected(wrapper)).toStrictEqual({ picked: '1106', target: '1106' });
   });
 
-  it('按取值配色：展开一个取值编辑它，同一时间只展开一个', async () => {
+  it('按取值配色：点子图例的一类进这一类的样式设置、类别选好它；从行尾再进时是上次选的类别', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
 
     await button(wrapper, '编辑水渠样式').trigger('click');
-    expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(true);
+    expect(selected(wrapper)).toStrictEqual({ picked: '水渠', target: '水渠' });
     await choose(wrapper.get('[data-symbol-editor="水渠"]'), 'XL');
     expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ items: { 水渠: { width: 'XL' } } });
     await back(wrapper);
     await button(wrapper, '编辑河流样式').trigger('click');
-    expect(wrapper.find('[data-symbol-editor="河流"]').exists()).toBe(true);
-    expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(false);
+    expect(selected(wrapper)).toStrictEqual({ picked: '河流', target: '河流' });
+    expect(wrapper.findAll('[data-symbol-editor]')).toHaveLength(1);
     await back(wrapper);
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+
+    await button(wrapper, '水域线层的样式设置').trigger('click');
+    expect(selected(wrapper)).toStrictEqual({ picked: '河流', target: '河流' });
+  });
+
+  it('恢复按钮：编辑器写"恢复××的默认"、只恢复这一类，统一配色时写"恢复默认"；"恢复整个图层默认"没改过时禁用（用户 2026-11-24）', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await button(wrapper, '编辑水渠样式').trigger('click');
+    const resetItem = () =>
+      required(
+        wrapper
+          .get('[data-symbol-editor]')
+          .findAll('button')
+          .find(item => item.text().startsWith('恢复')),
+        '编辑器的恢复按钮'
+      );
+    const resetLayer = () => button(wrapper, '恢复水域线层整个图层的默认符号');
+    expect(resetItem().text()).toBe('恢复水渠的默认');
+    expect(resetItem().attributes('disabled')).toBeDefined();
+    expect(resetLayer().text()).toBe('恢复整个图层默认');
+    expect(resetLayer().attributes('disabled')).toBeDefined();
+
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { width: 'XL' });
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '河流' }, { width: 'L' });
+    await nextTick();
+    expect(resetLayer().attributes('disabled')).toBeUndefined();
+    await resetItem().trigger('click');
+    expect(symbols.hasOverride({ code: 'csxhjctb_hydl', item: '水渠' })).toBe(false);
+    expect(symbols.hasOverride({ code: 'csxhjctb_hydl', item: '河流' })).toBe(true);
+
+    await choose(wrapper, '统一配色');
+    expect(picker(wrapper)).toBeUndefined();
+    expect(resetItem().text()).toBe('恢复默认');
+    expect(resetLayer().text()).toBe('恢复整个图层默认');
+  });
+
+  it('进样式设置时焦点到标题行，返回时回到这一行的样式设置；焦点在图例外面时让出不抢焦点（用户 2026-11-24）', async () => {
+    const { wrapper, owner, yieldCode } = mountLegend({ attach: true });
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    const gear = button(wrapper, '地类图斑的样式设置');
+    (gear.element as HTMLElement).focus();
+
+    await gear.trigger('click');
+    expect(document.activeElement).toBe(wrapper.get('[data-settings-heading]').element);
+    await back(wrapper);
+    expect(document.activeElement).toBe(button(wrapper, '地类图斑的样式设置').element);
+
+    // 点了子图例的一类进来，返回时也回到这一行的样式设置
+    await button(wrapper, '编辑水渠样式').trigger('click');
+    expect(document.activeElement).toBe(wrapper.get('[data-settings-heading]').element);
+    await back(wrapper);
+    expect(document.activeElement).toBe(button(wrapper, '水域线层的样式设置').element);
+
+    // 图例浮层开着同一个资源的设置时这边回到浏览，焦点留在别处
+    await button(wrapper, '水域线层的样式设置').trigger('click');
+    const outside = document.createElement('input');
+    document.body.append(outside);
+    outside.focus();
+    yieldCode.value = 'csxhjctb_hydl';
+    await nextTick();
+    expect(wrapper.find('[data-legend-settings]').exists()).toBe(false);
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it('按分类过滤时子图例照样列出全部类别，过滤掉的淡显、写明已过滤，仍能点进设置；摘要只画地图上的类别（ADR 0173，用户 2026-11-24）', async () => {
+    const { wrapper, owner } = mountLegend();
+    owner.add(['csxhjctb_hydl']);
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
+    owner.setFilter('bgdc_dltb', { [CLASS_FIELD]: ['0101'] });
+    await nextTick();
+
+    const values = wrapper
+      .get('[data-legend="csxhjctb_hydl"]')
+      .findAll('[data-value] button')
+      .map(item => ({
+        excluded: item.attributes('data-excluded'),
+        faded: item.classes().some(name => name.includes('excluded')),
+        title: item.attributes('title'),
+        label: item.attributes('aria-label')
+      }));
+    expect(values).toStrictEqual([
+      { excluded: undefined, faded: false, title: '河流', label: '编辑河流样式' },
+      { excluded: 'true', faded: true, title: '水渠（已过滤，地图上不显示）', label: '编辑水渠样式（已过滤）' },
+      { excluded: 'true', faded: true, title: '其他（已过滤，地图上不显示）', label: '编辑其他样式（已过滤）' }
+    ]);
+
+    expect(wrapper.findAll('[data-landuse]')).toHaveLength(76);
+    expect(wrapper.findAll('[data-landuse] button[data-excluded]')).toHaveLength(75);
+    expect(wrapper.find('[data-landuse="0101"] button').attributes('data-excluded')).toBeUndefined();
+    const irrigated = wrapper.get('[data-landuse="0102"] button');
+    expect(irrigated.attributes('title')).toContain('0102 水浇地（已过滤，地图上不显示）');
+    expect(irrigated.attributes('aria-label')).toBe('编辑水浇地样式（已过滤）');
+
+    // 行头照旧，摘要只画勾着的河流
+    expect(summaryButton(wrapper, 'csxhjctb_hydl').text()).toBe('水域线层2025');
+    expect(summaryColors(row(wrapper, 'csxhjctb_hydl').get('[data-summary]'))).toStrictEqual(['#1E88E5']);
+
+    // 过滤掉的一类也能点进设置，类别下拉不跟着过滤
+    await button(wrapper, '编辑水渠样式（已过滤）').trigger('click');
+    expect(selected(wrapper)).toStrictEqual({ picked: '水渠', target: '水渠' });
+    const options = required(picker(wrapper), '类别下拉')
+      .findAllComponents(ElOption)
+      .map(option => option.props('label'));
+    expect(options).toStrictEqual(['河流', '水渠', '其他']);
+  });
+
+  it('按分类过滤到一类都不剩：子图例全部淡显，行首的摘要空着，不退回去画统一的符号（ADR 0175）', async () => {
+    const { wrapper, owner } = mountLegend();
+    owner.add(['csxhjctb_hydl']);
+    owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: [] });
+    await nextTick();
+
+    const values = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('[data-value] button');
+    expect(values.map(value => value.attributes('data-excluded'))).toStrictEqual(['true', 'true', 'true']);
+    expect(row(wrapper, 'csxhjctb_hydl').find('[data-swatch], [data-summary]').exists()).toBe(false);
   });
 
   it('标题带显示的年份；换年份后条目仍展开，正在编辑的取值仍打开（ADR 0052 第 3 节）', async () => {
@@ -467,12 +696,13 @@ describe('ResourceLegend', () => {
     await nextTick();
     await button(wrapper, '编辑水渠样式').trigger('click');
     await back(wrapper);
-    const title = () => button(wrapper, '收起水域线层').text();
+    const title = () => summaryButton(wrapper, 'csxhjctb_hydl').text();
     expect(title()).toContain('水域线层2025');
 
     owner.setYear('csxhjctb_hydl', 2023);
     await nextTick();
     expect(title()).toContain('水域线层2023');
+    expect(summaryButton(wrapper, 'csxhjctb_hydl').attributes('aria-expanded')).toBe('true');
     await button(wrapper, '编辑水渠样式').trigger('click');
     expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(true);
 
@@ -483,7 +713,7 @@ describe('ResourceLegend', () => {
     expect(title()).toContain('水域线层2024');
   });
 
-  it('地类：展开一个地类编辑它，同一时间只展开一个', async () => {
+  it('地类：点一个地类进它的样式设置，改的是这一类；返回后预览跟着变，再点另一类换成另一类', async () => {
     const { wrapper, symbols } = mountLegend();
     await nextTick();
     await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('010');
@@ -495,8 +725,6 @@ describe('ResourceLegend', () => {
     await nextTick();
     await back(wrapper);
     expect(swatchColors(wrapper.get('[data-landuse="0101"] [data-swatch]'))).toContain('rgba(0, 0, 255, 0.5)');
-    expect(wrapper.find('[data-landuse="0101"] [data-edited]').exists()).toBe(true);
-    expect(wrapper.find('[data-landuse="0102"] [data-edited]').exists()).toBe(false);
 
     await button(wrapper, '编辑旱地样式').trigger('click');
     expect(wrapper.find('[data-symbol-editor="0103"]').exists()).toBe(true);
@@ -505,26 +733,25 @@ describe('ResourceLegend', () => {
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
   });
 
-  it('正在编辑的一类被过滤掉（ADR 0173）：编辑器仍对着它，不换到别的类别，一类都不剩时也不改到统一符号上', async () => {
+  it('正在设置的一类被过滤掉（ADR 0173）：编辑器和类别仍对着它，一类都不剩时也不改到统一符号上', async () => {
     const { wrapper, owner } = mountLegend();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
     await button(wrapper, '编辑水渠样式').trigger('click');
-    const editing = () => ({
-      title: wrapper.get('[data-legend-settings] h3').text(),
-      target: wrapper.get('[data-legend-settings] [data-symbol-editor]').attributes('data-symbol-editor')
-    });
-    expect(editing()).toStrictEqual({ title: '水渠', target: '水渠' });
+    const heading = () => wrapper.get('[data-settings-heading]').element.firstElementChild?.textContent;
+    expect(heading()).toBe('水域线层');
+    expect(selected(wrapper)).toStrictEqual({ picked: '水渠', target: '水渠' });
 
     owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
     await nextTick();
-    expect(editing()).toStrictEqual({ title: '水渠', target: '水渠' });
+    expect(selected(wrapper)).toStrictEqual({ picked: '水渠', target: '水渠' });
     owner.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: [] });
     await nextTick();
-    expect(editing()).toStrictEqual({ title: '水渠', target: '水渠' });
+    expect(selected(wrapper)).toStrictEqual({ picked: '水渠', target: '水渠' });
+    expect(heading()).toBe('水域线层');
   });
 
-  it('地类平铺且没有分类选择器；悬浮提示包含编码和含义，点击条目直接进入单项编辑', async () => {
+  it('地类平铺、浏览时没有下拉；悬浮提示包含编码和含义，点一类进这一类的样式设置、类别选好它', async () => {
     const { wrapper } = mountLegend();
     await nextTick();
     expect(wrapper.findComponent(ElSelect).exists()).toBe(false);
@@ -535,9 +762,11 @@ describe('ResourceLegend', () => {
     expect(item.attributes('title')).toContain('（可调整）');
     expect(item.attributes('title')).toContain('果园');
     await item.trigger('click');
-    expect(wrapper.get('[data-legend-settings] h3').text()).toBe('可调整果园');
-    expect(wrapper.find('[data-symbol-editor="0201K"]').exists()).toBe(true);
-    expect(wrapper.text()).not.toContain('统一配色');
+    expect(wrapper.get('[data-settings-heading]').element.firstElementChild?.textContent).toBe('地类图斑');
+    expect(selected(wrapper)).toStrictEqual({ picked: '0201K', target: '0201K' });
+    // 编辑器的名称是这一类
+    const fills = wrapper.findAllComponents(ElColorPicker).map(colorPicker => colorPicker.props('ariaLabel'));
+    expect(fills).toContain('可调整果园的填充色');
   });
 
   it('没有勾选时提示', async () => {

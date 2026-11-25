@@ -15,13 +15,15 @@ import { ResourceLegend } from './ResourceLegend';
 import { ResourceLegendReset } from './ResourceLegendReset';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
+// 地类、按取值配色的线、单一符号、再一个按取值配色的线（用来切成统一配色）；只有地类图斑默认勾选
 const CATALOG = buildCatalog([{
   code: null,
   name: '测试',
   children: [
     { code: 'bgdc_dltb', name: '地类图斑', geoType: 'Polygon', yearList: [2022] },
     { code: 'csxhjctb_hydl', name: '水域线层', geoType: 'Line', yearList: [2025] },
-    { code: 'bgdc_ccwjq', name: '坑塘', geoType: 'Polygon', yearList: [2022] }
+    { code: 'bgdc_ccwjq', name: '坑塘', geoType: 'Polygon', yearList: [2022] },
+    { code: 'csxhjctb_lctl', name: '城市道路', geoType: 'Line', yearList: [2025] }
   ]
 }]);
 // 与页面一致的布局令牌，feature 测试不反向导入 app
@@ -91,20 +93,32 @@ function setup(width: number) {
   };
 }
 
-// 图例一行的摘要按钮（每行第一个按钮）；网格最后两列是年份和改过符号的点，量它们的右边
+// 图例的一行：摘要四列（箭头、摘要、名称、年份）加行尾的样式设置
+const rowOf = (code: string) =>
+  required(document.querySelector<HTMLElement>(`[data-legend="${code}"] > div`), `${code}的行`);
 const summaryOf = (code: string) =>
-  required(document.querySelector<HTMLElement>(`[data-legend="${code}"] button`), `${code}的摘要`);
-function rights(code: string): number[] {
-  const edited = required(summaryOf(code).lastElementChild, `${code}的改过标记`);
-  const year = required(edited.previousElementSibling, `${code}的年份`);
-  return [year.getBoundingClientRect().right, edited.getBoundingClientRect().right];
-}
+  required(document.querySelector<HTMLElement>(`[data-legend="${code}"] > div > :first-child`), `${code}的摘要`);
+const settingsOf = (code: string) =>
+  required(
+    document.querySelector<HTMLElement>(`[data-legend="${code}"] [data-legend-settings-button]`),
+    `${code}的样式设置按钮`
+  );
+// 年份是摘要的最后一列
+const yearOf = (code: string) => required(summaryOf(code).lastElementChild, `${code}的年份`);
+// 量年份和行尾样式设置的右边
+const rights = (code: string) => [
+  yearOf(code).getBoundingClientRect().right,
+  settingsOf(code).getBoundingClientRect().right
+];
+// 按取值配色的子图例里一类的按钮
+const valueOf = (code: string, key: string) =>
+  required(document.querySelector(`[data-legend="${code}"] [data-value="${key}"] button`), `${code}的${key}`);
 
 describe('ResourceLegend（真实布局）', () => {
-  it.each([320, 280, 240])('%s 像素面板完整显示名称、符号，浏览和编辑均不横向溢出', async width => {
+  it.each([320, 280, 240])('%s 像素面板完整显示名称、符号，浏览和样式设置均不横向溢出', async width => {
     using ctx = setup(width);
-    // 复合图例默认展开（ADR 0094）
-    expect(ctx.wrapper.find('[aria-label="收起地类图斑"]').exists()).toBe(true);
+    // 按类别配色默认展开（ADR 0094）
+    expect(summaryOf('bgdc_dltb').getAttribute('aria-expanded')).toBe('true');
     const items = ctx.wrapper.findAll('[data-landuse] button');
     expect(items).toHaveLength(76);
     expect(ctx.scroller.scrollWidth).toBe(ctx.scroller.clientWidth);
@@ -116,89 +130,145 @@ describe('ResourceLegend（真实布局）', () => {
     }
     const swatch = ctx.wrapper.get('[data-landuse="0101"] [data-swatch]').element.getBoundingClientRect();
     expect([swatch.width, swatch.height]).toStrictEqual([22, 16]);
-    const row = ctx.wrapper.get('[aria-label="收起地类图斑"]').element.parentElement?.getBoundingClientRect();
+    const row = rowOf('bgdc_dltb').getBoundingClientRect();
     const search = ctx.wrapper.get('input[placeholder="搜索编码或名称"]').element.closest('.el-input');
-    expect(row).toBeDefined();
-    expect(search?.getBoundingClientRect().left).toBe((row?.left ?? 0) + 24);
+    expect(search?.getBoundingClientRect().left).toBe(row.left + 24);
     expect(swatch.left).toBe(search?.getBoundingClientRect().left);
 
     await ctx.wrapper.get('[aria-label="编辑水田样式"]').trigger('click');
     expect(ctx.scroller.scrollWidth).toBe(ctx.scroller.clientWidth);
-    const back = ctx.wrapper.findAll('button').find(item => item.text() === '返回图例');
-    const title = ctx.wrapper.get('[data-legend-settings] h3').element.getBoundingClientRect();
-    const backRect = back?.element.getBoundingClientRect();
-    expect(backRect).toBeDefined();
-    expect(Math.abs((backRect?.top ?? 0) + (backRect?.height ?? 0) / 2 - title.top - title.height / 2)).toBeLessThan(1);
+    const settings = ctx.wrapper.get('[data-legend-settings="bgdc_dltb"]').element.getBoundingClientRect();
+    // 标题行：资源名在左，"返回图例"在最右、和标题垂直居中
+    const heading = ctx.wrapper.get('[data-settings-heading]');
+    const title = heading.get('h3');
+    expect(title.text()).toBe('地类图斑');
+    const titleRect = title.element.getBoundingClientRect();
+    const back = required(heading.findAll('button').find(item => item.text() === '返回图例'), '返回图例').element;
+    const backRect = back.getBoundingClientRect();
+    expect(Math.abs(backRect.top + backRect.height / 2 - titleRect.top - titleRect.height / 2)).toBeLessThan(1);
+    expect(Math.abs(backRect.right - heading.element.getBoundingClientRect().right)).toBeLessThan(1);
+    // 显示方式一行：两个选项都在面板里
+    const modes = ctx.wrapper.get('[aria-label="图层配色方式"]').element;
+    const modeRow = required(modes.parentElement, '显示方式一行');
+    expect(modeRow.scrollWidth).toBe(modeRow.clientWidth);
+    const options = [...modes.querySelectorAll('.el-radio-button')].map(option => option.getBoundingClientRect());
+    expect(options).toHaveLength(2);
+    for (const option of options) {
+      expect(option.right).toBeLessThanOrEqual(Math.min(modeRow.getBoundingClientRect().right, settings.right));
+    }
+    // 编辑器灰框的第一行选类别，选着点进来的这一类
+    const editor = ctx.wrapper.get('[data-symbol-editor="0101"]').element;
+    const pickerRow = required(editor.firstElementChild, '编辑器的第一行');
+    const picker = required(pickerRow.querySelector('[aria-label="选择要修改的类别"]'), '选类别的下拉');
+    expect(pickerRow.textContent).toContain('水田');
+    expect(pickerRow.scrollWidth).toBe(pickerRow.clientWidth);
+    const select = required(picker.closest('.el-select'), '类别下拉框').getBoundingClientRect();
+    expect(select.right).toBeLessThanOrEqual(pickerRow.getBoundingClientRect().right);
+    expect(editor.getBoundingClientRect().right).toBeLessThanOrEqual(settings.right);
   });
 
-  it('按类别配色、统一配色、单一符号、过滤着的行混在一起时，年份和改过的点逐行对齐；单一符号行最右一段也能进编辑（2026-11-24 审查）', async () => {
+  it('按类别配色、统一配色、单一符号、按分类过滤的行，年份和样式设置逐行右对齐、行高相同；没有可点的占位', async () => {
     using ctx = setup(320);
-    ctx.layers.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
-    ctx.symbols.setMode('bgdc_dltb', 'uniform');
-    // 过滤着的行名称后面多一个漏斗，和名称共用一列，不挤占年份（2026-11-24 集成审查）
+    ctx.layers.add(['csxhjctb_hydl', 'bgdc_ccwjq', 'csxhjctb_lctl']);
+    ctx.symbols.setMode('csxhjctb_lctl', 'uniform');
     ctx.layers.setFilter('csxhjctb_hydl', { [CLASS_FIELD]: ['河流'] });
     await nextTick();
-    expect(document.querySelector('[data-legend="csxhjctb_hydl"] [data-legend-filtered]')).not.toBeNull();
-    expect(rights('bgdc_dltb')).toStrictEqual(rights('csxhjctb_hydl'));
-    expect(rights('bgdc_ccwjq')).toStrictEqual(rights('csxhjctb_hydl'));
-    expect(summaryOf('csxhjctb_hydl').getBoundingClientRect().height).toBe(
-      summaryOf('bgdc_ccwjq').getBoundingClientRect().height
-    );
+    // 过滤着的行照样按类别展开，过滤掉的类别淡显
+    expect(valueOf('csxhjctb_hydl', '河流').hasAttribute('data-excluded')).toBe(false);
+    expect(valueOf('csxhjctb_hydl', '水渠').hasAttribute('data-excluded')).toBe(true);
+    const codes = ['bgdc_dltb', 'csxhjctb_hydl', 'bgdc_ccwjq', 'csxhjctb_lctl'];
+    const height = rowOf('bgdc_dltb').getBoundingClientRect().height;
+    for (const code of codes) {
+      expect(rights(code)).toStrictEqual(rights('bgdc_dltb'));
+      expect(rowOf(code).getBoundingClientRect().height).toBe(height);
+    }
 
-    const row = required(summaryOf('bgdc_ccwjq').parentElement, '坑塘的行');
-    const rect = row.getBoundingClientRect();
-    const hit = document.elementFromPoint(rect.right - 10, rect.top + rect.height / 2);
-    expect(hit?.closest('button')?.getAttribute('aria-label')).toBe('编辑坑塘图例');
-    await userEvent.click(row, { position: { x: rect.width - 10, y: rect.height / 2 } });
-    expect(ctx.wrapper.find('[data-symbol-editor="bgdc_ccwjq"]').exists()).toBe(true);
+    // 只有按类别配色的摘要是按钮；别的行里只有样式设置一个按钮，以前行尾可点的占位没有了
+    expect(summaryOf('csxhjctb_hydl').tagName).toBe('BUTTON');
+    expect(document.querySelector('[data-legend-slot]')).toBeNull();
+    for (const code of ['bgdc_ccwjq', 'csxhjctb_lctl']) {
+      expect(summaryOf(code).tagName).toBe('DIV');
+      expect(rowOf(code).querySelectorAll('button')).toHaveLength(1);
+    }
+    // 单击单一符号、统一配色的行尾不做什么；按类别配色的只收起，都不进设置
+    await userEvent.click(yearOf('bgdc_ccwjq'));
+    await userEvent.click(yearOf('csxhjctb_lctl'));
+    expect(ctx.wrapper.find('[data-legend-settings]').exists()).toBe(false);
+    await userEvent.click(yearOf('csxhjctb_hydl'));
+    expect(summaryOf('csxhjctb_hydl').getAttribute('aria-expanded')).toBe('false');
+    expect(ctx.wrapper.find('[data-legend-settings]').exists()).toBe(false);
   });
 
-  it('统一配色的行尾留出的一段也能进编辑（2026-11-24 集成审查）', async () => {
-    using ctx = setup(320);
-    ctx.symbols.setMode('bgdc_dltb', 'uniform');
-    await nextTick();
-
-    const row = required(summaryOf('bgdc_dltb').parentElement, '地类图斑的行');
-    const rect = row.getBoundingClientRect();
-    const hit = document.elementFromPoint(rect.right - 10, rect.top + rect.height / 2);
-    expect(hit?.closest('[data-legend-slot]')).not.toBeNull();
-    await userEvent.click(row, { position: { x: rect.width - 10, y: rect.height / 2 } });
-    expect(ctx.wrapper.find('[data-symbol-editor="bgdc_dltb"]').exists()).toBe(true);
-  });
-
-  it('点击可见条目进入编辑后回到列表原滚动位置，鼠标移出时设置入口隐藏', async () => {
+  it('从列表中间的子图例进样式设置时滚到顶、焦点在标题行，返回后回到原来的滚动位置、焦点回到这一行的样式设置', async () => {
     using ctx = setup(320);
     ctx.scroller.scrollTop = 180;
-    const bounds = ctx.scroller.getBoundingClientRect();
-    const visible = ctx.wrapper.findAll('[data-landuse] button').find(item => {
-      const rect = item.element.getBoundingClientRect();
-      return rect.top > bounds.top && rect.bottom < bounds.bottom;
-    });
-    if (!visible) {
-      throw new Error('没有可点击的图例');
-    }
     const before = ctx.scroller.scrollTop;
-    expect(visible.attributes('title')).not.toBe('');
-    await userEvent.click(visible.element);
+    expect(before).toBe(180);
+    // 取滚动容器正中的一项：顶上一段被吸顶的行头盖着
+    const bounds = ctx.scroller.getBoundingClientRect();
+    const middle = bounds.top + bounds.height / 2;
+    const item = required(
+      ctx.wrapper.findAll('[data-landuse] button').find(button => {
+        const rect = button.element.getBoundingClientRect();
+        return rect.top <= middle && rect.bottom >= middle;
+      }),
+      '列表中间的地类'
+    );
+    const key = required(item.element.closest('[data-landuse]')?.getAttribute('data-landuse'), '地类编码');
+    await userEvent.click(item.element);
     expect(ctx.scroller.scrollTop).toBe(0);
-    const back = ctx.wrapper.findAll('button').find(item => item.text() === '返回图例');
-    if (!back) {
-      throw new Error('没有返回图例入口');
-    }
+    expect(ctx.wrapper.find(`[data-symbol-editor="${key}"]`).exists()).toBe(true);
+    expect(document.activeElement?.hasAttribute('data-settings-heading')).toBe(true);
+
+    const back = required(ctx.wrapper.findAll('button').find(button => button.text() === '返回图例'), '返回图例');
     await userEvent.click(back.element);
     await nextTick();
     expect(ctx.scroller.scrollTop).toBe(before);
+    expect(document.activeElement).toBe(settingsOf('bgdc_dltb'));
+  });
 
-    ctx.scroller.scrollTop = 0;
-    const settings = ctx.wrapper.get('[aria-label="编辑地类图斑样式"]').element;
-    const row = settings.parentElement;
-    if (!row) {
-      throw new Error('没有图层标题行');
-    }
-    await userEvent.hover(row);
-    expect(getComputedStyle(settings).opacity).toBe('1');
+  it('样式设置按钮只在悬停这一行或键盘焦点在行内时显示，平时不接收点击', async () => {
+    using ctx = setup(320);
+    ctx.layers.add(['bgdc_ccwjq']);
+    await nextTick();
+    const row = rowOf('bgdc_dltb');
+    const settings = settingsOf('bgdc_dltb');
+    const other = settingsOf('bgdc_ccwjq');
     await userEvent.unhover(row);
     expect(getComputedStyle(settings).opacity).toBe('0');
+    expect(getComputedStyle(settings).pointerEvents).toBe('none');
+
+    await userEvent.hover(row);
+    expect(getComputedStyle(settings).opacity).toBe('1');
+    expect(getComputedStyle(settings).pointerEvents).toBe('auto');
+    expect(getComputedStyle(other).opacity).toBe('0');
+    await userEvent.unhover(row);
+    expect(getComputedStyle(settings).opacity).toBe('0');
+
+    // 键盘从摘要 Tab 到样式设置
+    summaryOf('bgdc_dltb').focus();
+    await userEvent.tab();
+    expect(document.activeElement).toBe(settings);
+    expect(getComputedStyle(settings).opacity).toBe('1');
+    settings.blur();
+    expect(getComputedStyle(settings).opacity).toBe('0');
+  });
+
+  it('展开的长地类图例往下滚时，行头吸在滚动容器顶上并盖住滚过去的子图例', async () => {
+    using ctx = setup(320);
+    const row = rowOf('bgdc_dltb');
+    expect(getComputedStyle(row).position).toBe('sticky');
+    const top = ctx.scroller.getBoundingClientRect().top;
+    expect(row.getBoundingClientRect().top).toBe(top);
+    ctx.scroller.scrollTop = 400;
+    expect(ctx.scroller.scrollTop).toBe(400);
+    const rect = row.getBoundingClientRect();
+    expect(rect.top).toBe(top);
+    // 前面的子图例已经滚过行头；行头叠在子图例上面
+    const first = ctx.wrapper.get('[data-landuse] button').element.getBoundingClientRect();
+    expect(first.bottom).toBeLessThan(top);
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    expect(hit !== null && row.contains(hit)).toBe(true);
   });
 
   it('恢复入口上方留出间距，滚动不移动底栏，确认提示可取消且编辑时隐藏', async () => {

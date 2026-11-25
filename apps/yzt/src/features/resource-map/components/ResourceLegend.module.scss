@@ -140,7 +140,7 @@ button.summary {
   color: var(--color-text-secondary);
 }
 
-// 搜索和子图例整体缩进，独立编辑视图仍占满内容宽度
+// 搜索和子图例整体缩进；样式设置替换整张列表，不在这里
 .content {
   padding: var(--space-xs) 0 var(--space-sm) var(--space-xl);
 }

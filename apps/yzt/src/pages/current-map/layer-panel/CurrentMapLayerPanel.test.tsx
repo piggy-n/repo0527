@@ -10,7 +10,7 @@ import { OTHER_ITEM } from '@/features/resource-map/classification';
 import { CLASS_FIELD } from '@/features/resource-map/filter-fields';
 import { type ResourceLayers, useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
-import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
+import { type ResourceSymbols, useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { sceneManifestSchema } from '@/features/scene-models/api';
 import { buildModelCatalog } from '@/features/scene-models/catalog';
 import { ModelKindSelect } from '@/features/scene-models/components/ModelKindSelect';
@@ -88,6 +88,7 @@ async function mountPanel({
   perDimension?: boolean;
 } = {}) {
   let owner: ResourceLayers | undefined;
+  let resourceSymbols: ResourceSymbols | undefined;
   let models: SceneModels | undefined;
   let current: CurrentLayers | undefined;
   let context: MapContext | undefined;
@@ -118,6 +119,7 @@ async function mountPanel({
     const sceneModels = useSceneModels({ ...map, sceneStatus }, MODELS);
     const list = useCurrentLayers(layers, sceneModels);
     owner = layers;
+    resourceSymbols = symbols;
     models = sceneModels;
     current = list;
     context = map;
@@ -142,12 +144,13 @@ async function mountPanel({
   });
   const wrapper = mount(Page, { attachTo: document.body });
   await nextTick();
-  if (!owner || !models || !current || !context) {
+  if (!owner || !resourceSymbols || !models || !current || !context) {
     throw new Error('页面没有创建拥有者');
   }
   return {
     wrapper,
     owner,
+    symbols: resourceSymbols,
     models,
     current,
     map: context,
@@ -174,16 +177,38 @@ function selectedRow(wrapper: VueWrapper): string | null {
   return found.exists() ? (found.attributes('data-current-row')?.replace('resource:', '') ?? null) : null;
 }
 const popover = () => document.querySelector<HTMLElement>('[data-layer-popover]');
-// 图例浮层：标题上的样式设置，显示的是浏览、单项编辑还是整层的配置（整层的才有配色方式）
+// 图例浮层：标题栏、标题上的样式设置、内容区（标题栏下面）
 const layerPopover = () => required(popover(), '图例浮层');
 const settingsButton = () =>
   required(layerPopover().querySelector<HTMLButtonElement>('button[aria-label="样式设置"]'), '样式设置');
+const popoverBody = () => required(layerPopover().lastElementChild, '浮层的内容区');
+// 标题栏从左到右：符号预览记作 svg，按钮记读屏名称，其余记文字
+const legendHeader = () =>
+  [...required(layerPopover().firstElementChild, '浮层的标题栏').children].map(child =>
+    child.localName === 'svg' ? 'svg' : (child.getAttribute('aria-label') ?? child.textContent)
+  );
+// 样式设置按没按下，内容是子图例、样式设置还是空的（空的由 :empty 藏起来，只剩标题栏）。jsdom 的 :empty 把 Vue 片段
+// 的空文本节点也算作内容，这里照 CSS 的规则只看元素和非空的文字
 const legendShown = () => ({
   pressed: settingsButton().getAttribute('aria-pressed'),
-  browsing: layerPopover().querySelector('[data-layer-legend]') !== null,
-  settings: layerPopover().querySelector('[data-legend-settings]') !== null,
-  wholeLayer: layerPopover().querySelector('[aria-label="图层配色方式"]') !== null
+  browsing: popoverBody().querySelector('[data-layer-legend]') !== null,
+  settings: popoverBody().querySelector('[data-legend-settings]') !== null,
+  empty: popoverBody().childElementCount === 0 && popoverBody().textContent === ''
 });
+const LEGEND_BROWSING = { pressed: 'false', browsing: true, settings: false, empty: false };
+const LEGEND_SETTINGS = { pressed: 'true', browsing: false, settings: true, empty: false };
+const LEGEND_EMPTY = { pressed: 'false', browsing: false, settings: false, empty: true };
+// 点图例浮层子图例里的一类（值的 data-value、地类的 data-landuse）
+async function editClass(selector: string) {
+  required(layerPopover().querySelector<HTMLButtonElement>(`${selector} button`), selector).click();
+  await nextTick();
+}
+// 样式设置里"类别"选着的一类
+const pickedClass = (wrapper: VueWrapper) =>
+  required(
+    wrapper.findAllComponents(ElSelect).find(select => select.props('ariaLabel') === '选择要修改的类别'),
+    '类别的下拉'
+  ).props('modelValue');
 // 右键菜单里的定位；焦点在不在右键菜单里
 const locateItem = () => document.querySelector<HTMLButtonElement>('[data-menu-item="locate"]');
 const menuItem = (key: string) =>
@@ -362,8 +387,8 @@ describe('CurrentMapLayerPanel', () => {
     expect(currentOrder(wrapper)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
   });
 
-  it('透明度和图例是两个浮层：再点入口、关闭按钮、Esc 关闭；点行首的符号选中并打开图例，告诉页面是哪个资源', async () => {
-    const { wrapper, owner, legendCodes } = await mountPanel();
+  it('透明度和图例是两个浮层：再点入口、关闭按钮、Esc 关闭；点行首的符号选中并打开图例', async () => {
+    const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
     await row(wrapper, 'bgdc_dltb').trigger('click');
@@ -377,12 +402,10 @@ describe('CurrentMapLayerPanel', () => {
     await row(wrapper, 'csxhjctb_hydl').get('[data-row-symbol]').trigger('click');
     expect(selectedRow(wrapper)).toBe('csxhjctb_hydl');
     expect(popover()?.getAttribute('aria-label')).toBe('水域线层的图例');
-    expect(legendCodes.at(-1)).toBe('csxhjctb_hydl');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await nextTick();
     expect(popover()).toBeNull();
-    expect(legendCodes.at(-1)).toBeNull();
   });
 
   it('标注（ADR 0160）：工具栏第 8 个按钮、右键菜单的"标注…"打开第三种浮层；菜单直接显示、隐藏标注', async () => {
@@ -843,17 +866,31 @@ describe('CurrentMapLayerPanel', () => {
     expect(row(wrapper, 'bgdc_dltb').attributes('tabindex')).toBe('0');
   });
 
-  it('右侧图例开始编辑图例浮层正开着的同一个资源时，图例浮层关掉，后打开编辑的一方为准（2026-11-14 审查发现）', async () => {
-    const { wrapper, legendYield } = await mountPanel();
+  it('右侧图例开始设置图例浮层正在设置的同一个资源时，图例浮层回到看图例、不关闭，后打开设置的一方为准（2026-11-14 审查发现，用户 2026-11-24 改成不关闭）', async () => {
+    const { wrapper, owner, legendYield, legendCodes } = await mountPanel();
+    owner.add(['bgdc_cjdcq']);
+    await nextTick();
     await row(wrapper, 'bgdc_dltb').get('[data-row-symbol]').trigger('click');
-    expect(popover()).not.toBeNull();
+    await editClass('[data-landuse]');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
 
+    // 右侧设置的是别的资源：不让
     legendYield.value = 'bgdc_cjdcq';
     await nextTick();
-    expect(popover()).not.toBeNull();
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
     legendYield.value = 'bgdc_dltb';
     await nextTick();
-    expect(popover()).toBeNull();
+    expect(popover()?.getAttribute('aria-label')).toBe('地类图斑的图例');
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+    expect(legendCodes.at(-1)).toBeNull();
+
+    // 单一符号让出以后没有内容，只剩标题栏
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    legendYield.value = 'bgdc_cjdcq';
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_EMPTY);
+    expect(legendCodes.at(-1)).toBeNull();
   });
 
   it('三维里图层标题下面有"全部、二维资源、三维模型"的标签，带数量，默认"全部"；二维里没有，切换维度回到"全部"（ADR 0161）', async () => {
@@ -1237,44 +1274,133 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()).toBeNull();
   });
 
-  it('图例浮层里正在编辑一类时点标题上的样式设置：换成整层的配置，再点一次回到浏览（2026-11-14 审查发现）', async () => {
-    const { wrapper } = await mountPanel();
-    await row(wrapper, 'bgdc_dltb').trigger('click');
-    await tool(wrapper, 'legend').trigger('click');
-
-    required(layerPopover().querySelector<HTMLButtonElement>('[data-landuse] button'), '地类的条目').click();
-    await nextTick();
-    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: false, settings: true, wholeLayer: false });
-
-    settingsButton().click();
-    await nextTick();
-    expect(legendShown()).toStrictEqual({ pressed: 'true', browsing: false, settings: true, wholeLayer: true });
-
-    settingsButton().click();
-    await nextTick();
-    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
-  });
-
-  it('图例浮层的标题栏在样式设置左边有显示方式的快捷切换：换成统一配色时内容直接是设置，再点换回浏览（用户 2026-11-24）', async () => {
+  it('按类别配色的图例先看子图例：点一类进样式设置、类别选好这一类，标题上的样式设置按下；再点样式设置或"返回图例"回到子图例（用户 2026-11-24）', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
     await row(wrapper, 'csxhjctb_hydl').trigger('click');
     await tool(wrapper, 'legend').trigger('click');
-    const toggle = () => required(layerPopover().querySelector<HTMLButtonElement>('[data-legend-mode]'), '显示方式');
-    expect(toggle().getAttribute('data-legend-mode')).toBe('classified');
-    expect(toggle().nextElementSibling).toBe(settingsButton());
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
 
-    toggle().click();
-    await nextTick();
-    expect(toggle().getAttribute('data-legend-mode')).toBe('uniform');
-    expect(layerPopover().querySelector('button[aria-label="样式设置"]')).toBeNull();
-    expect(layerPopover().querySelector('[aria-label="图层配色方式"]')).not.toBeNull();
+    // 水渠是第二类：不是没选时的第一类
+    await editClass('[data-value="水渠"]');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    expect(pickedClass(wrapper)).toBe('水渠');
 
-    toggle().click();
+    settingsButton().click();
     await nextTick();
-    expect(toggle().getAttribute('data-legend-mode')).toBe('classified');
-    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+
+    // 直接按样式设置进去，类别还是这个资源上次选的
+    settingsButton().click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    expect(pickedClass(wrapper)).toBe('水渠');
+    const back = required(
+      [...popoverBody().querySelectorAll('button')].find(button => button.textContent?.includes('返回图例')),
+      '返回图例'
+    );
+    back.click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+  });
+
+  it('图例浮层的标题栏是符号、名称、年份、样式设置、关闭：三种图例都有样式设置，没有显示方式的快捷切换（用户 2026-11-24）', async () => {
+    const { wrapper, owner, symbols } = await mountPanel();
+    owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    await nextTick();
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    // 按类别配色、单一符号、统一配色
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    expect(legendHeader()).toStrictEqual(['svg', '地类图斑', '2024', '样式设置', '关闭']);
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    expect(legendHeader()).toStrictEqual(['svg', '村级调查区', '2024', '样式设置', '关闭']);
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    expect(legendHeader()).toStrictEqual(['svg', '水域线层', '2024', '样式设置', '关闭']);
+  });
+
+  it('单一符号、统一配色的图例一打开就是样式设置、按钮按下（工具栏、右键菜单、行首的符号都是）；松开以后没有内容，只剩标题栏（用户 2026-11-24）', async () => {
+    const { wrapper, owner, symbols } = await mountPanel();
+    owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    await nextTick();
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    settingsButton().click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_EMPTY);
+    settingsButton().click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    await tool(wrapper, 'legend').trigger('click');
+    expect(popover()).toBeNull();
+
+    await row(wrapper, 'csxhjctb_hydl').trigger('contextmenu');
+    menuItem('legend').click();
+    await nextTick();
+    expect(popover()?.getAttribute('aria-label')).toBe('水域线层的图例');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    settingsButton().click();
+    await nextTick();
+    expect(legendShown()).toStrictEqual(LEGEND_EMPTY);
+
+    // 行首的符号：点一下关上，再点打开又是样式设置
+    await row(wrapper, 'csxhjctb_hydl').get('[data-row-symbol]').trigger('click');
+    expect(popover()).toBeNull();
+    await row(wrapper, 'csxhjctb_hydl').get('[data-row-symbol]').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+  });
+
+  it('图例浮层开着时换选中的行：浮层跟着换，按新资源的图例种类重新决定看子图例还是样式设置（用户 2026-11-24）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    expect(popover()?.getAttribute('aria-label')).toBe('村级调查区的图例');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+
+    // 单一符号松开了样式设置，换到按类别配色的照样先看子图例
+    settingsButton().click();
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+
+    // 在一类的样式设置里换到地类图斑：样式设置不带过去
+    await editClass('[data-value="水渠"]');
+    expect(legendShown()).toStrictEqual(LEGEND_SETTINGS);
+    await row(wrapper, 'bgdc_dltb').trigger('click');
+    expect(popover()?.getAttribute('aria-label')).toBe('地类图斑的图例');
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+  });
+
+  it('图例浮层只在样式设置里告诉页面是哪个资源：看子图例、松开样式设置、关闭时是 null（2026-11-24 审查）', async () => {
+    const { wrapper, owner, legendCodes } = await mountPanel();
+    owner.add(['bgdc_cjdcq', 'csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').get('[data-row-symbol]').trigger('click');
+    expect(legendShown()).toStrictEqual(LEGEND_BROWSING);
+    expect(legendCodes).toStrictEqual([null]);
+
+    await editClass('[data-value="水渠"]');
+    expect(legendCodes.at(-1)).toBe('csxhjctb_hydl');
+    settingsButton().click();
+    await nextTick();
+    expect(legendCodes.at(-1)).toBeNull();
+
+    // 单一符号一打开就在样式设置里
+    await row(wrapper, 'bgdc_cjdcq').trigger('click');
+    expect(legendCodes.at(-1)).toBe('bgdc_cjdcq');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    expect(popover()).toBeNull();
+    expect(legendCodes).toStrictEqual([null, 'csxhjctb_hydl', null, 'bgdc_cjdcq', null]);
   });
 
   it('选中的行上移、下移以后浮层重新放：箭头对着的元素读图层的顺序，元素不变也重新量（2026-11-14 审查发现）', async () => {

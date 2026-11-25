@@ -3,6 +3,7 @@ import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
+import type { FeatureFilter } from './feature-filter';
 import { CLASS_FIELD } from './filter-fields';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import {
@@ -12,6 +13,7 @@ import {
   type LegendEntry,
   legendEntries,
   legendEntry,
+  type LegendSwatch,
   SUMMARY_LIMITS,
   summaryItems,
   swatchOf
@@ -128,12 +130,10 @@ describe('legendEntries', () => {
       // 摘要：没登记代表取值，取前几个取值，兜底不算
       summary: [lineSwatch('#1E88E5'), lineSwatch('#4FC3F7')],
       values: [
-        { key: '河流', label: '河流', swatch: lineSwatch('#1E88E5') },
-        { key: '水渠', label: '水渠', swatch: lineSwatch('#4FC3F7') },
-        { key: '$other', label: '其他', swatch: lineSwatch('#2F80ED') }
-      ],
-      filtered: false,
-      filterNote: null
+        { key: '河流', label: '河流', swatch: lineSwatch('#1E88E5'), excluded: false },
+        { key: '水渠', label: '水渠', swatch: lineSwatch('#4FC3F7'), excluded: false },
+        { key: '$other', label: '其他', swatch: lineSwatch('#2F80ED'), excluded: false }
+      ]
     });
     const czcdyd = entryOf(entries, 'bgdc_czcdyd');
     // 键是取值，已保存的符号覆盖按它；名称只用于显示
@@ -431,12 +431,12 @@ describe('landuseLegendItems', () => {
 });
 
 // 目录里一个资源的图例条目画出的填充有多不透明
-function opacityOf(code: string, override?: ResourceSymbolOverride): number {
+function opacityOf(code: string, override?: ResourceSymbolOverride, filter?: FeatureFilter): number {
   const resource = CATALOG.resources.get(code);
   if (!resource) {
     throw new Error(`目录里没有 ${code}`);
   }
-  return fillOpacityOf(legendEntry(resource, 2022, override));
+  return fillOpacityOf(legendEntry(resource, 2022, override, filter));
 }
 
 describe('fillOpacityOf（ADR 0161 的"盖住模型"）', () => {
@@ -455,53 +455,106 @@ describe('fillOpacityOf（ADR 0161 的"盖住模型"）', () => {
     expect(opacityOf('csxhjctb_csnljsl')).toBe(0);
     expect(opacityOf('csxhjctb_tyhdp')).toBe(0);
   });
+
+  it('按分类过滤时只看没过滤掉的类别：过滤掉的不画在地图上（ADR 0175）', () => {
+    const translucent = { fillColor: 'rgba(255, 0, 0, 0.3)' };
+    // 地类：只勾着半透明的一类，其他不透明的过滤掉了
+    expect(opacityOf('bgdc_dltb', { items: { '0101': translucent } }, { [CLASS_FIELD]: ['0101'] })).toBe(0.3);
+    // 按取值配色同样
+    expect(opacityOf('bgdc_czcdyd', { items: { '201': translucent } }, { [CLASS_FIELD]: ['201'] })).toBe(0.3);
+    expect(opacityOf('bgdc_czcdyd', { items: { '201': translucent } })).toBe(1);
+    // 一项都没勾时什么都不画
+    expect(opacityOf('bgdc_dltb', undefined, { [CLASS_FIELD]: [] })).toBe(0);
+    expect(opacityOf('bgdc_czcdyd', undefined, { [CLASS_FIELD]: [] })).toBe(0);
+  });
+
+  it('统一符号只看统一的填充，不管按分类过滤掉了哪些', () => {
+    const override: ResourceSymbolOverride = { mode: 'uniform', uniform: { fillColor: 'rgba(255, 0, 0, 0.5)' } };
+    expect(opacityOf('bgdc_dltb', override, { [CLASS_FIELD]: ['0101'] })).toBe(0.5);
+  });
 });
 
-describe('过滤着的图例（ADR 0173）', () => {
+// 按取值配色、地类的条目，种类不对时抛错
+function valuesOf(entry: LegendEntry): Extract<LegendEntry, { kind: 'values' }> {
+  if (entry.kind !== 'values') {
+    throw new Error(`${entry.code} 不是按取值配色`);
+  }
+  return entry;
+}
+
+function landuseOf(entry: LegendEntry): Extract<LegendEntry, { kind: 'landuse' }> {
+  if (entry.kind !== 'landuse') {
+    throw new Error(`${entry.code} 不是地类图例`);
+  }
+  return entry;
+}
+
+// 取值的键和是否过滤掉
+const marks = (entry: LegendEntry) => valuesOf(entry).values.map(({ key, excluded }) => [key, excluded]);
+// 线的预览取颜色
+const colors = (swatches: readonly LegendSwatch[]) =>
+  swatches.map(swatch => (swatch.geometry === 'line' ? swatch.color : swatch.geometry));
+
+describe('过滤着的图例（ADR 0173、0175）', () => {
   const SCHOOLS = buildCatalog([
     { code: null, name: '测试', children: [layer('csxhjctb_xxa', '学校面层', 'Polygon', [2025])] }
   ]);
   const school = SCHOOLS.resources.get('csxhjctb_xxa');
   const hydl = CATALOG.resources.get('csxhjctb_hydl');
-  if (!school || !hydl) {
-    throw new Error('测试目录里没有学校面层或水域线层');
+  const dltb = CATALOG.resources.get('bgdc_dltb');
+  if (!school || !hydl || !dltb) {
+    throw new Error('测试目录里没有学校面层、水域线层或地类图斑');
   }
-  const uniform: ResourceSymbolOverride = { mode: 'uniform' };
 
-  it('没有条件：不算过滤，不写条件', () => {
-    expect(legendEntry(school, 2025, undefined)).toMatchObject({ filtered: false, filterNote: null });
-  });
-
-  it('按分类过滤：只列勾着的类别，摘要也只用它们；类别已经说明了条件，不另写', () => {
-    const entry = legendEntry(hydl, 2025, undefined, { [CLASS_FIELD]: ['水渠'] });
-    expect(entry.kind === 'values' && entry.values.map(value => value.key)).toStrictEqual(['水渠']);
-    expect(entry.kind === 'values' && entry.summary.map(swatch => swatch.geometry === 'line' && swatch.color)).toStrictEqual([
-      '#4FC3F7'
-    ]);
-    expect(entry).toMatchObject({ filtered: true, filterNote: null });
-    // 地类只留勾着的预览，地类图例按它列出
-    const landuse = legendEntry(
-      CATALOG.resources.get('bgdc_dltb') ?? school,
-      2022,
-      undefined,
-      { [CLASS_FIELD]: ['0101', '0102'] }
+  it('没有条件：哪一类都没过滤掉', () => {
+    expect(valuesOf(legendEntry(school, 2025, undefined)).values.map(value => value.excluded)).toStrictEqual(
+      Array.from({ length: 7 }, () => false)
     );
-    expect(landuse.kind === 'landuse' && [...landuse.swatches.keys()]).toStrictEqual(['0101', '0102']);
+    const landuse = landuseOf(legendEntry(dltb, 2022, undefined));
+    expect(landuse.excluded).toStrictEqual(new Set());
+    expect(landuse.swatches.size).toBeGreaterThan(0);
   });
 
-  it('按别的字段过滤：类别不变，条件写在名称下面', () => {
-    const entry = legendEntry(school, 2025, undefined, { type: ['小学', '普通高等学校本科院校'] });
-    expect(entry.kind === 'values' && entry.values).toHaveLength(7);
-    expect(entry).toMatchObject({ filtered: true, filterNote: '办学类型：小学、普通高等学校本科院校' });
+  it('按分类过滤：照样列出全部类别，过滤掉的标出来，预览不变；摘要只用勾着的', () => {
+    const plain = valuesOf(legendEntry(hydl, 2025, undefined));
+    const entry = valuesOf(legendEntry(hydl, 2025, undefined, { [CLASS_FIELD]: ['水渠'] }));
+
+    expect(marks(entry)).toStrictEqual([
+      ['河流', true],
+      ['水渠', false],
+      ['$other', true]
+    ]);
+    expect(entry.values.map(({ key, label, swatch }) => ({ key, label, swatch }))).toStrictEqual(
+      plain.values.map(({ key, label, swatch }) => ({ key, label, swatch }))
+    );
+    expect(colors(plain.summary)).toStrictEqual(['#1E88E5', '#4FC3F7']);
+    expect(colors(entry.summary)).toStrictEqual(['#4FC3F7']);
   });
 
-  it('统一样式时分类的条件也写出来（类别没列出）；一项都没勾时写明', () => {
-    expect(legendEntry(school, 2025, uniform, { [CLASS_FIELD]: ['08H211'], type: ['小学'] })).toMatchObject({
-      filterNote: '分类：高等院校；办学类型：小学'
-    });
-    const none = legendEntry(school, 2025, undefined, { [CLASS_FIELD]: [] });
-    expect(none.kind === 'values' && none.values).toStrictEqual([]);
-    expect(none.filterNote).toBe('分类：一项都没选');
+  it('地类按分类过滤：swatches 是全部类别，过滤掉的键放在 excluded 里；摘要只用勾着的', () => {
+    const kept = ['0101', '0102'];
+    const plain = landuseOf(legendEntry(dltb, 2022, undefined));
+    const entry = landuseOf(legendEntry(dltb, 2022, undefined, { [CLASS_FIELD]: kept }));
+
+    expect(entry.swatches).toStrictEqual(plain.swatches);
+    expect(entry.excluded).toStrictEqual(new Set([...plain.swatches.keys()].filter(key => !kept.includes(key))));
+    // 登记的代表取值里只有水田勾着
+    expect(entry.summary).toStrictEqual([plain.swatches.get('0101')]);
+  });
+
+  it('一项都没勾：全部类别标为过滤掉，摘要为空', () => {
+    const entry = valuesOf(legendEntry(school, 2025, undefined, { [CLASS_FIELD]: [] }));
+
+    expect(entry.values).toHaveLength(7);
+    expect(entry.values.every(value => value.excluded)).toBe(true);
+    expect(entry.summary).toStrictEqual([]);
+    expect(landuseOf(legendEntry(dltb, 2022, undefined, { [CLASS_FIELD]: [] })).summary).toStrictEqual([]);
+  });
+
+  it('按别的字段过滤：图例不显示，条目和没有条件时一样', () => {
+    expect(legendEntry(school, 2025, undefined, { type: ['小学', '普通高等学校本科院校'] })).toStrictEqual(
+      legendEntry(school, 2025, undefined)
+    );
   });
 
   it('右侧图例的条目按资源的显示状态过滤', () => {
@@ -512,7 +565,13 @@ describe('过滤着的图例（ADR 0173）', () => {
       throw new Error('没有水域线层');
     }
     displays.set('csxhjctb_hydl', { ...display, filter: { [CLASS_FIELD]: ['河流'] } });
-    const entry = legendEntries({ ...state, displays }, new Map()).find(item => item.code === 'csxhjctb_hydl');
-    expect(entry?.kind === 'values' && entry.values.map(value => value.label)).toStrictEqual(['河流']);
+    const entry = entryOf(legendEntries({ ...state, displays }, new Map()), 'csxhjctb_hydl');
+
+    expect(marks(entry)).toStrictEqual([
+      ['河流', false],
+      ['水渠', true],
+      ['$other', true]
+    ]);
+    expect(colors(valuesOf(entry).summary)).toStrictEqual(['#1E88E5']);
   });
 });
