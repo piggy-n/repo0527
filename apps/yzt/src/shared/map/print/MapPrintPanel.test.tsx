@@ -47,17 +47,19 @@ function fakePrint(capture: PrintCapture | null = null) {
   return print;
 }
 
-// 浮层内容放在提供地图的页面里（没有画布，相机不变）；设置由页面持有
+// 浮层内容放在提供地图的页面里（没有画布，相机不变）；设置、浮层显示着由页面持有
 function mountPanel(print: MapPrint, dimension: ViewKind = '2d', initial: PrintSettings = DEFAULT_PRINT_SETTINGS) {
   const settings = ref(initial);
+  const active = ref(true);
   const done = vi.fn<() => void>();
-  const viewer = vi.fn<(open: boolean) => void>();
+  const viewer = vi.fn<(closeLayer: (() => void) | null) => void>();
   const Page = defineComponent(() => {
     provideMap({ groups: ['basemap'], camera: CAMERA });
     return () => (
       <MapPrintPanel
         print={print}
         settings={settings.value}
+        active={active.value}
         dimension={dimension}
         onUpdate:settings={(value: PrintSettings) => (settings.value = value)}
         onDone={done}
@@ -66,7 +68,7 @@ function mountPanel(print: MapPrint, dimension: ViewKind = '2d', initial: PrintS
     );
   });
   const wrapper = mount(Page, { attachTo: document.body });
-  return { wrapper, settings, done, viewer };
+  return { wrapper, settings, active, done, viewer };
 }
 
 const radio = (wrapper: VueWrapper, label: string) =>
@@ -91,10 +93,20 @@ const exportButton = (wrapper: VueWrapper) => {
   return found;
 };
 
-const preview = (wrapper: VueWrapper) => wrapper.get('button[aria-label="查看打印预览的大图"]');
+const preview = (wrapper: VueWrapper) => wrapper.get('button[data-print-preview]');
+
+// 大图开着时交给页面的关闭函数（页面交给浮层的 hold，浮层按 Esc 时调用）
+const closeLayerOf = (viewer: ReturnType<typeof vi.fn<(closeLayer: (() => void) | null) => void>>) => {
+  const closeLayer = viewer.mock.calls[0]?.[0];
+  if (!closeLayer) {
+    throw new Error('大图没有交出关闭函数');
+  }
+  return closeLayer;
+};
 
 // 大图预览挂在 body 下
 const viewerElement = () => document.querySelector('.el-image-viewer__wrapper');
+const viewerImage = () => document.querySelector<HTMLImageElement>('.el-image-viewer__img');
 
 const viewerExport = () => {
   const found = [...document.querySelectorAll<HTMLButtonElement>('.el-image-viewer__actions button')].find(
@@ -138,6 +150,7 @@ describe('MapPrintPanel', () => {
     const { wrapper } = mountPanel(print);
     await flushPromises();
     expect(wrapper.text()).toContain('等待地图加载完成');
+    expect(preview(wrapper).attributes('aria-label')).toBe('打印预览：等待地图加载完成');
     expect(wrapper.find('[data-print-size]').exists()).toBe(false);
 
     finish?.(captureOf(1440, 800));
@@ -145,10 +158,13 @@ describe('MapPrintPanel', () => {
     expect(sizeText(wrapper)).toBe('1672 × 800 像素');
     expect(print.capture).toHaveBeenCalledTimes(1);
     expect(print.capture).toHaveBeenCalledWith(true, expect.any(AbortSignal));
+    expect(preview(wrapper).attributes('aria-label')).toBe('查看打印预览的大图');
 
+    // 说明在按钮里面，读屏只读按钮的名称：说明并进名称
     const empty = mountPanel(fakePrint(null));
     await flushPromises();
     expect(empty.wrapper.text()).toContain('地图还没有就绪');
+    expect(preview(empty.wrapper).attributes('aria-label')).toBe('打印预览：地图还没有就绪');
   });
 
   it('改图例的位置只重新合成、只改清晰度时预览不变，都不再截图、查要素', async () => {
@@ -275,7 +291,7 @@ describe('MapPrintPanel', () => {
     const print = fakePrint(captureOf(1440, 800));
     const { wrapper } = mountPanel(print);
     await flushPromises();
-    const line = () => wrapper.get('[aria-label="查看打印预览的大图"] + div');
+    const line = () => wrapper.get('[data-print-preview] + div');
     expect(line().text()).toBe('1672 × 800 像素');
 
     print.phase.value = 'waiting';
@@ -309,8 +325,11 @@ describe('MapPrintPanel', () => {
     expect(viewerElement()?.querySelector('[data-print-viewer-info]')?.textContent).toBe(
       '打印预览：1672 × 800 像素，图例较长，放在了右侧'
     );
-    expect(viewer.mock.calls).toStrictEqual([[true]]);
+    expect(viewer.mock.calls).toStrictEqual([[expect.any(Function)]]);
     expect(done).not.toHaveBeenCalled();
+    // 页面关浮层、焦点回到入口时大图要已经卸下：它的 FocusTrap 卸载时会移动焦点
+    const viewerAtDone: boolean[] = [];
+    done.mockImplementation(() => viewerAtDone.push(viewerElement() !== null));
 
     viewerExport().click();
     await flushPromises();
@@ -319,8 +338,8 @@ describe('MapPrintPanel', () => {
     expect(names).toStrictEqual(['现状底图-20261124-014530.png']);
     expect(document.querySelector('.el-message')?.textContent).toContain('图例较长，放在了右侧');
     expect(revokeUrl).toHaveBeenCalledWith('blob:print');
-    expect(viewer.mock.calls).toStrictEqual([[true], [false]]);
-    expect(done).toHaveBeenCalledTimes(1);
+    expect(viewer.mock.calls).toStrictEqual([[expect.any(Function)], [null]]);
+    expect(viewerAtDone).toStrictEqual([false]);
     expect(viewerElement()).toBeNull();
   });
 
@@ -342,9 +361,81 @@ describe('MapPrintPanel', () => {
 
     expect(viewerElement()).toBeNull();
     expect(revokeUrl).toHaveBeenCalledWith('blob:print');
-    expect(viewer.mock.calls).toStrictEqual([[true], [false]]);
+    expect(viewer.mock.calls).toStrictEqual([[expect.any(Function)], [null]]);
+    expect(document.activeElement).toBe(preview(wrapper).element);
     expect(save).not.toHaveBeenCalled();
     expect(done).not.toHaveBeenCalled();
+  });
+
+  it('Esc 交给浮层：大图自己不处理 Esc；浮层调用交出的关闭函数时关大图，焦点回到预览', async () => {
+    const print = fakePrint(captureOf(1440, 800));
+    const { wrapper, viewer } = mountPanel(print);
+    await flushPromises();
+    await preview(wrapper).trigger('click');
+    await flushPromises();
+
+    viewerElement()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(viewerElement()).not.toBeNull();
+
+    closeLayerOf(viewer)();
+    await flushPromises();
+
+    expect(viewerElement()).toBeNull();
+    expect(viewer.mock.calls).toStrictEqual([[expect.any(Function)], [null]]);
+    expect(document.activeElement).toBe(preview(wrapper).element);
+  });
+
+  it('空格按大图工具栏的按钮只做按钮的事，不再叠加大图自己的空格快捷键（切换原始大小）', async () => {
+    const print = fakePrint(captureOf(1440, 800));
+    const { wrapper } = mountPanel(print);
+    await flushPromises();
+    await preview(wrapper).trigger('click');
+    await flushPromises();
+    const zoomIn = document.querySelector<HTMLButtonElement>('.el-image-viewer__actions button[aria-label="放大"]');
+    // jsdom 不加载图片：大图在图片加载完之前不缩放
+    viewerImage()?.dispatchEvent(new Event('load'));
+    await flushPromises();
+
+    // 浏览器用空格点按钮：按下时冒泡，松开时点击
+    zoomIn?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+    zoomIn?.click();
+    await flushPromises();
+
+    expect(viewerImage()?.style.transform).toContain('scale(1.2)');
+    // 仍是适应窗口
+    expect(viewerImage()?.style.maxWidth).toBe('100%');
+  });
+
+  it('生成大图时浮层关上（还在淡出、没卸载）：放弃生成，晚到的结果不显示；大图开着时浮层关上，大图一起关', async () => {
+    let finish: ((result: PrintResult | null) => void) | undefined;
+    const print = fakePrint(captureOf(1440, 800));
+    print.run.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    const { wrapper, active, viewer } = mountPanel(print);
+    await flushPromises();
+    await preview(wrapper).trigger('click');
+
+    active.value = false;
+    await flushPromises();
+    finish?.(RESULT);
+    await flushPromises();
+
+    expect(print.cancel).toHaveBeenCalledTimes(1);
+    expect(createUrl).not.toHaveBeenCalled();
+    expect(viewerElement()).toBeNull();
+    expect(viewer).not.toHaveBeenCalled();
+
+    active.value = true;
+    await flushPromises();
+    await preview(wrapper).trigger('click');
+    await flushPromises();
+    expect(viewerElement()).not.toBeNull();
+    active.value = false;
+    await flushPromises();
+
+    expect(viewerElement()).toBeNull();
+    expect(revokeUrl).toHaveBeenCalledWith('blob:print');
+    expect(viewer.mock.calls).toStrictEqual([[expect.any(Function)], [null]]);
   });
 
   it('生成大图时关掉浮层（卸载）：放弃生成，晚到的结果不显示', async () => {

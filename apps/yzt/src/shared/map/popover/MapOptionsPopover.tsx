@@ -8,6 +8,7 @@ import {
   onScopeDispose,
   type PropType,
   ref,
+  shallowRef,
   type SlotsType,
   type VNode,
   watch
@@ -24,8 +25,11 @@ export interface MapOptionsContext {
   readonly active: boolean;
   /** 关闭浮层，焦点回到入口：内容里的操作做完时调用（如选了底图） */
   readonly close: () => void;
-  /** 内容打开了盖住整页的一层（如打印的大图预览）：开着时单击外部、Esc 不关浮层，交给那一层 */
-  readonly hold: (held: boolean) => void;
+  /**
+   * 内容打开了盖住整页的一层（如打印的大图预览）时交给它的关闭函数，关上时交 null：开着时单击哪里都不关浮层，
+   * Esc 只关那一层（照样在捕获阶段截住，页面上别的 Esc 监听收不到）
+   */
+  readonly hold: (closeLayer: (() => void) | null) => void;
 }
 
 /**
@@ -61,12 +65,12 @@ export const MapOptionsPopover = defineComponent({
     useResizeObserver(element, () => void popover.value?.popperRef?.popperInstanceRef?.update());
     const pageActive = usePageActive();
     const shown = computed(() => props.open && props.visible && pageActive.value);
-    // 内容打开的那一层开着；浮层关上时一起放开
-    const held = ref(false);
-    const hold = (value: boolean) => (held.value = value && shown.value);
+    // 内容打开的那一层的关闭函数；浮层关上时一起放开
+    const held = shallowRef<(() => void) | null>(null);
+    const hold = (closeLayer: (() => void) | null) => (held.value = shown.value ? closeLayer : null);
     watch(shown, visible => {
       if (!visible) {
-        held.value = false;
+        held.value = null;
         emit('topChange', null);
       }
     });
@@ -81,12 +85,14 @@ export const MapOptionsPopover = defineComponent({
       reference.value?.querySelector('button')?.focus({ preventScroll: true });
     };
     useLightDismiss({
-      active: () => shown.value && !held.value,
-      // 箭头和边框也算浮层：它们在内容外面、在 Element 的弹出层里面
+      active: () => shown.value,
+      // 箭头和边框也算浮层：它们在内容外面、在 Element 的弹出层里面；内容打开的那一层开着时点哪里都算里面
       contains: target =>
-        reference.value?.contains(target) === true || element.value?.closest('.el-popper')?.contains(target) === true,
+        held.value !== null ||
+        reference.value?.contains(target) === true ||
+        element.value?.closest('.el-popper')?.contains(target) === true,
       onOutside: () => emit('update:open', false),
-      onEscape: close
+      onEscape: () => (held.value ? held.value() : close())
     });
     // Popper 算完位置后报告顶部：Element 的位置要等 Vue 渲染才写进 DOM，这时量到的还是旧的，等这一轮之后再量；选项保持同一对象避免更新循环
     const popperOptions = {

@@ -14,6 +14,7 @@ import {
 import {
   computed,
   defineComponent,
+  nextTick,
   onBeforeUnmount,
   onScopeDispose,
   type PropType,
@@ -45,9 +46,24 @@ interface ViewerToolbar {
   readonly reset: () => void;
 }
 
+// 空格激活大图工具栏的按钮时，不让按下冒泡到大图在 document 上的快捷键（空格切换原始大小），不然会多切一次；
+// 不 preventDefault，按钮照常在松开时点击
+const keepSpace = (event: KeyboardEvent) => {
+  if (event.key === ' ' || event.code === 'Space') {
+    event.stopPropagation();
+  }
+};
+
 // 大图工具栏的一个按钮：只有图标，名称在提示和读屏里
 const viewerButton = (label: string, icon: VNode, onClick: () => void) => (
-  <button type="button" class={styles.viewerButton} aria-label={label} title={label} onClick={onClick}>
+  <button
+    type="button"
+    class={styles.viewerButton}
+    aria-label={label}
+    title={label}
+    onKeydown={keepSpace}
+    onClick={onClick}
+  >
     <ElIcon>{icon}</ElIcon>
   </button>
 );
@@ -59,7 +75,8 @@ const movedText = (requested: LegendPlacement, result: PrintResult) =>
 /**
  * 地图打印的浮层内容（ADR 0174，用户 2026-11-24 确认的做法二和第 8 批的调整）：浅灰标题栏右边是"导出"，下面是预览、
  * 图例的位置、清晰度。预览在打开时、相机变了以后等画面完整截一次，改图例的位置只重新合成；点预览按现在的设置生成导出的那张图，
- * 用 Element 的图片预览看大图，大图里导出的就是这张。等加载、生成、失败都写在预览下面那一行。浮层关掉（卸载）时放弃没完成的导出
+ * 用 Element 的图片预览看大图，大图里导出的就是这张。等加载、生成、失败都写在预览下面那一行。浮层关上时放弃没完成的导出、
+ * 关掉大图
  */
 export const MapPrintPanel = defineComponent({
   name: 'MapPrintPanel',
@@ -74,8 +91,8 @@ export const MapPrintPanel = defineComponent({
     'update:settings': (settings: PrintSettings) => typeof settings === 'object',
     /** 导出完了：页面关掉浮层 */
     done: () => true,
-    /** 大图预览开着：页面让浮层不因单击外部、Esc 关闭 */
-    viewer: (open: boolean) => typeof open === 'boolean'
+    /** 大图预览开着时是关掉它的函数，关上时是 null：页面交给浮层的 hold，Esc 只关大图 */
+    viewer: (closeLayer: (() => void) | null) => closeLayer === null || typeof closeLayer === 'function'
   },
   setup(props, { emit }) {
     const map = useMap();
@@ -219,34 +236,55 @@ export const MapPrintPanel = defineComponent({
       }
       URL.revokeObjectURL(current.url);
       viewed.value = null;
-      emit('viewer', false);
+      emit('viewer', null);
     };
+
+    // 用户关掉大图（Esc、遮罩、关闭按钮）：焦点回到预览。等大图卸下再给：它的 FocusTrap 卸载时会把焦点放回打开前的元素
+    // （生成时预览不能点，Chromium 里是 body）
+    const dismissViewer = () => {
+      closeViewer();
+      void nextTick(() => thumbnail.value?.focus({ preventScroll: true }));
+    };
+
+    // 浮层关上（还在淡出、没卸载）时就放弃没完成的导出、关掉大图：淡出的这段时间里晚到的结果不再弹出大图
+    watch(
+      () => props.active,
+      active => {
+        if (!active) {
+          props.print.cancel();
+          closeViewer();
+        }
+      }
+    );
 
     const exportImage = async () => {
       const requested = props.settings.legend;
       const result = await produce('save');
-      if (result) {
+      if (result && alive && props.active) {
         save(result, movedText(requested, result));
       }
     };
 
-    // 浮层在生成的时候关掉了：结果不再显示
+    // 浮层在生成的时候关上了：结果不再显示
     const openViewer = async () => {
       const requested = props.settings.legend;
       const result = await produce('view');
-      if (!result || !alive) {
+      if (!result || !alive || !props.active) {
         return;
       }
       viewed.value = { result, url: URL.createObjectURL(result.blob), moved: movedText(requested, result) };
-      emit('viewer', true);
+      emit('viewer', dismissViewer);
     };
 
-    const exportViewed = () => {
+    // 先关大图、等它卸下（FocusTrap 会移动焦点），再保存、让页面关浮层，焦点回到入口
+    const exportViewed = async () => {
       const current = viewed.value;
-      if (current) {
-        closeViewer();
-        save(current.result, current.moved);
+      if (!current) {
+        return;
       }
+      closeViewer();
+      await nextTick();
+      save(current.result, current.moved);
     };
 
     onBeforeUnmount(() => {
@@ -314,10 +352,9 @@ export const MapPrintPanel = defineComponent({
           urlList={[current.url]}
           hideOnClickModal
           teleported
-          onClose={() => {
-            closeViewer();
-            thumbnail.value?.focus({ preventScroll: true });
-          }}
+          // Esc 由浮层在捕获阶段截住、交给 dismissViewer，不让大图自己在冒泡阶段处理（页面上别的 Esc 监听会一起收到）
+          closeOnPressEscape={false}
+          onClose={dismissViewer}
         >
           {{
             progress: () => [
@@ -331,7 +368,12 @@ export const MapPrintPanel = defineComponent({
               <span class={styles.viewerGap} />,
               viewerButton('原始大小、适应窗口', <ScaleToOriginal />, reset),
               <span class={styles.viewerGap} />,
-              <button type="button" class={[styles.viewerButton, styles.viewerExport]} onClick={exportViewed}>
+              <button
+                type="button"
+                class={[styles.viewerButton, styles.viewerExport]}
+                onKeydown={keepSpace}
+                onClick={() => void exportViewed()}
+              >
                 <ElIcon size={18}>
                   <Download />
                 </ElIcon>
@@ -368,7 +410,9 @@ export const MapPrintPanel = defineComponent({
                   type="button"
                   class={styles.preview}
                   disabled={note !== '' || busy}
-                  aria-label="查看打印预览的大图"
+                  // 没截到图时说明放进名称：按钮的名称取 aria-label，里面的文字读屏读不到
+                  aria-label={note === '' ? '查看打印预览的大图' : `打印预览：${note}`}
+                  data-print-preview
                   onClick={() => void openViewer()}
                 >
                   <canvas ref={canvas} class={[styles.image, note !== '' && styles.hidden]} aria-hidden="true" />
