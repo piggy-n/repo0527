@@ -2,10 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { filterMenuEntry, filterToolItem } from './filter-entries';
 
-const ROW = { model: false, filterable: true, filtering: false };
+const ROW = { model: false, filterable: true };
 
 describe('要素过滤的入口（ADR 0173）', () => {
-  it('工具栏的"过滤"：没有选中时、三维模型、没有可过滤字段的资源不能用，提示写出原因；开着浮层时按下', () => {
+  it('工具栏的"过滤"：没有选中时、三维模型、没有可过滤字段的资源不能用，提示写出原因；开着浮层时按下；过滤着时提示也只写"过滤"', () => {
     expect(filterToolItem(ROW, true)).toStrictEqual({
       key: 'filter',
       icon: 'layer-filter',
@@ -14,7 +14,6 @@ describe('要素过滤的入口（ADR 0173）', () => {
       disabled: false,
       pressed: true
     });
-    expect(filterToolItem({ ...ROW, filtering: true }, false)).toMatchObject({ disabled: false, tip: '过滤（已过滤）' });
     expect(filterToolItem(null, false)).toMatchObject({ disabled: true, tip: '过滤' });
     expect(filterToolItem({ ...ROW, model: true }, false)).toMatchObject({ disabled: true, tip: '三维模型没有属性过滤' });
     expect(filterToolItem({ ...ROW, filterable: false }, false)).toMatchObject({

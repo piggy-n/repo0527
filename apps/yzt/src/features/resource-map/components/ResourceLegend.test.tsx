@@ -403,6 +403,47 @@ describe('ResourceLegend', () => {
     expect(entry().find('[data-value="河流"]').exists()).toBe(true);
   });
 
+  it('显示方式的快捷切换在样式设置左边（用户 2026-11-24）：点一下换成另一种，统一配色时留出样式设置的位置；单一符号没有', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
+    await nextTick();
+    const entry = () => wrapper.get('[data-legend="csxhjctb_hydl"]');
+    const toggle = () => entry().get('[data-legend-mode]');
+    expect(toggle().attributes()).toMatchObject({
+      'data-legend-mode': 'classified',
+      title: '显示方式：按类别配色，点击换成统一配色',
+      'aria-label': '水域线层的显示方式：按类别配色，点击换成统一配色'
+    });
+    expect(toggle().element.nextElementSibling).toBe(button(wrapper, '编辑水域线层样式').element);
+    expect(wrapper.get('[data-legend="bgdc_dltb"] [data-legend-mode]').attributes('data-legend-mode')).toBe('classified');
+    // 单一符号没有切换和设置，也没有行尾的占位：宽度留在摘要按钮里，整行可点
+    const symbolRow = wrapper.get('[data-legend="bgdc_ccwjq"]');
+    expect(symbolRow.find('[data-legend-mode]').exists()).toBe(false);
+    expect([...(symbolRow.element.firstElementChild?.children ?? [])].map(item => item.tagName)).toStrictEqual(['BUTTON']);
+    expect(button(wrapper, '编辑坑塘图例').classes().some(name => name.includes('symbolSummary'))).toBe(true);
+
+    await toggle().trigger('click');
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('uniform');
+    expect(toggle().attributes('title')).toBe('显示方式：统一配色，点击换成按类别配色');
+    expect(toggle().attributes('aria-label')).toBe('水域线层的显示方式：统一配色，点击换成按类别配色');
+    expect(entry().find('[data-value="河流"]').exists()).toBe(false);
+    expect(entry().find('button[aria-label="编辑水域线层样式"]').exists()).toBe(false);
+    expect(toggle().element.nextElementSibling?.getAttribute('aria-hidden')).toBe('true');
+
+    await toggle().trigger('click');
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('classified');
+    expect(entry().find('[data-value="河流"]').exists()).toBe(true);
+  });
+
+  it('样式设置里"返回图例"在名称后面（标题行最右，用户 2026-11-24）', async () => {
+    const { wrapper, owner } = mountLegend();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await button(wrapper, '编辑水域线层样式').trigger('click');
+    const heading = wrapper.get('[data-legend-settings="csxhjctb_hydl"]').element.firstElementChild;
+    expect([...(heading?.children ?? [])].map(item => item.textContent?.trim())).toStrictEqual(['水域线层', '返回图例']);
+  });
+
   it('按取值配色：展开一个取值编辑它，同一时间只展开一个', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.add(['csxhjctb_hydl']);

@@ -492,12 +492,12 @@ describe('过滤着的图例（ADR 0173）', () => {
   it('按别的字段过滤：类别不变，条件写在名称下面', () => {
     const entry = legendEntry(school, 2025, undefined, { type: ['小学', '普通高等学校本科院校'] });
     expect(entry.kind === 'values' && entry.values).toHaveLength(7);
-    expect(entry).toMatchObject({ filtered: true, filterNote: '类型：小学、普通高等学校本科院校' });
+    expect(entry).toMatchObject({ filtered: true, filterNote: '办学类型：小学、普通高等学校本科院校' });
   });
 
   it('统一样式时分类的条件也写出来（类别没列出）；一项都没勾时写明', () => {
     expect(legendEntry(school, 2025, uniform, { [CLASS_FIELD]: ['08H211'], type: ['小学'] })).toMatchObject({
-      filterNote: '分类：高等院校；类型：小学'
+      filterNote: '分类：高等院校；办学类型：小学'
     });
     const none = legendEntry(school, 2025, undefined, { [CLASS_FIELD]: [] });
     expect(none.kind === 'values' && none.values).toStrictEqual([]);

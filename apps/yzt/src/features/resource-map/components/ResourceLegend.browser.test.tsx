@@ -6,8 +6,9 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
+import { required } from '@/shared/testing/required';
 import { buildCatalog } from '../catalog';
-import { useResourceLayers } from '../composables/useResourceLayers';
+import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
 import { ResourceLegend } from './ResourceLegend';
 import { ResourceLegendReset } from './ResourceLegendReset';
@@ -16,7 +17,11 @@ const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch:
 const CATALOG = buildCatalog([{
   code: null,
   name: '测试',
-  children: [{ code: 'bgdc_dltb', name: '地类图斑', geoType: 'Polygon', yearList: [2022] }]
+  children: [
+    { code: 'bgdc_dltb', name: '地类图斑', geoType: 'Polygon', yearList: [2022] },
+    { code: 'csxhjctb_hydl', name: '水域线层', geoType: 'Line', yearList: [2025] },
+    { code: 'bgdc_ccwjq', name: '坑塘', geoType: 'Polygon', yearList: [2022] }
+  ]
 }]);
 // 与页面一致的布局令牌，feature 测试不反向导入 app
 const TOKENS = {
@@ -39,6 +44,7 @@ function setup(width: number) {
   const tokens = host.appendChild(document.createElement('style'));
   tokens.textContent = `:root { ${Object.entries(TOKENS).map(([key, value]) => `${key}: ${value};`).join(' ')} }`;
   let symbolsOwner: ResourceSymbols | undefined;
+  let layersOwner: ResourceLayers | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const catalog = shallowRef(CATALOG);
@@ -46,6 +52,7 @@ function setup(width: number) {
     symbolsOwner = symbols;
     const editing = ref(false);
     const layers = useResourceLayers(map, { catalog, tileBase: 'http://localhost/tiles/', symbols });
+    layersOwner = layers;
     return () => (
       <MxPanel title="图例" style={{ height: '360px', flex: 'none', ...TOKENS }}>
         {{
@@ -67,19 +74,29 @@ function setup(width: number) {
   });
   const wrapper = mount(Page, { attachTo: host });
   const scroller = wrapper.get('[data-resource-legend]').element.parentElement;
-  if (!scroller || !symbolsOwner) {
-    throw new Error('没有图例滚动容器或样式拥有者');
+  if (!scroller || !symbolsOwner || !layersOwner) {
+    throw new Error('没有图例滚动容器或拥有者');
   }
   return {
     wrapper,
     host,
     scroller,
     symbols: symbolsOwner,
+    layers: layersOwner,
     [Symbol.dispose]() {
       wrapper.unmount();
       host.remove();
     }
   };
+}
+
+// 图例一行的摘要按钮（每行第一个按钮）；网格最后两列是年份和改过符号的点，量它们的右边
+const summaryOf = (code: string) =>
+  required(document.querySelector<HTMLElement>(`[data-legend="${code}"] button`), `${code}的摘要`);
+function rights(code: string): number[] {
+  const edited = required(summaryOf(code).lastElementChild, `${code}的改过标记`);
+  const year = required(edited.previousElementSibling, `${code}的年份`);
+  return [year.getBoundingClientRect().right, edited.getBoundingClientRect().right];
 }
 
 describe('ResourceLegend（真实布局）', () => {
@@ -111,6 +128,22 @@ describe('ResourceLegend（真实布局）', () => {
     const backRect = back?.element.getBoundingClientRect();
     expect(backRect).toBeDefined();
     expect(Math.abs((backRect?.top ?? 0) + (backRect?.height ?? 0) / 2 - title.top - title.height / 2)).toBeLessThan(1);
+  });
+
+  it('按类别配色、统一配色、单一符号的行混在一起时，年份和改过的点逐行对齐；单一符号行最右一段也能进编辑（2026-11-24 审查）', async () => {
+    using ctx = setup(320);
+    ctx.layers.add(['csxhjctb_hydl', 'bgdc_ccwjq']);
+    ctx.symbols.setMode('bgdc_dltb', 'uniform');
+    await nextTick();
+    expect(rights('bgdc_dltb')).toStrictEqual(rights('csxhjctb_hydl'));
+    expect(rights('bgdc_ccwjq')).toStrictEqual(rights('csxhjctb_hydl'));
+
+    const row = required(summaryOf('bgdc_ccwjq').parentElement, '坑塘的行');
+    const rect = row.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.right - 10, rect.top + rect.height / 2);
+    expect(hit?.closest('button')?.getAttribute('aria-label')).toBe('编辑坑塘图例');
+    await userEvent.click(row, { position: { x: rect.width - 10, y: rect.height / 2 } });
+    expect(ctx.wrapper.find('[data-symbol-editor="bgdc_ccwjq"]').exists()).toBe(true);
   });
 
   it('点击可见条目进入编辑后回到列表原滚动位置，鼠标移出时设置入口隐藏', async () => {

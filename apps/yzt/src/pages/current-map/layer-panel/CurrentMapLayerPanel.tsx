@@ -6,6 +6,7 @@ import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSel
 import { FeatureFilter } from '@/features/resource-map/components/FeatureFilter';
 import { LabelEditor } from '@/features/resource-map/components/LabelEditor';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
+import { LegendModeToggle } from '@/features/resource-map/components/LegendModeToggle';
 import { LegendPreview } from '@/features/resource-map/components/LegendPreview';
 import { ResourceLayerRow } from '@/features/resource-map/components/ResourceLayerRow';
 import type { ResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
@@ -17,7 +18,6 @@ import {
   resourceCodeOfKey,
   resourceKey
 } from '@/features/resource-map/layer-panel';
-import { isFiltering } from '@/features/resource-map/feature-filter';
 import { filterFieldsOf } from '@/features/resource-map/filter-fields';
 import { labelFieldsOf } from '@/features/resource-map/label-fields';
 import { fillOpacityOf, legendEntry } from '@/features/resource-map/legend';
@@ -92,6 +92,12 @@ const POPOVER_NAMES: Readonly<Record<PopoverKind, string>> = {
   label: '标注',
   filter: '过滤'
 };
+
+/** 一行和过滤有关的状态（ADR 0173）：模型没有属性过滤，资源要有可过滤的字段 */
+function filterRow(key: string): FilterRowState {
+  const code = resourceCodeOfKey(key);
+  return { model: code === null, filterable: code !== null && filterFieldsOf(code).length > 0 };
+}
 
 /** 开着的右键菜单：在资源还是图层上，右键的是哪一项，在哪里打开 */
 interface PanelMenuState {
@@ -472,17 +478,6 @@ export const CurrentMapLayerPanel = defineComponent({
       };
     };
 
-    // 一行和过滤有关的状态（ADR 0173）：模型没有属性过滤，资源要有可过滤的字段
-    const filterRow = (key: string): FilterRowState => {
-      const code = resourceCodeOfKey(key);
-      const display = code === null ? undefined : state.value.displays.get(code);
-      return {
-        model: code === null,
-        filterable: code !== null && filterFieldsOf(code).length > 0,
-        filtering: display !== undefined && isFiltering(display.filter)
-      };
-    };
-
     const togglePopover = (kind: PopoverKind) => {
       popover.value = popover.value?.kind === kind ? null : { kind, configuring: false };
     };
@@ -605,10 +600,11 @@ export const CurrentMapLayerPanel = defineComponent({
           disabled: key === null || model,
           pressed: popover.value?.kind === 'legend'
         },
-        // 第 7 个按钮：标题改成两个字后放得下（ADR 0160）
-        labelToolItem(key === null ? null : labelRow(key), popover.value?.kind === 'label'),
-        // 最右是过滤，取代原来竖线后面的移除（用户 2026-11-24：放不下可以去掉移除；行尾的叉、Delete、右键菜单的移除都在，ADR 0173）
-        filterToolItem(key === null ? null : filterRow(key), popover.value?.kind === 'filter')
+        // 过滤紧跟图例（用户 2026-11-24：两者关联强）；它取代了原来竖线后面的移除（放不下可以去掉移除；行尾的叉、Delete、
+        // 右键菜单的移除都在，ADR 0173）
+        filterToolItem(key === null ? null : filterRow(key), popover.value?.kind === 'filter'),
+        // 标注：标题改成两个字后放得下（ADR 0160）
+        labelToolItem(key === null ? null : labelRow(key), popover.value?.kind === 'label')
       ];
     });
 
@@ -679,8 +675,8 @@ export const CurrentMapLayerPanel = defineComponent({
           ? ([
               { key: 'opacity', label: '透明度', icon: 'layer-opacity' },
               { key: 'legend', label: '图例', icon: 'map-legend' },
-              ...labelMenuEntries(labelRow(current.key)),
               filterMenuEntry(filterRow(current.key)),
+              ...labelMenuEntries(labelRow(current.key)),
               'divider'
             ] satisfies PanelMenuEntry[])
           : []),
@@ -981,6 +977,9 @@ export const CurrentMapLayerPanel = defineComponent({
                 {resource.name}
               </span>,
               <span class={styles.popYear}>{display.year}</span>,
+              ...(legend && entry.kind !== 'symbol'
+                ? [<LegendModeToggle class={styles.popButton} symbols={props.symbols} entry={entry} />]
+                : []),
               ...(configurable
                 ? [
                     <button

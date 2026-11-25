@@ -30,11 +30,11 @@ const fieldOf = (code: string, id: string): FilterField => {
 const keysOf = (field: FilterField) => field.values.map(value => value.key);
 
 describe('能过滤的字段（ADR 0173）', () => {
-  it('分类字段来自配色规则，取值、名称同图例，最后是"其他"；学校面层另有登记的"类型"', () => {
+  it('分类字段来自配色规则，取值、名称同图例，最后是"其他"；学校面层另有登记的"办学类型"', () => {
     const fields = filterFieldsOf(SCHOOL);
     expect(fields.map(field => [field.id, field.label])).toStrictEqual([
       [CLASS_FIELD, '分类'],
-      ['type', '类型']
+      ['type', '办学类型']
     ]);
     expect(fields[0]?.values).toStrictEqual([
       { key: '08H211', label: '高等院校' },
@@ -189,13 +189,13 @@ describe('过滤表达式：地图和属性求值用同一个', () => {
 
 describe('条件的文字', () => {
   it('字段的叫法加勾着的取值；多于 4 项写前三个和项数；一项都没选时写明', () => {
-    expect(filterText(SCHOOL, { type: ['小学', '普通高等学校本科院校'] })).toBe('类型：小学、普通高等学校本科院校');
-    expect(filterText(SCHOOL, { [CLASS_FIELD]: ['08H211'], type: ['小学'] })).toBe('分类：高等院校；类型：小学');
+    expect(filterText(SCHOOL, { type: ['小学', '普通高等学校本科院校'] })).toBe('办学类型：小学、普通高等学校本科院校');
+    expect(filterText(SCHOOL, { [CLASS_FIELD]: ['08H211'], type: ['小学'] })).toBe('分类：高等院校；办学类型：小学');
     expect(filterText(SCHOOL, { type: ['托儿所', '幼儿园', '小学', '初级中学', '高级中学'] })).toBe(
-      '类型：托儿所、幼儿园、小学等 5 项'
+      '办学类型：托儿所、幼儿园、小学等 5 项'
     );
     const [condition] = filterConditions(SCHOOL, { type: [] });
-    expect(condition && conditionText(condition)).toBe('类型：一项都没选');
+    expect(condition && conditionText(condition)).toBe('办学类型：一项都没选');
     expect(filterText(SCHOOL, NO_FILTER)).toBe('');
   });
 });

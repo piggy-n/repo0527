@@ -417,7 +417,7 @@ describe('CurrentMapLayerPanel', () => {
     expect(popover()?.getAttribute('aria-label')).toBe('水域线层的标注');
   });
 
-  it('过滤（ADR 0173）：工具栏最右的过滤打开第四种浮层，勾选立即生效；过滤着的行名称后面一个漏斗，点了也打开', async () => {
+  it('过滤（ADR 0173）：工具栏的过滤打开第四种浮层，勾选立即生效；过滤着的行名称后面一个漏斗，点了也打开', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_hydl']);
     await nextTick();
@@ -513,12 +513,12 @@ describe('CurrentMapLayerPanel', () => {
     expect(locateItem()?.disabled).toBe(true);
   });
 
-  it('工具栏最右是过滤，没有移除（用户 2026-11-24，ADR 0173）；移除选中的一行用 Delete，选中相邻的', async () => {
+  it('工具栏没有移除，过滤紧跟图例（用户 2026-11-24，ADR 0173）；移除选中的一行用 Delete，选中相邻的', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.add(['csxhjctb_lrdl']);
     await nextTick();
     const keys = wrapper.findAll('[aria-label="图层的操作"] [data-tool]').map(item => item.attributes('data-tool'));
-    expect(keys).toStrictEqual(['move-up', 'move-down', 'move-top', 'move-bottom', 'opacity', 'legend', 'label', 'filter']);
+    expect(keys).toStrictEqual(['move-up', 'move-down', 'move-top', 'move-bottom', 'opacity', 'legend', 'filter', 'label']);
 
     await row(wrapper, 'csxhjctb_lrdl').trigger('click');
     await row(wrapper, 'csxhjctb_lrdl').trigger('keydown', { key: 'Delete' });
@@ -538,9 +538,9 @@ describe('CurrentMapLayerPanel', () => {
       'visible',
       'opacity',
       'legend',
+      'filter',
       'label-visible',
       'label',
-      'filter',
       'locate',
       'move-up',
       'move-down',
@@ -1252,6 +1252,28 @@ describe('CurrentMapLayerPanel', () => {
 
     settingsButton().click();
     await nextTick();
+    expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
+  });
+
+  it('图例浮层的标题栏在样式设置左边有显示方式的快捷切换：换成统一配色时内容直接是设置，再点换回浏览（用户 2026-11-24）', async () => {
+    const { wrapper, owner } = await mountPanel();
+    owner.add(['csxhjctb_hydl']);
+    await nextTick();
+    await row(wrapper, 'csxhjctb_hydl').trigger('click');
+    await tool(wrapper, 'legend').trigger('click');
+    const toggle = () => required(layerPopover().querySelector<HTMLButtonElement>('[data-legend-mode]'), '显示方式');
+    expect(toggle().getAttribute('data-legend-mode')).toBe('classified');
+    expect(toggle().nextElementSibling).toBe(settingsButton());
+
+    toggle().click();
+    await nextTick();
+    expect(toggle().getAttribute('data-legend-mode')).toBe('uniform');
+    expect(layerPopover().querySelector('button[aria-label="样式设置"]')).toBeNull();
+    expect(layerPopover().querySelector('[aria-label="图层配色方式"]')).not.toBeNull();
+
+    toggle().click();
+    await nextTick();
+    expect(toggle().getAttribute('data-legend-mode')).toBe('classified');
     expect(legendShown()).toStrictEqual({ pressed: 'false', browsing: true, settings: false, wholeLayer: false });
   });
 

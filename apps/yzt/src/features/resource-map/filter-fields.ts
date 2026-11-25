@@ -39,7 +39,7 @@ interface RegisteredField {
   readonly values: readonly string[];
 }
 
-// 学校的类型（type）：2026-11-02 探查的全部取值（学校面层 2025 年），按学段从低到高排；名称就是取值
+// 学校的办学类型（type）：2026-11-02 探查的全部取值（学校面层 2025 年），按学段从低到高排；名称就是取值
 const SCHOOL_KINDS: readonly string[] = [
   '托儿所',
   '幼儿园',
@@ -77,15 +77,16 @@ function pickKinds(...values: readonly string[]): readonly string[] {
   return SCHOOL_KINDS.filter(value => values.includes(value));
 }
 
-// 用户 2026-11-24 确认先登记学校的"类型"（"只展示小学、大学"），别的字段确认叫法后再加（docs/backlog.md）
+// 用户 2026-11-24 确认先登记学校的 type（"只展示小学、大学"），叫"办学类型"：叫"类型"时和分类字段的"分类"分不清（同日用户选定）；
+// 别的字段确认叫法后再加（docs/backlog.md）
 const REGISTERED_FIELDS = new Map<string, readonly RegisteredField[]>([
-  ['csxhjctb_xxa', [{ property: 'type', label: '类型', values: SCHOOL_KINDS }]],
+  ['csxhjctb_xxa', [{ property: 'type', label: '办学类型', values: SCHOOL_KINDS }]],
   [
     'csxhjctb_xxp',
     [
       {
         property: 'type',
-        label: '类型',
+        label: '办学类型',
         values: pickKinds(
           '托儿所',
           '幼儿园',

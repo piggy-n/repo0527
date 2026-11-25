@@ -136,7 +136,7 @@ export function filterConditions(code: string, filter: FeatureFilter): FilterCon
 // 名称太多时只写前三个和项数
 const LISTED = 4;
 
-/** 一个条件的文字，如"类型：小学、普通高等学校本科院校"；一项都没勾时写明 */
+/** 一个条件的文字，如"办学类型：小学、普通高等学校本科院校"；一项都没勾时写明 */
 export function conditionText({ field, labels }: FilterCondition): string {
   if (labels.length === 0) {
     return `${field.label}：一项都没选`;
@@ -145,7 +145,7 @@ export function conditionText({ field, labels }: FilterCondition): string {
   return `${field.label}：${names}`;
 }
 
-/** 条件连成一句（行上的提示、浮层的底部）；没有条件时为空字符串 */
+/** 条件连成一句（图层行上漏斗的提示和读屏名称）；没有条件时为空字符串 */
 export function filterText(code: string, filter: FeatureFilter): string {
   return filterConditions(code, filter).map(conditionText).join('；');
 }
