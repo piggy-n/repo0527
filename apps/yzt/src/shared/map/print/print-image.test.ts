@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { arrangePrint, CORNER_LIMITS, scaledPixels } from './print-image';
+import { arrangePrint, CORNER_LIMITS, fitTitle, scaledPixels, TITLE_METRICS } from './print-image';
 import { printFileName } from './print-file-name';
 import type { LegendLayout } from './print-legend';
 
@@ -47,9 +47,66 @@ describe('arrangePrint', () => {
   it('不带图例、没有图例条目时只有地图', () => {
     const layoutOf = fixed(232, 300);
 
-    expect(arrangePrint(MAP, 'none', true, layoutOf)).toStrictEqual({ placement: 'none', ...MAP, legend: null });
-    expect(arrangePrint(MAP, 'side', false, layoutOf)).toStrictEqual({ placement: 'none', ...MAP, legend: null });
+    const mapOnly = { placement: 'none', ...MAP, top: 0, legend: null };
+    expect(arrangePrint(MAP, 'none', true, layoutOf)).toStrictEqual(mapOnly);
+    expect(arrangePrint(MAP, 'side', false, layoutOf)).toStrictEqual(mapOnly);
     expect(layoutOf).not.toHaveBeenCalled();
+  });
+});
+
+describe('arrangePrint 的顶部一栏（标题，用户 2026-11-25）', () => {
+  const TOP = TITLE_METRICS.headerHeight;
+
+  it('地图和右侧一栏都往下让出这一栏，图片高出这一栏；右侧一栏仍按地图的高度分列', () => {
+    const layoutOf = fixed(232, 400);
+
+    expect(arrangePrint(MAP, 'side', true, layoutOf, TOP)).toMatchObject({
+      placement: 'side',
+      width: 1672,
+      height: 800 + TOP,
+      top: TOP,
+      legend: { x: 1440, y: TOP }
+    });
+    expect(layoutOf).toHaveBeenCalledWith(800);
+    expect(arrangePrint(MAP, 'side', true, fixed(232, 900), TOP)).toMatchObject({ height: 900 + TOP });
+  });
+
+  it('右下角的图例离地图的下边 16，不算顶部一栏；不带图例时只有地图和这一栏', () => {
+    expect(arrangePrint(MAP, 'corner', true, fixed(232, 300), TOP)).toMatchObject({
+      placement: 'corner',
+      width: 1440,
+      height: 800 + TOP,
+      legend: { x: 1440 - 232 - 16, y: TOP + 800 - 300 - 16 }
+    });
+    expect(arrangePrint(MAP, 'none', true, fixed(232, 300), TOP)).toStrictEqual({
+      placement: 'none',
+      width: 1440,
+      height: 800 + TOP,
+      top: TOP,
+      legend: null
+    });
+  });
+});
+
+// 量标题：每个字和字号一样宽
+const GRAPHEMES = new Intl.Segmenter('zh', { granularity: 'grapheme' });
+const measure = (text: string, size: number) => [...GRAPHEMES.segment(text)].length * size;
+
+describe('fitTitle', () => {
+  it('放得下时用最大的字号', () => {
+    expect(fitTitle('江苏省统一调查监测现状图', 22, 1392, measure)).toStrictEqual({ text: '江苏省统一调查监测现状图', size: 22 });
+  });
+
+  it('放不下时字号逐步缩小，最小 14', () => {
+    // 12 个字：16 号是 192 宽
+    expect(fitTitle('江苏省统一调查监测现状图', 22, 200, measure)).toStrictEqual({ text: '江苏省统一调查监测现状图', size: 16 });
+    expect(fitTitle('江苏省统一调查监测现状图', 22, 168, measure)).toStrictEqual({ text: '江苏省统一调查监测现状图', size: 14 });
+  });
+
+  it('14 号还放不下时截掉末尾、加省略号，不把一个字截成两半', () => {
+    // 100 宽在 14 号能放 7 个字：6 个字加省略号
+    expect(fitTitle('江苏省统一调查监测现状图', 22, 100, measure)).toStrictEqual({ text: '江苏省统一调…', size: 14 });
+    expect(fitTitle('地图👨‍👩‍👧标题', 22, 56, measure)).toStrictEqual({ text: '地图👨‍👩‍👧…', size: 14 });
   });
 });
 

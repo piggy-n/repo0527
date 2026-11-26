@@ -3,7 +3,13 @@ import type { MapContext, MapViewport } from '@mx/map-vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import type { PrintLegendBlock } from './print-legend';
-import { type MapPrintOptions, useMapPrint } from './useMapPrint';
+import {
+  DEFAULT_PRINT_SETTINGS,
+  type MapPrintOptions,
+  type PrintSettings,
+  printTitle,
+  useMapPrint
+} from './useMapPrint';
 
 // jsdom 没有 Canvas 2D：合成用的上下文换成什么也不画的假对象，量文字按字数；编码直接给出一个 PNG
 function stubCanvas(): void {
@@ -74,6 +80,9 @@ function setup(viewport: MapViewport | null) {
   return { print, completions, legend, scope };
 }
 
+// 默认设置（不带标题）改几项
+const settings = (patch: Partial<PrintSettings>): PrintSettings => ({ ...DEFAULT_PRINT_SETTINGS, ...patch });
+
 // 让排在前面的微任务、Promise 回调都跑完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
@@ -82,7 +91,7 @@ describe('useMapPrint', () => {
     const { viewport, snapshots } = fakeViewport();
     const { print, completions, legend } = setup(viewport);
 
-    const running = print.run({ legend: 'side', double: true });
+    const running = print.run(settings({ legend: 'side', double: true }));
     await settle();
     expect(print.phase.value).toBe('waiting');
     expect(snapshots).toStrictEqual([]);
@@ -101,12 +110,27 @@ describe('useMapPrint', () => {
     expect(print.error.value).toBe('');
   });
 
+  it('标题（用户 2026-11-25）：顶部一栏让图片高出 56，画在地图上时图片不变；只有空白的标题不带', async () => {
+    const { viewport } = fakeViewport();
+    const { print, completions } = setup(viewport);
+    const heightOf = async (patch: Partial<PrintSettings>) => {
+      const running = print.run(settings({ legend: 'none', ...patch }));
+      await settle();
+      completions.at(-1)?.resolve();
+      return (await running)?.height;
+    };
+
+    expect(await heightOf({ title: '江苏省统一调查监测现状图', titlePlacement: 'header' })).toBe(856);
+    expect(await heightOf({ title: '江苏省统一调查监测现状图', titlePlacement: 'map' })).toBe(800);
+    expect(await heightOf({ title: '  ', titlePlacement: 'header' })).toBe(800);
+  });
+
   it('三维照屏幕的像素比；没有图例条目时只有地图', async () => {
     const { viewport, snapshots } = fakeViewport('3d');
     const { print, completions, legend } = setup(viewport);
     legend.mockReturnValue([]);
 
-    const running = print.run({ legend: 'corner', double: true });
+    const running = print.run(settings({ legend: 'corner', double: true }));
     await settle();
     completions[0]?.resolve();
 
@@ -118,7 +142,7 @@ describe('useMapPrint', () => {
     const { viewport, snapshots } = fakeViewport();
     const { print, completions } = setup(viewport);
 
-    const running = print.run({ legend: 'side', double: false });
+    const running = print.run(settings({ legend: 'side', double: false }));
     await settle();
     print.skipWait();
 
@@ -131,8 +155,8 @@ describe('useMapPrint', () => {
     const { viewport, snapshots } = fakeViewport();
     const { print } = setup(viewport);
 
-    const running = print.run({ legend: 'side', double: false });
-    expect(await print.run({ legend: 'side', double: false })).toBeNull();
+    const running = print.run(settings({ legend: 'side', double: false }));
+    expect(await print.run(settings({ legend: 'side', double: false }))).toBeNull();
     await settle();
     print.cancel();
 
@@ -146,7 +170,7 @@ describe('useMapPrint', () => {
     const { viewport } = fakeViewport();
     const { print, completions } = setup(viewport);
 
-    const running = print.run({ legend: 'side', double: false });
+    const running = print.run(settings({ legend: 'side', double: false }));
     await settle();
     completions[0]?.reject(new DOMException('等待的视图已被卸下或替换', 'AbortError'));
 
@@ -157,13 +181,13 @@ describe('useMapPrint', () => {
   it('截图出错、没有就绪的视图时记下原因；下一次开始时清空', async () => {
     const { print, completions } = setup(null);
 
-    const missing = print.run({ legend: 'side', double: false });
+    const missing = print.run(settings({ legend: 'side', double: false }));
     await settle();
     completions[0]?.resolve();
     expect(await missing).toBeNull();
     expect(print.error.value).toBe('地图还没有就绪，请稍后再导出');
 
-    const next = print.run({ legend: 'side', double: false });
+    const next = print.run(settings({ legend: 'side', double: false }));
     expect(print.error.value).toBe('');
     print.cancel();
     await next;
@@ -173,12 +197,12 @@ describe('useMapPrint', () => {
     const { viewport, snapshots } = fakeViewport();
     const { print, scope } = setup(viewport);
 
-    const running = print.run({ legend: 'side', double: false });
+    const running = print.run(settings({ legend: 'side', double: false }));
     await settle();
     scope.stop();
 
     expect(await running).toBeNull();
-    expect(await print.run({ legend: 'side', double: false })).toBeNull();
+    expect(await print.run(settings({ legend: 'side', double: false }))).toBeNull();
     expect(snapshots).toStrictEqual([]);
     expect(print.error.value).toBe('');
   });
@@ -187,7 +211,7 @@ describe('useMapPrint', () => {
     const { viewport } = fakeViewport();
     const { print, completions, legend } = setup(viewport);
 
-    const running = print.run({ legend: 'none', double: false });
+    const running = print.run(settings({ legend: 'none', double: false }));
     await settle();
     completions[0]?.resolve();
 
@@ -220,7 +244,7 @@ describe('useMapPrint', () => {
     const { print, completions } = setup(viewport);
 
     const capturing = print.capture(true, new AbortController().signal);
-    const running = print.run({ legend: 'side', double: false });
+    const running = print.run(settings({ legend: 'side', double: false }));
     await settle();
     completions[0]?.resolve();
     await expect(capturing).rejects.toMatchObject({ name: 'AbortError' });
@@ -233,5 +257,13 @@ describe('useMapPrint', () => {
     await settle();
     missing.completions[0]?.resolve();
     expect(await empty).toBeNull();
+  });
+});
+
+describe('printTitle', () => {
+  it('去掉首尾空白；空的、只有空白的不带标题', () => {
+    expect(printTitle({ title: ' 徐州市 ', titlePlacement: 'map' })).toStrictEqual({ text: '徐州市', placement: 'map' });
+    expect(printTitle({ title: '', titlePlacement: 'header' })).toBeNull();
+    expect(printTitle({ title: ' \n ', titlePlacement: 'header' })).toBeNull();
   });
 });

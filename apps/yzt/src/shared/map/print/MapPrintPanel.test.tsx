@@ -48,8 +48,8 @@ function fakePrint(capture: PrintCapture | null = null) {
 }
 
 // 浮层内容放在提供地图的页面里（没有画布，相机不变）；设置、浮层显示着由页面持有
-function mountPanel(print: MapPrint, dimension: ViewKind = '2d', initial: PrintSettings = DEFAULT_PRINT_SETTINGS) {
-  const settings = ref(initial);
+function mountPanel(print: MapPrint, dimension: ViewKind = '2d', initial: Partial<PrintSettings> = {}) {
+  const settings = ref<PrintSettings>({ ...DEFAULT_PRINT_SETTINGS, ...initial });
   const active = ref(true);
   const done = vi.fn<() => void>();
   const viewer = vi.fn<(closeLayer: (() => void) | null) => void>();
@@ -173,15 +173,58 @@ describe('MapPrintPanel', () => {
     await flushPromises();
 
     await choose(wrapper, '右下角');
-    expect(settings.value).toStrictEqual({ legend: 'corner', double: false });
+    expect(settings.value).toStrictEqual({ ...DEFAULT_PRINT_SETTINGS, legend: 'corner' });
     expect(sizeText(wrapper)).toBe('1440 × 800 像素');
     await choose(wrapper, '不带');
     await choose(wrapper, '右侧一栏');
     expect(sizeText(wrapper)).toBe('1672 × 800 像素');
     await choose(wrapper, '2 倍');
 
-    expect(settings.value).toStrictEqual({ legend: 'side', double: true });
+    expect(settings.value).toStrictEqual({ ...DEFAULT_PRINT_SETTINGS, double: true });
     expect(print.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('标题（用户 2026-11-25）：顶部一栏让导出的图高出 56，地图上不变；改标题、位置只重新合成，不再截图', async () => {
+    const print = fakePrint(captureOf(1440, 800));
+    const { wrapper, settings } = mountPanel(print, '2d', { title: '江苏省统一调查监测现状图' });
+    await flushPromises();
+    const input = wrapper.get('input[aria-label="标题"]');
+    expect((input.element as HTMLInputElement).value).toBe('江苏省统一调查监测现状图');
+    expect(input.attributes('maxlength')).toBe('40');
+    expect(input.attributes('placeholder')).toBe('无标题');
+    expect(sizeText(wrapper)).toBe('1672 × 856 像素');
+
+    await choose(wrapper, '地图上');
+    expect(settings.value.titlePlacement).toBe('map');
+    expect(sizeText(wrapper)).toBe('1672 × 800 像素');
+    await choose(wrapper, '顶部一栏');
+    await input.setValue('徐州市现状图');
+    await flushPromises();
+    expect(settings.value).toStrictEqual({ ...DEFAULT_PRINT_SETTINGS, title: '徐州市现状图' });
+    expect(sizeText(wrapper)).toBe('1672 × 856 像素');
+    expect(print.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('标题清空（或只有空白）就不带：图片只有地图和图例，位置不能选；位置在标题前面写着"位置"', async () => {
+    const print = fakePrint(captureOf(1440, 800));
+    const { wrapper, settings } = mountPanel(print, '2d', { title: '江苏省统一调查监测现状图' });
+    await flushPromises();
+    const placement = () => wrapper.get('[role="radiogroup"][aria-label="标题的位置"]');
+    const names = new Set(['标题', '位置', '图例', '清晰度']);
+    const labels = wrapper.findAll('[data-map-print] span').map(item => item.text()).filter(text => names.has(text));
+    expect(labels).toStrictEqual(['标题', '位置', '图例', '清晰度']);
+    expect(placement().findAll('input').every(item => !item.element.disabled)).toBe(true);
+
+    await wrapper.get('input[aria-label="标题"]').setValue('   ');
+    await flushPromises();
+    expect(settings.value.title).toBe('   ');
+    expect(sizeText(wrapper)).toBe('1672 × 800 像素');
+    expect(placement().findAll('input').every(item => item.element.disabled)).toBe(true);
+
+    await wrapper.get('input[aria-label="标题"]').setValue('');
+    await flushPromises();
+    expect(settings.value.title).toBe('');
+    expect(sizeText(wrapper)).toBe('1672 × 800 像素');
   });
 
   it('打开时不带图例就不查；换成带图例时重新截一次', async () => {
@@ -218,7 +261,7 @@ describe('MapPrintPanel', () => {
     expect(wrapper.text()).toContain('三维只能同屏幕的清晰度');
     await exportButton(wrapper).trigger('click');
     await flushPromises();
-    expect(print.run).toHaveBeenCalledWith({ legend: 'side', double: false });
+    expect(print.run).toHaveBeenCalledWith({ ...DEFAULT_PRINT_SETTINGS, double: false });
   });
 
   it('导出完交给浏览器保存，提示文件名，通知页面关掉浮层', async () => {
@@ -268,10 +311,10 @@ describe('MapPrintPanel', () => {
     expect(print.cancel).toHaveBeenCalledTimes(1);
   });
 
-  it('标题栏是"地图打印"，导出在右边、是链接样式；导出时"导出"转圈，图例、清晰度、预览都不能点', async () => {
+  it('标题栏是"地图打印"，导出在右边、是链接样式；导出时"导出"转圈，标题、图例、清晰度、预览都不能点', async () => {
     const print = fakePrint(captureOf(1440, 800));
     print.run.mockImplementationOnce(() => new Promise(() => undefined));
-    const { wrapper } = mountPanel(print);
+    const { wrapper } = mountPanel(print, '2d', { title: '江苏省统一调查监测现状图' });
     await flushPromises();
     expect(wrapper.get('header').text()).toContain('地图打印');
     expect(exportButton(wrapper).classes()).toContain('is-link');
@@ -283,6 +326,8 @@ describe('MapPrintPanel', () => {
 
     expect(exportButton(wrapper).classes()).toContain('is-loading');
     expect(preview(wrapper).attributes('disabled')).toBeDefined();
+    expect(wrapper.get('input[aria-label="标题"]').attributes('disabled')).toBeDefined();
+    expect(radio(wrapper, '地图上')?.classes()).toContain('is-disabled');
     expect(radio(wrapper, '右下角')?.classes()).toContain('is-disabled');
     expect(radio(wrapper, '2 倍')?.classes()).toContain('is-disabled');
   });
@@ -319,7 +364,7 @@ describe('MapPrintPanel', () => {
     await preview(wrapper).trigger('click');
     await flushPromises();
 
-    expect(print.run).toHaveBeenCalledExactlyOnceWith({ legend: 'corner', double: false });
+    expect(print.run).toHaveBeenCalledExactlyOnceWith({ ...DEFAULT_PRINT_SETTINGS, legend: 'corner' });
     expect(viewerElement()?.querySelector('img')?.getAttribute('src')).toBe('blob:print');
     // 右下角放不下改到了右侧：大图下面就说明
     expect(viewerElement()?.querySelector('[data-print-viewer-info]')?.textContent).toBe(

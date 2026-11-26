@@ -3,7 +3,13 @@ import type { MapContext, MapViewport } from '@mx/map-vue';
 import { onScopeDispose, type Ref, ref } from 'vue';
 import { canvasBlob } from '../../file-transfer';
 import { printFileName } from './print-file-name';
-import { composePrintImage, LEGEND_FONTS, type LegendPlacement } from './print-image';
+import {
+  composePrintImage,
+  LEGEND_FONTS,
+  type LegendPlacement,
+  type PrintTitle,
+  type TitlePlacement
+} from './print-image';
 import type { PrintLegendBlock } from './print-legend';
 
 /** 导出的设置（ADR 0174） */
@@ -11,9 +17,24 @@ export interface PrintSettings {
   readonly legend: LegendPlacement;
   /** 二维按 2 倍的像素比截图；三维照屏幕（模型按屏幕误差选精度） */
   readonly double: boolean;
+  /** 标题（用户 2026-11-25）：去掉首尾空白后为空时不带 */
+  readonly title: string;
+  readonly titlePlacement: TitlePlacement;
 }
 
-export const DEFAULT_PRINT_SETTINGS: PrintSettings = { legend: 'side', double: false };
+/** 默认的设置；标题的默认值由页面给（现状底图是系统名） */
+export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
+  legend: 'side',
+  double: false,
+  title: '',
+  titlePlacement: 'header'
+};
+
+/** 设置里要画的标题：去掉首尾空白后为空时不带 */
+export function printTitle(settings: Pick<PrintSettings, 'title' | 'titlePlacement'>): PrintTitle | null {
+  const text = settings.title.trim();
+  return text === '' ? null : { text, placement: settings.titlePlacement };
+}
 
 export interface MapPrintOptions {
   /** 文件名的开头，如"现状底图" */
@@ -83,7 +104,7 @@ function failureMessage(reason: unknown): string {
 }
 
 /**
- * 地图打印（ADR 0174）：截图那一刻的画面加上图例合成一张 PNG，交给调用方保存。组合式函数不保存、不提示，
+ * 地图打印（ADR 0174）：截图那一刻的画面加上图例、标题合成一张 PNG，交给调用方保存。组合式函数不保存、不提示，
  * 这些由组件决定；同一时间只有一次导出，作用域销毁时作废，晚到的结果不交出去
  */
 export function useMapPrint(map: MapContext, options: MapPrintOptions): MapPrint {
@@ -140,7 +161,7 @@ export function useMapPrint(map: MapContext, options: MapPrintOptions): MapPrint
       phase.value = 'composing';
       const double = settings.double && view.kind === '2d';
       const { snapshot, blocks } = captureOf(view, settings.legend !== 'none', double ? 2 : undefined);
-      const image = composePrintImage(snapshot, blocks, settings.legend);
+      const image = composePrintImage(snapshot, blocks, settings.legend, printTitle(settings));
       const blob = await canvasBlob(image.canvas);
       signal.throwIfAborted();
       const { width, height } = image.canvas;

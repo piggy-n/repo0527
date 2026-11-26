@@ -130,7 +130,52 @@ function countColor(image: HTMLCanvasElement, rgb: readonly number[], x: number,
   return count;
 }
 
+// 图片一块矩形里深色（字）的像素有多少
+function countDark(image: HTMLCanvasElement, x: number, y: number, width: number, height: number): number {
+  const data = image.getContext('2d')?.getImageData(x, y, width, height).data ?? new Uint8ClampedArray();
+  let count = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if ([0, 1, 2].every(channel => (data[index + channel] ?? 255) < 120)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+// 一个像素是不是白的（三个通道都大于 240）
+function isWhite(image: HTMLCanvasElement, x: number, y: number): boolean {
+  const pixel = image.getContext('2d')?.getImageData(x, y, 1, 1).data ?? new Uint8ClampedArray();
+  return [0, 1, 2].every(channel => (pixel[channel] ?? 0) > 240);
+}
+
 describe('地图打印（真实的 MapLibre，ADR 0174）', () => {
+  it('标题（用户 2026-11-25）：顶部一栏在整张图上面、地图往下让出 56；地图上时是地图上方居中的白底框，图片不变大', async () => {
+    using ctx = setup();
+    await withTimeout(ctx.view.whenReady(), '视图就绪');
+    await withTimeout(ctx.view.whenComplete(), '画面完整');
+    const snapshot = ctx.view.snapshot();
+    const ratio = snapshot.image.width / snapshot.width;
+    const text = '江苏省统一调查监测现状图';
+
+    const header = composePrintImage(snapshot, [], 'none', { text, placement: 'header' }).canvas;
+    const band = Math.round(56 * ratio);
+    expect([header.width, header.height]).toStrictEqual([snapshot.image.width, Math.round((600 + 56) * ratio)]);
+    // 这一栏是白底，中间有深色的字；地图从这一栏下面开始，两块地类照样在
+    expect(isWhite(header, 4, 4)).toBe(true);
+    const titleArea = countDark(header, header.width / 2 - 150 * ratio, 0, 300 * ratio, band);
+    expect(titleArea).toBeGreaterThan(100 * ratio * ratio);
+    expect(countColor(header, landuseRgb('0101'), 0, header.width)).toBeGreaterThan(10_000 * ratio * ratio);
+
+    const onMap = composePrintImage(snapshot, [], 'none', { text, placement: 'map' }).canvas;
+    expect([onMap.width, onMap.height]).toStrictEqual([snapshot.image.width, snapshot.image.height]);
+    // 地图上方居中：框的上内边距是白底，框里有深色的字；左上角还是地图
+    expect(isWhite(onMap, onMap.width / 2, Math.round(19 * ratio))).toBe(true);
+    expect(countDark(onMap, onMap.width / 2 - 150 * ratio, 16 * ratio, 300 * ratio, 38 * ratio)).toBeGreaterThan(
+      100 * ratio * ratio
+    );
+    expect(isWhite(onMap, 4, 4)).toBe(false);
+  });
+
   it('截图和图例合成一张图：图例只列画面里画出来的取值，右侧一栏在地图右边', async () => {
     using ctx = setup();
     await withTimeout(ctx.view.whenReady(), '视图就绪');

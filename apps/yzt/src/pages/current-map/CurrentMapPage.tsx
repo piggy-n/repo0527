@@ -393,8 +393,8 @@ export const CurrentMapPage = defineComponent({
       ].filter((block): block is PrintLegendBlock => block !== null);
     };
     const print = useMapPrint(map, { name: '现状底图', omitGroups: PRINT_OMITTED_GROUPS, legend: printLegend });
-    // 设置在这次打开页面期间记住，不进偏好
-    const printSettings = shallowRef<PrintSettings>(DEFAULT_PRINT_SETTINGS);
+    // 设置在这次打开页面期间记住，不进偏好；标题默认是系统名（用户 2026-11-25）
+    const printSettings = shallowRef<PrintSettings>({ ...DEFAULT_PRINT_SETTINGS, title: appConfig.title });
     const changePrintOpen = (open: boolean) => {
       printOpen.value = open;
       if (open) {

@@ -6,6 +6,7 @@ import {
   ElButton,
   ElIcon,
   ElImageViewer,
+  ElInput,
   ElMessage,
   ElRadioButton,
   ElRadioGroup,
@@ -25,8 +26,14 @@ import {
 } from 'vue';
 import { saveFile } from '../../file-transfer';
 import { SvgIcon } from '../../icons/SvgIcon';
-import { composePrintImage, type LegendPlacement, type PrintImage, scaledPixels } from './print-image';
-import type { MapPrint, PrintCapture, PrintResult, PrintSettings } from './useMapPrint';
+import {
+  composePrintImage,
+  type LegendPlacement,
+  type PrintImage,
+  scaledPixels,
+  type TitlePlacement
+} from './print-image';
+import { type MapPrint, type PrintCapture, type PrintResult, type PrintSettings, printTitle } from './useMapPrint';
 import styles from './MapPrintPanel.module.scss';
 
 const PLACEMENTS: readonly { readonly id: LegendPlacement; readonly label: string }[] = [
@@ -34,6 +41,14 @@ const PLACEMENTS: readonly { readonly id: LegendPlacement; readonly label: strin
   { id: 'corner', label: '右下角' },
   { id: 'none', label: '不带' }
 ];
+
+const TITLE_PLACEMENTS: readonly { readonly id: TitlePlacement; readonly label: string }[] = [
+  { id: 'header', label: '顶部一栏' },
+  { id: 'map', label: '地图上' }
+];
+
+// 标题最多多少个字：顶部一栏里 22 号字就放得下
+const TITLE_MAX_LENGTH = 40;
 
 // 预览的宽度：浮层 320 减去两边的边框 1、内边距 16、预览的边框 1
 const PREVIEW_WIDTH = 284;
@@ -74,7 +89,8 @@ const movedText = (requested: LegendPlacement, result: PrintResult) =>
 
 /**
  * 地图打印的浮层内容（ADR 0174，用户 2026-11-24 确认的做法二和第 8 批的调整）：浅灰标题栏右边是"导出"，下面是预览、
- * 图例的位置、清晰度。预览在打开时、相机变了以后等画面完整截一次，改图例的位置只重新合成；点预览按现在的设置生成导出的那张图，
+ * 标题和它的位置（用户 2026-11-25）、图例的位置、清晰度。预览在打开时、相机变了以后等画面完整截一次，改标题、图例的位置
+ * 只重新合成；点预览按现在的设置生成导出的那张图，
  * 用 Element 的图片预览看大图，大图里导出的就是这张。等加载、生成、失败都写在预览下面那一行。浮层关上时放弃没完成的导出、
  * 关掉大图
  */
@@ -147,14 +163,15 @@ export const MapPrintPanel = defineComponent({
       previewError.value = reason instanceof Error ? reason.message : '预览失败';
     };
 
-    // 按截下的画面和现在的图例位置合成预览
+    // 按截下的画面和现在的标题、图例位置合成预览
     const compose = () => {
       if (!captured) {
         show(null);
         return;
       }
       try {
-        show(composePrintImage(captured.capture.snapshot, captured.capture.blocks, props.settings.legend));
+        const { snapshot, blocks } = captured.capture;
+        show(composePrintImage(snapshot, blocks, props.settings.legend, printTitle(props.settings)));
         previewError.value = '';
       } catch (reason) {
         fail(reason);
@@ -207,6 +224,12 @@ export const MapPrintPanel = defineComponent({
           compose();
         }
       },
+      { flush: 'post' }
+    );
+    // 改标题、标题的位置：只按截下的重新合成
+    watch(
+      () => [props.settings.title, props.settings.titlePlacement] as const,
+      () => compose(),
       { flush: 'post' }
     );
 
@@ -425,6 +448,41 @@ export const MapPrintPanel = defineComponent({
                   )}
                 </button>
                 {renderStatus()}
+                <div class={styles.field}>
+                  <span class={styles.label}>标题</span>
+                  <ElInput
+                    size="small"
+                    clearable
+                    maxlength={TITLE_MAX_LENGTH}
+                    placeholder="无标题"
+                    aria-label="标题"
+                    disabled={busy}
+                    modelValue={props.settings.title}
+                    onUpdate:modelValue={(value: string) => update({ title: value })}
+                  />
+                </div>
+                <div class={styles.field}>
+                  <span class={styles.label}>位置</span>
+                  <ElRadioGroup
+                    class="radio-group-block"
+                    size="small"
+                    aria-label="标题的位置"
+                    disabled={busy || printTitle(props.settings) === null}
+                    modelValue={props.settings.titlePlacement}
+                    onUpdate:modelValue={value => {
+                      const placement = TITLE_PLACEMENTS.find(item => item.id === value);
+                      if (placement) {
+                        update({ titlePlacement: placement.id });
+                      }
+                    }}
+                  >
+                    {TITLE_PLACEMENTS.map(item => (
+                      <ElRadioButton key={item.id} value={item.id}>
+                        {item.label}
+                      </ElRadioButton>
+                    ))}
+                  </ElRadioGroup>
+                </div>
                 <div class={styles.field}>
                   <span class={styles.label}>图例</span>
                   <ElRadioGroup
